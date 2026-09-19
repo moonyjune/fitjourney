@@ -36,9 +36,15 @@ export default function TabsLayout() {
   useEffect(() => {
     if (isCoach || !clientSetupDone || !remindersEnabled) return;
     (async () => {
-      const granted = await requestNotificationPermissions();
-      if (granted) {
-        await scheduleAllReminders(plan);
+      try {
+        const granted = await requestNotificationPermissions();
+        if (granted) {
+          await scheduleAllReminders(plan);
+        }
+      } catch (error) {
+        // expo-notifications isn't available in Expo Go (SDK 53+); local dev-client/production
+        // builds still get reminders. Never let this block the rest of the app from loading.
+        console.warn('[notifications] unavailable in this runtime:', error);
       }
     })();
   }, [isCoach, clientSetupDone, remindersEnabled, plan]);

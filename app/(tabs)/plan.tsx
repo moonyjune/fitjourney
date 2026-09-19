@@ -70,15 +70,20 @@ export default function PlanScreen() {
   }
 
   async function handleToggleReminders(value: boolean) {
-    if (value) {
-      const granted = await requestNotificationPermissions();
-      if (!granted) {
-        Alert.alert(t('plan.permissionTitle'), t('plan.permissionMessage'));
-        return;
+    try {
+      if (value) {
+        const granted = await requestNotificationPermissions();
+        if (!granted) {
+          Alert.alert(t('plan.permissionTitle'), t('plan.permissionMessage'));
+          return;
+        }
+        await scheduleAllReminders(plan);
+      } else {
+        await cancelAllReminders();
       }
-      await scheduleAllReminders(plan);
-    } else {
-      await cancelAllReminders();
+    } catch (error) {
+      // expo-notifications isn't available in Expo Go (SDK 53+); still let the preference save.
+      console.warn('[notifications] unavailable in this runtime:', error);
     }
     updateSettings({ remindersEnabled: value });
   }
