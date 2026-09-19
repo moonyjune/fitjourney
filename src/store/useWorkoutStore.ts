@@ -1,0 +1,33 @@
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { WorkoutLogEntry } from '../types';
+import { toDateKey } from '../utils/date';
+
+interface WorkoutState {
+  entries: WorkoutLogEntry[];
+  addEntry: (entry: Omit<WorkoutLogEntry, 'id' | 'dateISO'>, dateISO?: string) => void;
+  removeEntry: (id: string) => void;
+  entriesForDateKey: (dateKey: string) => WorkoutLogEntry[];
+}
+
+export const useWorkoutStore = create<WorkoutState>()(
+  persist(
+    (set, get) => ({
+      entries: [],
+      addEntry: (entry, dateISO) =>
+        set((state) => ({
+          entries: [
+            ...state.entries,
+            { ...entry, id: `${Date.now()}`, dateISO: dateISO ?? new Date().toISOString() },
+          ],
+        })),
+      removeEntry: (id) => set((state) => ({ entries: state.entries.filter((e) => e.id !== id) })),
+      entriesForDateKey: (dateKey) => get().entries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey),
+    }),
+    {
+      name: 'workout-store',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);
