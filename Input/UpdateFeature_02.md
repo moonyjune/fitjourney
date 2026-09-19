@@ -14,4 +14,3 @@
    Thông tin update sẽ được Coach xác nhận qua button [Confirm] sau khi update và lưu trữ data.
 6. **Fatty**
    Người dùng sẽ nhận được thông báo và hiển thị lịch trình tập luyện, chế độ ăn uống mới từ Coach.
-7. 

@@ -3,6 +3,8 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { Card } from '../../src/components/Card';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { ProofCapture } from '../../src/components/ProofCapture';
+import { MealItemRows } from '../../src/components/PlanPreview';
+import { WaterTimeline } from '../../src/components/WaterTimeline';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
@@ -12,6 +14,7 @@ export default function NutritionScreen() {
   const dateKey = todayKey();
   const dayType = useMemo(() => getDayType(new Date()), []);
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
+  const waterSchedule = usePlanStore((s) => s.plan.waterSchedule);
   const meals = mealTemplates[dayType];
 
   const log = useNutritionStore((s) => s.getLog(dateKey));
@@ -68,6 +71,11 @@ export default function NutritionScreen() {
         </View>
       </Card>
 
+      <Text style={styles.sectionTitle}>Lịch trình uống nước hôm nay</Text>
+      <Card>
+        <WaterTimeline schedule={waterSchedule} currentMl={log.waterMl} />
+      </Card>
+
       <Text style={styles.sectionTitle}>Bữa ăn theo kế hoạch</Text>
       {meals.map((meal) => {
         const eaten = !!log.mealsEaten[meal.slot];
@@ -81,9 +89,9 @@ export default function NutritionScreen() {
                 </View>
               </View>
               <Text style={styles.mealTime}>{meal.timeRange}</Text>
-              <Text style={styles.mealDescription}>{meal.description}</Text>
+              <MealItemRows items={meal.items} />
               <Text style={styles.mealMacro}>
-                {meal.calories} kcal · {meal.proteinG}g protein
+                Tổng: {meal.calories} kcal · {meal.proteinG}g protein
               </Text>
               <ProofCapture dateKey={dateKey} taskType="meal" taskRefId={meal.slot} />
             </Card>

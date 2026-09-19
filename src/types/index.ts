@@ -2,13 +2,19 @@ export type DayType = 'training' | 'rest';
 
 export type MealSlot = 'meal1' | 'meal2' | 'meal3';
 
+export interface MealFoodItem {
+  name: string;
+  calories: number;
+}
+
 export interface MealTemplate {
   slot: MealSlot;
   label: string;
   timeRange: string;
   startHour: number;
   startMinute: number;
-  description: string;
+  /** Individual food line items; `calories` below must equal their sum. */
+  items: MealFoodItem[];
   calories: number;
   proteinG: number;
 }
@@ -77,9 +83,17 @@ export interface ProofPhoto {
 }
 
 export interface MilestoneDef {
-  key: '1m' | '3m' | '6m';
+  key: string;
   label: string;
-  monthsFromStart: number;
+  daysFromStart: number;
+}
+
+/** A point in the day's water-drinking schedule, targeting a cumulative amount by that time. */
+export interface WaterCheckpoint {
+  hour: number;
+  minute: number;
+  label: string;
+  cumulativeTargetMl: number;
 }
 
 export interface ShoppingListItem {
@@ -100,4 +114,5 @@ export interface PlanData {
   mealTemplates: Record<DayType, MealTemplate[]>;
   workoutTemplates: WorkoutTemplate[];
   shoppingList: ShoppingListItem[];
+  waterSchedule: WaterCheckpoint[];
 }

@@ -6,21 +6,39 @@ import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 
+const RANGE_OPTIONS = [
+  { key: '1w', label: '1 tuần', days: 7 },
+  { key: '2w', label: '2 tuần', days: 14 },
+  { key: '1m', label: '1 tháng', days: 30 },
+  { key: '2m', label: '2 tháng', days: 61 },
+  { key: '3m', label: '3 tháng', days: 91 },
+];
+
+// Chart labels get unreadable with many points — only show every Nth label.
+function thinLabels(labels: string[], maxVisible = 7): string[] {
+  if (labels.length <= maxVisible) return labels;
+  const step = Math.ceil(labels.length / maxVisible);
+  return labels.map((label, i) => (i % step === 0 || i === labels.length - 1 ? label : ''));
+}
+
 export default function WeightScreen() {
   const entries = useWeightStore((s) => s.entries);
   const addEntry = useWeightStore((s) => s.addEntry);
   const removeEntry = useWeightStore((s) => s.removeEntry);
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
   const [input, setInput] = useState('');
+  const [rangeDays, setRangeDays] = useState(30);
 
   const chartData = useMemo(() => {
-    const recent = entries.slice(-14);
-    if (recent.length === 0) return null;
+    const cutoff = Date.now() - rangeDays * 24 * 60 * 60 * 1000;
+    const inRange = entries.filter((e) => new Date(e.dateISO).getTime() >= cutoff);
+    if (inRange.length === 0) return null;
+    const labels = inRange.map((e) => formatDateVi(toDateKey(new Date(e.dateISO))).slice(0, 5));
     return {
-      labels: recent.map((e) => formatDateVi(toDateKey(new Date(e.dateISO))).slice(0, 5)),
-      datasets: [{ data: recent.map((e) => e.weightKg) }],
+      labels: thinLabels(labels),
+      datasets: [{ data: inRange.map((e) => e.weightKg) }],
     };
-  }, [entries]);
+  }, [entries, rangeDays]);
 
   function handleAdd() {
     const value = parseFloat(input.replace(',', '.'));
@@ -55,9 +73,22 @@ export default function WeightScreen() {
             </View>
           </Card>
 
-          {chartData && chartData.datasets[0].data.length > 1 && (
-            <Card>
-              <Text style={styles.cardTitle}>Biểu đồ cân nặng (gần đây)</Text>
+          <Card>
+            <Text style={styles.cardTitle}>Biểu đồ cân nặng</Text>
+            <View style={styles.rangeRow}>
+              {RANGE_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.rangeButton, rangeDays === opt.days && styles.rangeButtonActive]}
+                  onPress={() => setRangeDays(opt.days)}
+                >
+                  <Text style={[styles.rangeButtonText, rangeDays === opt.days && styles.rangeButtonTextActive]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {chartData && chartData.datasets[0].data.length > 1 ? (
               <LineChart
                 data={chartData}
                 width={screenWidth}
@@ -75,9 +106,11 @@ export default function WeightScreen() {
                 bezier
                 style={{ borderRadius: 12 }}
               />
-              <Text style={styles.goalNote}>Mục tiêu: {goalWeightKg} kg</Text>
-            </Card>
-          )}
+            ) : (
+              <Text style={styles.emptyChartText}>Chưa đủ dữ liệu trong khoảng này.</Text>
+            )}
+            <Text style={styles.goalNote}>Mục tiêu: {goalWeightKg} kg</Text>
+          </Card>
 
           <Text style={styles.historyTitle}>Lịch sử</Text>
         </>
@@ -117,6 +150,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addButtonText: { color: '#fff', fontWeight: '700' },
+  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
+  rangeButton: { backgroundColor: '#F0F0F0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  rangeButtonActive: { backgroundColor: '#4F8EF7' },
+  rangeButtonText: { fontSize: 12, color: '#666', fontWeight: '600' },
+  rangeButtonTextActive: { color: '#fff' },
+  emptyChartText: { textAlign: 'center', color: '#999', paddingVertical: 24 },
   goalNote: { textAlign: 'center', color: '#888', fontSize: 12, marginTop: 6 },
   historyTitle: { fontSize: 15, fontWeight: '700', marginBottom: 8, marginTop: 4, color: '#222' },
   historyRow: {

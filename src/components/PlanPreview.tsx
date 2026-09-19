@@ -1,13 +1,27 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Card } from './Card';
-import type { PlanData } from '../types';
+import type { MealFoodItem, PlanData } from '../types';
 import { shoppingListTotalVnd } from '../constants/plan';
 
 function formatVnd(amount: number): string {
   return amount.toLocaleString('vi-VN') + ' đ';
 }
 
-/** Renders a PlanData (meal menus, workouts, shopping list) — reused for both the live plan and an AI proposal preview. */
+/** One food line per row (name + kcal) — shared by the plan reference view and the daily meal cards. */
+export function MealItemRows({ items }: { items: MealFoodItem[] }) {
+  return (
+    <View style={styles.itemsList}>
+      {items.map((item, index) => (
+        <View key={`${item.name}-${index}`} style={styles.itemRow}>
+          <Text style={styles.itemName}>{item.name}</Text>
+          <Text style={styles.itemCalories}>{item.calories} kcal</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/** Renders a PlanData (meal menus, water schedule, workouts, shopping list) — reused for both the live plan and an AI proposal preview. */
 export function PlanPreview({ plan }: { plan: PlanData }) {
   return (
     <View>
@@ -17,9 +31,9 @@ export function PlanPreview({ plan }: { plan: PlanData }) {
           <Text style={styles.mealLabel}>
             {m.label} ({m.timeRange})
           </Text>
-          <Text style={styles.mealDescription}>{m.description}</Text>
+          <MealItemRows items={m.items} />
           <Text style={styles.mealMacro}>
-            {m.calories} kcal · {m.proteinG}g protein
+            Tổng: {m.calories} kcal · {m.proteinG}g protein
           </Text>
         </Card>
       ))}
@@ -30,12 +44,25 @@ export function PlanPreview({ plan }: { plan: PlanData }) {
           <Text style={styles.mealLabel}>
             {m.label} ({m.timeRange})
           </Text>
-          <Text style={styles.mealDescription}>{m.description}</Text>
+          <MealItemRows items={m.items} />
           <Text style={styles.mealMacro}>
-            {m.calories} kcal · {m.proteinG}g protein
+            Tổng: {m.calories} kcal · {m.proteinG}g protein
           </Text>
         </Card>
       ))}
+
+      <Text style={styles.sectionTitle}>Lịch trình uống nước (mục tiêu cộng dồn)</Text>
+      <Card>
+        {plan.waterSchedule.map((cp, index) => (
+          <View key={`${cp.hour}-${cp.minute}-${index}`} style={styles.waterRow}>
+            <Text style={styles.waterTime}>
+              {String(cp.hour).padStart(2, '0')}:{String(cp.minute).padStart(2, '0')}
+            </Text>
+            <Text style={styles.waterLabel}>{cp.label}</Text>
+            <Text style={styles.waterTarget}>{cp.cumulativeTargetMl}ml</Text>
+          </View>
+        ))}
+      </Card>
 
       <Text style={styles.sectionTitle}>Chi tiết bài tập Cardio</Text>
       {plan.workoutTemplates.map((t) => (
@@ -73,6 +100,21 @@ const styles = StyleSheet.create({
   mealLabel: { fontSize: 14, fontWeight: '700', color: '#222' },
   mealDescription: { fontSize: 13, color: '#444', marginTop: 6, lineHeight: 18 },
   mealMacro: { fontSize: 13, color: '#4F8EF7', fontWeight: '700', marginTop: 8 },
+  itemsList: { marginTop: 8 },
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
+  itemName: { fontSize: 13, color: '#444', flex: 1, paddingRight: 8 },
+  itemCalories: { fontSize: 13, color: '#666', fontWeight: '600' },
+  waterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+    gap: 10,
+  },
+  waterTime: { fontSize: 12, fontWeight: '700', color: '#0288D1', width: 44 },
+  waterLabel: { fontSize: 12, color: '#444', flex: 1 },
+  waterTarget: { fontSize: 12, fontWeight: '700', color: '#333' },
   shoppingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

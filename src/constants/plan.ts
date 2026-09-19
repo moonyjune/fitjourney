@@ -1,4 +1,4 @@
-import type { DayType, MealTemplate, PlanData, ShoppingListItem, WorkoutTemplate } from '../types';
+import type { DayType, MealTemplate, MilestoneDef, PlanData, ShoppingListItem, WaterCheckpoint, WorkoutTemplate } from '../types';
 
 // Nguồn: Input/KeHoachGiamCan.docx và Input/BuyingList.docx
 // Kế hoạch IF 16:8 cho người 110kg: khung ăn 12:00 - 20:00, khung nhịn 20:00 - 12:00 hôm sau.
@@ -16,18 +16,30 @@ export const WEEKLY_FAT_LOSS_TARGET_KG = [0.9, 1.1] as const;
 // getDay(): 0 = Chủ Nhật, 1 = Thứ 2, ... 6 = Thứ 7
 export const TRAINING_WEEKDAYS = new Set([1, 2, 4, 5]);
 
-export const WATER_REMINDER_TIMES = [
-  { hour: 9, minute: 0 },
-  { hour: 13, minute: 0 },
-  { hour: 16, minute: 0 },
-  { hour: 18, minute: 30 },
-] as const;
+// Lịch trình uống nước mặc định theo mốc thời gian trong ngày (giờ ngủ dậy -> trước khi ngủ),
+// mỗi mốc ghi lượng nước CỘNG DỒN cần đạt tính từ đầu ngày. Tổng khớp DEFAULT_WATER_TARGET_ML.
+export const DEFAULT_WATER_SCHEDULE: WaterCheckpoint[] = [
+  { hour: 6, minute: 0, label: 'Thức dậy - 1 ly nước ấm', cumulativeTargetMl: 500 },
+  { hour: 6, minute: 30, label: 'Trong lúc tập sáng', cumulativeTargetMl: 1000 },
+  { hour: 8, minute: 30, label: 'Trong khung nhịn (sáng)', cumulativeTargetMl: 2000 },
+  { hour: 12, minute: 0, label: 'Sau bữa 1 (trưa)', cumulativeTargetMl: 2300 },
+  { hour: 15, minute: 30, label: 'Trước bữa 2 (chiều)', cumulativeTargetMl: 2700 },
+  { hour: 17, minute: 30, label: 'Trong/sau lúc tập chiều', cumulativeTargetMl: 3300 },
+  { hour: 19, minute: 15, label: 'Sau bữa 3 (tối)', cumulativeTargetMl: 3700 },
+  { hour: 20, minute: 0, label: 'Trước khi bắt đầu nhịn tối', cumulativeTargetMl: 4500 },
+];
 
-export const MILESTONES = [
-  { key: '1m', label: 'Mốc 1 tháng', monthsFromStart: 1 },
-  { key: '3m', label: 'Mốc 3 tháng', monthsFromStart: 3 },
-  { key: '6m', label: 'Mốc 6 tháng', monthsFromStart: 6 },
-] as const;
+// Mốc tiến trình chi tiết theo tuần/tháng kể từ ngày bắt đầu.
+export const MILESTONES: MilestoneDef[] = [
+  { key: '1w', label: 'Mốc 1 tuần', daysFromStart: 7 },
+  { key: '2w', label: 'Mốc 2 tuần', daysFromStart: 14 },
+  { key: '4w', label: 'Mốc 4 tuần', daysFromStart: 28 },
+  { key: '1m', label: 'Mốc 1 tháng', daysFromStart: 30 },
+  { key: '6w', label: 'Mốc 6 tuần', daysFromStart: 42 },
+  { key: '2m', label: 'Mốc 2 tháng', daysFromStart: 61 },
+  { key: '10w', label: 'Mốc 10 tuần', daysFromStart: 70 },
+  { key: '3m', label: 'Mốc 3 tháng', daysFromStart: 91 },
+];
 
 export function getDayType(date: Date = new Date()): DayType {
   return TRAINING_WEEKDAYS.has(date.getDay()) ? 'training' : 'rest';
@@ -41,8 +53,15 @@ export const DEFAULT_MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       timeRange: '12:00 - 12:45',
       startHour: 12,
       startMinute: 0,
-      description:
-        '4 lòng trắng trứng luộc, 2 quả trứng nguyên, 120g xúc xích gà nạc áp chảo, 1 lát bánh mì nguyên cám, 1 hũ sữa chua không đường, 30g yến mạch + 1/2 quả chuối, 8 hạt hạnh nhân.',
+      items: [
+        { name: '4 lòng trắng trứng luộc', calories: 68 },
+        { name: '2 quả trứng luộc nguyên quả', calories: 143 },
+        { name: '120g xúc xích gà nạc áp chảo', calories: 180 },
+        { name: '1 lát bánh mì nguyên cám', calories: 70 },
+        { name: '1 hũ sữa chua không đường (100g)', calories: 60 },
+        { name: '30g yến mạch cán vỡ + 1/2 quả chuối chín', calories: 165 },
+        { name: '8 hạt hạnh nhân', calories: 55 },
+      ],
       calories: 741,
       proteinG: 53,
     },
@@ -52,7 +71,11 @@ export const DEFAULT_MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       timeRange: '15:30 - 16:00',
       startHour: 15,
       startMinute: 30,
-      description: 'Bát miến gà: 200g lườn gà xé phay không da, 40g miến khô, rau cải/mộc nhĩ, nước dùng gà trong.',
+      items: [
+        { name: '200g lườn gà xé phay không da', calories: 330 },
+        { name: '40g miến khô (ngâm nở nấu bát lớn)', calories: 130 },
+        { name: 'Rau cải, mộc nhĩ, nước dùng gà trong', calories: 40 },
+      ],
       calories: 500,
       proteinG: 64,
     },
@@ -62,8 +85,13 @@ export const DEFAULT_MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       timeRange: '19:15 - 20:00',
       startHour: 19,
       startMinute: 15,
-      description:
-        '200g ức gà áp chảo/nướng mộc, 180g khoai tây nghiền (hoặc 150g khoai lang), 1 bát salad lớn, 2 quả trứng luộc, 1 ly sữa tươi tách béo không đường (200ml).',
+      items: [
+        { name: '200g ức gà áp chảo/nướng mộc', calories: 330 },
+        { name: '180g khoai tây nghiền (hoặc 150g khoai lang luộc)', calories: 130 },
+        { name: '1 bát salad lớn (dưa chuột, cà chua, hành tây)', calories: 40 },
+        { name: '2 quả trứng luộc nguyên quả', calories: 143 },
+        { name: '1 ly sữa tươi tách béo không đường (200ml)', calories: 70 },
+      ],
       calories: 713,
       proteinG: 86,
     },
@@ -75,9 +103,15 @@ export const DEFAULT_MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       timeRange: '12:00 - 12:45',
       startHour: 12,
       startMinute: 0,
-      description:
-        '4 lòng trắng trứng luộc, 2 quả trứng nguyên, 80g xúc xích gà, 1 hũ sữa chua không đường, 30g yến mạch + 1/2 quả chuối, 8 hạt hạnh nhân (bỏ bánh mì).',
-      calories: 661,
+      items: [
+        { name: '4 lòng trắng trứng luộc', calories: 68 },
+        { name: '2 quả trứng luộc nguyên quả', calories: 143 },
+        { name: '80g xúc xích gà nạc áp chảo', calories: 120 },
+        { name: '1 hũ sữa chua không đường', calories: 60 },
+        { name: '30g yến mạch cán vỡ + 1/2 quả chuối chín', calories: 165 },
+        { name: '8 hạt hạnh nhân', calories: 55 },
+      ],
+      calories: 611,
       proteinG: 50,
     },
     {
@@ -86,8 +120,12 @@ export const DEFAULT_MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       timeRange: '15:30 - 16:00',
       startHour: 15,
       startMinute: 30,
-      description: '200g lườn gà/thăn bò/phi lê cá + 20g miến khô (hoặc 80g cơm gạo lứt) + rau củ hấp.',
-      calories: 470,
+      items: [
+        { name: '200g lườn gà / thăn bò / phi lê cá', calories: 330 },
+        { name: '20g miến khô (hoặc 80g cơm gạo lứt)', calories: 65 },
+        { name: 'Rau củ hấp', calories: 40 },
+      ],
+      calories: 435,
       proteinG: 60,
     },
     {
@@ -96,9 +134,14 @@ export const DEFAULT_MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       timeRange: '19:15 - 20:00',
       startHour: 19,
       startMinute: 15,
-      description: '200g ức gà/phi lê cá + 120g khoai lang + salad rau củ lớn + 200ml sữa tươi tách béo (bỏ trứng luộc).',
-      calories: 650,
-      proteinG: 80,
+      items: [
+        { name: '200g ức gà / phi lê cá', calories: 330 },
+        { name: '120g khoai lang luộc', calories: 104 },
+        { name: 'Salad rau củ lớn', calories: 40 },
+        { name: '200ml sữa tươi tách béo không đường', calories: 70 },
+      ],
+      calories: 544,
+      proteinG: 74,
     },
   ],
 };
@@ -181,6 +224,7 @@ export const DEFAULT_PLAN: PlanData = {
   mealTemplates: DEFAULT_MEAL_TEMPLATES,
   workoutTemplates: DEFAULT_WORKOUT_TEMPLATES,
   shoppingList: DEFAULT_SHOPPING_LIST,
+  waterSchedule: DEFAULT_WATER_SCHEDULE,
 };
 
 export function shoppingListTotalVnd(shoppingList: ShoppingListItem[]): number {

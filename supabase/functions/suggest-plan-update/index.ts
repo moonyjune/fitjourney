@@ -31,11 +31,14 @@ type PlanData = {
   };
   workoutTemplates: WorkoutTemplate[];
   shoppingList: ShoppingListItem[];
+  waterSchedule: WaterCheckpoint[];
 };
 type MealTemplate = {
   slot: "meal1" | "meal2" | "meal3";
   label: string; timeRange: string; startHour: number; startMinute: number;
-  description: string; calories: number; proteinG: number;
+  items: { name: string; calories: number }[]; // liệt kê TỪNG món ăn riêng, mỗi món 1 dòng + calo riêng
+  calories: number; // PHẢI bằng tổng calories của items
+  proteinG: number;
 };
 type WorkoutTemplate = {
   id: string; label: string; timeRange: string; durationMin: number; caloriesBurned: number;
@@ -44,12 +47,18 @@ type WorkoutTemplate = {
 type ShoppingListItem = {
   category: string; name: string; amountPerWeek: string; quantityToBuy: string; estimatedPriceVnd: number;
 };
+type WaterCheckpoint = {
+  hour: number; minute: number; label: string;
+  cumulativeTargetMl: number; // lượng nước CỘNG DỒN cần đạt tính từ đầu ngày tới mốc này
+};
 
 Quy tắc:
 - Giữ nguyên mọi phần không liên quan đến yêu cầu chỉnh sửa.
-- Giữ đơn vị: calo (kcal), protein (g), giá (VNĐ, số nguyên).
-- Nếu yêu cầu ảnh hưởng đến calo/protein của món ăn, cập nhật lại số liệu calories/proteinG cho hợp lý.
+- Giữ đơn vị: calo (kcal), protein (g), giá (VNĐ, số nguyên), nước (ml).
+- Nếu yêu cầu ảnh hưởng đến calo/protein của món ăn, cập nhật lại items và calories/proteinG cho hợp lý
+  (calories của meal luôn bằng tổng calories của các items trong items).
 - Nếu yêu cầu thêm/đổi nguyên liệu, cập nhật shoppingList tương ứng (thêm dòng mới nếu cần, ước tính giá VNĐ hợp lý theo mặt bằng giá siêu thị/chợ Việt Nam).
+- Nếu yêu cầu ảnh hưởng đến giờ giấc/lượng nước uống, cập nhật waterSchedule; cumulativeTargetMl của mốc cuối cùng phải bằng tổng lượng nước mục tiêu cả ngày, các mốc phải tăng dần theo thời gian.
 - Không thêm trường ngoài schema. Không bỏ trường bắt buộc.`;
 
 Deno.serve(async (req) => {
@@ -154,6 +163,7 @@ function isValidPlanShape(value: unknown): value is {
   mealTemplates: { training: unknown[]; rest: unknown[] };
   workoutTemplates: unknown[];
   shoppingList: unknown[];
+  waterSchedule: unknown[];
 } {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
@@ -163,6 +173,7 @@ function isValidPlanShape(value: unknown): value is {
     Array.isArray(meals.training) &&
     Array.isArray(meals.rest) &&
     Array.isArray(v.workoutTemplates) &&
-    Array.isArray(v.shoppingList)
+    Array.isArray(v.shoppingList) &&
+    Array.isArray(v.waterSchedule)
   );
 }

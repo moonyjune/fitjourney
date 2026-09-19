@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { TRAINING_WEEKDAYS, WATER_REMINDER_TIMES } from '../constants/plan';
+import { TRAINING_WEEKDAYS } from '../constants/plan';
 import type { PlanData } from '../types';
 
 Notifications.setNotificationHandler({
@@ -41,16 +41,16 @@ export async function scheduleAllReminders(plan: PlanData): Promise<void> {
     });
   }
 
-  for (const water of WATER_REMINDER_TIMES) {
+  for (const checkpoint of plan.waterSchedule) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Nhắc uống nước 💧',
-        body: 'Đừng quên uống nước để đạt mục tiêu 4.5L hôm nay.',
+        body: `${checkpoint.label} — mục tiêu cộng dồn ${checkpoint.cumulativeTargetMl}ml.`,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,
-        hour: water.hour,
-        minute: water.minute,
+        hour: checkpoint.hour,
+        minute: checkpoint.minute,
       },
     });
   }
