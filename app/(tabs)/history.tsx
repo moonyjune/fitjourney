@@ -11,6 +11,7 @@ import { usePlanStore } from '../../src/store/usePlanStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { computeMilestones } from '../../src/utils/milestones';
+import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
 
 interface DaySummary {
   dateKey: string;
@@ -110,8 +111,30 @@ export default function HistoryScreen() {
     [settings.startDateISO, settings.startWeightKg, settings.goalWeightKg, latestWeight]
   );
 
+  const streak = useMemo(
+    () => computeCurrentStreak(nutritionLogs, 3, settings.waterTargetMl),
+    [nutritionLogs, settings.waterTargetMl]
+  );
+  const badges = unlockedStreakBadges(streak);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.sectionTitle}>Thành tích</Text>
+      <Card>
+        <Text style={styles.streakValue}>🔥 {streak} ngày liên tiếp</Text>
+        {badges.length > 0 ? (
+          <View style={styles.badgeRow}>
+            {badges.map((b) => (
+              <View key={b} style={styles.badgeChip}>
+                <Text style={styles.badgeChipText}>{badgeLabel(b)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.dayMeta}>Hoàn thành 3 ngày liên tiếp để mở huy hiệu đầu tiên.</Text>
+        )}
+      </Card>
+
       <Text style={styles.sectionTitle}>Mốc tiến trình</Text>
       {milestones.map((m) => (
         <Card key={m.key}>
@@ -176,4 +199,8 @@ const styles = StyleSheet.create({
   dayMeta: { fontSize: 12, color: '#666', marginTop: 4 },
   proofBadge: { fontSize: 12, color: '#4F8EF7', fontWeight: '700', marginTop: 6 },
   emptyText: { textAlign: 'center', color: '#999', marginBottom: 12 },
+  streakValue: { fontSize: 20, fontWeight: '800', color: '#8A5A00' },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  badgeChip: { backgroundColor: '#FFE8B3', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  badgeChipText: { fontSize: 11, fontWeight: '700', color: '#8A5A00' },
 });

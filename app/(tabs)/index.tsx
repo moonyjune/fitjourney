@@ -13,6 +13,7 @@ import { usePlanStore } from '../../src/store/usePlanStore';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { computeMilestones } from '../../src/utils/milestones';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
+import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
 
 export default function TodayScreen() {
   const [now, setNow] = useState(new Date());
@@ -25,6 +26,7 @@ export default function TodayScreen() {
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
   const nutritionLog = useNutritionStore((s) => s.getLog(todayKey()));
+  const allNutritionLogs = useNutritionStore((s) => s.logs);
   const allWorkoutEntries = useWorkoutStore((s) => s.entries);
   const workoutEntries = useMemo(
     () => allWorkoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === todayKey()),
@@ -61,6 +63,12 @@ export default function TodayScreen() {
     return milestones.find((m) => m.status === 'upcoming') ?? milestones[milestones.length - 1];
   }, [settings.startDateISO, settings.startWeightKg, settings.goalWeightKg, currentWeight, now]);
 
+  const streak = useMemo(
+    () => computeCurrentStreak(allNutritionLogs, 3, settings.waterTargetMl, now),
+    [allNutritionLogs, settings.waterTargetMl, now]
+  );
+  const badges = unlockedStreakBadges(streak);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.dateLabel}>
@@ -74,6 +82,20 @@ export default function TodayScreen() {
           Còn khoảng {ifStatus.hoursUntilTransition.toFixed(1)} giờ nữa đến{' '}
           {ifStatus.isEatingWindow ? 'giờ nhịn' : 'giờ ăn'}
         </Text>
+      </Card>
+
+      <Card style={styles.streakCard}>
+        <Text style={styles.streakValue}>🔥 {streak} ngày liên tiếp</Text>
+        <Text style={styles.streakHint}>Hoàn thành đủ 3 bữa + đủ nước mỗi ngày để giữ chuỗi.</Text>
+        {badges.length > 0 && (
+          <View style={styles.badgeRow}>
+            {badges.map((b) => (
+              <View key={b} style={styles.badgeChip}>
+                <Text style={styles.badgeChipText}>{badgeLabel(b)}</Text>
+              </View>
+            ))}
+          </View>
+        )}
       </Card>
 
       <Card>
@@ -128,6 +150,12 @@ const styles = StyleSheet.create({
   weightChange: { fontSize: 12, fontWeight: '600' },
   goalLabel: { fontSize: 13, color: '#888', marginTop: 4 },
   milestoneMeta: { fontSize: 12, color: '#666' },
+  streakCard: { backgroundColor: '#FFF7E6' },
+  streakValue: { fontSize: 20, fontWeight: '800', color: '#8A5A00' },
+  streakHint: { fontSize: 11, color: '#8A5A00', marginTop: 4, opacity: 0.8 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  badgeChip: { backgroundColor: '#FFE8B3', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  badgeChipText: { fontSize: 11, fontWeight: '700', color: '#8A5A00' },
   workoutSummary: { fontSize: 14, color: '#333' },
   restNote: { fontSize: 12, color: '#888', marginTop: 6 },
 });

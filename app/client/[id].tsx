@@ -1,12 +1,21 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { PlanPreview } from '../../src/components/PlanPreview';
 import { supabase } from '../../src/lib/supabase';
 import { pullPlan, pushPlan } from '../../src/sync/cloudSync';
-import { DEFAULT_PLAN } from '../../src/constants/plan';
-import type { PlanData } from '../../src/types';
+import { DEFAULT_PLAN, DEFAULT_WATER_TARGET_ML } from '../../src/constants/plan';
+import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
+import { formatDateVi, toDateKey } from '../../src/utils/date';
+import type { DailyNutritionLog, PlanData } from '../../src/types';
+
+interface RecentProof {
+  id: string;
+  entryDate: string;
+  note: string | null;
+  signedUrl: string | null;
+}
 
 export default function ClientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -18,6 +27,8 @@ export default function ClientDetailScreen() {
     latest: null,
     start: null,
   });
+  const [streak, setStreak] = useState(0);
+  const [recentProofs, setRecentProofs] = useState<RecentProof[]>([]);
 
   const [instruction, setInstruction] = useState('');
   const [proposedPlan, setProposedPlan] = useState<PlanData | null>(null);
@@ -28,9 +39,9 @@ export default function ClientDetailScreen() {
     if (!clientId) return;
     (async () => {
       setLoading(true);
-      const [remotePlan, profileRes, latestWeightRes] = await Promise.all([
+      const [remotePlan, profileRes, latestWeightRes, nutritionLogsRes, proofsRes] = await Promise.all([
         pullPlan(clientId),
-        supabase.from('profiles').select('start_weight_kg').eq('id', clientId).maybeSingle(),
+        supabase.from('profiles').select('start_weight_kg, water_target_ml').eq('id', clientId).maybeSingle(),
         supabase
           .from('weight_entries')
           .select('weight_kg')
@@ -38,12 +49,48 @@ export default function ClientDetailScreen() {
           .order('entry_date', { ascending: false })
           .limit(1)
           .maybeSingle(),
+        supabase.from('nutrition_logs').select('*').eq('user_id', clientId),
+        supabase
+          .from('proof_photos')
+          .select('id, entry_date, note, photo_path')
+          .eq('user_id', clientId)
+          .order('created_at', { ascending: false })
+          .limit(6),
       ]);
+
       setPlan(remotePlan?.plan ?? DEFAULT_PLAN);
       setWeightSummary({
         start: profileRes.data?.start_weight_kg ?? null,
         latest: latestWeightRes.data?.weight_kg ?? null,
       });
+
+      const logsMap: Record<string, DailyNutritionLog> = {};
+      for (const row of nutritionLogsRes.data ?? []) {
+        logsMap[toDateKey(new Date(row.entry_date))] = {
+          dateISO: row.entry_date,
+          mealsEaten: row.meals_eaten ?? {},
+          extraCalories: row.extra_calories ?? 0,
+          extraProteinG: row.extra_protein_g ?? 0,
+          waterMl: row.water_ml ?? 0,
+        };
+      }
+      const waterTarget = profileRes.data?.water_target_ml ?? DEFAULT_WATER_TARGET_ML;
+      setStreak(computeCurrentStreak(logsMap, 3, waterTarget));
+
+      const proofRows = proofsRes.data ?? [];
+      const proofsWithUrls = await Promise.all(
+        proofRows.map(async (row) => {
+          const { data: signed } = await supabase.storage.from('proofs').createSignedUrl(row.photo_path, 3600);
+          return {
+            id: row.id,
+            entryDate: row.entry_date,
+            note: row.note,
+            signedUrl: signed?.signedUrl ?? null,
+          };
+        })
+      );
+      setRecentProofs(proofsWithUrls);
+
       setLoading(false);
     })();
   }, [clientId]);
@@ -90,6 +137,7 @@ export default function ClientDetailScreen() {
   }
 
   const change = weightSummary.latest != null && weightSummary.start != null ? weightSummary.latest - weightSummary.start : null;
+  const badges = unlockedStreakBadges(streak);
 
   return (
     <>
@@ -107,6 +155,37 @@ export default function ClientDetailScreen() {
             </Text>
           )}
         </Card>
+
+        <Card style={styles.streakCard}>
+          <Text style={styles.streakValue}>🔥 {streak} ngày liên tiếp</Text>
+          {badges.length > 0 && (
+            <View style={styles.badgeRow}>
+              {badges.map((b) => (
+                <View key={b} style={styles.badgeChip}>
+                  <Text style={styles.badgeChipText}>{badgeLabel(b)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </Card>
+
+        <Text style={styles.sectionTitle}>Ảnh minh chứng gần đây</Text>
+        {recentProofs.length === 0 ? (
+          <Text style={styles.emptyText}>Chưa có ảnh minh chứng nào.</Text>
+        ) : (
+          <View style={styles.proofGrid}>
+            {recentProofs.map((p) => (
+              <View key={p.id} style={styles.proofItem}>
+                {p.signedUrl ? (
+                  <Image source={{ uri: p.signedUrl }} style={styles.proofThumb} />
+                ) : (
+                  <View style={[styles.proofThumb, styles.proofThumbFallback]} />
+                )}
+                <Text style={styles.proofDate}>{formatDateVi(toDateKey(new Date(p.entryDate)))}</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <Text style={styles.sectionTitle}>Trợ lý AI chỉnh kế hoạch cho học viên này</Text>
         <Card>
@@ -159,6 +238,17 @@ const styles = StyleSheet.create({
   weightText: { fontSize: 24, fontWeight: '800', color: '#222' },
   changeText: { fontSize: 12, fontWeight: '600', marginTop: 4 },
   sectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 12, marginBottom: 8, color: '#222' },
+  streakCard: { backgroundColor: '#FFF7E6' },
+  streakValue: { fontSize: 18, fontWeight: '800', color: '#8A5A00' },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  badgeChip: { backgroundColor: '#FFE8B3', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  badgeChipText: { fontSize: 11, fontWeight: '700', color: '#8A5A00' },
+  emptyText: { color: '#999', fontSize: 12, marginBottom: 8 },
+  proofGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  proofItem: { width: 88 },
+  proofThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: '#eee' },
+  proofThumbFallback: { alignItems: 'center', justifyContent: 'center' },
+  proofDate: { fontSize: 10, color: '#888', marginTop: 4, textAlign: 'center' },
   aiInput: {
     borderWidth: 1,
     borderColor: '#DDD',
