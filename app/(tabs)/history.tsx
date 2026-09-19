@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Card } from '../../src/components/Card';
+import { Badge } from '../../src/components/Badge';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
@@ -13,7 +14,10 @@ import { fetchFeedback } from '../../src/sync/cloudSync';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { computeMilestones } from '../../src/utils/milestones';
-import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
+import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
+import { useTranslation } from '../../src/i18n/useTranslation';
+import type { StringKey } from '../../src/i18n/strings';
+import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import type { CoachFeedback } from '../../src/types';
 
 interface DaySummary {
@@ -28,19 +32,20 @@ interface DaySummary {
   weightKg: number | null;
 }
 
-const MILESTONE_STATUS_LABEL: Record<string, string> = {
-  upcoming: 'Chưa tới ngày',
-  achieved: 'Đã đạt mục tiêu',
-  missed: 'Chưa đạt mục tiêu',
+const MILESTONE_STATUS_KEY: Record<string, StringKey> = {
+  upcoming: 'history.milestoneUpcoming',
+  achieved: 'history.milestoneAchieved',
+  missed: 'history.milestoneMissed',
 };
 
 const MILESTONE_STATUS_COLOR: Record<string, string> = {
-  upcoming: '#888',
-  achieved: '#2E9E4E',
-  missed: '#E0563A',
+  upcoming: colors.textMuted,
+  achieved: colors.success,
+  missed: colors.danger,
 };
 
 export default function HistoryScreen() {
+  const { t } = useTranslation();
   const nutritionLogs = useNutritionStore((s) => s.logs);
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const weightEntries = useWeightStore((s) => s.entries);
@@ -129,29 +134,27 @@ export default function HistoryScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.sectionTitle}>Thành tích</Text>
+      <Text style={styles.sectionTitle}>{t('history.achievementsTitle')}</Text>
       <Card>
-        <Text style={styles.streakValue}>🔥 {streak} ngày liên tiếp</Text>
+        <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>
         {badges.length > 0 ? (
           <View style={styles.badgeRow}>
             {badges.map((b) => (
-              <View key={b} style={styles.badgeChip}>
-                <Text style={styles.badgeChipText}>{badgeLabel(b)}</Text>
-              </View>
+              <Badge key={b} label={t('today.streakDays', { n: b })} tone="gold" />
             ))}
           </View>
         ) : (
-          <Text style={styles.dayMeta}>Hoàn thành 3 ngày liên tiếp để mở huy hiệu đầu tiên.</Text>
+          <Text style={styles.dayMeta}>{t('history.emptyBadges')}</Text>
         )}
       </Card>
 
       {feedbackList.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>Nhận xét từ Coach</Text>
+          <Text style={styles.sectionTitle}>{t('history.coachFeedbackTitle')}</Text>
           {feedbackList.map((f) => (
             <Card key={f.id}>
               <Text style={styles.feedbackPeriod}>
-                {f.periodLabel} · {f.periodType === 'weekly' ? 'Tuần' : 'Tháng'}
+                {f.periodLabel} · {f.periodType === 'weekly' ? t('history.periodWeek') : t('history.periodMonth')}
               </Text>
               <Text style={styles.dayMeta}>{f.feedbackText}</Text>
               <Text style={styles.feedbackDate}>{formatDateVi(toDateKey(new Date(f.createdAtISO)))}</Text>
@@ -160,50 +163,48 @@ export default function HistoryScreen() {
         </>
       )}
 
-      <Text style={styles.sectionTitle}>Mốc tiến trình</Text>
+      <Text style={styles.sectionTitle}>{t('history.milestonesTitle')}</Text>
       {milestones.map((m) => (
         <Card key={m.key}>
           <View style={styles.milestoneRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.milestoneLabel}>{m.label}</Text>
+              <Text style={styles.milestoneLabel}>{t(`milestone.${m.key}` as StringKey)}</Text>
               <Text style={styles.milestoneMeta}>
-                Hạn: {formatDateVi(toDateKey(m.targetDate))} · Mục tiêu: {m.targetWeightKg.toFixed(1)} kg
+                {t('history.milestoneDue', { date: formatDateVi(toDateKey(m.targetDate)), kg: m.targetWeightKg.toFixed(1) })}
               </Text>
             </View>
             <Text style={[styles.milestoneStatus, { color: MILESTONE_STATUS_COLOR[m.status] }]}>
-              {MILESTONE_STATUS_LABEL[m.status]}
+              {t(MILESTONE_STATUS_KEY[m.status])}
             </Text>
           </View>
         </Card>
       ))}
 
-      <Text style={styles.sectionTitle}>Tổng kết theo tuần</Text>
-      {weeklySummaries.length === 0 && <Text style={styles.emptyText}>Chưa có dữ liệu.</Text>}
+      <Text style={styles.sectionTitle}>{t('history.weeklyTitle')}</Text>
+      {weeklySummaries.length === 0 && <Text style={styles.emptyText}>{t('history.emptyData')}</Text>}
       {weeklySummaries.map((w) => (
         <Card key={w.weekKey}>
-          <Text style={styles.weekLabel}>Tuần bắt đầu {formatDateVi(w.weekKey)}</Text>
+          <Text style={styles.weekLabel}>{t('history.weekLabel', { date: formatDateVi(w.weekKey) })}</Text>
           <Text style={styles.weekMeta}>
-            TB {Math.round(w.avgCalories)} kcal/ngày · {w.totalWorkouts} buổi tập
+            {t('history.weekMeta', { kcal: Math.round(w.avgCalories), n: w.totalWorkouts })}
             {w.weightChange !== null
-              ? ` · Cân nặng ${w.weightChange > 0 ? '+' : ''}${w.weightChange.toFixed(1)} kg`
+              ? t('history.weekWeightChange', { sign: w.weightChange > 0 ? '+' : '', kg: w.weightChange.toFixed(1) })
               : ''}
           </Text>
         </Card>
       ))}
 
-      <Text style={styles.sectionTitle}>Nhật ký hằng ngày</Text>
-      {daySummaries.length === 0 && <Text style={styles.emptyText}>Chưa có dữ liệu.</Text>}
+      <Text style={styles.sectionTitle}>{t('history.dailyTitle')}</Text>
+      {daySummaries.length === 0 && <Text style={styles.emptyText}>{t('history.emptyData')}</Text>}
       {daySummaries.map((d) => (
         <Card key={d.dateKey}>
           <Text style={styles.dayLabel}>{formatDateVi(d.dateKey)}</Text>
+          <Text style={styles.dayMeta}>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Text>
           <Text style={styles.dayMeta}>
-            {d.calories} kcal · {d.proteinG}g protein · {d.waterMl}ml nước
-          </Text>
-          <Text style={styles.dayMeta}>
-            {d.mealsEatenCount}/3 bữa · {d.workoutsCount} buổi tập ({d.caloriesBurned} kcal){' '}
+            {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
             {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}
           </Text>
-          {d.proofsCount > 0 && <Text style={styles.proofBadge}>📷 {d.proofsCount} ảnh minh chứng</Text>}
+          {d.proofsCount > 0 && <Text style={styles.proofBadge}>{t('history.proofBadge', { n: d.proofsCount })}</Text>}
         </Card>
       ))}
     </ScrollView>
@@ -211,23 +212,21 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  content: { padding: 16, paddingBottom: 32 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 8, marginBottom: 8, color: '#222' },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.base, paddingBottom: spacing.xxl },
+  sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
   milestoneRow: { flexDirection: 'row', alignItems: 'center' },
-  milestoneLabel: { fontSize: 14, fontWeight: '700', color: '#222' },
-  milestoneMeta: { fontSize: 12, color: '#888', marginTop: 4 },
+  milestoneLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  milestoneMeta: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   milestoneStatus: { fontSize: 12, fontWeight: '700' },
-  weekLabel: { fontSize: 14, fontWeight: '700', color: '#222' },
-  weekMeta: { fontSize: 12, color: '#666', marginTop: 4 },
-  dayLabel: { fontSize: 14, fontWeight: '700', color: '#222' },
-  dayMeta: { fontSize: 12, color: '#666', marginTop: 4 },
-  proofBadge: { fontSize: 12, color: '#4F8EF7', fontWeight: '700', marginTop: 6 },
-  emptyText: { textAlign: 'center', color: '#999', marginBottom: 12 },
-  streakValue: { fontSize: 20, fontWeight: '800', color: '#8A5A00' },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  badgeChip: { backgroundColor: '#FFE8B3', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  badgeChipText: { fontSize: 11, fontWeight: '700', color: '#8A5A00' },
-  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: '#4F8EF7' },
-  feedbackDate: { fontSize: 11, color: '#999', marginTop: 8 },
+  weekLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  weekMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  dayLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+  dayMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  proofBadge: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: spacing.sm - 2 },
+  emptyText: { textAlign: 'center', color: colors.textMuted, marginBottom: spacing.md },
+  streakValue: { fontSize: 20, fontWeight: '800', color: colors.gold },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginTop: spacing.md },
+  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  feedbackDate: { fontSize: 11, color: colors.textMuted, marginTop: spacing.md - 4 },
 });

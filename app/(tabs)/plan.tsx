@@ -12,7 +12,7 @@ import { supabase } from '../../src/lib/supabase';
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { CARB_SWAP_OPTIONS, PROTEIN_SWAP_OPTIONS } from '../../src/constants/plan';
 import { useTranslation } from '../../src/i18n/useTranslation';
-import { colors } from '../../src/theme/tokens';
+import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import type { PlanData } from '../../src/types';
 
 export default function PlanScreen() {
@@ -48,9 +48,9 @@ export default function PlanScreen() {
     setLinkingCoach(false);
     if (result.ok) {
       setCoachCodeInput('');
-      Alert.alert('Đã liên kết', 'Bạn đã liên kết với Coach thành công.');
+      Alert.alert(t('plan.linkedTitle'), t('plan.linkedMessage'));
     } else {
-      Alert.alert('Không liên kết được', result.message);
+      Alert.alert(t('plan.linkFailedTitle'), result.message);
     }
   }
 
@@ -60,18 +60,18 @@ export default function PlanScreen() {
     const water = parseFloat(waterTarget);
     const goal = parseFloat(goalWeight);
     if (!cal || !protein || !water || !goal) {
-      Alert.alert('Lỗi', 'Vui lòng nhập đầy đủ các giá trị hợp lệ.');
+      Alert.alert(t('common.error'), t('plan.invalidValuesMessage'));
       return;
     }
     updateSettings({ calorieTargetKcal: cal, proteinTargetG: protein, waterTargetMl: water, goalWeightKg: goal });
-    Alert.alert('Đã lưu', 'Mục tiêu đã được cập nhật.');
+    Alert.alert(t('plan.savedTitle'), t('plan.savedMessage'));
   }
 
   async function handleToggleReminders(value: boolean) {
     if (value) {
       const granted = await requestNotificationPermissions();
       if (!granted) {
-        Alert.alert('Chưa cấp quyền', 'Bạn cần cho phép thông báo để bật nhắc nhở.');
+        Alert.alert(t('plan.permissionTitle'), t('plan.permissionMessage'));
         return;
       }
       await scheduleAllReminders(plan);
@@ -92,11 +92,9 @@ export default function PlanScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.sectionTitle}>{t('mode.title')}</Text>
       <Card>
-        <Text style={styles.fieldLabel}>
-          {settings.coachEnabled ? 'Bạn cũng có vai trò Coach.' : 'Bạn cũng có thể quản lý học viên với vai trò Coach.'}
-        </Text>
+        <Text style={styles.fieldLabel}>{settings.coachEnabled ? t('plan.coachFieldEnabled') : t('plan.coachFieldDisabled')}</Text>
         <Button
-          title={settings.coachEnabled ? 'Chuyển sang chế độ Coach' : 'Kích hoạt vai trò Coach'}
+          title={settings.coachEnabled ? t('plan.switchToCoach') : t('plan.activateCoach')}
           onPress={handleSwitchToCoach}
           loading={switchingMode}
         />
@@ -120,41 +118,38 @@ export default function PlanScreen() {
         </View>
       </Card>
 
-      <Text style={styles.sectionTitle}>Trợ lý AI cập nhật kế hoạch</Text>
-      <Text style={styles.aiHint}>
-        Trò chuyện để chỉnh thực đơn, bài tập, lịch uống nước hoặc danh sách đi chợ. AI sẽ đề xuất bản cập
-        nhật — bạn xem trước và bấm Xác nhận thì mới áp dụng.
-      </Text>
+      <Text style={styles.sectionTitle}>{t('plan.aiTitle')}</Text>
+      <Text style={styles.aiHint}>{t('plan.aiHint')}</Text>
       <PlanChatAssistant livePlan={plan} onApply={handleApplyPlan} />
 
-      <Text style={styles.sectionTitle}>Nhắc nhở</Text>
+      <Text style={styles.sectionTitle}>{t('plan.remindersTitle')}</Text>
       <Card>
         <View style={styles.switchRow}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.fieldLabel}>Nhắc giờ ăn, giờ tập, uống nước</Text>
-            <Text style={styles.switchHint}>Thông báo local trên thiết bị (không hoạt động trên web).</Text>
+            <Text style={styles.fieldLabel}>{t('plan.remindersLabel')}</Text>
+            <Text style={styles.switchHint}>{t('plan.remindersHint')}</Text>
           </View>
           <Switch value={settings.remindersEnabled} onValueChange={handleToggleReminders} />
         </View>
       </Card>
 
-      <Text style={styles.sectionTitle}>Mục tiêu cá nhân</Text>
+      <Text style={styles.sectionTitle}>{t('plan.goalsTitle')}</Text>
       <Card>
-        <Text style={styles.fieldLabel}>Cân nặng mục tiêu (kg)</Text>
+        <Text style={styles.fieldLabel}>{t('plan.goalWeightLabel')}</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={goalWeight} onChangeText={setGoalWeight} />
-        <Text style={styles.fieldLabel}>Calo mục tiêu / ngày</Text>
+        <Text style={styles.fieldLabel}>{t('plan.calorieTargetLabel')}</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={calorieTarget} onChangeText={setCalorieTarget} />
-        <Text style={styles.fieldLabel}>Protein mục tiêu (g) / ngày</Text>
+        <Text style={styles.fieldLabel}>{t('plan.proteinTargetLabel')}</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={proteinTarget} onChangeText={setProteinTarget} />
-        <Text style={styles.fieldLabel}>Nước mục tiêu (ml) / ngày</Text>
+        <Text style={styles.fieldLabel}>{t('plan.waterTargetLabel')}</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={waterTarget} onChangeText={setWaterTarget} />
-        <Button title="Lưu mục tiêu" onPress={saveTargets} />
+        <Button title={t('plan.saveGoalsButton')} onPress={saveTargets} />
       </Card>
 
-      <Text style={styles.sectionTitle}>Kế hoạch hiện tại</Text>
+      <Text style={styles.sectionTitle}>{t('plan.currentPlanTitle')}</Text>
       <PlanPreview plan={plan} />
 
-      <Text style={styles.sectionTitle}>Tùy biến món ăn (giữ nguyên calo & protein)</Text>
+      <Text style={styles.sectionTitle}>{t('plan.swapTitle')}</Text>
       <Card>
         <Text style={styles.swapGroupTitle}>Nhóm tinh bột (~120-140 kcal/phần)</Text>
         {CARB_SWAP_OPTIONS.map((item) => (
@@ -162,7 +157,7 @@ export default function PlanScreen() {
             • {item}
           </Text>
         ))}
-        <Text style={[styles.swapGroupTitle, { marginTop: 12 }]}>Nhóm đạm (~30-35g protein/phần)</Text>
+        <Text style={[styles.swapGroupTitle, { marginTop: spacing.md }]}>Nhóm đạm (~30-35g protein/phần)</Text>
         {PROTEIN_SWAP_OPTIONS.map((item) => (
           <Text key={item} style={styles.swapItem}>
             • {item}
@@ -170,28 +165,28 @@ export default function PlanScreen() {
         ))}
       </Card>
 
-      <Text style={styles.sectionTitle}>Coach</Text>
+      <Text style={styles.sectionTitle}>{t('plan.coachSectionTitle')}</Text>
       <Card>
         {settings.coachId ? (
-          <Text style={styles.fieldLabel}>Bạn đã liên kết với 1 Coach.</Text>
+          <Text style={styles.fieldLabel}>{t('plan.linkedToCoach')}</Text>
         ) : (
           <>
-            <Text style={styles.fieldLabel}>Nhập mã Coach để liên kết tài khoản</Text>
+            <Text style={styles.fieldLabel}>{t('plan.enterCoachCode')}</Text>
             <TextInput
               style={styles.input}
               autoCapitalize="characters"
-              placeholder="VD: AB12CD"
+              placeholder={t('plan.coachCodePlaceholder')}
               value={coachCodeInput}
               onChangeText={setCoachCodeInput}
             />
-            <Button title="Liên kết" onPress={handleLinkCoach} loading={linkingCoach} />
+            <Button title={t('plan.linkButton')} onPress={handleLinkCoach} loading={linkingCoach} />
           </>
         )}
       </Card>
 
-      <Text style={styles.sectionTitle}>Tài khoản</Text>
+      <Text style={styles.sectionTitle}>{t('tab.account')}</Text>
       <Card>
-        <Text style={styles.fieldLabel}>{session?.user.email ?? 'Chưa đăng nhập'}</Text>
+        <Text style={styles.fieldLabel}>{session?.user.email ?? t('common.notSignedIn')}</Text>
         <Button title={t('common.signOut')} onPress={() => supabase.auth.signOut()} variant="danger" />
       </Card>
     </ScrollView>
@@ -199,27 +194,27 @@ export default function PlanScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  content: { padding: 16, paddingBottom: 32 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 8, marginBottom: 8, color: '#222' },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 4 },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  switchHint: { fontSize: 11, color: '#999', marginTop: 2 },
-  aiHint: { fontSize: 12, color: '#666', marginBottom: 10, lineHeight: 17 },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.base, paddingBottom: spacing.xxl },
+  sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
+  fieldLabel: { ...typography.label, color: '#444', marginBottom: spacing.xs },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  switchHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
+  aiHint: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 17 },
   input: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 15,
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
-  swapGroupTitle: { fontSize: 13, fontWeight: '700', color: '#222' },
+  swapGroupTitle: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
   swapItem: { fontSize: 13, color: '#444', marginTop: 4, lineHeight: 18 },
-  languageRow: { flexDirection: 'row', gap: 8 },
-  languageButton: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  languageRow: { flexDirection: 'row', gap: spacing.sm },
+  languageButton: { flex: 1, backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingVertical: spacing.md, alignItems: 'center' },
   languageButtonActive: { backgroundColor: colors.primary },
-  languageButtonText: { fontSize: 13, fontWeight: '700', color: '#666' },
-  languageButtonTextActive: { color: '#fff' },
+  languageButtonText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
+  languageButtonTextActive: { color: colors.white },
 });

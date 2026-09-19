@@ -2,20 +2,19 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
+import { Badge } from '../../src/components/Badge';
+import { Button } from '../../src/components/Button';
 import { PlanPreview } from '../../src/components/PlanPreview';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { supabase } from '../../src/lib/supabase';
 import { fetchFeedback, pullPlan, pushCoachFeedback, pushPlan } from '../../src/sync/cloudSync';
 import { DEFAULT_PLAN, DEFAULT_WATER_TARGET_ML } from '../../src/constants/plan';
-import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
+import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
+import { useTranslation } from '../../src/i18n/useTranslation';
+import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import type { CoachFeedback, DailyNutritionLog, FeedbackPeriodType, PlanData } from '../../src/types';
-
-function defaultPeriodLabel(periodType: FeedbackPeriodType, now: Date): string {
-  if (periodType === 'weekly') return `Tuần bắt đầu ${formatDateVi(weekStartKey(now))}`;
-  return `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
-}
 
 interface RecentProof {
   id: string;
@@ -25,8 +24,14 @@ interface RecentProof {
 }
 
 export default function ClientDetailScreen() {
+  const { t } = useTranslation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clientId = Array.isArray(id) ? id[0] : id;
+
+  function defaultPeriodLabel(periodType: FeedbackPeriodType, now: Date): string {
+    if (periodType === 'weekly') return t('history.weekLabel', { date: formatDateVi(weekStartKey(now)) });
+    return t('clientDetail.monthLabel', { m: now.getMonth() + 1, y: now.getFullYear() });
+  }
 
   const [plan, setPlan] = useState<PlanData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -50,14 +55,14 @@ export default function ClientDetailScreen() {
 
   async function handleSendFeedback() {
     if (!clientId || !feedbackText.trim()) {
-      Alert.alert('Thiếu nội dung', 'Nhập nhận xét trước khi gửi.');
+      Alert.alert(t('clientDetail.missingContentTitle'), t('clientDetail.missingContentMessage'));
       return;
     }
     setFeedbackBusy(true);
     const result = await pushCoachFeedback(clientId, feedbackPeriodType, feedbackLabel, feedbackText.trim());
     setFeedbackBusy(false);
     if (!result.ok) {
-      Alert.alert('Không gửi được', result.message);
+      Alert.alert(t('clientDetail.sendFailedTitle'), result.message);
       return;
     }
     setFeedbackText('');
@@ -131,13 +136,13 @@ export default function ClientDetailScreen() {
     if (!clientId) return;
     await pushPlan(newPlan, new Date().toISOString(), clientId);
     setPlan(newPlan);
-    Alert.alert('Đã cập nhật', 'Kế hoạch của học viên đã được cập nhật.');
+    Alert.alert(t('clientDetail.updatedTitle'), t('clientDetail.updatedMessage'));
   }
 
   if (loading || !plan) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#4F8EF7" />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -147,37 +152,35 @@ export default function ClientDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Học viên', headerShown: true }} />
+      <Stack.Screen options={{ title: t('clientDetail.headerTitle'), headerShown: true }} />
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Card>
-          <Text style={styles.cardTitle}>Tiến trình cân nặng</Text>
+          <Text style={styles.cardTitle}>{t('clientDetail.weightProgressTitle')}</Text>
           <Text style={styles.weightText}>
-            {weightSummary.latest != null ? `${weightSummary.latest.toFixed(1)} kg` : 'Chưa có dữ liệu'}
+            {weightSummary.latest != null ? `${weightSummary.latest.toFixed(1)} kg` : t('clientDetail.noData')}
           </Text>
           {change != null && (
-            <Text style={[styles.changeText, { color: change <= 0 ? '#2E9E4E' : '#E0563A' }]}>
+            <Text style={[styles.changeText, { color: change <= 0 ? colors.success : colors.danger }]}>
               {change > 0 ? '+' : ''}
-              {change.toFixed(1)} kg so với lúc bắt đầu
+              {change.toFixed(1)} {t('today.weightChangeSuffix')}
             </Text>
           )}
         </Card>
 
         <Card style={styles.streakCard}>
-          <Text style={styles.streakValue}>🔥 {streak} ngày liên tiếp</Text>
+          <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>
           {badges.length > 0 && (
             <View style={styles.badgeRow}>
               {badges.map((b) => (
-                <View key={b} style={styles.badgeChip}>
-                  <Text style={styles.badgeChipText}>{badgeLabel(b)}</Text>
-                </View>
+                <Badge key={b} label={t('today.streakDays', { n: b })} tone="gold" />
               ))}
             </View>
           )}
         </Card>
 
-        <Text style={styles.sectionTitle}>Ảnh minh chứng gần đây</Text>
+        <Text style={styles.sectionTitle}>{t('clientDetail.proofsTitle')}</Text>
         {recentProofs.length === 0 ? (
-          <Text style={styles.emptyText}>Chưa có ảnh minh chứng nào.</Text>
+          <Text style={styles.emptyText}>{t('clientDetail.emptyProofs')}</Text>
         ) : (
           <View style={styles.proofGrid}>
             {recentProofs.map((p) => (
@@ -193,7 +196,7 @@ export default function ClientDetailScreen() {
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>Nhận xét định kỳ</Text>
+        <Text style={styles.sectionTitle}>{t('clientDetail.feedbackTitle')}</Text>
         <Card>
           <View style={styles.periodToggleRow}>
             <TouchableOpacity
@@ -201,7 +204,7 @@ export default function ClientDetailScreen() {
               onPress={() => handlePeriodTypeChange('weekly')}
             >
               <Text style={[styles.periodButtonText, feedbackPeriodType === 'weekly' && styles.periodButtonTextActive]}>
-                Theo tuần
+                {t('clientDetail.periodWeekly')}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -209,37 +212,40 @@ export default function ClientDetailScreen() {
               onPress={() => handlePeriodTypeChange('monthly')}
             >
               <Text style={[styles.periodButtonText, feedbackPeriodType === 'monthly' && styles.periodButtonTextActive]}>
-                Theo tháng
+                {t('clientDetail.periodMonthly')}
               </Text>
             </TouchableOpacity>
           </View>
-          <TextInput style={styles.input} value={feedbackLabel} onChangeText={setFeedbackLabel} placeholder="Nhãn giai đoạn" />
+          <TextInput
+            style={styles.input}
+            value={feedbackLabel}
+            onChangeText={setFeedbackLabel}
+            placeholder={t('clientDetail.periodLabelPlaceholder')}
+          />
           <TextInput
             style={styles.aiInput}
             multiline
-            placeholder="Nhận xét tiến độ, điều chỉnh kế hoạch, lời khuyên cho học viên..."
+            placeholder={t('clientDetail.feedbackPlaceholder')}
             value={feedbackText}
             onChangeText={setFeedbackText}
           />
-          <TouchableOpacity style={styles.saveButton} onPress={handleSendFeedback} disabled={feedbackBusy}>
-            {feedbackBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Gửi nhận xét</Text>}
-          </TouchableOpacity>
+          <Button title={t('clientDetail.sendFeedbackButton')} onPress={handleSendFeedback} loading={feedbackBusy} />
         </Card>
 
         {feedbackList.map((f) => (
           <Card key={f.id}>
             <Text style={styles.feedbackPeriod}>
-              {f.periodLabel} · {f.periodType === 'weekly' ? 'Tuần' : 'Tháng'}
+              {f.periodLabel} · {f.periodType === 'weekly' ? t('history.periodWeek') : t('history.periodMonth')}
             </Text>
             <Text style={styles.feedbackText}>{f.feedbackText}</Text>
             <Text style={styles.feedbackDate}>{formatDateVi(toDateKey(new Date(f.createdAtISO)))}</Text>
           </Card>
         ))}
 
-        <Text style={styles.sectionTitle}>Trợ lý AI chỉnh kế hoạch cho học viên này</Text>
+        <Text style={styles.sectionTitle}>{t('clientDetail.aiTitle')}</Text>
         {clientId && <PlanChatAssistant livePlan={plan} targetUserId={clientId} onApply={handleApplyPlan} />}
 
-        <Text style={styles.sectionTitle}>Kế hoạch hiện tại</Text>
+        <Text style={styles.sectionTitle}>{t('plan.currentPlanTitle')}</Text>
         <PlanPreview plan={plan} />
       </ScrollView>
     </>
@@ -247,52 +253,48 @@ export default function ClientDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  content: { padding: 16, paddingBottom: 32 },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  cardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 8, color: '#222' },
-  weightText: { fontSize: 24, fontWeight: '800', color: '#222' },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.base, paddingBottom: spacing.xxl },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
+  cardTitle: { ...typography.title, marginBottom: spacing.sm, color: colors.textPrimary },
+  weightText: { ...typography.h2, color: colors.textPrimary },
   changeText: { fontSize: 12, fontWeight: '600', marginTop: 4 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 12, marginBottom: 8, color: '#222' },
-  streakCard: { backgroundColor: '#FFF7E6' },
-  streakValue: { fontSize: 18, fontWeight: '800', color: '#8A5A00' },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  badgeChip: { backgroundColor: '#FFE8B3', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  badgeChipText: { fontSize: 11, fontWeight: '700', color: '#8A5A00' },
-  emptyText: { color: '#999', fontSize: 12, marginBottom: 8 },
-  proofGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 8 },
+  sectionTitle: { ...typography.title, marginTop: spacing.md, marginBottom: spacing.sm, color: colors.textPrimary },
+  streakCard: { backgroundColor: colors.goldLight },
+  streakValue: { fontSize: 18, fontWeight: '800', color: colors.gold },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginTop: spacing.md },
+  emptyText: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm },
+  proofGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
   proofItem: { width: 88 },
-  proofThumb: { width: 88, height: 88, borderRadius: 10, backgroundColor: '#eee' },
+  proofThumb: { width: 88, height: 88, borderRadius: radius.md, backgroundColor: '#eee' },
   proofThumbFallback: { alignItems: 'center', justifyContent: 'center' },
-  proofDate: { fontSize: 10, color: '#888', marginTop: 4, textAlign: 'center' },
+  proofDate: { fontSize: 10, color: colors.textMuted, marginTop: 4, textAlign: 'center' },
   aiInput: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 14,
     minHeight: 70,
     textAlignVertical: 'top',
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
-  saveButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  saveButtonText: { color: '#fff', fontWeight: '700' },
-  periodToggleRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  periodButton: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  periodButtonActive: { backgroundColor: '#4F8EF7' },
-  periodButtonText: { fontSize: 12, fontWeight: '700', color: '#666' },
-  periodButtonTextActive: { color: '#fff' },
+  periodToggleRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  periodButton: { flex: 1, backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingVertical: spacing.sm, alignItems: 'center' },
+  periodButtonActive: { backgroundColor: colors.primary },
+  periodButtonText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
+  periodButtonTextActive: { color: colors.white },
   input: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 14,
-    marginBottom: 10,
+    marginBottom: spacing.sm,
   },
-  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: '#4F8EF7' },
-  feedbackText: { fontSize: 13, color: '#333', marginTop: 6, lineHeight: 18 },
-  feedbackDate: { fontSize: 11, color: '#999', marginTop: 8 },
+  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  feedbackText: { fontSize: 13, color: '#333', marginTop: spacing.sm - 2, lineHeight: 18 },
+  feedbackDate: { fontSize: 11, color: colors.textMuted, marginTop: spacing.sm },
 });

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card } from '../../src/components/Card';
+import { Button } from '../../src/components/Button';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { ProofCapture } from '../../src/components/ProofCapture';
 import { MealItemRows } from '../../src/components/PlanPreview';
@@ -9,8 +10,11 @@ import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
+import { useTranslation } from '../../src/i18n/useTranslation';
+import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
 export default function NutritionScreen() {
+  const { t } = useTranslation();
   const dateKey = todayKey();
   const dayType = useMemo(() => getDayType(new Date()), []);
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
@@ -37,7 +41,7 @@ export default function NutritionScreen() {
     const cal = parseFloat(extraCalories.replace(',', '.')) || 0;
     const protein = parseFloat(extraProtein.replace(',', '.')) || 0;
     if (cal <= 0 && protein <= 0) {
-      Alert.alert('Lỗi', 'Nhập ít nhất calo hoặc protein.');
+      Alert.alert(t('common.error'), t('nutrition.errorMissingValue'));
       return;
     }
     addExtra(dateKey, cal, protein);
@@ -48,17 +52,17 @@ export default function NutritionScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.dayTypeLabel}>{dayType === 'training' ? 'Thực đơn ngày tập luyện' : 'Thực đơn ngày nghỉ'}</Text>
+      <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('nutrition.dayTraining') : t('nutrition.dayRest')}</Text>
 
       <Card>
-        <Text style={styles.cardTitle}>Tổng hôm nay</Text>
-        <ProgressBar label="Calo" current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" color="#F7A44F" />
-        <ProgressBar label="Protein" current={totalProtein} target={settings.proteinTargetG} unit="g" color="#4F8EF7" />
+        <Text style={styles.cardTitle}>{t('nutrition.totalTitle')}</Text>
+        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" color={colors.warning} />
+        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" color={colors.primary} />
       </Card>
 
       <Card>
-        <Text style={styles.cardTitle}>Nước uống</Text>
-        <ProgressBar label="Nước" current={log.waterMl} target={settings.waterTargetMl} unit="ml" color="#4FC3F7" />
+        <Text style={styles.cardTitle}>{t('nutrition.waterTitle')}</Text>
+        <ProgressBar label={t('common.water')} current={log.waterMl} target={settings.waterTargetMl} unit="ml" color={colors.info} />
         <View style={styles.waterButtons}>
           {WATER_QUICK_ADD_ML.map((ml) => (
             <TouchableOpacity key={ml} style={styles.waterButton} onPress={() => addWater(dateKey, ml)}>
@@ -66,17 +70,17 @@ export default function NutritionScreen() {
             </TouchableOpacity>
           ))}
           <TouchableOpacity style={styles.waterResetButton} onPress={() => resetWater(dateKey)}>
-            <Text style={styles.waterResetText}>Đặt lại</Text>
+            <Text style={styles.waterResetText}>{t('common.reset')}</Text>
           </TouchableOpacity>
         </View>
       </Card>
 
-      <Text style={styles.sectionTitle}>Lịch trình uống nước hôm nay</Text>
+      <Text style={styles.sectionTitle}>{t('nutrition.waterScheduleTitle')}</Text>
       <Card>
         <WaterTimeline schedule={waterSchedule} currentMl={log.waterMl} />
       </Card>
 
-      <Text style={styles.sectionTitle}>Bữa ăn theo kế hoạch</Text>
+      <Text style={styles.sectionTitle}>{t('nutrition.mealsTitle')}</Text>
       {meals.map((meal) => {
         const eaten = !!log.mealsEaten[meal.slot];
         return (
@@ -90,64 +94,59 @@ export default function NutritionScreen() {
               </View>
               <Text style={styles.mealTime}>{meal.timeRange}</Text>
               <MealItemRows items={meal.items} />
-              <Text style={styles.mealMacro}>
-                Tổng: {meal.calories} kcal · {meal.proteinG}g protein
-              </Text>
+              <Text style={styles.mealMacro}>{t('nutrition.mealTotal', { kcal: meal.calories, protein: meal.proteinG })}</Text>
               <ProofCapture dateKey={dateKey} taskType="meal" taskRefId={meal.slot} />
             </Card>
           </TouchableOpacity>
         );
       })}
 
-      <Text style={styles.sectionTitle}>Thêm món ăn ngoài kế hoạch</Text>
+      <Text style={styles.sectionTitle}>{t('nutrition.extraTitle')}</Text>
       <Card>
         <TextInput
           style={styles.input}
-          placeholder="Tên món (không bắt buộc)"
+          placeholder={t('nutrition.extraNamePlaceholder')}
           value={extraName}
           onChangeText={setExtraName}
         />
         <View style={styles.extraRow}>
           <TextInput
             style={[styles.input, styles.extraInput]}
-            placeholder="Calo"
+            placeholder={t('common.calories')}
             keyboardType="decimal-pad"
             value={extraCalories}
             onChangeText={setExtraCalories}
           />
           <TextInput
             style={[styles.input, styles.extraInput]}
-            placeholder="Protein (g)"
+            placeholder={t('nutrition.extraProteinPlaceholder')}
             keyboardType="decimal-pad"
             value={extraProtein}
             onChangeText={setExtraProtein}
           />
         </View>
-        <TouchableOpacity style={styles.addButton} onPress={handleAddExtra}>
-          <Text style={styles.addButtonText}>Thêm vào tổng hôm nay</Text>
-        </TouchableOpacity>
+        <Button title={t('nutrition.addExtraButton')} onPress={handleAddExtra} />
       </Card>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  content: { padding: 16, paddingBottom: 32 },
-  dayTypeLabel: { fontSize: 14, color: '#666', marginBottom: 12, fontWeight: '600' },
-  cardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10, color: '#222' },
-  sectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 8, marginBottom: 8, color: '#222' },
-  waterButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  waterButton: { backgroundColor: '#E1F5FE', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.base, paddingBottom: spacing.xxl },
+  dayTypeLabel: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.md, fontWeight: '600' },
+  cardTitle: { ...typography.title, marginBottom: spacing.md, color: colors.textPrimary },
+  sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
+  waterButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
+  waterButton: { backgroundColor: colors.infoLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   waterButtonText: { color: '#0288D1', fontWeight: '700', fontSize: 13 },
-  waterResetButton: { backgroundColor: '#F0F0F0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  waterResetText: { color: '#666', fontSize: 13 },
-  mealCardDone: { backgroundColor: '#E8F6EC' },
+  waterResetButton: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  waterResetText: { color: colors.textSecondary, fontSize: 13 },
+  mealCardDone: { backgroundColor: colors.successLight },
   mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  mealLabel: { fontSize: 14, fontWeight: '700', color: '#222', flex: 1 },
-  mealTime: { fontSize: 12, color: '#888', marginTop: 2 },
-  mealDescription: { fontSize: 13, color: '#444', marginTop: 8, lineHeight: 18 },
-  mealMacro: { fontSize: 13, color: '#4F8EF7', fontWeight: '700', marginTop: 8 },
+  mealLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, flex: 1 },
+  mealTime: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  mealMacro: { fontSize: 13, color: colors.primary, fontWeight: '700', marginTop: spacing.sm },
   checkbox: {
     width: 24,
     height: 24,
@@ -157,19 +156,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxChecked: { backgroundColor: '#2E9E4E', borderColor: '#2E9E4E' },
-  checkboxTick: { color: '#fff', fontWeight: '900', fontSize: 14 },
+  checkboxChecked: { backgroundColor: colors.success, borderColor: colors.success },
+  checkboxTick: { color: colors.white, fontWeight: '900', fontSize: 14 },
   input: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 15,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  extraRow: { flexDirection: 'row', gap: 8 },
+  extraRow: { flexDirection: 'row', gap: spacing.sm },
   extraInput: { flex: 1 },
-  addButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  addButtonText: { color: '#fff', fontWeight: '700' },
 });

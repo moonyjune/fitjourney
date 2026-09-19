@@ -3,6 +3,8 @@ import { Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, 
 import * as ImagePicker from 'expo-image-picker';
 import { useProofStore } from '../store/useProofStore';
 import { persistPickedPhoto } from '../utils/photoStorage';
+import { useTranslation } from '../i18n/useTranslation';
+import { colors, radius, spacing } from '../theme/tokens';
 import type { ProofTaskType } from '../types';
 
 interface ProofCaptureProps {
@@ -12,6 +14,7 @@ interface ProofCaptureProps {
 }
 
 export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps) {
+  const { t } = useTranslation();
   const proof = useProofStore((s) => s.proofFor(dateKey, taskType, taskRefId));
   const addProof = useProofStore((s) => s.addProof);
   const removeProof = useProofStore((s) => s.removeProof);
@@ -24,7 +27,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
   async function pickFromLibrary() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Cần quyền truy cập', 'Vui lòng cho phép truy cập thư viện ảnh để đính kèm minh chứng.');
+      Alert.alert(t('proof.permissionTitle'), t('proof.libraryPermissionMessage'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
@@ -36,7 +39,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Cần quyền truy cập', 'Vui lòng cho phép dùng camera để chụp ảnh minh chứng.');
+      Alert.alert(t('proof.permissionTitle'), t('proof.cameraPermissionMessage'));
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
@@ -47,7 +50,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
 
   async function handleSave() {
     if (!pendingUri) {
-      Alert.alert('Thiếu ảnh', 'Vui lòng chụp hoặc chọn một ảnh minh chứng.');
+      Alert.alert(t('proof.missingPhotoTitle'), t('proof.missingPhotoMessage'));
       return;
     }
     setBusy(true);
@@ -70,7 +73,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
         <View style={styles.proofTextWrap}>
           {!!proof.note && <Text style={styles.proofNote}>{proof.note}</Text>}
           <TouchableOpacity onPress={() => removeProof(proof.id)}>
-            <Text style={styles.removeText}>Xóa ảnh minh chứng</Text>
+            <Text style={styles.removeText}>{t('proof.removeLink')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -80,7 +83,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
   if (!isEditing) {
     return (
       <TouchableOpacity style={styles.addProofButton} onPress={() => setIsEditing(true)}>
-        <Text style={styles.addProofText}>📷 Thêm ảnh minh chứng</Text>
+        <Text style={styles.addProofText}>{t('proof.addButton')}</Text>
       </TouchableOpacity>
     );
   }
@@ -93,17 +96,17 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
         <View style={styles.pickButtons}>
           {Platform.OS !== 'web' && (
             <TouchableOpacity style={styles.pickButton} onPress={takePhoto}>
-              <Text style={styles.pickButtonText}>Chụp ảnh</Text>
+              <Text style={styles.pickButtonText}>{t('proof.takePhoto')}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.pickButton} onPress={pickFromLibrary}>
-            <Text style={styles.pickButtonText}>Chọn ảnh</Text>
+            <Text style={styles.pickButtonText}>{t('proof.pickPhoto')}</Text>
           </TouchableOpacity>
         </View>
       )}
       <TextInput
         style={styles.noteInput}
-        placeholder="Ghi chú (không bắt buộc)"
+        placeholder={t('proof.notePlaceholder')}
         value={note}
         onChangeText={setNote}
       />
@@ -116,10 +119,10 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
             setNote('');
           }}
         >
-          <Text style={styles.cancelText}>Hủy</Text>
+          <Text style={styles.cancelText}>{t('common.cancel')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={busy}>
-          <Text style={styles.saveText}>{busy ? 'Đang lưu...' : 'Lưu'}</Text>
+          <Text style={styles.saveText}>{busy ? t('proof.saving') : t('common.save')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -128,35 +131,35 @@ export function ProofCapture({ dateKey, taskType, taskRefId }: ProofCaptureProps
 
 const styles = StyleSheet.create({
   addProofButton: {
-    marginTop: 10,
+    marginTop: spacing.sm,
     alignSelf: 'flex-start',
-    backgroundColor: '#F0F4FF',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
   },
-  addProofText: { color: '#4F8EF7', fontSize: 12, fontWeight: '700' },
-  proofRow: { flexDirection: 'row', marginTop: 10, gap: 10 },
-  thumbnail: { width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' },
+  addProofText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+  proofRow: { flexDirection: 'row', marginTop: spacing.sm, gap: spacing.sm },
+  thumbnail: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: '#eee' },
   proofTextWrap: { flex: 1, justifyContent: 'center' },
   proofNote: { fontSize: 12, color: '#444', marginBottom: 4 },
-  removeText: { fontSize: 11, color: '#E0563A' },
-  editWrap: { marginTop: 10 },
-  pickButtons: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  pickButton: { backgroundColor: '#F0F4FF', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  pickButtonText: { color: '#4F8EF7', fontSize: 12, fontWeight: '700' },
+  removeText: { fontSize: 11, color: colors.danger },
+  editWrap: { marginTop: spacing.sm },
+  pickButtons: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
+  pickButton: { backgroundColor: colors.primaryLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  pickButtonText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
   noteInput: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderColor: colors.border,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.sm,
     fontSize: 13,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
-  editActions: { flexDirection: 'row', gap: 8 },
-  cancelButton: { paddingHorizontal: 12, paddingVertical: 8 },
-  cancelText: { color: '#888', fontSize: 12 },
-  saveButton: { backgroundColor: '#4F8EF7', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
+  editActions: { flexDirection: 'row', gap: spacing.sm },
+  cancelButton: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  cancelText: { color: colors.textMuted, fontSize: 12 },
+  saveButton: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   saveText: { color: '#fff', fontSize: 12, fontWeight: '700' },
 });

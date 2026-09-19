@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import { Card } from '../../src/components/Card';
+import { Badge } from '../../src/components/Badge';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
@@ -13,9 +14,13 @@ import { usePlanStore } from '../../src/store/usePlanStore';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { computeMilestones } from '../../src/utils/milestones';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
+import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
+import { useTranslation } from '../../src/i18n/useTranslation';
+import type { StringKey } from '../../src/i18n/strings';
+import { colors, spacing, typography } from '../../src/theme/tokens';
 
 export default function TodayScreen() {
+  const { t, language } = useTranslation();
   const [now, setNow] = useState(new Date());
   useFocusEffect(
     useCallback(() => {
@@ -69,93 +74,94 @@ export default function TodayScreen() {
   );
   const badges = unlockedStreakBadges(streak);
 
+  const dateLocale = language === 'en' ? 'en-US' : 'vi-VN';
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.dateLabel}>
-        {now.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' })} ·{' '}
-        {dayType === 'training' ? 'Ngày tập luyện' : 'Ngày nghỉ ngơi'}
+        {now.toLocaleDateString(dateLocale, { weekday: 'long', day: '2-digit', month: '2-digit' })} ·{' '}
+        {dayType === 'training' ? t('today.dayTraining') : t('today.dayRest')}
       </Text>
 
       <Card style={ifStatus.isEatingWindow ? styles.eatingCard : styles.fastingCard}>
-        <Text style={styles.ifLabel}>{ifStatus.label}</Text>
         <Text style={styles.ifSubLabel}>
-          Còn khoảng {ifStatus.hoursUntilTransition.toFixed(1)} giờ nữa đến{' '}
-          {ifStatus.isEatingWindow ? 'giờ nhịn' : 'giờ ăn'}
+          {t('today.ifRemaining', {
+            hours: ifStatus.hoursUntilTransition.toFixed(1),
+            target: ifStatus.isEatingWindow ? t('today.untilFasting') : t('today.untilEating'),
+          })}
         </Text>
       </Card>
 
       <Card style={styles.streakCard}>
-        <Text style={styles.streakValue}>🔥 {streak} ngày liên tiếp</Text>
-        <Text style={styles.streakHint}>Hoàn thành đủ 3 bữa + đủ nước mỗi ngày để giữ chuỗi.</Text>
+        <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>
+        <Text style={styles.streakHint}>{t('today.streakHint')}</Text>
         {badges.length > 0 && (
           <View style={styles.badgeRow}>
             {badges.map((b) => (
-              <View key={b} style={styles.badgeChip}>
-                <Text style={styles.badgeChipText}>{badgeLabel(b)}</Text>
-              </View>
+              <Badge key={b} label={t('today.streakDays', { n: b })} tone="gold" />
             ))}
           </View>
         )}
       </Card>
 
       <Card>
-        <Text style={styles.cardTitle}>Cân nặng</Text>
+        <Text style={styles.cardTitle}>{t('today.weightTitle')}</Text>
         <View style={styles.weightRow}>
           <Text style={styles.weightValue}>{currentWeight.toFixed(1)} kg</Text>
-          <Text style={[styles.weightChange, { color: weightChange <= 0 ? '#2E9E4E' : '#E0563A' }]}>
+          <Text style={[styles.weightChange, { color: weightChange <= 0 ? colors.success : colors.danger }]}>
             {weightChange > 0 ? '+' : ''}
-            {weightChange.toFixed(1)} kg so với lúc bắt đầu
+            {weightChange.toFixed(1)} {t('today.weightChangeSuffix')}
           </Text>
         </View>
-        <Text style={styles.goalLabel}>Mục tiêu: {settings.goalWeightKg} kg</Text>
+        <Text style={styles.goalLabel}>{t('common.goalLabel', { kg: settings.goalWeightKg })}</Text>
       </Card>
 
       <Card>
-        <Text style={styles.cardTitle}>{nextMilestone.label}</Text>
+        <Text style={styles.cardTitle}>{t(`milestone.${nextMilestone.key}` as StringKey)}</Text>
         <Text style={styles.milestoneMeta}>
-          Hạn {formatDateVi(toDateKey(nextMilestone.targetDate))} · Mục tiêu {nextMilestone.targetWeightKg.toFixed(1)} kg
-          {nextMilestone.status === 'upcoming' ? ` · còn ${nextMilestone.daysRemaining} ngày` : ''}
+          {t('today.milestoneMeta', {
+            date: formatDateVi(toDateKey(nextMilestone.targetDate)),
+            kg: nextMilestone.targetWeightKg.toFixed(1),
+          })}
+          {nextMilestone.status === 'upcoming' ? t('today.milestoneDaysRemaining', { n: nextMilestone.daysRemaining }) : ''}
         </Text>
       </Card>
 
       <Card>
-        <Text style={styles.cardTitle}>Dinh dưỡng hôm nay</Text>
-        <ProgressBar label="Calo" current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" color="#F7A44F" />
-        <ProgressBar label="Protein" current={totalProtein} target={settings.proteinTargetG} unit="g" color="#4F8EF7" />
-        <ProgressBar label="Nước" current={nutritionLog.waterMl} target={settings.waterTargetMl} unit="ml" color="#4FC3F7" />
+        <Text style={styles.cardTitle}>{t('today.nutritionTitle')}</Text>
+        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" color={colors.warning} />
+        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" color={colors.primary} />
+        <ProgressBar label={t('common.water')} current={nutritionLog.waterMl} target={settings.waterTargetMl} unit="ml" color={colors.info} />
       </Card>
 
       <Card>
-        <Text style={styles.cardTitle}>Tập luyện hôm nay</Text>
+        <Text style={styles.cardTitle}>{t('today.workoutTitle')}</Text>
         <Text style={styles.workoutSummary}>
-          Đã tập {workoutEntries.length} buổi · Đốt {caloriesBurnedToday} kcal
+          {t('today.workoutSummary', { count: workoutEntries.length, kcal: caloriesBurnedToday })}
         </Text>
-        {dayType === 'rest' && <Text style={styles.restNote}>Hôm nay là ngày nghỉ theo kế hoạch.</Text>}
+        {dayType === 'rest' && <Text style={styles.restNote}>{t('today.restNote')}</Text>}
       </Card>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  content: { padding: 16, paddingBottom: 32 },
-  dateLabel: { fontSize: 14, color: '#666', marginBottom: 12, textTransform: 'capitalize' },
-  eatingCard: { backgroundColor: '#E8F6EC' },
-  fastingCard: { backgroundColor: '#FFF3E0' },
-  ifLabel: { fontSize: 16, fontWeight: '700', color: '#333' },
-  ifSubLabel: { fontSize: 13, color: '#666', marginTop: 4 },
-  cardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10, color: '#222' },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.base, paddingBottom: spacing.xxl },
+  dateLabel: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.md, textTransform: 'capitalize' },
+  eatingCard: { backgroundColor: colors.successLight },
+  fastingCard: { backgroundColor: colors.warningLight },
+  ifSubLabel: { ...typography.label, color: colors.textPrimary },
+  cardTitle: { ...typography.title, marginBottom: spacing.md, color: colors.textPrimary },
   weightRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap' },
-  weightValue: { fontSize: 28, fontWeight: '800', color: '#222' },
-  weightChange: { fontSize: 12, fontWeight: '600' },
-  goalLabel: { fontSize: 13, color: '#888', marginTop: 4 },
-  milestoneMeta: { fontSize: 12, color: '#666' },
-  streakCard: { backgroundColor: '#FFF7E6' },
-  streakValue: { fontSize: 20, fontWeight: '800', color: '#8A5A00' },
-  streakHint: { fontSize: 11, color: '#8A5A00', marginTop: 4, opacity: 0.8 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
-  badgeChip: { backgroundColor: '#FFE8B3', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-  badgeChipText: { fontSize: 11, fontWeight: '700', color: '#8A5A00' },
-  workoutSummary: { fontSize: 14, color: '#333' },
-  restNote: { fontSize: 12, color: '#888', marginTop: 6 },
+  weightValue: { ...typography.h1, color: colors.textPrimary },
+  weightChange: { ...typography.caption },
+  goalLabel: { ...typography.caption, fontWeight: '400', color: colors.textMuted, marginTop: spacing.xs },
+  milestoneMeta: { ...typography.caption, fontWeight: '400', color: colors.textSecondary },
+  streakCard: { backgroundColor: colors.goldLight },
+  streakValue: { fontSize: 20, fontWeight: '800', color: colors.gold },
+  streakHint: { ...typography.small, color: colors.gold, marginTop: spacing.xs, opacity: 0.8 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  workoutSummary: { ...typography.body, color: colors.textPrimary },
+  restNote: { ...typography.caption, fontWeight: '400', color: colors.textMuted, marginTop: spacing.sm },
 });

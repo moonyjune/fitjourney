@@ -1,5 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 import type { WaterCheckpoint } from '../types';
+import { useTranslation } from '../i18n/useTranslation';
+import type { StringKey } from '../i18n/strings';
+import { colors } from '../theme/tokens';
 
 interface WaterTimelineProps {
   schedule: WaterCheckpoint[];
@@ -17,18 +20,19 @@ function getStatus(checkpoint: WaterCheckpoint, currentMl: number, now: Date): C
 }
 
 const STATUS_COLOR: Record<CheckpointStatus, string> = {
-  complete: '#2E9E4E',
-  behind: '#E0563A',
+  complete: colors.success,
+  behind: colors.danger,
   notStarted: '#CCC',
 };
 
-const STATUS_LABEL: Record<CheckpointStatus, string> = {
-  complete: 'Hoàn thành',
-  behind: 'Chưa đạt',
-  notStarted: 'Chưa tới giờ',
+const STATUS_KEY: Record<CheckpointStatus, StringKey> = {
+  complete: 'waterTimeline.complete',
+  behind: 'waterTimeline.behind',
+  notStarted: 'waterTimeline.notStarted',
 };
 
 export function WaterTimeline({ schedule, currentMl, now = new Date() }: WaterTimelineProps) {
+  const { t } = useTranslation();
   return (
     <View>
       {schedule.map((checkpoint, index) => {
@@ -45,10 +49,10 @@ export function WaterTimeline({ schedule, currentMl, now = new Date() }: WaterTi
                 <Text style={styles.time}>
                   {String(checkpoint.hour).padStart(2, '0')}:{String(checkpoint.minute).padStart(2, '0')}
                 </Text>
-                <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>{STATUS_LABEL[status]}</Text>
+                <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>{t(STATUS_KEY[status])}</Text>
               </View>
               <Text style={styles.label}>{checkpoint.label}</Text>
-              <Text style={styles.target}>Mục tiêu cộng dồn: {checkpoint.cumulativeTargetMl}ml</Text>
+              <Text style={styles.target}>{t('waterTimeline.target', { ml: checkpoint.cumulativeTargetMl })}</Text>
             </View>
           </View>
         );

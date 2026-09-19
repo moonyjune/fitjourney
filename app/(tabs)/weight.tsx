@@ -2,16 +2,20 @@ import { useMemo, useState } from 'react';
 import { Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { Card } from '../../src/components/Card';
+import { Button } from '../../src/components/Button';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
+import { useTranslation } from '../../src/i18n/useTranslation';
+import type { StringKey } from '../../src/i18n/strings';
+import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 
-const RANGE_OPTIONS = [
-  { key: '1w', label: '1 tuần', days: 7 },
-  { key: '2w', label: '2 tuần', days: 14 },
-  { key: '1m', label: '1 tháng', days: 30 },
-  { key: '2m', label: '2 tháng', days: 61 },
-  { key: '3m', label: '3 tháng', days: 91 },
+const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
+  { key: 'weight.range1w', days: 7 },
+  { key: 'weight.range2w', days: 14 },
+  { key: 'weight.range1m', days: 30 },
+  { key: 'weight.range2m', days: 61 },
+  { key: 'weight.range3m', days: 91 },
 ];
 
 // Chart labels get unreadable with many points — only show every Nth label.
@@ -22,6 +26,7 @@ function thinLabels(labels: string[], maxVisible = 7): string[] {
 }
 
 export default function WeightScreen() {
+  const { t } = useTranslation();
   const entries = useWeightStore((s) => s.entries);
   const addEntry = useWeightStore((s) => s.addEntry);
   const removeEntry = useWeightStore((s) => s.removeEntry);
@@ -58,23 +63,21 @@ export default function WeightScreen() {
       ListHeaderComponent={
         <>
           <Card>
-            <Text style={styles.cardTitle}>Ghi nhận cân nặng mới</Text>
+            <Text style={styles.cardTitle}>{t('weight.logTitle')}</Text>
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.input}
                 keyboardType="decimal-pad"
-                placeholder="VD: 108.5"
+                placeholder={t('weight.inputPlaceholder')}
                 value={input}
                 onChangeText={setInput}
               />
-              <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-                <Text style={styles.addButtonText}>Lưu</Text>
-              </TouchableOpacity>
+              <Button title={t('common.save')} onPress={handleAdd} />
             </View>
           </Card>
 
           <Card>
-            <Text style={styles.cardTitle}>Biểu đồ cân nặng</Text>
+            <Text style={styles.cardTitle}>{t('weight.chartTitle')}</Text>
             <View style={styles.rangeRow}>
               {RANGE_OPTIONS.map((opt) => (
                 <TouchableOpacity
@@ -83,7 +86,7 @@ export default function WeightScreen() {
                   onPress={() => setRangeDays(opt.days)}
                 >
                   <Text style={[styles.rangeButtonText, rangeDays === opt.days && styles.rangeButtonTextActive]}>
-                    {opt.label}
+                    {t(opt.key)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -95,24 +98,24 @@ export default function WeightScreen() {
                 height={200}
                 yAxisSuffix="kg"
                 chartConfig={{
-                  backgroundColor: '#fff',
-                  backgroundGradientFrom: '#fff',
-                  backgroundGradientTo: '#fff',
+                  backgroundColor: colors.surface,
+                  backgroundGradientFrom: colors.surface,
+                  backgroundGradientTo: colors.surface,
                   decimalPlaces: 1,
                   color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
                   labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
                   propsForDots: { r: '3' },
                 }}
                 bezier
-                style={{ borderRadius: 12 }}
+                style={{ borderRadius: radius.lg }}
               />
             ) : (
-              <Text style={styles.emptyChartText}>Chưa đủ dữ liệu trong khoảng này.</Text>
+              <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>
             )}
-            <Text style={styles.goalNote}>Mục tiêu: {goalWeightKg} kg</Text>
+            <Text style={styles.goalNote}>{t('common.goalLabel', { kg: goalWeightKg })}</Text>
           </Card>
 
-          <Text style={styles.historyTitle}>Lịch sử</Text>
+          <Text style={styles.historyTitle}>{t('tab.history')}</Text>
         </>
       }
       renderItem={({ item }) => (
@@ -120,56 +123,49 @@ export default function WeightScreen() {
           <Text style={styles.historyDate}>{formatDateVi(toDateKey(new Date(item.dateISO)))}</Text>
           <Text style={styles.historyWeight}>{item.weightKg.toFixed(1)} kg</Text>
           <TouchableOpacity onPress={() => removeEntry(item.id)}>
-            <Text style={styles.deleteText}>Xóa</Text>
+            <Text style={styles.deleteText}>{t('common.delete')}</Text>
           </TouchableOpacity>
         </View>
       )}
-      ListEmptyComponent={<Text style={styles.emptyText}>Chưa có dữ liệu cân nặng.</Text>}
+      ListEmptyComponent={<Text style={styles.emptyText}>{t('weight.emptyHistory')}</Text>}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  content: { padding: 16, paddingBottom: 32 },
-  cardTitle: { fontSize: 15, fontWeight: '700', marginBottom: 10, color: '#222' },
-  inputRow: { flexDirection: 'row', gap: 8 },
+  container: { flex: 1, backgroundColor: colors.background },
+  content: { padding: spacing.base, paddingBottom: spacing.xxl },
+  cardTitle: { ...typography.title, marginBottom: spacing.md, color: colors.textPrimary },
+  inputRow: { flexDirection: 'row', gap: spacing.sm },
   input: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 16,
   },
-  addButton: {
-    backgroundColor: '#4F8EF7',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  addButtonText: { color: '#fff', fontWeight: '700' },
-  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 },
-  rangeButton: { backgroundColor: '#F0F0F0', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
-  rangeButtonActive: { backgroundColor: '#4F8EF7' },
-  rangeButtonText: { fontSize: 12, color: '#666', fontWeight: '600' },
-  rangeButtonTextActive: { color: '#fff' },
-  emptyChartText: { textAlign: 'center', color: '#999', paddingVertical: 24 },
-  goalNote: { textAlign: 'center', color: '#888', fontSize: 12, marginTop: 6 },
-  historyTitle: { fontSize: 15, fontWeight: '700', marginBottom: 8, marginTop: 4, color: '#222' },
+  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginBottom: spacing.md },
+  rangeButton: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm - 2 },
+  rangeButtonActive: { backgroundColor: colors.primary },
+  rangeButtonText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  rangeButtonTextActive: { color: colors.white },
+  emptyChartText: { textAlign: 'center', color: colors.textMuted, paddingVertical: 24 },
+  goalNote: { textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
+  historyTitle: { ...typography.title, marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textPrimary },
   historyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
   },
-  historyDate: { color: '#666', fontSize: 13 },
-  historyWeight: { fontWeight: '700', fontSize: 15, color: '#222' },
-  deleteText: { color: '#E0563A', fontSize: 13 },
-  emptyText: { textAlign: 'center', color: '#999', marginTop: 20 },
+  historyDate: { color: colors.textSecondary, fontSize: 13 },
+  historyWeight: { fontWeight: '700', fontSize: 15, color: colors.textPrimary },
+  deleteText: { color: colors.danger, fontSize: 13 },
+  emptyText: { textAlign: 'center', color: colors.textMuted, marginTop: 20 },
 });

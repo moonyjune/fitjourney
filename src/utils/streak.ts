@@ -40,10 +40,6 @@ export function unlockedStreakBadges(streak: number): number[] {
   return STREAK_BADGE_THRESHOLDS.filter((t) => streak >= t);
 }
 
-export function badgeLabel(threshold: number): string {
-  return `🔥 ${threshold} ngày liên tiếp`;
-}
-
 // Only used as a stable reference for MEAL_SLOTS_COUNT where a MealTemplate[] is available.
 export function mealSlotsCount(meals: MealTemplate[]): number {
   return meals.length;

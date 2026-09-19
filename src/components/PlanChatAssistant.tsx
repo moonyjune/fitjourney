@@ -10,6 +10,8 @@ import {
   listChatSessions,
   saveChatMessage,
 } from '../sync/cloudSync';
+import { useTranslation } from '../i18n/useTranslation';
+import { colors, radius, spacing } from '../theme/tokens';
 import type { ChatSessionSummary, PlanData, StoredChatMessage } from '../types';
 
 interface PlanChatAssistantProps {
@@ -25,6 +27,7 @@ function sessionTitleFrom(text: string): string {
 }
 
 export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatAssistantProps) {
+  const { t } = useTranslation();
   const selfId = useAuthStore((s) => s.session?.user.id);
   const ownerId = targetUserId ?? selfId;
 
@@ -85,7 +88,7 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
       let sessionId = activeSessionId;
       if (!sessionId) {
         sessionId = await createChatSession(ownerId, sessionTitleFrom(text));
-        if (!sessionId) throw new Error('Không tạo được phiên chat.');
+        if (!sessionId) throw new Error(t('chat.sessionCreateError'));
         setActiveSessionId(sessionId);
         setSessions((prev) => [{ id: sessionId!, title: sessionTitleFrom(text), updatedAtISO: new Date().toISOString() }, ...prev]);
       }
@@ -123,7 +126,7 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      const replyText: string = data.reply || '(không có phản hồi)';
+      const replyText: string = data.reply || t('chat.noReply');
       const proposedPlan: PlanData | null = data.plan ?? null;
       const assistantMessage: StoredChatMessage = {
         id: `local-${Date.now()}-a`,
@@ -139,7 +142,7 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
         setShowPreview(true);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Có lỗi xảy ra khi gọi AI.';
+      const message = err instanceof Error ? err.message : t('chat.genericError');
       setMessages((prev) => [
         ...prev,
         { id: `local-${Date.now()}-e`, role: 'assistant', content: `⚠️ ${message}`, proposedPlan: null, createdAtISO: new Date().toISOString() },
@@ -176,19 +179,19 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
                 onPress={() => loadSession(s.id)}
               >
                 <Text style={[styles.sessionChipText, s.id === activeSessionId && styles.sessionChipTextActive]} numberOfLines={1}>
-                  {s.title || 'Cuộc trò chuyện'}
+                  {s.title || t('chat.defaultSessionTitle')}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         )}
         <TouchableOpacity style={styles.newButton} onPress={handleNewSession}>
-          <Text style={styles.newButtonText}>+ Mới</Text>
+          <Text style={styles.newButtonText}>{t('common.new')}</Text>
         </TouchableOpacity>
       </View>
 
       {loadingHistory ? (
-        <ActivityIndicator color="#4F8EF7" style={{ marginVertical: 12 }} />
+        <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
       ) : (
         <>
           {messages.length > 0 && (
@@ -200,7 +203,7 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
                   </View>
                 </View>
               ))}
-              {sending && <ActivityIndicator style={{ marginTop: 8 }} color="#4F8EF7" />}
+              {sending && <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} />}
             </Card>
           )}
 
@@ -208,31 +211,31 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.chatInput}
-                placeholder='Nhắn với trợ lý AI, VD: "Tăng protein bữa tối thêm 20g"'
+                placeholder={t('chat.inputPlaceholder')}
                 value={input}
                 onChangeText={setInput}
                 onSubmitEditing={handleSend}
                 editable={!sending}
               />
               <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={sending || !input.trim()}>
-                <Text style={styles.sendButtonText}>Gửi</Text>
+                <Text style={styles.sendButtonText}>{t('common.send')}</Text>
               </TouchableOpacity>
             </View>
           </Card>
 
           {hasPendingChanges && (
             <Card style={styles.pendingCard}>
-              <Text style={styles.pendingText}>Có thay đổi chưa áp dụng cho kế hoạch chính thức.</Text>
+              <Text style={styles.pendingText}>{t('chat.pendingBanner')}</Text>
               <View style={styles.pendingActions}>
                 <TouchableOpacity style={styles.linkButton} onPress={() => setShowPreview((v) => !v)}>
-                  <Text style={styles.linkButtonText}>{showPreview ? 'Ẩn chi tiết' : 'Xem chi tiết'}</Text>
+                  <Text style={styles.linkButtonText}>{showPreview ? t('chat.hideDetails') : t('chat.showDetails')}</Text>
                 </TouchableOpacity>
                 <View style={{ flex: 1 }} />
                 <TouchableOpacity style={styles.discardButton} onPress={handleDiscard} disabled={applying}>
-                  <Text style={styles.discardButtonText}>Hủy</Text>
+                  <Text style={styles.discardButtonText}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.confirmButton} onPress={handleApply} disabled={applying}>
-                  {applying ? <ActivityIndicator color="#fff" /> : <Text style={styles.confirmButtonText}>Xác nhận áp dụng</Text>}
+                  {applying ? <ActivityIndicator color={colors.white} /> : <Text style={styles.confirmButtonText}>{t('chat.confirmApply')}</Text>}
                 </TouchableOpacity>
               </View>
             </Card>
@@ -246,47 +249,47 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
 }
 
 const styles = StyleSheet.create({
-  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.sm },
   sessionScroll: { flex: 1 },
   sessionChip: {
-    backgroundColor: '#F0F0F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 6,
+    backgroundColor: colors.neutralLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm - 2,
+    marginRight: spacing.sm - 2,
     maxWidth: 160,
   },
-  sessionChipActive: { backgroundColor: '#4F8EF7' },
-  sessionChipText: { fontSize: 12, color: '#666', fontWeight: '600' },
-  sessionChipTextActive: { color: '#fff' },
-  newButton: { backgroundColor: '#E8F0FE', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  newButtonText: { fontSize: 12, fontWeight: '700', color: '#4F8EF7' },
-  bubbleRow: { marginBottom: 8, alignItems: 'flex-start' },
+  sessionChipActive: { backgroundColor: colors.primary },
+  sessionChipText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  sessionChipTextActive: { color: colors.white },
+  newButton: { backgroundColor: colors.primaryLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm - 1 },
+  newButtonText: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  bubbleRow: { marginBottom: spacing.sm, alignItems: 'flex-start' },
   bubbleRowUser: { alignItems: 'flex-end' },
-  bubble: { maxWidth: '85%', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
-  bubbleUser: { backgroundColor: '#4F8EF7' },
-  bubbleAssistant: { backgroundColor: '#F0F0F0' },
-  bubbleTextUser: { color: '#fff', fontSize: 13 },
-  bubbleTextAssistant: { color: '#222', fontSize: 13 },
-  inputRow: { flexDirection: 'row', gap: 8 },
+  bubble: { maxWidth: '85%', borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  bubbleUser: { backgroundColor: colors.primary },
+  bubbleAssistant: { backgroundColor: colors.neutralLight },
+  bubbleTextUser: { color: colors.white, fontSize: 13 },
+  bubbleTextAssistant: { color: colors.textPrimary, fontSize: 13 },
+  inputRow: { flexDirection: 'row', gap: spacing.sm },
   chatInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 14,
   },
-  sendButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingHorizontal: 16, justifyContent: 'center' },
-  sendButtonText: { color: '#fff', fontWeight: '700' },
-  pendingCard: { backgroundColor: '#FFF3E0' },
-  pendingText: { fontSize: 12, color: '#8A5A00', fontWeight: '600', marginBottom: 10 },
-  pendingActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  linkButton: { paddingVertical: 6 },
-  linkButtonText: { color: '#4F8EF7', fontWeight: '700', fontSize: 12 },
-  discardButton: { backgroundColor: '#F0F0F0', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  discardButtonText: { color: '#666', fontWeight: '700', fontSize: 12 },
-  confirmButton: { backgroundColor: '#2E9E4E', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  confirmButtonText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  sendButton: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.base, justifyContent: 'center' },
+  sendButtonText: { color: colors.white, fontWeight: '700' },
+  pendingCard: { backgroundColor: colors.warningLight },
+  pendingText: { fontSize: 12, color: colors.gold, fontWeight: '600', marginBottom: spacing.sm },
+  pendingActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  linkButton: { paddingVertical: spacing.sm - 2 },
+  linkButtonText: { color: colors.primary, fontWeight: '700', fontSize: 12 },
+  discardButton: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  discardButtonText: { color: colors.textSecondary, fontWeight: '700', fontSize: 12 },
+  confirmButton: { backgroundColor: colors.success, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  confirmButtonText: { color: colors.white, fontWeight: '700', fontSize: 12 },
 });
