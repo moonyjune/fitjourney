@@ -6,7 +6,8 @@ import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useProofStore } from '../../src/store/useProofStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
-import { getDayType, MEAL_TEMPLATES } from '../../src/constants/plan';
+import { getDayType } from '../../src/constants/plan';
+import { usePlanStore } from '../../src/store/usePlanStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { computeMilestones } from '../../src/utils/milestones';
@@ -42,6 +43,7 @@ export default function HistoryScreen() {
   const proofs = useProofStore((s) => s.photos);
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
+  const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
 
   const daySummaries = useMemo<DaySummary[]>(() => {
     const dateKeys = new Set<string>();
@@ -55,7 +57,7 @@ export default function HistoryScreen() {
       .reverse()
       .map((dateKey) => {
         const dayType = getDayType(new Date(dateKey));
-        const meals = MEAL_TEMPLATES[dayType];
+        const meals = mealTemplates[dayType];
         const log = nutritionLogs[dateKey];
         const eatenMeals = meals.filter((m) => log?.mealsEaten[m.slot]);
         const calories = eatenMeals.reduce((s, m) => s + m.calories, 0) + (log?.extraCalories ?? 0);
@@ -76,7 +78,7 @@ export default function HistoryScreen() {
           weightKg: dayWeight?.weightKg ?? null,
         };
       });
-  }, [nutritionLogs, workoutEntries, weightEntries, proofs]);
+  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates]);
 
   const weeklySummaries = useMemo(() => {
     const groups = new Map<string, DaySummary[]>();

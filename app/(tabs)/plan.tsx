@@ -1,32 +1,31 @@
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card } from '../../src/components/Card';
+import { PlanPreview } from '../../src/components/PlanPreview';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
+import { usePlanStore } from '../../src/store/usePlanStore';
 import { supabase } from '../../src/lib/supabase';
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
-import {
-  CARB_SWAP_OPTIONS,
-  MEAL_TEMPLATES,
-  PROTEIN_SWAP_OPTIONS,
-  SHOPPING_LIST,
-  SHOPPING_LIST_TOTAL_VND,
-  WORKOUT_TEMPLATES,
-} from '../../src/constants/plan';
-
-function formatVnd(amount: number): string {
-  return amount.toLocaleString('vi-VN') + ' đ';
-}
+import { CARB_SWAP_OPTIONS, PROTEIN_SWAP_OPTIONS } from '../../src/constants/plan';
+import type { PlanData } from '../../src/types';
 
 export default function PlanScreen() {
   const settings = useSettingsStore();
   const session = useAuthStore((s) => s.session);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
+  const plan = usePlanStore((s) => s.plan);
+  const applyPlan = usePlanStore((s) => s.applyPlan);
 
   const [calorieTarget, setCalorieTarget] = useState(String(settings.calorieTargetKcal));
   const [proteinTarget, setProteinTarget] = useState(String(settings.proteinTargetG));
   const [waterTarget, setWaterTarget] = useState(String(settings.waterTargetMl));
   const [goalWeight, setGoalWeight] = useState(String(settings.goalWeightKg));
+
+  const [instruction, setInstruction] = useState('');
+  const [proposedPlan, setProposedPlan] = useState<PlanData | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   function saveTargets() {
     const cal = parseFloat(calorieTarget);
@@ -48,15 +47,91 @@ export default function PlanScreen() {
         Alert.alert('Chưa cấp quyền', 'Bạn cần cho phép thông báo để bật nhắc nhở.');
         return;
       }
-      await scheduleAllReminders();
+      await scheduleAllReminders(plan);
     } else {
       await cancelAllReminders();
     }
     updateSettings({ remindersEnabled: value });
   }
 
+  async function handleAskAi() {
+    if (!instruction.trim()) {
+      Alert.alert('Thiếu yêu cầu', 'Nhập yêu cầu chỉnh sửa kế hoạch, ví dụ: "Tăng protein bữa tối thêm 20g".');
+      return;
+    }
+    setAiBusy(true);
+    setAiError(null);
+    setProposedPlan(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('suggest-plan-update', {
+        body: { currentPlan: plan, instruction },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (!data?.plan) throw new Error('AI không trả về kế hoạch hợp lệ.');
+      setProposedPlan(data.plan as PlanData);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi gọi AI.');
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function handleConfirmProposal() {
+    if (!proposedPlan) return;
+    applyPlan(proposedPlan);
+    if (settings.remindersEnabled) {
+      await scheduleAllReminders(proposedPlan);
+    }
+    setProposedPlan(null);
+    setInstruction('');
+    Alert.alert('Đã cập nhật', 'Kế hoạch mới đã được áp dụng.');
+  }
+
+  function handleDiscardProposal() {
+    setProposedPlan(null);
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.sectionTitle}>Trợ lý AI cập nhật kế hoạch</Text>
+      <Card>
+        <Text style={styles.aiHint}>
+          Mô tả thay đổi bạn muốn (thực đơn, bài tập, hoặc danh sách đi chợ/giá tiền). AI sẽ đề xuất bản
+          cập nhật — bạn xem trước và bấm Xác nhận thì mới áp dụng.
+        </Text>
+        <TextInput
+          style={styles.aiInput}
+          multiline
+          placeholder='VD: "Tăng protein bữa tối thêm 20g" hoặc "Đổi ức gà thành cá hồi trong buy-list"'
+          value={instruction}
+          onChangeText={setInstruction}
+        />
+        <TouchableOpacity style={styles.saveButton} onPress={handleAskAi} disabled={aiBusy}>
+          {aiBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Xem đề xuất</Text>}
+        </TouchableOpacity>
+        {aiError && <Text style={styles.aiError}>{aiError}</Text>}
+      </Card>
+
+      {proposedPlan && (
+        <>
+          <Card style={styles.proposalBanner}>
+            <Text style={styles.proposalBannerText}>
+              Đây là bản đề xuất từ AI — chưa được áp dụng. Xem kỹ rồi bấm Xác nhận hoặc Hủy bên dưới.
+            </Text>
+          </Card>
+          <PlanPreview plan={proposedPlan} />
+          <View style={styles.proposalActions}>
+            <TouchableOpacity style={styles.discardButton} onPress={handleDiscardProposal}>
+              <Text style={styles.discardButtonText}>Hủy đề xuất</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmProposal}>
+              <Text style={styles.confirmButtonText}>Xác nhận cập nhật</Text>
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
+
       <Text style={styles.sectionTitle}>Nhắc nhở</Text>
       <Card>
         <View style={styles.switchRow}>
@@ -83,31 +158,7 @@ export default function PlanScreen() {
         </TouchableOpacity>
       </Card>
 
-      <Text style={styles.sectionTitle}>Thực đơn tuần - Ngày tập luyện (T2,3,5,6)</Text>
-      {MEAL_TEMPLATES.training.map((m) => (
-        <Card key={m.slot}>
-          <Text style={styles.mealLabel}>
-            {m.label} ({m.timeRange})
-          </Text>
-          <Text style={styles.mealDescription}>{m.description}</Text>
-          <Text style={styles.mealMacro}>
-            {m.calories} kcal · {m.proteinG}g protein
-          </Text>
-        </Card>
-      ))}
-
-      <Text style={styles.sectionTitle}>Thực đơn tuần - Ngày nghỉ (T4,7,CN)</Text>
-      {MEAL_TEMPLATES.rest.map((m) => (
-        <Card key={m.slot}>
-          <Text style={styles.mealLabel}>
-            {m.label} ({m.timeRange})
-          </Text>
-          <Text style={styles.mealDescription}>{m.description}</Text>
-          <Text style={styles.mealMacro}>
-            {m.calories} kcal · {m.proteinG}g protein
-          </Text>
-        </Card>
-      ))}
+      {!proposedPlan && <PlanPreview plan={plan} />}
 
       <Text style={styles.sectionTitle}>Tùy biến món ăn (giữ nguyên calo & protein)</Text>
       <Card>
@@ -122,32 +173,6 @@ export default function PlanScreen() {
           <Text key={item} style={styles.swapItem}>
             • {item}
           </Text>
-        ))}
-      </Card>
-
-      <Text style={styles.sectionTitle}>Chi tiết bài tập Cardio</Text>
-      {WORKOUT_TEMPLATES.map((t) => (
-        <Card key={t.id}>
-          <Text style={styles.mealLabel}>{t.label}</Text>
-          <Text style={styles.mealDescription}>{t.description}</Text>
-          <Text style={styles.mealMacro}>
-            {t.durationMin} phút · {t.caloriesBurned} kcal
-          </Text>
-        </Card>
-      ))}
-
-      <Text style={styles.sectionTitle}>Danh sách đi chợ 1 tuần (~{formatVnd(SHOPPING_LIST_TOTAL_VND)})</Text>
-      <Card>
-        {SHOPPING_LIST.map((item) => (
-          <View key={item.name} style={styles.shoppingRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.shoppingName}>{item.name}</Text>
-              <Text style={styles.shoppingMeta}>
-                {item.category} · Mua: {item.quantityToBuy}
-              </Text>
-            </View>
-            <Text style={styles.shoppingPrice}>{formatVnd(item.estimatedPriceVnd)}</Text>
-          </View>
         ))}
       </Card>
 
@@ -171,6 +196,32 @@ const styles = StyleSheet.create({
   switchHint: { fontSize: 11, color: '#999', marginTop: 2 },
   signOutButton: { backgroundColor: '#FDEDEA', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
   signOutText: { color: '#E0563A', fontWeight: '700' },
+  aiHint: { fontSize: 12, color: '#666', marginBottom: 10, lineHeight: 17 },
+  aiInput: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    minHeight: 70,
+    textAlignVertical: 'top',
+    marginBottom: 10,
+  },
+  aiError: { color: '#E0563A', fontSize: 12, marginTop: 8 },
+  proposalBanner: { backgroundColor: '#FFF3E0' },
+  proposalBannerText: { fontSize: 12, color: '#8A5A00', fontWeight: '600' },
+  proposalActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  discardButton: {
+    flex: 1,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  discardButtonText: { color: '#666', fontWeight: '700' },
+  confirmButton: { flex: 1, backgroundColor: '#2E9E4E', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  confirmButtonText: { color: '#fff', fontWeight: '700' },
   input: {
     borderWidth: 1,
     borderColor: '#DDD',
@@ -182,20 +233,6 @@ const styles = StyleSheet.create({
   },
   saveButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   saveButtonText: { color: '#fff', fontWeight: '700' },
-  mealLabel: { fontSize: 14, fontWeight: '700', color: '#222' },
-  mealDescription: { fontSize: 13, color: '#444', marginTop: 6, lineHeight: 18 },
-  mealMacro: { fontSize: 13, color: '#4F8EF7', fontWeight: '700', marginTop: 8 },
   swapGroupTitle: { fontSize: 13, fontWeight: '700', color: '#222' },
   swapItem: { fontSize: 13, color: '#444', marginTop: 4, lineHeight: 18 },
-  shoppingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  shoppingName: { fontSize: 13, fontWeight: '600', color: '#222' },
-  shoppingMeta: { fontSize: 11, color: '#888', marginTop: 2 },
-  shoppingPrice: { fontSize: 13, fontWeight: '700', color: '#333' },
 });

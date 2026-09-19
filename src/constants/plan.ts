@@ -1,4 +1,4 @@
-import type { DayType, MealTemplate, WorkoutTemplate } from '../types';
+import type { DayType, MealTemplate, PlanData, ShoppingListItem, WorkoutTemplate } from '../types';
 
 // Nguồn: Input/KeHoachGiamCan.docx và Input/BuyingList.docx
 // Kế hoạch IF 16:8 cho người 110kg: khung ăn 12:00 - 20:00, khung nhịn 20:00 - 12:00 hôm sau.
@@ -33,7 +33,7 @@ export function getDayType(date: Date = new Date()): DayType {
   return TRAINING_WEEKDAYS.has(date.getDay()) ? 'training' : 'rest';
 }
 
-export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
+export const DEFAULT_MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
   training: [
     {
       slot: 'meal1',
@@ -103,7 +103,7 @@ export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
   ],
 };
 
-export const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
+export const DEFAULT_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   {
     id: 'morning-swim-incline',
     label: 'Tập sáng (Bụng đói) - Bơi lội / Đi bộ dốc',
@@ -158,15 +158,7 @@ export const PROTEIN_SWAP_OPTIONS = [
   '4 lòng trắng + 2 quả trứng nguyên',
 ];
 
-export interface ShoppingListItem {
-  category: string;
-  name: string;
-  amountPerWeek: string;
-  quantityToBuy: string;
-  estimatedPriceVnd: number;
-}
-
-export const SHOPPING_LIST: ShoppingListItem[] = [
+export const DEFAULT_SHOPPING_LIST: ShoppingListItem[] = [
   { category: 'Đạm (Protein)', name: 'Ức gà / lườn gà tươi (không da)', amountPerWeek: '400g/ngày tập x4 + 350g/ngày nghỉ x3', quantityToBuy: '2.7 - 3.0 kg', estimatedPriceVnd: 195000 },
   { category: 'Đạm (Protein)', name: 'Trứng gà', amountPerWeek: '8 quả/ngày tập x4 + 6 quả/ngày nghỉ x3', quantityToBuy: '45 quả (4.5 vỉ)', estimatedPriceVnd: 145000 },
   { category: 'Đạm (Protein)', name: 'Xúc xích gà nạc áp chảo', amountPerWeek: '120g x4 ngày + 80g x3 ngày', quantityToBuy: '700g (~2-3 gói)', estimatedPriceVnd: 150000 },
@@ -185,4 +177,12 @@ export const SHOPPING_LIST: ShoppingListItem[] = [
   { category: 'Rau củ & phụ liệu', name: 'Cà phê đen phin/gói không đường', amountPerWeek: 'Uống sáng x 7 ngày', quantityToBuy: '1 hộp/túi', estimatedPriceVnd: 45000 },
 ];
 
-export const SHOPPING_LIST_TOTAL_VND = SHOPPING_LIST.reduce((sum, item) => sum + item.estimatedPriceVnd, 0);
+export const DEFAULT_PLAN: PlanData = {
+  mealTemplates: DEFAULT_MEAL_TEMPLATES,
+  workoutTemplates: DEFAULT_WORKOUT_TEMPLATES,
+  shoppingList: DEFAULT_SHOPPING_LIST,
+};
+
+export function shoppingListTotalVnd(shoppingList: ShoppingListItem[]): number {
+  return shoppingList.reduce((sum, item) => sum + item.estimatedPriceVnd, 0);
+}

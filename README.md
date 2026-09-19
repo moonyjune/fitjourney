@@ -13,14 +13,19 @@ và Web** từ cùng một codebase. Backend dùng **Supabase** (auth + database
   thêm món ngoài kế hoạch, theo dõi nước.
 - **Tập luyện**: bài tập cardio gợi ý (bơi, đi bộ dốc), ghi buổi tập tùy chỉnh kèm ảnh minh chứng.
 - **Lịch sử**: mốc tiến trình 1/3/6 tháng, tổng kết theo tuần, nhật ký từng ngày.
-- **Kế hoạch**: bật/tắt nhắc nhở, chỉnh mục tiêu cá nhân, tham khảo thực đơn tuần, bảng tùy biến
-  món ăn, danh sách đi chợ, đăng xuất.
+- **Kế hoạch**: trợ lý AI cập nhật kế hoạch (xem bên dưới), bật/tắt nhắc nhở, chỉnh mục tiêu cá nhân,
+  tham khảo thực đơn tuần, bảng tùy biến món ăn, danh sách đi chợ, đăng xuất.
 - **Nhắc nhở**: thông báo local (giờ ăn, giờ tập, uống nước) qua `expo-notifications`.
 - **Đăng nhập**: email/mật khẩu qua Supabase Auth. Dữ liệu lưu local (AsyncStorage, hoạt động offline)
   và đồng bộ nền lên Supabase khi có mạng.
+- **Trợ lý AI cập nhật kế hoạch**: gõ yêu cầu bằng tiếng Việt (VD: "Tăng protein bữa tối thêm 20g",
+  "Đổi ức gà thành cá hồi trong buy-list") → gọi Claude API qua Supabase Edge Function → xem trước
+  bản đề xuất (đúng format thực đơn/buy-list hiện tại) → bấm **Xác nhận cập nhật** thì mới lưu và áp
+  dụng (đồng thời lên lại lịch nhắc nhở nếu giờ ăn/tập thay đổi).
 
-> Giai đoạn 2 (chưa làm): vai trò Coach/Client, đồng bộ 2 chiều đầy đủ, dashboard, gamification,
-> vòng review của Coach — xem `Input/UpdateFeature_01.md`.
+> Giai đoạn 2 tiếp theo (chưa làm): vai trò Coach/Client, đồng bộ 2 chiều đầy đủ giữa nhiều user,
+> dashboard, gamification, vòng review của Coach — xem `Input/UpdateFeature_01.md`. Trợ lý AI ở trên
+> hiện áp dụng cho chính user (chưa gắn với vai trò Coach riêng).
 
 ## Yêu cầu
 
@@ -34,7 +39,8 @@ và Web** từ cùng một codebase. Backend dùng **Supabase** (auth + database
 1. Tạo project tại [supabase.com](https://supabase.com) (New Project).
 2. Vào **SQL Editor** > New query, dán toàn bộ nội dung file `supabase/schema.sql` > Run.
    File này tạo bảng `profiles`, `weight_entries`, `nutrition_logs`, `workout_entries`,
-   `proof_photos`, bucket Storage `proofs`, và các RLS policy để mỗi user chỉ thấy dữ liệu của mình.
+   `proof_photos`, `plans`, `plan_update_requests`, bucket Storage `proofs`, và các RLS policy để
+   mỗi user chỉ thấy dữ liệu của mình. An toàn để chạy lại nhiều lần (idempotent).
 3. Vào **Project Settings > API**, copy `Project URL` và key `anon` `public`.
 4. Copy `.env.example` thành `.env` và điền 2 giá trị trên:
    ```
@@ -45,6 +51,22 @@ và Web** từ cùng một codebase. Backend dùng **Supabase** (auth + database
    **Authentication > Providers > Email > Confirm email** để đăng ký xong là đăng nhập được ngay.
 
 `.env` không được commit lên git (đã thêm vào `.gitignore`).
+
+## Thiết lập trợ lý AI cập nhật kế hoạch (Supabase Edge Function)
+
+Tính năng "Xem đề xuất / Xác nhận cập nhật" ở tab Kế hoạch gọi một Edge Function (chạy trên server
+Supabase, không lộ API key ra app) để hỏi Claude. Cần deploy function này 1 lần:
+
+```bash
+npm install -g supabase
+supabase login                                   # mở trình duyệt để đăng nhập
+supabase link --project-ref <project-ref-của-bạn>  # lấy project-ref từ URL dashboard hoặc Project Settings > General
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   # API key từ console.anthropic.com
+supabase functions deploy suggest-plan-update
+```
+
+Không có function này thì các phần khác của app vẫn hoạt động bình thường — chỉ riêng nút
+"Xem đề xuất" sẽ báo lỗi cho tới khi deploy xong.
 
 ## Chạy thử
 
@@ -97,14 +119,18 @@ app/                  Màn hình (Expo Router - file-based routing)
   auth.tsx             Đăng nhập / đăng ký
   onboarding.tsx        Nhập cân nặng ban đầu (chỉ hiện sau khi đăng nhập)
 src/
-  constants/plan.ts    Dữ liệu kế hoạch (thực đơn, bài tập, danh sách đi chợ, mốc tiến trình)
+  constants/plan.ts    Dữ liệu MẶC ĐỊNH của kế hoạch (thực đơn, bài tập, buy-list, mốc tiến trình) —
+                        seed ban đầu cho usePlanStore, không còn là nguồn dữ liệu trực tiếp cho màn hình
   lib/supabase.ts       Supabase client
-  sync/cloudSync.ts     Đẩy dữ liệu local lên Supabase + kéo profile về khi đăng nhập máy mới
-  notifications/        Lên lịch nhắc nhở local (expo-notifications)
-  store/                Zustand store (cân nặng, dinh dưỡng, tập luyện, ảnh minh chứng, cài đặt,
-                         auth) + persist AsyncStorage
-  components/           Component dùng chung (Card, ProgressBar, ProofCapture)
+  sync/cloudSync.ts     Đẩy dữ liệu local lên Supabase + kéo profile/plan về khi đăng nhập máy mới
+  notifications/        Lên lịch nhắc nhở local (expo-notifications), nhận PlanData làm tham số
+  store/                Zustand store (cân nặng, dinh dưỡng, tập luyện, ảnh minh chứng, cài đặt, kế
+                         hoạch, auth) + persist AsyncStorage
+  components/           Component dùng chung (Card, ProgressBar, ProofCapture, PlanPreview)
   utils/                Hàm tiện ích (ngày tháng, trạng thái IF, mốc tiến trình, tuần)
-  types/                Định nghĩa TypeScript
-supabase/schema.sql     SQL để chạy trong Supabase SQL Editor (bảng + RLS + storage bucket)
+  types/                Định nghĩa TypeScript (bao gồm PlanData — schema round-trip qua AI)
+supabase/
+  schema.sql             SQL để chạy trong Supabase SQL Editor (bảng + RLS + storage bucket)
+  functions/
+    suggest-plan-update/ Edge Function gọi Claude API để đề xuất cập nhật kế hoạch
 ```

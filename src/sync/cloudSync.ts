@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
-import type { DailyNutritionLog, ProofPhoto, UserSettings, WeightEntry, WorkoutLogEntry } from '../types';
+import type { DailyNutritionLog, PlanData, ProofPhoto, UserSettings, WeightEntry, WorkoutLogEntry } from '../types';
 
 function currentUserId(): string | null {
   return useAuthStore.getState().session?.user.id ?? null;
@@ -121,6 +121,33 @@ export async function pushNutritionLog(log: DailyNutritionLog): Promise<void> {
     if (error) throw error;
   } catch (error) {
     logSyncError('pushNutritionLog', error);
+  }
+}
+
+export async function pullPlan(): Promise<{ plan: PlanData; updatedAtISO: string } | null> {
+  const userId = currentUserId();
+  if (!userId) return null;
+  try {
+    const { data, error } = await supabase.from('plans').select('*').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { plan: data.plan_json as PlanData, updatedAtISO: data.updated_at };
+  } catch (error) {
+    logSyncError('pullPlan', error);
+    return null;
+  }
+}
+
+export async function pushPlan(plan: PlanData, updatedAtISO: string): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  try {
+    const { error } = await supabase
+      .from('plans')
+      .upsert({ user_id: userId, plan_json: plan, updated_at: updatedAtISO }, { onConflict: 'user_id' });
+    if (error) throw error;
+  } catch (error) {
+    logSyncError('pushPlan', error);
   }
 }
 

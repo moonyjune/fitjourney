@@ -81,3 +81,23 @@ export interface MilestoneDef {
   label: string;
   monthsFromStart: number;
 }
+
+export interface ShoppingListItem {
+  category: string;
+  name: string;
+  amountPerWeek: string;
+  quantityToBuy: string;
+  estimatedPriceVnd: number;
+}
+
+/**
+ * The editable content of the plan: meal menus, workout templates, and shopping list.
+ * Seeded from src/constants/plan.ts defaults, then stored per-user in Supabase (table `plans`)
+ * once a user (or an AI-assisted edit) customizes it, so it round-trips through the
+ * plan-update AI prompt as a single JSON document.
+ */
+export interface PlanData {
+  mealTemplates: Record<DayType, MealTemplate[]>;
+  workoutTemplates: WorkoutTemplate[];
+  shoppingList: ShoppingListItem[];
+}

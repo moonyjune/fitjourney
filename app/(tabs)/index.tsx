@@ -8,7 +8,8 @@ import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
-import { getDayType, MEAL_TEMPLATES } from '../../src/constants/plan';
+import { getDayType } from '../../src/constants/plan';
+import { usePlanStore } from '../../src/store/usePlanStore';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { computeMilestones } from '../../src/utils/milestones';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
@@ -30,9 +31,10 @@ export default function TodayScreen() {
     [allWorkoutEntries]
   );
 
+  const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
   const dayType = useMemo(() => getDayType(now), [now]);
   const ifStatus = useMemo(() => getIfStatus(now), [now]);
-  const meals = MEAL_TEMPLATES[dayType];
+  const meals = mealTemplates[dayType];
 
   const eatenCalories = meals
     .filter((m) => nutritionLog.mealsEaten[m.slot])

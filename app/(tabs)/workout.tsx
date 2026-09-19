@@ -4,12 +4,14 @@ import { Card } from '../../src/components/Card';
 import { ProofCapture } from '../../src/components/ProofCapture';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { todayKey } from '../../src/store/useNutritionStore';
-import { getDayType, WORKOUT_TEMPLATES } from '../../src/constants/plan';
+import { getDayType } from '../../src/constants/plan';
+import { usePlanStore } from '../../src/store/usePlanStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 
 export default function WorkoutScreen() {
   const dateKey = todayKey();
   const dayType = useMemo(() => getDayType(new Date()), []);
+  const workoutTemplates = usePlanStore((s) => s.plan.workoutTemplates);
   const entries = useWorkoutStore((s) => s.entries);
   const addEntry = useWorkoutStore((s) => s.addEntry);
   const removeEntry = useWorkoutStore((s) => s.removeEntry);
@@ -51,7 +53,7 @@ export default function WorkoutScreen() {
       </Text>
 
       <Text style={styles.sectionTitle}>Bài tập gợi ý</Text>
-      {WORKOUT_TEMPLATES.map((t) => (
+      {workoutTemplates.map((t) => (
         <Card key={t.id}>
           <Text style={styles.templateLabel}>{t.label}</Text>
           <Text style={styles.templateTime}>{t.timeRange}</Text>

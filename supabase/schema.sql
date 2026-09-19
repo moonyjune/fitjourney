@@ -67,6 +67,24 @@ create table if not exists public.proof_photos (
   created_at timestamptz not null default now()
 );
 
+-- 6. Kế hoạch (thực đơn, bài tập, danh sách đi chợ) của user, có thể chỉnh qua AI hoặc thủ công.
+-- Lưu dạng 1 JSON document / user để dễ round-trip qua prompt AI (xem PlanData trong src/types).
+create table if not exists public.plans (
+  user_id uuid primary key references public.profiles (id) on delete cascade,
+  plan_json jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+-- Lịch sử các lần cập nhật kế hoạch qua AI (phục vụ audit / xem lại đề xuất cũ).
+create table if not exists public.plan_update_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  instruction text not null,
+  proposed_plan_json jsonb not null,
+  applied boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
 -- Tự động tạo profile khi có user đăng ký mới.
 create or replace function public.handle_new_user()
 returns trigger
@@ -92,6 +110,8 @@ alter table public.weight_entries enable row level security;
 alter table public.nutrition_logs enable row level security;
 alter table public.workout_entries enable row level security;
 alter table public.proof_photos enable row level security;
+alter table public.plans enable row level security;
+alter table public.plan_update_requests enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
@@ -112,6 +132,14 @@ create policy "workout_entries_all_own" on public.workout_entries for all
 
 drop policy if exists "proof_photos_all_own" on public.proof_photos;
 create policy "proof_photos_all_own" on public.proof_photos for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "plans_all_own" on public.plans;
+create policy "plans_all_own" on public.plans for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "plan_update_requests_all_own" on public.plan_update_requests;
+create policy "plan_update_requests_all_own" on public.plan_update_requests for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Storage bucket cho ảnh minh chứng (private, truy cập qua signed URL / policy bên dưới).

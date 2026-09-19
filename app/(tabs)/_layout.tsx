@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Tabs, router } from 'expo-router';
 import { Text } from 'react-native';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { usePlanStore } from '../../src/store/usePlanStore';
 import { requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 
 function TabIcon({ symbol }: { symbol: string }) {
@@ -11,6 +12,8 @@ function TabIcon({ symbol }: { symbol: string }) {
 export default function TabsLayout() {
   const onboardingDone = useSettingsStore((s) => s.onboardingDone);
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
+  const plan = usePlanStore((s) => s.plan);
+  const syncPlanFromRemote = usePlanStore((s) => s.syncFromRemote);
 
   useEffect(() => {
     if (!onboardingDone) {
@@ -19,14 +22,18 @@ export default function TabsLayout() {
   }, [onboardingDone]);
 
   useEffect(() => {
+    if (onboardingDone) syncPlanFromRemote();
+  }, [onboardingDone, syncPlanFromRemote]);
+
+  useEffect(() => {
     if (!onboardingDone || !remindersEnabled) return;
     (async () => {
       const granted = await requestNotificationPermissions();
       if (granted) {
-        await scheduleAllReminders();
+        await scheduleAllReminders(plan);
       }
     })();
-  }, [onboardingDone, remindersEnabled]);
+  }, [onboardingDone, remindersEnabled, plan]);
 
   return (
     <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#4F8EF7' }}>

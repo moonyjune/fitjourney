@@ -5,12 +5,14 @@ import { ProgressBar } from '../../src/components/ProgressBar';
 import { ProofCapture } from '../../src/components/ProofCapture';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
-import { getDayType, MEAL_TEMPLATES, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
+import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
+import { usePlanStore } from '../../src/store/usePlanStore';
 
 export default function NutritionScreen() {
   const dateKey = todayKey();
   const dayType = useMemo(() => getDayType(new Date()), []);
-  const meals = MEAL_TEMPLATES[dayType];
+  const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
+  const meals = mealTemplates[dayType];
 
   const log = useNutritionStore((s) => s.getLog(dateKey));
   const toggleMeal = useNutritionStore((s) => s.toggleMeal);

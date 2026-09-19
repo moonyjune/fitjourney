@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { MEAL_TEMPLATES, TRAINING_WEEKDAYS, WATER_REMINDER_TIMES, WORKOUT_TEMPLATES } from '../constants/plan';
+import { TRAINING_WEEKDAYS, WATER_REMINDER_TIMES } from '../constants/plan';
+import type { PlanData } from '../types';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -21,12 +22,12 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 
 // Meal times are identical for training/rest days (only the menu content differs),
 // so meal reminders use the 'training' template purely as the time reference.
-export async function scheduleAllReminders(): Promise<void> {
+export async function scheduleAllReminders(plan: PlanData): Promise<void> {
   if (Platform.OS === 'web') return;
 
   await Notifications.cancelAllScheduledNotificationsAsync();
 
-  for (const meal of MEAL_TEMPLATES.training) {
+  for (const meal of plan.mealTemplates.training) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: `Đến giờ ${meal.label}`,
@@ -56,7 +57,7 @@ export async function scheduleAllReminders(): Promise<void> {
 
   // expo-notifications weekday: 1 = Sunday ... 7 = Saturday (matches Date#getDay() + 1).
   const trainingWeekdays = [...TRAINING_WEEKDAYS].map((jsDay) => jsDay + 1);
-  for (const workout of WORKOUT_TEMPLATES) {
+  for (const workout of plan.workoutTemplates) {
     if (!workout.reminderSlot || workout.startHour === undefined || workout.startMinute === undefined) continue;
     for (const weekday of trainingWeekdays) {
       await Notifications.scheduleNotificationAsync({
