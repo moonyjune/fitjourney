@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
@@ -8,20 +8,40 @@ import { PlanPreview } from '../../src/components/PlanPreview';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { supabase } from '../../src/lib/supabase';
 import { fetchFeedback, pullPlan, pushCoachFeedback, pushPlan } from '../../src/sync/cloudSync';
-import { DEFAULT_PLAN, DEFAULT_WATER_TARGET_ML } from '../../src/constants/plan';
+import { DEFAULT_PLAN, DEFAULT_WATER_TARGET_ML, getDayType } from '../../src/constants/plan';
 import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { useTranslation } from '../../src/i18n/useTranslation';
+import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
-import type { CoachFeedback, DailyNutritionLog, FeedbackPeriodType, PlanData } from '../../src/types';
+import type { CoachFeedback, DailyNutritionLog, FeedbackPeriodType, MealSlot, PlanData, ProofTaskType } from '../../src/types';
 
 interface RecentProof {
   id: string;
   entryDate: string;
   note: string | null;
   signedUrl: string | null;
+  taskType: ProofTaskType;
+  taskRefId: string;
 }
+
+interface WorkoutEntryRow {
+  id: string;
+  entryDate: string;
+  templateId: string | null;
+  label: string;
+  caloriesBurned: number;
+}
+
+type ProofStatus = 'met' | 'partial' | 'missing';
+
+const STATUS_ICON: Record<ProofStatus, string> = { met: '✅', partial: '⚠️', missing: '❌' };
+const STATUS_KEY: Record<ProofStatus, StringKey> = {
+  met: 'clientDetail.proofStatusMet',
+  partial: 'clientDetail.proofStatusPartial',
+  missing: 'clientDetail.proofStatusMissing',
+};
 
 export default function ClientDetailScreen() {
   const { t } = useTranslation();
@@ -41,6 +61,9 @@ export default function ClientDetailScreen() {
   });
   const [streak, setStreak] = useState(0);
   const [recentProofs, setRecentProofs] = useState<RecentProof[]>([]);
+  const [workoutEntriesById, setWorkoutEntriesById] = useState<Record<string, WorkoutEntryRow>>({});
+  const [nutritionLogsByDate, setNutritionLogsByDate] = useState<Record<string, DailyNutritionLog>>({});
+  const [activeProofId, setActiveProofId] = useState<string | null>(null);
 
   const [feedbackList, setFeedbackList] = useState<CoachFeedback[]>([]);
   const [feedbackPeriodType, setFeedbackPeriodType] = useState<FeedbackPeriodType>('weekly');
@@ -74,7 +97,7 @@ export default function ClientDetailScreen() {
     if (!clientId) return;
     (async () => {
       setLoading(true);
-      const [remotePlan, profileRes, latestWeightRes, nutritionLogsRes, proofsRes, feedbackRes] = await Promise.all([
+      const [remotePlan, profileRes, latestWeightRes, nutritionLogsRes, proofsRes, workoutEntriesRes, feedbackRes] = await Promise.all([
         pullPlan(clientId),
         supabase.from('profiles').select('start_weight_kg, water_target_ml').eq('id', clientId).maybeSingle(),
         supabase
@@ -87,10 +110,14 @@ export default function ClientDetailScreen() {
         supabase.from('nutrition_logs').select('*').eq('user_id', clientId),
         supabase
           .from('proof_photos')
-          .select('id, entry_date, note, photo_path')
+          .select('id, entry_date, note, photo_path, task_type, task_ref_id')
           .eq('user_id', clientId)
           .order('created_at', { ascending: false })
-          .limit(6),
+          .limit(16),
+        supabase
+          .from('workout_entries')
+          .select('id, entry_date, template_id, label, calories_burned')
+          .eq('user_id', clientId),
         fetchFeedback(clientId),
       ]);
       setFeedbackList(feedbackRes);
@@ -113,6 +140,19 @@ export default function ClientDetailScreen() {
       }
       const waterTarget = profileRes.data?.water_target_ml ?? DEFAULT_WATER_TARGET_ML;
       setStreak(computeCurrentStreak(logsMap, 3, waterTarget));
+      setNutritionLogsByDate(logsMap);
+
+      const workoutById: Record<string, WorkoutEntryRow> = {};
+      for (const row of workoutEntriesRes.data ?? []) {
+        workoutById[row.id] = {
+          id: row.id,
+          entryDate: row.entry_date,
+          templateId: row.template_id,
+          label: row.label,
+          caloriesBurned: row.calories_burned ?? 0,
+        };
+      }
+      setWorkoutEntriesById(workoutById);
 
       const proofRows = proofsRes.data ?? [];
       const proofsWithUrls = await Promise.all(
@@ -123,6 +163,8 @@ export default function ClientDetailScreen() {
             entryDate: row.entry_date,
             note: row.note,
             signedUrl: signed?.signedUrl ?? null,
+            taskType: row.task_type as ProofTaskType,
+            taskRefId: row.task_ref_id as string,
           };
         })
       );
@@ -139,6 +181,92 @@ export default function ClientDetailScreen() {
     Alert.alert(t('clientDetail.updatedTitle'), t('clientDetail.updatedMessage'));
   }
 
+  function proofMealLabel(slot: MealSlot, dateKey: string): string {
+    const dayType = getDayType(new Date(dateKey));
+    const template = plan?.mealTemplates[dayType]?.find((m) => m.slot === slot);
+    return template?.label ?? slot;
+  }
+
+  function proofMealStatus(slot: MealSlot, dateKey: string): ProofStatus {
+    const log = nutritionLogsByDate[dateKey];
+    if (!log) return 'missing';
+    return log.mealsEaten[slot] ? 'met' : 'partial';
+  }
+
+  function proofWorkoutInfo(taskRefId: string): { label: string; actual: number; target: number; status: ProofStatus } {
+    const entry = workoutEntriesById[taskRefId];
+    if (!entry) return { label: t('tab.workout'), actual: 0, target: 0, status: 'missing' };
+    const template = plan?.workoutTemplates.find((w) => w.id === entry.templateId);
+    const target = template?.caloriesBurned ?? 0;
+    const status: ProofStatus = target === 0 || entry.caloriesBurned >= target * 0.9 ? 'met' : 'partial';
+    return { label: entry.label, actual: entry.caloriesBurned, target, status };
+  }
+
+  function proofStatus(p: RecentProof): ProofStatus {
+    const dateKey = toDateKey(new Date(p.entryDate));
+    return p.taskType === 'meal' ? proofMealStatus(p.taskRefId as MealSlot, dateKey) : proofWorkoutInfo(p.taskRefId).status;
+  }
+
+  function proofLabel(p: RecentProof): string {
+    const dateKey = toDateKey(new Date(p.entryDate));
+    return p.taskType === 'meal' ? proofMealLabel(p.taskRefId as MealSlot, dateKey) : proofWorkoutInfo(p.taskRefId).label;
+  }
+
+  function proofTooltip(p: RecentProof): string {
+    const dateKey = toDateKey(new Date(p.entryDate));
+    const dateLabel = formatDateVi(dateKey);
+    const noteLine = p.note ? t('clientDetail.proofTooltipNoteLine', { note: p.note }) : '';
+    if (p.taskType === 'meal') {
+      const slot = p.taskRefId as MealSlot;
+      return t('clientDetail.proofTooltipMeal', {
+        label: proofMealLabel(slot, dateKey),
+        date: dateLabel,
+        status: t(STATUS_KEY[proofMealStatus(slot, dateKey)]),
+        note: noteLine,
+      });
+    }
+    const info = proofWorkoutInfo(p.taskRefId);
+    return t('clientDetail.proofTooltipWorkout', {
+      label: info.label,
+      date: dateLabel,
+      actual: info.actual,
+      target: info.target,
+      status: t(STATUS_KEY[info.status]),
+      note: noteLine,
+    });
+  }
+
+  function renderProofItem(p: RecentProof) {
+    const status = proofStatus(p);
+    const isActive = activeProofId === p.id;
+    const isWeb = Platform.OS === 'web';
+    return (
+      <Pressable
+        key={p.id}
+        onHoverIn={isWeb ? () => setActiveProofId(p.id) : undefined}
+        onHoverOut={isWeb ? () => setActiveProofId((prev) => (prev === p.id ? null : prev)) : undefined}
+        onPress={() => setActiveProofId((prev) => (prev === p.id ? null : p.id))}
+      >
+        <View style={[styles.proofItem, isActive && styles.proofItemActive]}>
+          <View>
+            {p.signedUrl ? (
+              <Image source={{ uri: p.signedUrl }} style={styles.proofThumb} />
+            ) : (
+              <View style={[styles.proofThumb, styles.proofThumbFallback]} />
+            )}
+            <View style={styles.proofStatusBadge}>
+              <Text style={styles.proofStatusIcon}>{STATUS_ICON[status]}</Text>
+            </View>
+          </View>
+          <Text style={styles.proofLabel} numberOfLines={1}>
+            {proofLabel(p)}
+          </Text>
+          <Text style={styles.proofDate}>{formatDateVi(toDateKey(new Date(p.entryDate)))}</Text>
+        </View>
+      </Pressable>
+    );
+  }
+
   if (loading || !plan) {
     return (
       <View style={styles.loadingContainer}>
@@ -149,6 +277,9 @@ export default function ClientDetailScreen() {
 
   const change = weightSummary.latest != null && weightSummary.start != null ? weightSummary.latest - weightSummary.start : null;
   const badges = unlockedStreakBadges(streak);
+  const mealProofs = recentProofs.filter((p) => p.taskType === 'meal');
+  const workoutProofs = recentProofs.filter((p) => p.taskType === 'workout');
+  const activeProof = recentProofs.find((p) => p.id === activeProofId) ?? null;
 
   return (
     <>
@@ -182,18 +313,30 @@ export default function ClientDetailScreen() {
         {recentProofs.length === 0 ? (
           <Text style={styles.emptyText}>{t('clientDetail.emptyProofs')}</Text>
         ) : (
-          <View style={styles.proofGrid}>
-            {recentProofs.map((p) => (
-              <View key={p.id} style={styles.proofItem}>
-                {p.signedUrl ? (
-                  <Image source={{ uri: p.signedUrl }} style={styles.proofThumb} />
-                ) : (
-                  <View style={[styles.proofThumb, styles.proofThumbFallback]} />
-                )}
-                <Text style={styles.proofDate}>{formatDateVi(toDateKey(new Date(p.entryDate)))}</Text>
+          <>
+            <Text style={styles.proofsHint}>{t('clientDetail.proofsHint')}</Text>
+            {mealProofs.length > 0 && (
+              <View style={styles.proofSection}>
+                <Text style={styles.proofSectionTitle}>{t('clientDetail.proofsMealSection')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.proofRow}>
+                  {mealProofs.map((p) => renderProofItem(p))}
+                </ScrollView>
               </View>
-            ))}
-          </View>
+            )}
+            {workoutProofs.length > 0 && (
+              <View style={styles.proofSection}>
+                <Text style={styles.proofSectionTitle}>{t('clientDetail.proofsWorkoutSection')}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.proofRow}>
+                  {workoutProofs.map((p) => renderProofItem(p))}
+                </ScrollView>
+              </View>
+            )}
+            {activeProof && (
+              <Card style={styles.proofDetailCard}>
+                <Text style={styles.proofDetailText}>{proofTooltip(activeProof)}</Text>
+              </Card>
+            )}
+          </>
         )}
 
         <Text style={styles.sectionTitle}>{t('clientDetail.feedbackTitle')}</Text>
@@ -264,11 +407,35 @@ const styles = StyleSheet.create({
   streakValue: { fontSize: 18, fontWeight: '800', color: colors.gold },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginTop: spacing.md },
   emptyText: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm },
-  proofGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.sm },
-  proofItem: { width: 88 },
+  proofsHint: { fontSize: 11, color: colors.textMuted, marginBottom: spacing.sm },
+  proofSection: { marginBottom: spacing.md },
+  proofSectionTitle: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
+  proofRow: { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.sm },
+  proofItem: { width: 88, borderRadius: radius.md, padding: 2 },
+  proofItemActive: { backgroundColor: colors.primaryLight },
   proofThumb: { width: 88, height: 88, borderRadius: radius.md, backgroundColor: '#eee' },
   proofThumbFallback: { alignItems: 'center', justifyContent: 'center' },
-  proofDate: { fontSize: 10, color: colors.textMuted, marginTop: 4, textAlign: 'center' },
+  proofStatusBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  proofStatusIcon: { fontSize: 12 },
+  proofLabel: { fontSize: 11, fontWeight: '700', color: colors.textPrimary, marginTop: spacing.xs, textAlign: 'center' },
+  proofDate: { fontSize: 10, color: colors.textMuted, marginTop: 2, textAlign: 'center' },
+  proofDetailCard: { backgroundColor: colors.primaryLight },
+  proofDetailText: { fontSize: 12, color: colors.textPrimary, lineHeight: 18 },
   aiInput: {
     borderWidth: 1,
     borderColor: colors.border,
