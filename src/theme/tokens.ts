@@ -27,6 +27,14 @@ export const colors = {
   white: '#FFFFFF',
 } as const;
 
+// Per-role accent, layered on top of the shared palette above so Coach and the person
+// tracking their own weight ("Fatty") each get a visually distinct mode: cool/professional
+// blue for Coach, warm/energetic orange for Fatty. Applied via `useAccentColors()`.
+export const ROLE_ACCENTS = {
+  coach: { primary: '#3B72D6', primaryDark: '#2B559E', primaryLight: '#E4ECFB' },
+  client: { primary: '#F2704F', primaryDark: '#D5573A', primaryLight: '#FDEAE3' },
+} as const;
+
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -45,11 +53,18 @@ export const radius = {
   pill: 999,
 } as const;
 
+// The golden ratio (φ ≈ 1.618). Used to derive the type scale below and for a handful of
+// deliberate proportions elsewhere (logo core-to-ring size, hero image aspect ratios).
+export const GOLDEN_RATIO = 1.618;
+
+// Type scale grown from `body` in both directions by φ^(1/4) (≈1.128, four steps per octave)
+// for the fine text sizes and φ^(1/2) (≈1.272) for headings, so the jump to h1/h2 reads
+// as more deliberate than the small text steps.
 export const typography = {
-  h1: { fontSize: 28, fontWeight: '800' as const },
-  h2: { fontSize: 22, fontWeight: '800' as const },
+  h1: { fontSize: 29, fontWeight: '800' as const },
+  h2: { fontSize: 23, fontWeight: '800' as const },
   h3: { fontSize: 18, fontWeight: '700' as const },
-  title: { fontSize: 15, fontWeight: '700' as const },
+  title: { fontSize: 16, fontWeight: '700' as const },
   body: { fontSize: 14, fontWeight: '400' as const },
   label: { fontSize: 13, fontWeight: '600' as const },
   caption: { fontSize: 12, fontWeight: '600' as const },

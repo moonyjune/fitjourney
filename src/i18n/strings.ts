@@ -9,7 +9,7 @@ export type Language = 'vi' | 'en';
 export const STRINGS = {
   vi: {
     'app.name': 'Theo Dõi Giảm Cân',
-    'app.tagline': 'Đồng hành cùng bạn trên hành trình khỏe mạnh hơn',
+    'app.tagline': 'Giảm cân bền vững · Cân bằng cuộc sống · Sống khỏe mỗi ngày',
 
     'tab.today': 'Hôm nay',
     'tab.weight': 'Cân nặng',
@@ -45,13 +45,20 @@ export const STRINGS = {
     'auth.signUp': 'Đăng ký',
     'auth.switchToSignUp': 'Chưa có tài khoản? Đăng ký',
     'auth.switchToSignIn': 'Đã có tài khoản? Đăng nhập',
+    'auth.missingFieldsTitle': 'Thiếu thông tin',
+    'auth.missingFieldsMessage': 'Vui lòng nhập email và mật khẩu.',
+    'auth.checkEmailTitle': 'Kiểm tra email',
+    'auth.checkEmailMessage': 'Nếu dự án bật xác nhận email, hãy xác nhận trước khi đăng nhập.',
+    'auth.genericError': 'Có lỗi xảy ra.',
 
     'role.title': 'Bạn là ai?',
     'role.subtitle': 'Chọn vai trò để mình thiết lập đúng trải nghiệm cho bạn.',
-    'role.clientTitle': 'Tôi tự tập (Client)',
+    'role.clientTitle': 'Tôi là Fatty (tự tập)',
     'role.clientDescription': 'Theo dõi cân nặng, dinh dưỡng, tập luyện theo kế hoạch. Có thể liên kết với Coach sau.',
     'role.coachTitle': 'Tôi là Coach (Huấn luyện viên)',
     'role.coachDescription': 'Quản lý nhiều học viên, chỉnh thực đơn/lịch tập cho từng người bằng trợ lý AI.',
+    'role.coachBadge': 'Coach',
+    'role.clientBadge': 'Fatty',
 
     'onboarding.title': 'Chào mừng!',
     'onboarding.subtitle': 'Nhập thông tin ban đầu để bắt đầu theo dõi hành trình giảm cân theo kế hoạch IF 16:8.',
@@ -63,6 +70,15 @@ export const STRINGS = {
 
     'mode.title': 'Chế độ',
     'mode.language': 'Ngôn ngữ',
+    'mode.clientAlreadyTracking': 'Bạn cũng đang tự theo dõi cân nặng/dinh dưỡng.',
+    'mode.clientNotSetUp': 'Bạn có thể tự theo dõi cân nặng/dinh dưỡng của chính mình.',
+    'mode.switchToClient': 'Chuyển sang chế độ Fatty',
+    'mode.startPersonalTracking': 'Bắt đầu theo dõi cá nhân',
+
+    'coachAccount.codeTitle': 'Mã Coach',
+    'coachAccount.codeHint': 'Chia sẻ mã này cho học viên để họ liên kết tài khoản:',
+    'coachAccount.remindersTitle': 'Nhắc nhở',
+    'coachAccount.deviceReminders': 'Nhắc nhở trên thiết bị',
 
     'milestone.1w': 'Mốc 1 tuần',
     'milestone.2w': 'Mốc 2 tuần',
@@ -192,6 +208,8 @@ export const STRINGS = {
     'plan.saveGoalsButton': 'Lưu mục tiêu',
     'plan.currentPlanTitle': 'Kế hoạch hiện tại',
     'plan.swapTitle': 'Tùy biến món ăn (giữ nguyên calo & protein)',
+    'plan.swapCarbGroup': 'Nhóm tinh bột (~120-140 kcal/phần)',
+    'plan.swapProteinGroup': 'Nhóm đạm (~30-35g protein/phần)',
     'plan.coachSectionTitle': 'Coach',
     'plan.linkedToCoach': 'Bạn đã liên kết với 1 Coach.',
     'plan.enterCoachCode': 'Nhập mã Coach để liên kết tài khoản',
@@ -242,7 +260,7 @@ export const STRINGS = {
   },
   en: {
     'app.name': 'Weight Loss Tracker',
-    'app.tagline': 'Your companion on the path to a healthier you',
+    'app.tagline': 'Lose weight sustainably · Balance your life · Live healthier every day',
 
     'tab.today': 'Today',
     'tab.weight': 'Weight',
@@ -278,13 +296,20 @@ export const STRINGS = {
     'auth.signUp': 'Sign up',
     'auth.switchToSignUp': "Don't have an account? Sign up",
     'auth.switchToSignIn': 'Already have an account? Sign in',
+    'auth.missingFieldsTitle': 'Missing info',
+    'auth.missingFieldsMessage': 'Please enter your email and password.',
+    'auth.checkEmailTitle': 'Check your email',
+    'auth.checkEmailMessage': 'If email confirmation is enabled, confirm your address before signing in.',
+    'auth.genericError': 'Something went wrong.',
 
     'role.title': 'Who are you?',
     'role.subtitle': 'Pick a mode so we can set up the right experience for you.',
-    'role.clientTitle': 'I train myself (Client)',
+    'role.clientTitle': "I'm Fatty (train myself)",
     'role.clientDescription': 'Track your weight, nutrition, and workouts against the plan. You can link to a Coach later.',
     'role.coachTitle': 'I am a Coach',
     'role.coachDescription': 'Manage multiple clients and edit their menus/workout schedules with an AI assistant.',
+    'role.coachBadge': 'Coach',
+    'role.clientBadge': 'Fatty',
 
     'onboarding.title': 'Welcome!',
     'onboarding.subtitle': 'Enter your starting info to begin tracking your weight-loss journey on the IF 16:8 plan.',
@@ -296,6 +321,15 @@ export const STRINGS = {
 
     'mode.title': 'Mode',
     'mode.language': 'Language',
+    'mode.clientAlreadyTracking': "You're also tracking your own weight/nutrition.",
+    'mode.clientNotSetUp': 'You can also track your own weight/nutrition.',
+    'mode.switchToClient': 'Switch to Fatty mode',
+    'mode.startPersonalTracking': 'Start personal tracking',
+
+    'coachAccount.codeTitle': 'Coach code',
+    'coachAccount.codeHint': 'Share this code with clients so they can link their account:',
+    'coachAccount.remindersTitle': 'Reminders',
+    'coachAccount.deviceReminders': 'On-device reminders',
 
     'milestone.1w': '1-week checkpoint',
     'milestone.2w': '2-week checkpoint',
@@ -425,6 +459,8 @@ export const STRINGS = {
     'plan.saveGoalsButton': 'Save goals',
     'plan.currentPlanTitle': 'Current plan',
     'plan.swapTitle': 'Food swaps (same calories & protein)',
+    'plan.swapCarbGroup': 'Carb group (~120-140 kcal/serving)',
+    'plan.swapProteinGroup': 'Protein group (~30-35g protein/serving)',
     'plan.coachSectionTitle': 'Coach',
     'plan.linkedToCoach': 'You are linked to a Coach.',
     'plan.enterCoachCode': "Enter your coach's code to link accounts",

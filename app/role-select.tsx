@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { router } from 'expo-router';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useTranslation } from '../src/i18n/useTranslation';
-import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { colors, radius, spacing, typography, ROLE_ACCENTS } from '../src/theme/tokens';
 
 export default function RoleSelectScreen() {
   const { t } = useTranslation();
@@ -28,17 +28,25 @@ export default function RoleSelectScreen() {
       <Text style={styles.title}>{t('role.title')}</Text>
       <Text style={styles.subtitle}>{t('role.subtitle')}</Text>
 
-      <TouchableOpacity style={styles.card} onPress={handleClient} disabled={busy}>
-        <Text style={styles.cardEmoji}>🏃</Text>
-        <Text style={styles.cardTitle}>{t('role.clientTitle')}</Text>
+      <TouchableOpacity
+        style={[styles.card, { borderColor: ROLE_ACCENTS.client.primary, backgroundColor: ROLE_ACCENTS.client.primaryLight }]}
+        onPress={handleClient}
+        disabled={busy}
+      >
+        <Text style={styles.cardEmoji}>🔥</Text>
+        <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.client.primaryDark }]}>{t('role.clientTitle')}</Text>
         <Text style={styles.cardDescription}>{t('role.clientDescription')}</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.card} onPress={handleCoach} disabled={busy}>
+      <TouchableOpacity
+        style={[styles.card, { borderColor: ROLE_ACCENTS.coach.primary, backgroundColor: ROLE_ACCENTS.coach.primaryLight }]}
+        onPress={handleCoach}
+        disabled={busy}
+      >
         <Text style={styles.cardEmoji}>🧑‍🏫</Text>
-        <Text style={styles.cardTitle}>{t('role.coachTitle')}</Text>
+        <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.coach.primaryDark }]}>{t('role.coachTitle')}</Text>
         <Text style={styles.cardDescription}>{t('role.coachDescription')}</Text>
-        {busy && <ActivityIndicator style={{ marginTop: spacing.md }} color={colors.primary} />}
+        {busy && <ActivityIndicator style={{ marginTop: spacing.md }} color={ROLE_ACCENTS.coach.primary} />}
       </TouchableOpacity>
     </View>
   );

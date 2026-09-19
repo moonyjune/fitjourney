@@ -5,7 +5,7 @@ import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
 import { requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { useTranslation } from '../../src/i18n/useTranslation';
-import { colors } from '../../src/theme/tokens';
+import { useAccentColors } from '../../src/theme/useAccentColors';
 
 function TabIcon({ symbol }: { symbol: string }) {
   return <Text style={{ fontSize: 20 }}>{symbol}</Text>;
@@ -17,6 +17,7 @@ export default function TabsLayout() {
   const role = useSettingsStore((s) => s.role);
   const isCoach = role === 'coach';
   const { t } = useTranslation();
+  const colors = useAccentColors();
   const plan = usePlanStore((s) => s.plan);
   const syncPlanFromRemote = usePlanStore((s) => s.syncFromRemote);
 

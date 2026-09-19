@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
+import { resetAllLocalStores } from '../src/store/resetLocalStores';
 import { pullProfile } from '../src/sync/cloudSync';
 import { AppIntro } from '../src/components/AppIntro';
 
@@ -29,24 +30,34 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, [init]);
 
-  // First login on a new/reinstalled device: pull the profile created previously,
-  // instead of showing onboarding again and overwriting the remote start date/weight.
+  // Runs once per distinct signed-in user id (on cold start and on every account switch).
+  // The DB profile is always the source of truth for role/setup state: local AsyncStorage is
+  // per-device, not per-account, so if a different user just signed in on this device we wipe
+  // every cached store first — otherwise account B would briefly (or permanently) see account
+  // A's role, weight/nutrition/workout history, plan, and proof photos.
   useEffect(() => {
     if (!session) {
       setProfileChecked(false);
       checkedForUserId.current = null;
       return;
     }
-    if (roleChosen || checkedForUserId.current === session.user.id) {
+    if (checkedForUserId.current === session.user.id) {
       setProfileChecked(true);
       return;
     }
     checkedForUserId.current = session.user.id;
+
+    const lastUserId = useSettingsStore.getState().lastUserId;
+    if (lastUserId && lastUserId !== session.user.id) {
+      resetAllLocalStores();
+    }
+    useSettingsStore.setState({ lastUserId: session.user.id });
+
     pullProfile().then((remote) => {
       if (remote) hydrateFromRemote(remote);
       setProfileChecked(true);
     });
-  }, [session, roleChosen, hydrateFromRemote]);
+  }, [session, hydrateFromRemote]);
 
   const ready = initialized && (!session || profileChecked) && minIntroElapsed;
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { supabase } from '../src/lib/supabase';
 import { Button } from '../src/components/Button';
+import { Logo } from '../src/components/Logo';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
@@ -14,7 +15,7 @@ export default function AuthScreen() {
 
   async function handleSubmit() {
     if (!email || !password) {
-      Alert.alert('Lỗi', 'Vui lòng nhập email và mật khẩu.');
+      Alert.alert(t('auth.missingFieldsTitle'), t('auth.missingFieldsMessage'));
       return;
     }
     setBusy(true);
@@ -25,11 +26,11 @@ export default function AuthScreen() {
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
-        Alert.alert('Kiểm tra email', 'Nếu dự án bật xác nhận email, hãy xác nhận trước khi đăng nhập.');
+        Alert.alert(t('auth.checkEmailTitle'), t('auth.checkEmailMessage'));
       }
       // RootLayout listens to auth state changes and will navigate away automatically.
     } catch (err) {
-      Alert.alert('Lỗi', err instanceof Error ? err.message : 'Có lỗi xảy ra.');
+      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('auth.genericError'));
     } finally {
       setBusy(false);
     }
@@ -37,7 +38,7 @@ export default function AuthScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Text style={styles.title}>{t('auth.title')}</Text>
+      <Logo size={64} showWordmark />
       <Text style={styles.subtitle}>{mode === 'signIn' ? t('auth.subtitleSignIn') : t('auth.subtitleSignUp')}</Text>
 
       <TextInput
@@ -72,8 +73,7 @@ export default function AuthScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.surface, padding: spacing.xl, justifyContent: 'center' },
-  title: { ...typography.h2, textAlign: 'center', marginBottom: spacing.sm, color: colors.textPrimary },
-  subtitle: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xxl },
+  subtitle: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.base, marginBottom: spacing.xxl },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

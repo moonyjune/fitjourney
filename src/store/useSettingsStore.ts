@@ -45,6 +45,7 @@ export const useSettingsStore = create<SettingsState>()(
       coachId: null,
       coachCode: null,
       language: 'vi',
+      lastUserId: null,
       updateSettings: (patch) =>
         set((state) => {
           const updated = { ...state, ...patch };

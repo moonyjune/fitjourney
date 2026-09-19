@@ -83,6 +83,9 @@ export interface UserSettings {
   coachCode: string | null;
   /** UI language. Defaults to Vietnamese; a bilingual toggle lives in Plan / Coach account. */
   language: 'vi' | 'en';
+  /** The Supabase user id local data currently belongs to. Used to detect an account switch on
+   *  the same device so cached data can be wiped before the new account's data is shown. */
+  lastUserId: string | null;
 }
 
 export type FeedbackPeriodType = 'weekly' | 'monthly';

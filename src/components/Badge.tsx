@@ -1,30 +1,30 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing } from '../theme/tokens';
+import { useAccentColors } from '../theme/useAccentColors';
+import { radius, spacing } from '../theme/tokens';
 
 type BadgeTone = 'primary' | 'success' | 'warning' | 'danger' | 'gold' | 'neutral';
 
-const TONE_BG: Record<BadgeTone, string> = {
-  primary: colors.primaryLight,
-  success: colors.successLight,
-  warning: colors.warningLight,
-  danger: colors.dangerLight,
-  gold: colors.goldLight,
-  neutral: colors.neutralLight,
-};
-
-const TONE_TEXT: Record<BadgeTone, string> = {
-  primary: colors.primary,
-  success: colors.success,
-  warning: colors.warning,
-  danger: colors.danger,
-  gold: colors.gold,
-  neutral: colors.textSecondary,
-};
-
 export function Badge({ label, tone = 'primary' }: { label: string; tone?: BadgeTone }) {
+  const colors = useAccentColors();
+  const bg: Record<BadgeTone, string> = {
+    primary: colors.primaryLight,
+    success: colors.successLight,
+    warning: colors.warningLight,
+    danger: colors.dangerLight,
+    gold: colors.goldLight,
+    neutral: colors.neutralLight,
+  };
+  const text: Record<BadgeTone, string> = {
+    primary: colors.primary,
+    success: colors.success,
+    warning: colors.warning,
+    danger: colors.danger,
+    gold: colors.gold,
+    neutral: colors.textSecondary,
+  };
   return (
-    <View style={[styles.chip, { backgroundColor: TONE_BG[tone] }]}>
-      <Text style={[styles.text, { color: TONE_TEXT[tone] }]}>{label}</Text>
+    <View style={[styles.chip, { backgroundColor: bg[tone] }]}>
+      <Text style={[styles.text, { color: text[tone] }]}>{label}</Text>
     </View>
   );
 }

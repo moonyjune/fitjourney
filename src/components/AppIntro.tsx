@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Logo } from './Logo';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, spacing, typography } from '../theme/tokens';
 
@@ -18,8 +19,7 @@ export function AppIntro() {
   return (
     <View style={styles.container}>
       <Animated.View style={{ opacity: fade, transform: [{ scale }], alignItems: 'center' }}>
-        <Text style={styles.emoji}>🔥</Text>
-        <Text style={styles.title}>{t('app.name')}</Text>
+        <Logo size={96} showWordmark tint={colors.white} wordmarkColor={colors.white} />
         <Text style={styles.tagline}>{t('app.tagline')}</Text>
       </Animated.View>
     </View>
@@ -28,7 +28,5 @@ export function AppIntro() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.primary },
-  emoji: { fontSize: 56, marginBottom: spacing.base },
-  title: { ...typography.h3, fontSize: 24, color: colors.white, marginBottom: spacing.sm },
-  tagline: { ...typography.caption, color: colors.primaryLight, textAlign: 'center', paddingHorizontal: 40 },
+  tagline: { ...typography.caption, color: colors.primaryLight, textAlign: 'center', paddingHorizontal: 40, marginTop: spacing.sm },
 });
