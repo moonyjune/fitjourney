@@ -4,11 +4,17 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { PlanPreview } from '../../src/components/PlanPreview';
 import { supabase } from '../../src/lib/supabase';
-import { pullPlan, pushPlan } from '../../src/sync/cloudSync';
+import { fetchFeedback, pullPlan, pushCoachFeedback, pushPlan } from '../../src/sync/cloudSync';
 import { DEFAULT_PLAN, DEFAULT_WATER_TARGET_ML } from '../../src/constants/plan';
 import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
-import type { DailyNutritionLog, PlanData } from '../../src/types';
+import { weekStartKey } from '../../src/utils/weekKey';
+import type { CoachFeedback, DailyNutritionLog, FeedbackPeriodType, PlanData } from '../../src/types';
+
+function defaultPeriodLabel(periodType: FeedbackPeriodType, now: Date): string {
+  if (periodType === 'weekly') return `Tuần bắt đầu ${formatDateVi(weekStartKey(now))}`;
+  return `Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+}
 
 interface RecentProof {
   id: string;
@@ -35,11 +41,39 @@ export default function ClientDetailScreen() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  const [feedbackList, setFeedbackList] = useState<CoachFeedback[]>([]);
+  const [feedbackPeriodType, setFeedbackPeriodType] = useState<FeedbackPeriodType>('weekly');
+  const [feedbackLabel, setFeedbackLabel] = useState(() => defaultPeriodLabel('weekly', new Date()));
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+
+  function handlePeriodTypeChange(type: FeedbackPeriodType) {
+    setFeedbackPeriodType(type);
+    setFeedbackLabel(defaultPeriodLabel(type, new Date()));
+  }
+
+  async function handleSendFeedback() {
+    if (!clientId || !feedbackText.trim()) {
+      Alert.alert('Thiếu nội dung', 'Nhập nhận xét trước khi gửi.');
+      return;
+    }
+    setFeedbackBusy(true);
+    const result = await pushCoachFeedback(clientId, feedbackPeriodType, feedbackLabel, feedbackText.trim());
+    setFeedbackBusy(false);
+    if (!result.ok) {
+      Alert.alert('Không gửi được', result.message);
+      return;
+    }
+    setFeedbackText('');
+    const refreshed = await fetchFeedback(clientId);
+    setFeedbackList(refreshed);
+  }
+
   useEffect(() => {
     if (!clientId) return;
     (async () => {
       setLoading(true);
-      const [remotePlan, profileRes, latestWeightRes, nutritionLogsRes, proofsRes] = await Promise.all([
+      const [remotePlan, profileRes, latestWeightRes, nutritionLogsRes, proofsRes, feedbackRes] = await Promise.all([
         pullPlan(clientId),
         supabase.from('profiles').select('start_weight_kg, water_target_ml').eq('id', clientId).maybeSingle(),
         supabase
@@ -56,7 +90,9 @@ export default function ClientDetailScreen() {
           .eq('user_id', clientId)
           .order('created_at', { ascending: false })
           .limit(6),
+        fetchFeedback(clientId),
       ]);
+      setFeedbackList(feedbackRes);
 
       setPlan(remotePlan?.plan ?? DEFAULT_PLAN);
       setWeightSummary({
@@ -187,6 +223,49 @@ export default function ClientDetailScreen() {
           </View>
         )}
 
+        <Text style={styles.sectionTitle}>Nhận xét định kỳ</Text>
+        <Card>
+          <View style={styles.periodToggleRow}>
+            <TouchableOpacity
+              style={[styles.periodButton, feedbackPeriodType === 'weekly' && styles.periodButtonActive]}
+              onPress={() => handlePeriodTypeChange('weekly')}
+            >
+              <Text style={[styles.periodButtonText, feedbackPeriodType === 'weekly' && styles.periodButtonTextActive]}>
+                Theo tuần
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.periodButton, feedbackPeriodType === 'monthly' && styles.periodButtonActive]}
+              onPress={() => handlePeriodTypeChange('monthly')}
+            >
+              <Text style={[styles.periodButtonText, feedbackPeriodType === 'monthly' && styles.periodButtonTextActive]}>
+                Theo tháng
+              </Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput style={styles.input} value={feedbackLabel} onChangeText={setFeedbackLabel} placeholder="Nhãn giai đoạn" />
+          <TextInput
+            style={styles.aiInput}
+            multiline
+            placeholder="Nhận xét tiến độ, điều chỉnh kế hoạch, lời khuyên cho học viên..."
+            value={feedbackText}
+            onChangeText={setFeedbackText}
+          />
+          <TouchableOpacity style={styles.saveButton} onPress={handleSendFeedback} disabled={feedbackBusy}>
+            {feedbackBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Gửi nhận xét</Text>}
+          </TouchableOpacity>
+        </Card>
+
+        {feedbackList.map((f) => (
+          <Card key={f.id}>
+            <Text style={styles.feedbackPeriod}>
+              {f.periodLabel} · {f.periodType === 'weekly' ? 'Tuần' : 'Tháng'}
+            </Text>
+            <Text style={styles.feedbackText}>{f.feedbackText}</Text>
+            <Text style={styles.feedbackDate}>{formatDateVi(toDateKey(new Date(f.createdAtISO)))}</Text>
+          </Card>
+        ))}
+
         <Text style={styles.sectionTitle}>Trợ lý AI chỉnh kế hoạch cho học viên này</Text>
         <Card>
           <TextInput
@@ -263,6 +342,23 @@ const styles = StyleSheet.create({
   saveButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   saveButtonText: { color: '#fff', fontWeight: '700' },
   aiError: { color: '#E0563A', fontSize: 12, marginTop: 8 },
+  periodToggleRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  periodButton: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  periodButtonActive: { backgroundColor: '#4F8EF7' },
+  periodButtonText: { fontSize: 12, fontWeight: '700', color: '#666' },
+  periodButtonTextActive: { color: '#fff' },
+  input: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: '#4F8EF7' },
+  feedbackText: { fontSize: 13, color: '#333', marginTop: 6, lineHeight: 18 },
+  feedbackDate: { fontSize: 11, color: '#999', marginTop: 8 },
   proposalBanner: { backgroundColor: '#FFF3E0' },
   proposalBannerText: { fontSize: 12, color: '#8A5A00', fontWeight: '600' },
   proposalActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },

@@ -91,6 +91,17 @@ create table if not exists public.plan_update_requests (
   created_at timestamptz not null default now()
 );
 
+-- 7. Nhận xét/đánh giá định kỳ (tuần/tháng) của Coach dành cho từng Client.
+create table if not exists public.coach_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade, -- Client được nhận xét
+  coach_id uuid not null references public.profiles (id) on delete cascade,
+  period_type text not null check (period_type in ('weekly', 'monthly')),
+  period_label text not null,
+  feedback_text text not null,
+  created_at timestamptz not null default now()
+);
+
 -- Tự động tạo profile khi có user đăng ký mới.
 create or replace function public.handle_new_user()
 returns trigger
@@ -154,6 +165,7 @@ alter table public.workout_entries enable row level security;
 alter table public.proof_photos enable row level security;
 alter table public.plans enable row level security;
 alter table public.plan_update_requests enable row level security;
+alter table public.coach_feedback enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
@@ -204,6 +216,12 @@ create policy "plan_update_requests_all_own" on public.plan_update_requests for 
 drop policy if exists "plan_update_requests_all_by_coach" on public.plan_update_requests;
 create policy "plan_update_requests_all_by_coach" on public.plan_update_requests for all
   using (public.is_coach_of(user_id)) with check (public.is_coach_of(user_id));
+
+drop policy if exists "coach_feedback_select_own" on public.coach_feedback;
+create policy "coach_feedback_select_own" on public.coach_feedback for select using (auth.uid() = user_id);
+drop policy if exists "coach_feedback_all_by_coach" on public.coach_feedback;
+create policy "coach_feedback_all_by_coach" on public.coach_feedback for all
+  using (public.is_coach_of(user_id)) with check (public.is_coach_of(user_id) and coach_id = auth.uid());
 
 -- Storage bucket cho ảnh minh chứng (private, truy cập qua signed URL / policy bên dưới).
 insert into storage.buckets (id, name, public)

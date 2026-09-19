@@ -3,7 +3,9 @@ import { useAuthStore } from '../store/useAuthStore';
 import { generateCoachCode } from '../utils/coachCode';
 import type {
   CoachClientSummary,
+  CoachFeedback,
   DailyNutritionLog,
+  FeedbackPeriodType,
   PlanData,
   ProofPhoto,
   UserRole,
@@ -258,5 +260,49 @@ export async function pushProofPhoto(proof: ProofPhoto): Promise<void> {
     if (insertError) throw insertError;
   } catch (error) {
     logSyncError('pushProofPhoto', error);
+  }
+}
+
+/** Coach writes a weekly/monthly review for one of their clients. */
+export async function pushCoachFeedback(
+  clientUserId: string,
+  periodType: FeedbackPeriodType,
+  periodLabel: string,
+  feedbackText: string
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const coachId = currentUserId();
+  if (!coachId) return { ok: false, message: 'Chưa đăng nhập.' };
+  const { error } = await supabase.from('coach_feedback').insert({
+    user_id: clientUserId,
+    coach_id: coachId,
+    period_type: periodType,
+    period_label: periodLabel,
+    feedback_text: feedbackText,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+/** Feedback for a given client, newest first. Works for the client themself or their coach (RLS-scoped). */
+export async function fetchFeedback(clientUserId: string): Promise<CoachFeedback[]> {
+  try {
+    const { data, error } = await supabase
+      .from('coach_feedback')
+      .select('*')
+      .eq('user_id', clientUserId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      coachId: row.coach_id,
+      periodType: row.period_type,
+      periodLabel: row.period_label,
+      feedbackText: row.feedback_text,
+      createdAtISO: row.created_at,
+    }));
+  } catch (error) {
+    logSyncError('fetchFeedback', error);
+    return [];
   }
 }

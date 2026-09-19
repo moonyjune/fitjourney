@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Card } from '../../src/components/Card';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
@@ -6,12 +6,15 @@ import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useProofStore } from '../../src/store/useProofStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { useAuthStore } from '../../src/store/useAuthStore';
 import { getDayType } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
+import { fetchFeedback } from '../../src/sync/cloudSync';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { computeMilestones } from '../../src/utils/milestones';
 import { computeCurrentStreak, unlockedStreakBadges, badgeLabel } from '../../src/utils/streak';
+import type { CoachFeedback } from '../../src/types';
 
 interface DaySummary {
   dateKey: string;
@@ -45,6 +48,13 @@ export default function HistoryScreen() {
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
+  const session = useAuthStore((s) => s.session);
+
+  const [feedbackList, setFeedbackList] = useState<CoachFeedback[]>([]);
+  useEffect(() => {
+    if (!session) return;
+    fetchFeedback(session.user.id).then(setFeedbackList);
+  }, [session]);
 
   const daySummaries = useMemo<DaySummary[]>(() => {
     const dateKeys = new Set<string>();
@@ -135,6 +145,21 @@ export default function HistoryScreen() {
         )}
       </Card>
 
+      {feedbackList.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Nhận xét từ Coach</Text>
+          {feedbackList.map((f) => (
+            <Card key={f.id}>
+              <Text style={styles.feedbackPeriod}>
+                {f.periodLabel} · {f.periodType === 'weekly' ? 'Tuần' : 'Tháng'}
+              </Text>
+              <Text style={styles.dayMeta}>{f.feedbackText}</Text>
+              <Text style={styles.feedbackDate}>{formatDateVi(toDateKey(new Date(f.createdAtISO)))}</Text>
+            </Card>
+          ))}
+        </>
+      )}
+
       <Text style={styles.sectionTitle}>Mốc tiến trình</Text>
       {milestones.map((m) => (
         <Card key={m.key}>
@@ -203,4 +228,6 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
   badgeChip: { backgroundColor: '#FFE8B3', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
   badgeChipText: { fontSize: 11, fontWeight: '700', color: '#8A5A00' },
+  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: '#4F8EF7' },
+  feedbackDate: { fontSize: 11, color: '#999', marginTop: 8 },
 });

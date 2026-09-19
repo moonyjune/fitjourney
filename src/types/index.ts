@@ -77,6 +77,18 @@ export interface UserSettings {
   coachCode: string | null;
 }
 
+export type FeedbackPeriodType = 'weekly' | 'monthly';
+
+export interface CoachFeedback {
+  id: string;
+  userId: string;
+  coachId: string;
+  periodType: FeedbackPeriodType;
+  periodLabel: string;
+  feedbackText: string;
+  createdAtISO: string;
+}
+
 /** Summary row for a coach's client list. */
 export interface CoachClientSummary {
   id: string;
