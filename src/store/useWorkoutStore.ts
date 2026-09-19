@@ -9,6 +9,7 @@ interface WorkoutState {
   entries: WorkoutLogEntry[];
   addEntry: (entry: Omit<WorkoutLogEntry, 'id' | 'dateISO'>, dateISO?: string) => void;
   removeEntry: (id: string) => void;
+  /** Returns a new array each call — filter `entries` in a component's own useMemo instead of using this as a hook selector. */
   entriesForDateKey: (dateKey: string) => WorkoutLogEntry[];
 }
 

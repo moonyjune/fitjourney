@@ -14,8 +14,17 @@ interface NutritionState {
   addExtra: (dateKey: string, calories: number, proteinG: number) => void;
 }
 
+// Cached per dateKey so `getLog` returns a stable reference when no log exists yet.
+// Without this, a fallback object created fresh on every call would break selector
+// equality checks (useSyncExternalStore) and cause an infinite render loop.
+const emptyLogCache = new Map<string, DailyNutritionLog>();
 function emptyLog(dateKey: string): DailyNutritionLog {
-  return { dateISO: dateKey, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, waterMl: 0 };
+  let log = emptyLogCache.get(dateKey);
+  if (!log) {
+    log = { dateISO: dateKey, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, waterMl: 0 };
+    emptyLogCache.set(dateKey, log);
+  }
+  return log;
 }
 
 export const useNutritionStore = create<NutritionState>()(

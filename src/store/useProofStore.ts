@@ -10,6 +10,7 @@ interface ProofState {
   photos: ProofPhoto[];
   addProof: (input: { taskType: ProofTaskType; taskRefId: string; photoUri: string; note: string; dateISO?: string }) => ProofPhoto;
   removeProof: (id: string) => void;
+  /** Returns a new array each call — filter `photos` in a component's own useMemo instead of using this as a hook selector. */
   proofsForDateKey: (dateKey: string) => ProofPhoto[];
   proofFor: (dateKey: string, taskType: ProofTaskType, taskRefId: string) => ProofPhoto | undefined;
 }

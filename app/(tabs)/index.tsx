@@ -24,7 +24,11 @@ export default function TodayScreen() {
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
   const nutritionLog = useNutritionStore((s) => s.getLog(todayKey()));
-  const workoutEntries = useWorkoutStore((s) => s.entriesForDateKey(todayKey()));
+  const allWorkoutEntries = useWorkoutStore((s) => s.entries);
+  const workoutEntries = useMemo(
+    () => allWorkoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === todayKey()),
+    [allWorkoutEntries]
+  );
 
   const dayType = useMemo(() => getDayType(now), [now]);
   const ifStatus = useMemo(() => getIfStatus(now), [now]);
