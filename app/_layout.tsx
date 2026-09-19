@@ -12,6 +12,7 @@ export default function RootLayout() {
   const initialized = useAuthStore((s) => s.initialized);
   const session = useAuthStore((s) => s.session);
   const onboardingDone = useSettingsStore((s) => s.onboardingDone);
+  const roleChosen = useSettingsStore((s) => s.roleChosen);
   const hydrateFromRemote = useSettingsStore((s) => s.hydrateFromRemote);
   const segments = useSegments();
 
@@ -45,13 +46,19 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!ready) return;
-    const onAuthScreen = segments[0] === 'auth';
-    if (!session && !onAuthScreen) {
-      router.replace('/auth');
-    } else if (session && onAuthScreen) {
+    const segment0 = segments[0];
+    if (!session) {
+      if (segment0 !== 'auth') router.replace('/auth');
+      return;
+    }
+    if (!roleChosen) {
+      if (segment0 !== 'role-select') router.replace('/role-select');
+      return;
+    }
+    if (segment0 === 'auth' || segment0 === 'role-select') {
       router.replace('/(tabs)');
     }
-  }, [ready, session, segments]);
+  }, [ready, session, roleChosen, segments]);
 
   return (
     <SafeAreaProvider>
@@ -64,6 +71,8 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="onboarding" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="role-select" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="client/[id]" />
           <Stack.Screen name="auth" />
         </Stack>
       )}

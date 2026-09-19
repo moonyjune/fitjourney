@@ -88,10 +88,14 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Không xác thực được người dùng.' }, 401);
     }
 
-    const { currentPlan, instruction } = await req.json();
+    const { currentPlan, instruction, targetUserId } = await req.json();
     if (!currentPlan || typeof instruction !== 'string' || !instruction.trim()) {
       return jsonResponse({ error: 'Thiếu currentPlan hoặc instruction.' }, 400);
     }
+    // Coach editing a client's plan: targetUserId is the client. Authorization for the audit-log
+    // insert and (later) the actual `plans` write is enforced by Postgres RLS, not here — an
+    // unauthorized targetUserId simply fails to insert/write, it never reaches another user's data.
+    const auditUserId = typeof targetUserId === 'string' && targetUserId ? targetUserId : user.id;
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -135,7 +139,7 @@ Deno.serve(async (req) => {
 
     // Best-effort audit log; failure here should not block returning the proposal.
     await supabase.from('plan_update_requests').insert({
-      user_id: user.id,
+      user_id: auditUserId,
       instruction,
       proposed_plan_json: proposedPlan,
       applied: false,

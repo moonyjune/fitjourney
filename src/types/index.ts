@@ -56,6 +56,8 @@ export interface DailyNutritionLog {
   waterMl: number;
 }
 
+export type UserRole = 'coach' | 'client';
+
 export interface UserSettings {
   startWeightKg: number;
   goalWeightKg: number;
@@ -66,6 +68,23 @@ export interface UserSettings {
   onboardingDone: boolean;
   startDateISO: string;
   remindersEnabled: boolean;
+  /** Has the user picked Coach vs Client yet? Gates the role-select screen. */
+  roleChosen: boolean;
+  role: UserRole;
+  /** Set only for role 'client' once linked: the coach's user id. */
+  coachId: string | null;
+  /** Set only for role 'coach': the short code clients enter to link to them. */
+  coachCode: string | null;
+}
+
+/** Summary row for a coach's client list. */
+export interface CoachClientSummary {
+  id: string;
+  email: string | null;
+  displayName: string | null;
+  startWeightKg: number | null;
+  goalWeightKg: number | null;
+  latestWeightKg: number | null;
 }
 
 /** What a proof photo is attached to. */

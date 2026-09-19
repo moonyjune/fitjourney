@@ -27,6 +27,23 @@ export default function PlanScreen() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  const submitCoachCode = useSettingsStore((s) => s.submitCoachCode);
+  const [coachCodeInput, setCoachCodeInput] = useState('');
+  const [linkingCoach, setLinkingCoach] = useState(false);
+
+  async function handleLinkCoach() {
+    if (!coachCodeInput.trim()) return;
+    setLinkingCoach(true);
+    const result = await submitCoachCode(coachCodeInput);
+    setLinkingCoach(false);
+    if (result.ok) {
+      setCoachCodeInput('');
+      Alert.alert('Đã liên kết', 'Bạn đã liên kết với Coach thành công.');
+    } else {
+      Alert.alert('Không liên kết được', result.message);
+    }
+  }
+
   function saveTargets() {
     const cal = parseFloat(calorieTarget);
     const protein = parseFloat(proteinTarget);
@@ -174,6 +191,27 @@ export default function PlanScreen() {
             • {item}
           </Text>
         ))}
+      </Card>
+
+      <Text style={styles.sectionTitle}>Coach</Text>
+      <Card>
+        {settings.coachId ? (
+          <Text style={styles.fieldLabel}>Bạn đã liên kết với 1 Coach.</Text>
+        ) : (
+          <>
+            <Text style={styles.fieldLabel}>Nhập mã Coach để liên kết tài khoản</Text>
+            <TextInput
+              style={styles.input}
+              autoCapitalize="characters"
+              placeholder="VD: AB12CD"
+              value={coachCodeInput}
+              onChangeText={setCoachCodeInput}
+            />
+            <TouchableOpacity style={styles.saveButton} onPress={handleLinkCoach} disabled={linkingCoach}>
+              {linkingCoach ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Liên kết</Text>}
+            </TouchableOpacity>
+          </>
+        )}
       </Card>
 
       <Text style={styles.sectionTitle}>Tài khoản</Text>

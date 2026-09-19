@@ -6,11 +6,14 @@ import { DEFAULT_START_WEIGHT_KG } from '../src/constants/plan';
 
 export default function OnboardingScreen() {
   const completeOnboarding = useSettingsStore((s) => s.completeOnboarding);
+  const submitCoachCode = useSettingsStore((s) => s.submitCoachCode);
   const [startWeight, setStartWeight] = useState(String(DEFAULT_START_WEIGHT_KG));
   const [goalWeight, setGoalWeight] = useState(String(DEFAULT_START_WEIGHT_KG - 15));
   const [height, setHeight] = useState('');
+  const [coachCode, setCoachCode] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const startWeightKg = parseFloat(startWeight.replace(',', '.'));
     const goalWeightKg = parseFloat(goalWeight.replace(',', '.'));
     const heightCm = height ? parseFloat(height.replace(',', '.')) : null;
@@ -24,7 +27,15 @@ export default function OnboardingScreen() {
       return;
     }
 
+    setBusy(true);
     completeOnboarding(startWeightKg, goalWeightKg, heightCm);
+    if (coachCode.trim()) {
+      const result = await submitCoachCode(coachCode);
+      if (!result.ok) {
+        Alert.alert('Không liên kết được với Coach', result.message + '\nBạn vẫn có thể thử lại sau ở tab Kế hoạch.');
+      }
+    }
+    setBusy(false);
     router.replace('/(tabs)');
   }
 
@@ -62,8 +73,17 @@ export default function OnboardingScreen() {
         placeholder="170"
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-        <Text style={styles.buttonText}>Bắt đầu</Text>
+      <Text style={styles.label}>Mã Coach (nếu có) - không bắt buộc</Text>
+      <TextInput
+        style={styles.input}
+        autoCapitalize="characters"
+        value={coachCode}
+        onChangeText={setCoachCode}
+        placeholder="VD: AB12CD"
+      />
+
+      <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={busy}>
+        <Text style={styles.buttonText}>{busy ? 'Đang xử lý...' : 'Bắt đầu'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
