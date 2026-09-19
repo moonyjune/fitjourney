@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { Card } from '../../src/components/Card';
+import { Button } from '../../src/components/Button';
 import { PlanPreview } from '../../src/components/PlanPreview';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
@@ -10,9 +11,12 @@ import { usePlanStore } from '../../src/store/usePlanStore';
 import { supabase } from '../../src/lib/supabase';
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { CARB_SWAP_OPTIONS, PROTEIN_SWAP_OPTIONS } from '../../src/constants/plan';
+import { useTranslation } from '../../src/i18n/useTranslation';
+import { colors } from '../../src/theme/tokens';
 import type { PlanData } from '../../src/types';
 
 export default function PlanScreen() {
+  const { t } = useTranslation();
   const settings = useSettingsStore();
   const session = useAuthStore((s) => s.session);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -86,18 +90,34 @@ export default function PlanScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.sectionTitle}>Chế độ</Text>
+      <Text style={styles.sectionTitle}>{t('mode.title')}</Text>
       <Card>
         <Text style={styles.fieldLabel}>
           {settings.coachEnabled ? 'Bạn cũng có vai trò Coach.' : 'Bạn cũng có thể quản lý học viên với vai trò Coach.'}
         </Text>
-        <TouchableOpacity style={styles.saveButton} onPress={handleSwitchToCoach} disabled={switchingMode}>
-          {switchingMode ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.saveButtonText}>{settings.coachEnabled ? 'Chuyển sang chế độ Coach' : 'Kích hoạt vai trò Coach'}</Text>
-          )}
-        </TouchableOpacity>
+        <Button
+          title={settings.coachEnabled ? 'Chuyển sang chế độ Coach' : 'Kích hoạt vai trò Coach'}
+          onPress={handleSwitchToCoach}
+          loading={switchingMode}
+        />
+      </Card>
+
+      <Text style={styles.sectionTitle}>{t('mode.language')}</Text>
+      <Card>
+        <View style={styles.languageRow}>
+          <TouchableOpacity
+            style={[styles.languageButton, settings.language === 'vi' && styles.languageButtonActive]}
+            onPress={() => updateSettings({ language: 'vi' })}
+          >
+            <Text style={[styles.languageButtonText, settings.language === 'vi' && styles.languageButtonTextActive]}>Tiếng Việt</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.languageButton, settings.language === 'en' && styles.languageButtonActive]}
+            onPress={() => updateSettings({ language: 'en' })}
+          >
+            <Text style={[styles.languageButtonText, settings.language === 'en' && styles.languageButtonTextActive]}>English</Text>
+          </TouchableOpacity>
+        </View>
       </Card>
 
       <Text style={styles.sectionTitle}>Trợ lý AI cập nhật kế hoạch</Text>
@@ -128,9 +148,7 @@ export default function PlanScreen() {
         <TextInput style={styles.input} keyboardType="decimal-pad" value={proteinTarget} onChangeText={setProteinTarget} />
         <Text style={styles.fieldLabel}>Nước mục tiêu (ml) / ngày</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={waterTarget} onChangeText={setWaterTarget} />
-        <TouchableOpacity style={styles.saveButton} onPress={saveTargets}>
-          <Text style={styles.saveButtonText}>Lưu mục tiêu</Text>
-        </TouchableOpacity>
+        <Button title="Lưu mục tiêu" onPress={saveTargets} />
       </Card>
 
       <Text style={styles.sectionTitle}>Kế hoạch hiện tại</Text>
@@ -166,9 +184,7 @@ export default function PlanScreen() {
               value={coachCodeInput}
               onChangeText={setCoachCodeInput}
             />
-            <TouchableOpacity style={styles.saveButton} onPress={handleLinkCoach} disabled={linkingCoach}>
-              {linkingCoach ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Liên kết</Text>}
-            </TouchableOpacity>
+            <Button title="Liên kết" onPress={handleLinkCoach} loading={linkingCoach} />
           </>
         )}
       </Card>
@@ -176,9 +192,7 @@ export default function PlanScreen() {
       <Text style={styles.sectionTitle}>Tài khoản</Text>
       <Card>
         <Text style={styles.fieldLabel}>{session?.user.email ?? 'Chưa đăng nhập'}</Text>
-        <TouchableOpacity style={styles.signOutButton} onPress={() => supabase.auth.signOut()}>
-          <Text style={styles.signOutText}>Đăng xuất</Text>
-        </TouchableOpacity>
+        <Button title={t('common.signOut')} onPress={() => supabase.auth.signOut()} variant="danger" />
       </Card>
     </ScrollView>
   );
@@ -191,8 +205,6 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 4 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   switchHint: { fontSize: 11, color: '#999', marginTop: 2 },
-  signOutButton: { backgroundColor: '#FDEDEA', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
-  signOutText: { color: '#E0563A', fontWeight: '700' },
   aiHint: { fontSize: 12, color: '#666', marginBottom: 10, lineHeight: 17 },
   input: {
     borderWidth: 1,
@@ -203,8 +215,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 10,
   },
-  saveButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  saveButtonText: { color: '#fff', fontWeight: '700' },
   swapGroupTitle: { fontSize: 13, fontWeight: '700', color: '#222' },
   swapItem: { fontSize: 13, color: '#444', marginTop: 4, lineHeight: 18 },
+  languageRow: { flexDirection: 'row', gap: 8 },
+  languageButton: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  languageButtonActive: { backgroundColor: colors.primary },
+  languageButtonText: { fontSize: 13, fontWeight: '700', color: '#666' },
+  languageButtonTextActive: { color: '#fff' },
 });

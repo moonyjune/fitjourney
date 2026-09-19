@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
 import { supabase } from '../src/lib/supabase';
+import { Button } from '../src/components/Button';
+import { useTranslation } from '../src/i18n/useTranslation';
+import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
 export default function AuthScreen() {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<'signIn' | 'signUp'>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,18 +36,13 @@ export default function AuthScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Text style={styles.title}>Theo Dõi Giảm Cân</Text>
-      <Text style={styles.subtitle}>
-        {mode === 'signIn' ? 'Đăng nhập để đồng bộ dữ liệu của bạn.' : 'Tạo tài khoản mới để bắt đầu.'}
-      </Text>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Text style={styles.title}>{t('auth.title')}</Text>
+      <Text style={styles.subtitle}>{mode === 'signIn' ? t('auth.subtitleSignIn') : t('auth.subtitleSignUp')}</Text>
 
       <TextInput
         style={styles.input}
-        placeholder="Email"
+        placeholder={t('auth.email')}
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
@@ -51,39 +50,38 @@ export default function AuthScreen() {
       />
       <TextInput
         style={styles.input}
-        placeholder="Mật khẩu"
+        placeholder={t('auth.password')}
         secureTextEntry
         value={password}
         onChangeText={setPassword}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={busy}>
-        <Text style={styles.buttonText}>{busy ? 'Đang xử lý...' : mode === 'signIn' ? 'Đăng nhập' : 'Đăng ký'}</Text>
-      </TouchableOpacity>
+      <Button
+        title={busy ? t('common.loading') : mode === 'signIn' ? t('auth.signIn') : t('auth.signUp')}
+        onPress={handleSubmit}
+        loading={busy}
+        style={{ marginTop: spacing.md }}
+      />
 
       <TouchableOpacity onPress={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')}>
-        <Text style={styles.switchModeText}>
-          {mode === 'signIn' ? 'Chưa có tài khoản? Đăng ký' : 'Đã có tài khoản? Đăng nhập'}
-        </Text>
+        <Text style={styles.switchModeText}>{mode === 'signIn' ? t('auth.switchToSignUp') : t('auth.switchToSignIn')}</Text>
       </TouchableOpacity>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', padding: 24, justifyContent: 'center' },
-  title: { fontSize: 26, fontWeight: '800', textAlign: 'center', marginBottom: 8, color: '#222' },
-  subtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 28 },
+  container: { flex: 1, backgroundColor: colors.surface, padding: spacing.xl, justifyContent: 'center' },
+  title: { ...typography.h2, textAlign: 'center', marginBottom: spacing.sm, color: colors.textPrimary },
+  subtitle: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xxl },
   input: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 16,
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
-  button: { backgroundColor: '#4F8EF7', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 12 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  switchModeText: { textAlign: 'center', color: '#4F8EF7', marginTop: 20, fontSize: 13, fontWeight: '600' },
+  switchModeText: { textAlign: 'center', color: colors.primary, marginTop: spacing.lg, ...typography.caption },
 });

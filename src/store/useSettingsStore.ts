@@ -44,6 +44,7 @@ export const useSettingsStore = create<SettingsState>()(
       coachEnabled: false,
       coachId: null,
       coachCode: null,
+      language: 'vi',
       updateSettings: (patch) =>
         set((state) => {
           const updated = { ...state, ...patch };

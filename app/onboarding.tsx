@@ -1,10 +1,14 @@
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { DEFAULT_START_WEIGHT_KG } from '../src/constants/plan';
+import { Button } from '../src/components/Button';
+import { useTranslation } from '../src/i18n/useTranslation';
+import { colors, radius, spacing, typography } from '../src/theme/tokens';
 
 export default function OnboardingScreen() {
+  const { t } = useTranslation();
   const completeOnboarding = useSettingsStore((s) => s.completeOnboarding);
   const submitCoachCode = useSettingsStore((s) => s.submitCoachCode);
   const [startWeight, setStartWeight] = useState(String(DEFAULT_START_WEIGHT_KG));
@@ -41,73 +45,42 @@ export default function OnboardingScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Chào mừng!</Text>
-      <Text style={styles.subtitle}>
-        Nhập thông tin ban đầu để bắt đầu theo dõi hành trình giảm cân theo kế hoạch IF 16:8.
-      </Text>
+      <Text style={styles.title}>{t('onboarding.title')}</Text>
+      <Text style={styles.subtitle}>{t('onboarding.subtitle')}</Text>
 
-      <Text style={styles.label}>Cân nặng hiện tại (kg)</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="decimal-pad"
-        value={startWeight}
-        onChangeText={setStartWeight}
-        placeholder="110"
+      <Text style={styles.label}>{t('onboarding.startWeight')}</Text>
+      <TextInput style={styles.input} keyboardType="decimal-pad" value={startWeight} onChangeText={setStartWeight} placeholder="110" />
+
+      <Text style={styles.label}>{t('onboarding.goalWeight')}</Text>
+      <TextInput style={styles.input} keyboardType="decimal-pad" value={goalWeight} onChangeText={setGoalWeight} placeholder="95" />
+
+      <Text style={styles.label}>{t('onboarding.height')}</Text>
+      <TextInput style={styles.input} keyboardType="decimal-pad" value={height} onChangeText={setHeight} placeholder="170" />
+
+      <Text style={styles.label}>{t('onboarding.coachCode')}</Text>
+      <TextInput style={styles.input} autoCapitalize="characters" value={coachCode} onChangeText={setCoachCode} placeholder="VD: AB12CD" />
+
+      <Button
+        title={busy ? t('common.loading') : t('onboarding.start')}
+        onPress={handleSubmit}
+        loading={busy}
+        style={{ marginTop: spacing.xxl }}
       />
-
-      <Text style={styles.label}>Cân nặng mục tiêu (kg)</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="decimal-pad"
-        value={goalWeight}
-        onChangeText={setGoalWeight}
-        placeholder="95"
-      />
-
-      <Text style={styles.label}>Chiều cao (cm) - không bắt buộc</Text>
-      <TextInput
-        style={styles.input}
-        keyboardType="decimal-pad"
-        value={height}
-        onChangeText={setHeight}
-        placeholder="170"
-      />
-
-      <Text style={styles.label}>Mã Coach (nếu có) - không bắt buộc</Text>
-      <TextInput
-        style={styles.input}
-        autoCapitalize="characters"
-        value={coachCode}
-        onChangeText={setCoachCode}
-        placeholder="VD: AB12CD"
-      />
-
-      <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={busy}>
-        <Text style={styles.buttonText}>{busy ? 'Đang xử lý...' : 'Bắt đầu'}</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 24, paddingTop: 60, backgroundColor: '#fff', flexGrow: 1 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 8 },
-  subtitle: { fontSize: 14, color: '#666', marginBottom: 24, lineHeight: 20 },
-  label: { fontSize: 14, fontWeight: '600', marginBottom: 6, marginTop: 12, color: '#333' },
+  container: { padding: spacing.xl, paddingTop: 60, backgroundColor: colors.surface, flexGrow: 1 },
+  title: { ...typography.h1, marginBottom: spacing.sm, color: colors.textPrimary },
+  subtitle: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.xl, lineHeight: 20 },
+  label: { ...typography.label, marginBottom: spacing.sm, marginTop: spacing.md, color: '#333' },
   input: {
     borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
     fontSize: 16,
   },
-  button: {
-    backgroundColor: '#4F8EF7',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

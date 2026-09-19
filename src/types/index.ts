@@ -81,6 +81,8 @@ export interface UserSettings {
   coachId: string | null;
   /** Set once Coach mode is activated: the short code clients enter to link to them. */
   coachCode: string | null;
+  /** UI language. Defaults to Vietnamese; a bilingual toggle lives in Plan / Coach account. */
+  language: 'vi' | 'en';
 }
 
 export type FeedbackPeriodType = 'weekly' | 'monthly';
