@@ -2,12 +2,15 @@ import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import { generateCoachCode } from '../utils/coachCode';
 import type {
+  ChatRole,
+  ChatSessionSummary,
   CoachClientSummary,
   CoachFeedback,
   DailyNutritionLog,
   FeedbackPeriodType,
   PlanData,
   ProofPhoto,
+  StoredChatMessage,
   UserRole,
   UserSettings,
   WeightEntry,
@@ -33,25 +36,27 @@ export interface RemoteProfile {
   startDateISO: string;
   remindersEnabled: boolean;
   role: UserRole;
+  clientSetupDone: boolean;
+  coachEnabled: boolean;
   coachId: string | null;
   coachCode: string | null;
 }
 
-/** Returns the remote profile if onboarding was already completed on another device, else null. */
+/** Returns the remote profile if role-select was already completed on another device, else null. */
 export async function pullProfile(): Promise<RemoteProfile | null> {
   const userId = currentUserId();
   if (!userId) return null;
   try {
     const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
     if (error) throw error;
-    // Coaches never fill in weight/goal (they don't follow a plan themselves), so a coach role
-    // alone is enough evidence that role-select + setup already happened on another device.
-    const alreadyOnboarded = (data?.start_weight_kg != null && data?.goal_weight_kg != null) || data?.role === 'coach';
-    if (!data || !alreadyOnboarded) return null;
+    const clientSetupDone = data?.start_weight_kg != null && data?.goal_weight_kg != null;
+    const coachEnabled = data?.coach_code != null;
+    // Either capability having been set up is evidence role-select already happened on another device.
+    if (!data || (!clientSetupDone && !coachEnabled)) return null;
 
     return {
-      startWeightKg: data.start_weight_kg,
-      goalWeightKg: data.goal_weight_kg,
+      startWeightKg: data.start_weight_kg ?? 110,
+      goalWeightKg: data.goal_weight_kg ?? 95,
       heightCm: data.height_cm,
       calorieTargetKcal: data.calorie_target_kcal ?? 1950,
       proteinTargetG: data.protein_target_g ?? 200,
@@ -59,6 +64,8 @@ export async function pullProfile(): Promise<RemoteProfile | null> {
       startDateISO: data.start_date ? new Date(data.start_date).toISOString() : new Date().toISOString(),
       remindersEnabled: data.reminders_enabled ?? true,
       role: (data.role as UserRole) ?? 'client',
+      clientSetupDone,
+      coachEnabled,
       coachId: data.coach_id,
       coachCode: data.coach_code,
     };
@@ -304,5 +311,87 @@ export async function fetchFeedback(clientUserId: string): Promise<CoachFeedback
   } catch (error) {
     logSyncError('fetchFeedback', error);
     return [];
+  }
+}
+
+/**
+ * AI plan-chat sessions. `ownerId` is whose plan the chat is about (always the client);
+ * the current user is the actor (themself, or that client's coach). Persisting these lets a
+ * conversation survive closing the app, and lets the UI reuse an identical prior answer within
+ * the same session instead of calling Claude again for a repeated question.
+ */
+export async function createChatSession(ownerId: string, title: string): Promise<string | null> {
+  const actorId = currentUserId();
+  if (!actorId) return null;
+  try {
+    const { data, error } = await supabase
+      .from('plan_chat_sessions')
+      .insert({ owner_id: ownerId, actor_id: actorId, title })
+      .select('id')
+      .single();
+    if (error) throw error;
+    return data.id;
+  } catch (error) {
+    logSyncError('createChatSession', error);
+    return null;
+  }
+}
+
+export async function listChatSessions(ownerId: string): Promise<ChatSessionSummary[]> {
+  const actorId = currentUserId();
+  if (!actorId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('plan_chat_sessions')
+      .select('id, title, updated_at')
+      .eq('owner_id', ownerId)
+      .eq('actor_id', actorId)
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    return (data ?? []).map((row) => ({ id: row.id, title: row.title, updatedAtISO: row.updated_at }));
+  } catch (error) {
+    logSyncError('listChatSessions', error);
+    return [];
+  }
+}
+
+export async function fetchSessionMessages(sessionId: string): Promise<StoredChatMessage[]> {
+  try {
+    const { data, error } = await supabase
+      .from('plan_chat_messages')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map((row) => ({
+      id: row.id,
+      role: row.role,
+      content: row.content,
+      proposedPlan: row.proposed_plan_json ?? null,
+      createdAtISO: row.created_at,
+    }));
+  } catch (error) {
+    logSyncError('fetchSessionMessages', error);
+    return [];
+  }
+}
+
+export async function saveChatMessage(
+  sessionId: string,
+  role: ChatRole,
+  content: string,
+  proposedPlan?: PlanData | null
+): Promise<void> {
+  try {
+    const { error: insertError } = await supabase.from('plan_chat_messages').insert({
+      session_id: sessionId,
+      role,
+      content,
+      proposed_plan_json: proposedPlan ?? null,
+    });
+    if (insertError) throw insertError;
+    await supabase.from('plan_chat_sessions').update({ updated_at: new Date().toISOString() }).eq('id', sessionId);
+  } catch (error) {
+    logSyncError('saveChatMessage', error);
   }
 }

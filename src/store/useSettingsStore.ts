@@ -15,12 +15,16 @@ interface SettingsState extends UserSettings {
   completeOnboarding: (startWeightKg: number, goalWeightKg: number, heightCm: number | null) => void;
   /** Adopts a profile pulled from Supabase (e.g. first login on a new device) without re-pushing it. */
   hydrateFromRemote: (profile: RemoteProfile) => void;
-  /** Picks the Client role; still needs the weight/goal onboarding screen next. */
+  /** First-launch pick: start in Client mode; still needs the weight/goal onboarding screen next. */
   chooseClientRole: () => void;
-  /** Picks the Coach role, generates a shareable code, and skips weight onboarding (coach has no plan of their own). */
+  /** First-launch pick: start in Coach mode and generate a shareable code. */
   chooseCoachRole: () => Promise<void>;
   /** Client enters a coach's code to link accounts. */
   submitCoachCode: (code: string) => Promise<{ ok: true } | { ok: false; message: string }>;
+  /** Switches the visible tab set to Client mode (does not require Coach mode to be disabled). */
+  switchToClientMode: () => void;
+  /** Activates Coach capabilities if not already (generating a code) and switches to Coach mode. */
+  switchToCoachMode: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -32,11 +36,12 @@ export const useSettingsStore = create<SettingsState>()(
       calorieTargetKcal: DEFAULT_CALORIE_TARGET,
       proteinTargetG: DEFAULT_PROTEIN_TARGET_G,
       waterTargetMl: DEFAULT_WATER_TARGET_ML,
-      onboardingDone: false,
+      clientSetupDone: false,
       startDateISO: new Date().toISOString(),
       remindersEnabled: true,
       roleChosen: false,
       role: 'client',
+      coachEnabled: false,
       coachId: null,
       coachCode: null,
       updateSettings: (patch) =>
@@ -51,21 +56,20 @@ export const useSettingsStore = create<SettingsState>()(
           startWeightKg,
           goalWeightKg,
           heightCm,
-          onboardingDone: true,
+          clientSetupDone: true,
           startDateISO: new Date().toISOString(),
         }));
         pushProfile(get());
       },
-      hydrateFromRemote: (profile) =>
-        set((state) => ({ ...state, ...profile, roleChosen: true, onboardingDone: true })),
+      hydrateFromRemote: (profile) => set((state) => ({ ...state, ...profile, roleChosen: true })),
       chooseClientRole: () => {
         set((state) => ({ ...state, role: 'client', roleChosen: true }));
         pushProfile(get());
       },
       chooseCoachRole: async () => {
-        set((state) => ({ ...state, role: 'coach', roleChosen: true, onboardingDone: true }));
+        set((state) => ({ ...state, role: 'coach', roleChosen: true }));
         const code = await ensureCoachCode();
-        if (code) set((state) => ({ ...state, coachCode: code }));
+        if (code) set((state) => ({ ...state, coachCode: code, coachEnabled: true }));
       },
       submitCoachCode: async (code) => {
         const result = await linkToCoach(code);
@@ -74,6 +78,18 @@ export const useSettingsStore = create<SettingsState>()(
           if (refreshed) set((state) => ({ ...state, coachId: refreshed.coachId }));
         }
         return result;
+      },
+      switchToClientMode: () => {
+        set((state) => ({ ...state, role: 'client' }));
+        pushProfile(get());
+      },
+      switchToCoachMode: async () => {
+        if (!get().coachEnabled) {
+          const code = await ensureCoachCode();
+          if (code) set((state) => ({ ...state, coachCode: code, coachEnabled: true }));
+        }
+        set((state) => ({ ...state, role: 'coach' }));
+        pushProfile(get());
       },
     }),
     {

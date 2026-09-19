@@ -14,3 +14,13 @@
    Thông tin update sẽ được Coach xác nhận qua button [Confirm] sau khi update và lưu trữ data.
 6. **Fatty**
    Người dùng sẽ nhận được thông báo và hiển thị lịch trình tập luyện, chế độ ăn uống mới từ Coach.
+7. **Role**
+   Người dùng có thể vừa là Coach vừa là Fatty, cung cấp chức năng chuyển role để access tương ứng vào các tính năng của role đó.
+8. **Flash**
+   Tạo 1 Flash screen intro về ứng dụng
+9. Update thiết kế design các màn hình mang style năng động, hiện đại, tạo động lực, có xu hướng thiết kế theo nguyên lý vàng.
+   Cân nhắc thêm các hình ảnh sống động, animation để ứng dụng và user action trở nên mượt mà.
+   Tạo ra system design và hệ thống hoá các UI component chung đáp ứng cho flexible changes và update common lẫn specific.
+   Đáp ứng khả năng adapt và expand in future.
+10. **Language**
+   Chuyển đổi tất cả context sang English language

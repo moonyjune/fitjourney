@@ -10,32 +10,34 @@ function TabIcon({ symbol }: { symbol: string }) {
 }
 
 export default function TabsLayout() {
-  const onboardingDone = useSettingsStore((s) => s.onboardingDone);
+  const clientSetupDone = useSettingsStore((s) => s.clientSetupDone);
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
   const role = useSettingsStore((s) => s.role);
   const isCoach = role === 'coach';
   const plan = usePlanStore((s) => s.plan);
   const syncPlanFromRemote = usePlanStore((s) => s.syncFromRemote);
 
+  // Client mode always needs the weight/goal onboarding done at least once, even if this
+  // account switched here from Coach mode (a dual-role account may not have done it yet).
   useEffect(() => {
-    if (!onboardingDone) {
+    if (!isCoach && !clientSetupDone) {
       router.replace('/onboarding');
     }
-  }, [onboardingDone]);
+  }, [isCoach, clientSetupDone]);
 
   useEffect(() => {
-    if (onboardingDone && !isCoach) syncPlanFromRemote();
-  }, [onboardingDone, isCoach, syncPlanFromRemote]);
+    if (!isCoach && clientSetupDone) syncPlanFromRemote();
+  }, [isCoach, clientSetupDone, syncPlanFromRemote]);
 
   useEffect(() => {
-    if (!onboardingDone || !remindersEnabled || isCoach) return;
+    if (isCoach || !clientSetupDone || !remindersEnabled) return;
     (async () => {
       const granted = await requestNotificationPermissions();
       if (granted) {
         await scheduleAllReminders(plan);
       }
     })();
-  }, [onboardingDone, remindersEnabled, isCoach, plan]);
+  }, [isCoach, clientSetupDone, remindersEnabled, plan]);
 
   return (
     <Tabs

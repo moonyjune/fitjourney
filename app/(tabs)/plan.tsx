@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { PlanPreview } from '../../src/components/PlanPreview';
+import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
@@ -22,14 +24,18 @@ export default function PlanScreen() {
   const [waterTarget, setWaterTarget] = useState(String(settings.waterTargetMl));
   const [goalWeight, setGoalWeight] = useState(String(settings.goalWeightKg));
 
-  const [instruction, setInstruction] = useState('');
-  const [proposedPlan, setProposedPlan] = useState<PlanData | null>(null);
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-
   const submitCoachCode = useSettingsStore((s) => s.submitCoachCode);
+  const switchToCoachMode = useSettingsStore((s) => s.switchToCoachMode);
   const [coachCodeInput, setCoachCodeInput] = useState('');
   const [linkingCoach, setLinkingCoach] = useState(false);
+  const [switchingMode, setSwitchingMode] = useState(false);
+
+  async function handleSwitchToCoach() {
+    setSwitchingMode(true);
+    await switchToCoachMode();
+    setSwitchingMode(false);
+    router.replace('/(tabs)/clients');
+  }
 
   async function handleLinkCoach() {
     if (!coachCodeInput.trim()) return;
@@ -71,83 +77,35 @@ export default function PlanScreen() {
     updateSettings({ remindersEnabled: value });
   }
 
-  async function handleAskAi() {
-    if (!instruction.trim()) {
-      Alert.alert('Thiếu yêu cầu', 'Nhập yêu cầu chỉnh sửa kế hoạch, ví dụ: "Tăng protein bữa tối thêm 20g".');
-      return;
-    }
-    setAiBusy(true);
-    setAiError(null);
-    setProposedPlan(null);
-    try {
-      const { data, error } = await supabase.functions.invoke('suggest-plan-update', {
-        body: { currentPlan: plan, instruction },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (!data?.plan) throw new Error('AI không trả về kế hoạch hợp lệ.');
-      setProposedPlan(data.plan as PlanData);
-    } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi gọi AI.');
-    } finally {
-      setAiBusy(false);
-    }
-  }
-
-  async function handleConfirmProposal() {
-    if (!proposedPlan) return;
-    applyPlan(proposedPlan);
+  async function handleApplyPlan(newPlan: PlanData) {
+    applyPlan(newPlan);
     if (settings.remindersEnabled) {
-      await scheduleAllReminders(proposedPlan);
+      await scheduleAllReminders(newPlan);
     }
-    setProposedPlan(null);
-    setInstruction('');
-    Alert.alert('Đã cập nhật', 'Kế hoạch mới đã được áp dụng.');
-  }
-
-  function handleDiscardProposal() {
-    setProposedPlan(null);
   }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.sectionTitle}>Trợ lý AI cập nhật kế hoạch</Text>
+      <Text style={styles.sectionTitle}>Chế độ</Text>
       <Card>
-        <Text style={styles.aiHint}>
-          Mô tả thay đổi bạn muốn (thực đơn, bài tập, hoặc danh sách đi chợ/giá tiền). AI sẽ đề xuất bản
-          cập nhật — bạn xem trước và bấm Xác nhận thì mới áp dụng.
+        <Text style={styles.fieldLabel}>
+          {settings.coachEnabled ? 'Bạn cũng có vai trò Coach.' : 'Bạn cũng có thể quản lý học viên với vai trò Coach.'}
         </Text>
-        <TextInput
-          style={styles.aiInput}
-          multiline
-          placeholder='VD: "Tăng protein bữa tối thêm 20g" hoặc "Đổi ức gà thành cá hồi trong buy-list"'
-          value={instruction}
-          onChangeText={setInstruction}
-        />
-        <TouchableOpacity style={styles.saveButton} onPress={handleAskAi} disabled={aiBusy}>
-          {aiBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Xem đề xuất</Text>}
+        <TouchableOpacity style={styles.saveButton} onPress={handleSwitchToCoach} disabled={switchingMode}>
+          {switchingMode ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.saveButtonText}>{settings.coachEnabled ? 'Chuyển sang chế độ Coach' : 'Kích hoạt vai trò Coach'}</Text>
+          )}
         </TouchableOpacity>
-        {aiError && <Text style={styles.aiError}>{aiError}</Text>}
       </Card>
 
-      {proposedPlan && (
-        <>
-          <Card style={styles.proposalBanner}>
-            <Text style={styles.proposalBannerText}>
-              Đây là bản đề xuất từ AI — chưa được áp dụng. Xem kỹ rồi bấm Xác nhận hoặc Hủy bên dưới.
-            </Text>
-          </Card>
-          <PlanPreview plan={proposedPlan} />
-          <View style={styles.proposalActions}>
-            <TouchableOpacity style={styles.discardButton} onPress={handleDiscardProposal}>
-              <Text style={styles.discardButtonText}>Hủy đề xuất</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.confirmButton} onPress={handleConfirmProposal}>
-              <Text style={styles.confirmButtonText}>Xác nhận cập nhật</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
+      <Text style={styles.sectionTitle}>Trợ lý AI cập nhật kế hoạch</Text>
+      <Text style={styles.aiHint}>
+        Trò chuyện để chỉnh thực đơn, bài tập, lịch uống nước hoặc danh sách đi chợ. AI sẽ đề xuất bản cập
+        nhật — bạn xem trước và bấm Xác nhận thì mới áp dụng.
+      </Text>
+      <PlanChatAssistant livePlan={plan} onApply={handleApplyPlan} />
 
       <Text style={styles.sectionTitle}>Nhắc nhở</Text>
       <Card>
@@ -175,7 +133,8 @@ export default function PlanScreen() {
         </TouchableOpacity>
       </Card>
 
-      {!proposedPlan && <PlanPreview plan={plan} />}
+      <Text style={styles.sectionTitle}>Kế hoạch hiện tại</Text>
+      <PlanPreview plan={plan} />
 
       <Text style={styles.sectionTitle}>Tùy biến món ăn (giữ nguyên calo & protein)</Text>
       <Card>
@@ -235,31 +194,6 @@ const styles = StyleSheet.create({
   signOutButton: { backgroundColor: '#FDEDEA', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
   signOutText: { color: '#E0563A', fontWeight: '700' },
   aiHint: { fontSize: 12, color: '#666', marginBottom: 10, lineHeight: 17 },
-  aiInput: {
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    minHeight: 70,
-    textAlignVertical: 'top',
-    marginBottom: 10,
-  },
-  aiError: { color: '#E0563A', fontSize: 12, marginTop: 8 },
-  proposalBanner: { backgroundColor: '#FFF3E0' },
-  proposalBannerText: { fontSize: 12, color: '#8A5A00', fontWeight: '600' },
-  proposalActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  discardButton: {
-    flex: 1,
-    backgroundColor: '#F0F0F0',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  discardButtonText: { color: '#666', fontWeight: '700' },
-  confirmButton: { flex: 1, backgroundColor: '#2E9E4E', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  confirmButtonText: { color: '#fff', fontWeight: '700' },
   input: {
     borderWidth: 1,
     borderColor: '#DDD',

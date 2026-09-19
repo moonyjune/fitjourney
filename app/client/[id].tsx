@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInpu
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { PlanPreview } from '../../src/components/PlanPreview';
+import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { supabase } from '../../src/lib/supabase';
 import { fetchFeedback, pullPlan, pushCoachFeedback, pushPlan } from '../../src/sync/cloudSync';
 import { DEFAULT_PLAN, DEFAULT_WATER_TARGET_ML } from '../../src/constants/plan';
@@ -35,11 +36,6 @@ export default function ClientDetailScreen() {
   });
   const [streak, setStreak] = useState(0);
   const [recentProofs, setRecentProofs] = useState<RecentProof[]>([]);
-
-  const [instruction, setInstruction] = useState('');
-  const [proposedPlan, setProposedPlan] = useState<PlanData | null>(null);
-  const [aiBusy, setAiBusy] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
 
   const [feedbackList, setFeedbackList] = useState<CoachFeedback[]>([]);
   const [feedbackPeriodType, setFeedbackPeriodType] = useState<FeedbackPeriodType>('weekly');
@@ -131,36 +127,10 @@ export default function ClientDetailScreen() {
     })();
   }, [clientId]);
 
-  async function handleAskAi() {
-    if (!plan || !clientId) return;
-    if (!instruction.trim()) {
-      Alert.alert('Thiếu yêu cầu', 'Nhập yêu cầu chỉnh sửa kế hoạch cho học viên này.');
-      return;
-    }
-    setAiBusy(true);
-    setAiError(null);
-    setProposedPlan(null);
-    try {
-      const { data, error } = await supabase.functions.invoke('suggest-plan-update', {
-        body: { currentPlan: plan, instruction, targetUserId: clientId },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      if (!data?.plan) throw new Error('AI không trả về kế hoạch hợp lệ.');
-      setProposedPlan(data.plan as PlanData);
-    } catch (err) {
-      setAiError(err instanceof Error ? err.message : 'Có lỗi xảy ra khi gọi AI.');
-    } finally {
-      setAiBusy(false);
-    }
-  }
-
-  async function handleConfirm() {
-    if (!proposedPlan || !clientId) return;
-    await pushPlan(proposedPlan, new Date().toISOString(), clientId);
-    setPlan(proposedPlan);
-    setProposedPlan(null);
-    setInstruction('');
+  async function handleApplyPlan(newPlan: PlanData) {
+    if (!clientId) return;
+    await pushPlan(newPlan, new Date().toISOString(), clientId);
+    setPlan(newPlan);
     Alert.alert('Đã cập nhật', 'Kế hoạch của học viên đã được cập nhật.');
   }
 
@@ -267,43 +237,10 @@ export default function ClientDetailScreen() {
         ))}
 
         <Text style={styles.sectionTitle}>Trợ lý AI chỉnh kế hoạch cho học viên này</Text>
-        <Card>
-          <TextInput
-            style={styles.aiInput}
-            multiline
-            placeholder='VD: "Giảm calo bữa tối 100kcal" hoặc "Thêm ngày tập thứ 7"'
-            value={instruction}
-            onChangeText={setInstruction}
-          />
-          <TouchableOpacity style={styles.saveButton} onPress={handleAskAi} disabled={aiBusy}>
-            {aiBusy ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Xem đề xuất</Text>}
-          </TouchableOpacity>
-          {aiError && <Text style={styles.aiError}>{aiError}</Text>}
-        </Card>
+        {clientId && <PlanChatAssistant livePlan={plan} targetUserId={clientId} onApply={handleApplyPlan} />}
 
-        {proposedPlan && (
-          <>
-            <Card style={styles.proposalBanner}>
-              <Text style={styles.proposalBannerText}>Đề xuất từ AI — chưa áp dụng cho học viên.</Text>
-            </Card>
-            <PlanPreview plan={proposedPlan} />
-            <View style={styles.proposalActions}>
-              <TouchableOpacity style={styles.discardButton} onPress={() => setProposedPlan(null)}>
-                <Text style={styles.discardButtonText}>Hủy đề xuất</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.confirmButton} onPress={handleConfirm}>
-                <Text style={styles.confirmButtonText}>Xác nhận cập nhật</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-
-        {!proposedPlan && (
-          <>
-            <Text style={styles.sectionTitle}>Kế hoạch hiện tại</Text>
-            <PlanPreview plan={plan} />
-          </>
-        )}
+        <Text style={styles.sectionTitle}>Kế hoạch hiện tại</Text>
+        <PlanPreview plan={plan} />
       </ScrollView>
     </>
   );
@@ -341,7 +278,6 @@ const styles = StyleSheet.create({
   },
   saveButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   saveButtonText: { color: '#fff', fontWeight: '700' },
-  aiError: { color: '#E0563A', fontSize: 12, marginTop: 8 },
   periodToggleRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   periodButton: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
   periodButtonActive: { backgroundColor: '#4F8EF7' },
@@ -359,11 +295,4 @@ const styles = StyleSheet.create({
   feedbackPeriod: { fontSize: 12, fontWeight: '700', color: '#4F8EF7' },
   feedbackText: { fontSize: 13, color: '#333', marginTop: 6, lineHeight: 18 },
   feedbackDate: { fontSize: 11, color: '#999', marginTop: 8 },
-  proposalBanner: { backgroundColor: '#FFF3E0' },
-  proposalBannerText: { fontSize: 12, color: '#8A5A00', fontWeight: '600' },
-  proposalActions: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  discardButton: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  discardButtonText: { color: '#666', fontWeight: '700' },
-  confirmButton: { flex: 1, backgroundColor: '#2E9E4E', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
-  confirmButtonText: { color: '#fff', fontWeight: '700' },
 });

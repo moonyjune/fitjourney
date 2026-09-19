@@ -102,6 +102,28 @@ create table if not exists public.coach_feedback (
   created_at timestamptz not null default now()
 );
 
+-- 8. Phiên chat với trợ lý AI cập nhật kế hoạch. "owner_id" là chủ nhân kế hoạch đang được bàn
+-- (luôn là Client); "actor_id" là người đang chat (chính họ, hoặc Coach của họ). Lưu lại để:
+--   (a) tiếp tục hội thoại cũ thay vì mất trắng khi thoát app,
+--   (b) tránh gọi lại AI cho câu hỏi đã hỏi/trả lời y hệt trong cùng phiên (đỡ tốn token).
+create table if not exists public.plan_chat_sessions (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid not null references public.profiles (id) on delete cascade,
+  actor_id uuid not null references public.profiles (id) on delete cascade,
+  title text not null default 'Cuộc trò chuyện mới',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.plan_chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  session_id uuid not null references public.plan_chat_sessions (id) on delete cascade,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null,
+  proposed_plan_json jsonb,
+  created_at timestamptz not null default now()
+);
+
 -- Tự động tạo profile khi có user đăng ký mới.
 create or replace function public.handle_new_user()
 returns trigger
@@ -166,6 +188,8 @@ alter table public.proof_photos enable row level security;
 alter table public.plans enable row level security;
 alter table public.plan_update_requests enable row level security;
 alter table public.coach_feedback enable row level security;
+alter table public.plan_chat_sessions enable row level security;
+alter table public.plan_chat_messages enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
@@ -222,6 +246,18 @@ create policy "coach_feedback_select_own" on public.coach_feedback for select us
 drop policy if exists "coach_feedback_all_by_coach" on public.coach_feedback;
 create policy "coach_feedback_all_by_coach" on public.coach_feedback for all
   using (public.is_coach_of(user_id)) with check (public.is_coach_of(user_id) and coach_id = auth.uid());
+
+-- Phiên chat & tin nhắn: riêng tư cho người đang chat (actor_id) — Coach có phiên chat riêng với
+-- AI về từng Client, Client không cần thấy quá trình soạn thảo của Coach (chỉ thấy kết quả qua
+-- coach_feedback và bản kế hoạch đã áp dụng).
+drop policy if exists "plan_chat_sessions_all_own" on public.plan_chat_sessions;
+create policy "plan_chat_sessions_all_own" on public.plan_chat_sessions for all
+  using (auth.uid() = actor_id) with check (auth.uid() = actor_id);
+
+drop policy if exists "plan_chat_messages_all_own" on public.plan_chat_messages;
+create policy "plan_chat_messages_all_own" on public.plan_chat_messages for all
+  using (exists (select 1 from public.plan_chat_sessions s where s.id = plan_chat_messages.session_id and s.actor_id = auth.uid()))
+  with check (exists (select 1 from public.plan_chat_sessions s where s.id = plan_chat_messages.session_id and s.actor_id = auth.uid()));
 
 -- Storage bucket cho ảnh minh chứng (private, truy cập qua signed URL / policy bên dưới).
 insert into storage.buckets (id, name, public)

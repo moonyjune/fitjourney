@@ -1,27 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { Stack, router, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { pullProfile } from '../src/sync/cloudSync';
+import { AppIntro } from '../src/components/AppIntro';
+
+// Minimum time the branded intro stays on screen, so it isn't just a 1-frame flash on warm starts.
+const MIN_INTRO_MS = 1200;
 
 export default function RootLayout() {
   const init = useAuthStore((s) => s.init);
   const initialized = useAuthStore((s) => s.initialized);
   const session = useAuthStore((s) => s.session);
-  const onboardingDone = useSettingsStore((s) => s.onboardingDone);
   const roleChosen = useSettingsStore((s) => s.roleChosen);
   const role = useSettingsStore((s) => s.role);
   const hydrateFromRemote = useSettingsStore((s) => s.hydrateFromRemote);
   const segments = useSegments();
 
   const [profileChecked, setProfileChecked] = useState(false);
+  const [minIntroElapsed, setMinIntroElapsed] = useState(false);
   const checkedForUserId = useRef<string | null>(null);
 
   useEffect(() => {
     init();
+    const timer = setTimeout(() => setMinIntroElapsed(true), MIN_INTRO_MS);
+    return () => clearTimeout(timer);
   }, [init]);
 
   // First login on a new/reinstalled device: pull the profile created previously,
@@ -32,7 +37,7 @@ export default function RootLayout() {
       checkedForUserId.current = null;
       return;
     }
-    if (onboardingDone || checkedForUserId.current === session.user.id) {
+    if (roleChosen || checkedForUserId.current === session.user.id) {
       setProfileChecked(true);
       return;
     }
@@ -41,9 +46,9 @@ export default function RootLayout() {
       if (remote) hydrateFromRemote(remote);
       setProfileChecked(true);
     });
-  }, [session, onboardingDone, hydrateFromRemote]);
+  }, [session, roleChosen, hydrateFromRemote]);
 
-  const ready = initialized && (!session || profileChecked);
+  const ready = initialized && (!session || profileChecked) && minIntroElapsed;
 
   useEffect(() => {
     if (!ready) return;
@@ -63,11 +68,9 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style={ready ? 'dark' : 'light'} />
       {!ready ? (
-        <View style={styles.loading}>
-          <ActivityIndicator size="large" color="#4F8EF7" />
-        </View>
+        <AppIntro />
       ) : (
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />
@@ -80,7 +83,3 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-});

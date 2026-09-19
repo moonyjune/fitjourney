@@ -65,15 +65,21 @@ export interface UserSettings {
   calorieTargetKcal: number;
   proteinTargetG: number;
   waterTargetMl: number;
-  onboardingDone: boolean;
+  /** Whether the weight/goal onboarding has been completed — independent of `role`, since a
+   *  Coach can later switch into Client mode and still needs to do this once. */
+  clientSetupDone: boolean;
   startDateISO: string;
   remindersEnabled: boolean;
-  /** Has the user picked Coach vs Client yet? Gates the role-select screen. */
+  /** Has the user picked an initial mode yet? Gates the role-select screen (first launch only). */
   roleChosen: boolean;
+  /** Which tab set is currently shown. A single account can have both capabilities enabled
+   *  (see coachEnabled/clientSetupDone) and switch between them at any time. */
   role: UserRole;
-  /** Set only for role 'client' once linked: the coach's user id. */
+  /** True once this account has generated a coach code, i.e. activated Coach capabilities. */
+  coachEnabled: boolean;
+  /** Set once linked as a Client to a coach: that coach's user id. */
   coachId: string | null;
-  /** Set only for role 'coach': the short code clients enter to link to them. */
+  /** Set once Coach mode is activated: the short code clients enter to link to them. */
   coachCode: string | null;
 }
 
@@ -86,6 +92,22 @@ export interface CoachFeedback {
   periodType: FeedbackPeriodType;
   periodLabel: string;
   feedbackText: string;
+  createdAtISO: string;
+}
+
+export interface ChatSessionSummary {
+  id: string;
+  title: string;
+  updatedAtISO: string;
+}
+
+export type ChatRole = 'user' | 'assistant';
+
+export interface StoredChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+  proposedPlan: PlanData | null;
   createdAtISO: string;
 }
 

@@ -2,11 +2,13 @@
 // Deploy with: npx supabase functions deploy suggest-plan-update
 // Requires secret: npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 //
-// Takes the user's current plan (meal templates, workout templates, shopping list) plus a
-// natural-language instruction, asks Claude to return an updated plan in the exact same JSON
-// shape, and hands that proposal back to the client for preview + explicit confirmation.
-// This function never writes to the database itself — the client calls `plans` upsert only
-// after the user taps "Confirm".
+// Multi-turn chat: the client sends the whole message history plus the plan as it currently
+// stands (including any not-yet-confirmed edits from earlier in the same chat). Claude replies
+// conversationally and, whenever it wants to change the plan, calls the `propose_plan_update`
+// tool with the FULL updated plan as its input — that's how we reliably get structured JSON out
+// of a free-flowing chat instead of asking the model to emit raw JSON as text.
+// This function never writes to `plans` itself — the client only applies a proposal locally and
+// pushes it to Supabase after the user taps "Xác nhận áp dụng".
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -20,46 +22,111 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const SYSTEM_PROMPT = `Bạn là trợ lý chỉnh sửa kế hoạch giảm cân. Bạn nhận một JSON "currentPlan" đúng \
-schema PlanData và một yêu cầu chỉnh sửa bằng tiếng Việt. Hãy trả về DUY NHẤT một JSON object hợp lệ \
-đúng schema PlanData sau, không kèm giải thích, không markdown code fence:
+const SYSTEM_PROMPT_HEADER = `Bạn là trợ lý trò chuyện giúp chỉnh sửa kế hoạch giảm cân (thực đơn, bài tập, \
+lịch uống nước, danh sách đi chợ). Trả lời ngắn gọn, thân thiện, bằng tiếng Việt.
 
-type PlanData = {
-  mealTemplates: {
-    training: MealTemplate[]; // đúng 3 phần tử, slot lần lượt "meal1","meal2","meal3"
-    rest: MealTemplate[];      // đúng 3 phần tử, slot lần lượt "meal1","meal2","meal3"
-  };
-  workoutTemplates: WorkoutTemplate[];
-  shoppingList: ShoppingListItem[];
-  waterSchedule: WaterCheckpoint[];
-};
-type MealTemplate = {
-  slot: "meal1" | "meal2" | "meal3";
-  label: string; timeRange: string; startHour: number; startMinute: number;
-  items: { name: string; calories: number }[]; // liệt kê TỪNG món ăn riêng, mỗi món 1 dòng + calo riêng
-  calories: number; // PHẢI bằng tổng calories của items
-  proteinG: number;
-};
-type WorkoutTemplate = {
-  id: string; label: string; timeRange: string; durationMin: number; caloriesBurned: number;
-  description: string; reminderSlot?: "morning" | "evening"; startHour?: number; startMinute?: number;
-};
-type ShoppingListItem = {
-  category: string; name: string; amountPerWeek: string; quantityToBuy: string; estimatedPriceVnd: number;
-};
-type WaterCheckpoint = {
-  hour: number; minute: number; label: string;
-  cumulativeTargetMl: number; // lượng nước CỘNG DỒN cần đạt tính từ đầu ngày tới mốc này
-};
+Khi người dùng muốn thay đổi kế hoạch, hãy gọi tool "propose_plan_update" với TOÀN BỘ kế hoạch đã cập nhật \
+(không phải chỉ phần thay đổi) — dựa trên "Kế hoạch hiện tại" bên dưới cộng với thay đổi được yêu cầu. \
+Nếu người dùng chỉ hỏi thông tin, góp ý, hoặc yêu cầu chưa rõ ràng, cứ trả lời bằng văn bản, KHÔNG cần gọi tool.
 
-Quy tắc:
+Quy tắc khi gọi tool:
 - Giữ nguyên mọi phần không liên quan đến yêu cầu chỉnh sửa.
 - Giữ đơn vị: calo (kcal), protein (g), giá (VNĐ, số nguyên), nước (ml).
-- Nếu yêu cầu ảnh hưởng đến calo/protein của món ăn, cập nhật lại items và calories/proteinG cho hợp lý
-  (calories của meal luôn bằng tổng calories của các items trong items).
-- Nếu yêu cầu thêm/đổi nguyên liệu, cập nhật shoppingList tương ứng (thêm dòng mới nếu cần, ước tính giá VNĐ hợp lý theo mặt bằng giá siêu thị/chợ Việt Nam).
-- Nếu yêu cầu ảnh hưởng đến giờ giấc/lượng nước uống, cập nhật waterSchedule; cumulativeTargetMl của mốc cuối cùng phải bằng tổng lượng nước mục tiêu cả ngày, các mốc phải tăng dần theo thời gian.
-- Không thêm trường ngoài schema. Không bỏ trường bắt buộc.`;
+- Mỗi meal có "items" liệt kê từng món ăn riêng (tên + calo); "calories" của meal PHẢI bằng tổng calories của items.
+- Nếu thêm/đổi nguyên liệu, cập nhật shoppingList tương ứng (ước tính giá VNĐ hợp lý theo mặt bằng giá Việt Nam).
+- waterSchedule: các mốc phải tăng dần theo thời gian và theo cumulativeTargetMl; mốc cuối = tổng mục tiêu nước cả ngày.
+- mealTemplates.training và mealTemplates.rest luôn có đúng 3 phần tử, slot lần lượt "meal1","meal2","meal3".
+
+Kế hoạch hiện tại (JSON):
+`;
+
+const PLAN_TOOL = {
+  name: 'propose_plan_update',
+  description: 'Đề xuất một phiên bản kế hoạch (PlanData) đã được cập nhật để người dùng xem trước và xác nhận.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      mealTemplates: {
+        type: 'object',
+        properties: {
+          training: { type: 'array', items: mealTemplateSchema() },
+          rest: { type: 'array', items: mealTemplateSchema() },
+        },
+        required: ['training', 'rest'],
+      },
+      workoutTemplates: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            label: { type: 'string' },
+            timeRange: { type: 'string' },
+            durationMin: { type: 'number' },
+            caloriesBurned: { type: 'number' },
+            description: { type: 'string' },
+            reminderSlot: { type: 'string', enum: ['morning', 'evening'] },
+            startHour: { type: 'number' },
+            startMinute: { type: 'number' },
+          },
+          required: ['id', 'label', 'timeRange', 'durationMin', 'caloriesBurned', 'description'],
+        },
+      },
+      shoppingList: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            category: { type: 'string' },
+            name: { type: 'string' },
+            amountPerWeek: { type: 'string' },
+            quantityToBuy: { type: 'string' },
+            estimatedPriceVnd: { type: 'number' },
+          },
+          required: ['category', 'name', 'amountPerWeek', 'quantityToBuy', 'estimatedPriceVnd'],
+        },
+      },
+      waterSchedule: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            hour: { type: 'number' },
+            minute: { type: 'number' },
+            label: { type: 'string' },
+            cumulativeTargetMl: { type: 'number' },
+          },
+          required: ['hour', 'minute', 'label', 'cumulativeTargetMl'],
+        },
+      },
+    },
+    required: ['mealTemplates', 'workoutTemplates', 'shoppingList', 'waterSchedule'],
+  },
+};
+
+function mealTemplateSchema() {
+  return {
+    type: 'object',
+    properties: {
+      slot: { type: 'string', enum: ['meal1', 'meal2', 'meal3'] },
+      label: { type: 'string' },
+      timeRange: { type: 'string' },
+      startHour: { type: 'number' },
+      startMinute: { type: 'number' },
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { name: { type: 'string' }, calories: { type: 'number' } },
+          required: ['name', 'calories'],
+        },
+      },
+      calories: { type: 'number' },
+      proteinG: { type: 'number' },
+    },
+    required: ['slot', 'label', 'timeRange', 'startHour', 'startMinute', 'items', 'calories', 'proteinG'],
+  };
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -88,13 +155,18 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Không xác thực được người dùng.' }, 401);
     }
 
-    const { currentPlan, instruction, targetUserId } = await req.json();
-    if (!currentPlan || typeof instruction !== 'string' || !instruction.trim()) {
-      return jsonResponse({ error: 'Thiếu currentPlan hoặc instruction.' }, 400);
+    const { currentPlan, messages, targetUserId } = await req.json();
+    if (!currentPlan || !Array.isArray(messages) || messages.length === 0) {
+      return jsonResponse({ error: 'Thiếu currentPlan hoặc messages.' }, 400);
+    }
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage || typeof lastMessage.content !== 'string' || !lastMessage.content.trim()) {
+      return jsonResponse({ error: 'Tin nhắn cuối cùng trống.' }, 400);
     }
     // Coach editing a client's plan: targetUserId is the client. Authorization for the audit-log
-    // insert and (later) the actual `plans` write is enforced by Postgres RLS, not here — an
-    // unauthorized targetUserId simply fails to insert/write, it never reaches another user's data.
+    // insert and the actual `plans` write (done client-side after Confirm) is enforced by
+    // Postgres RLS, not here — an unauthorized targetUserId simply fails to write, it never
+    // reaches another user's data.
     const auditUserId = typeof targetUserId === 'string' && targetUserId ? targetUserId : user.id;
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
@@ -107,13 +179,9 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 8000,
-        system: SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: `currentPlan:\n${JSON.stringify(currentPlan)}\n\nYêu cầu chỉnh sửa: ${instruction}`,
-          },
-        ],
+        system: SYSTEM_PROMPT_HEADER + JSON.stringify(currentPlan),
+        tools: [PLAN_TOOL],
+        messages: messages.map((m: { role: string; content: string }) => ({ role: m.role, content: m.content })),
       }),
     });
 
@@ -123,29 +191,34 @@ Deno.serve(async (req) => {
     }
 
     const claudeData = await claudeResponse.json();
-    const text: string = claudeData.content?.[0]?.text ?? '';
-    const jsonText = extractJson(text);
+    const blocks: Array<Record<string, unknown>> = claudeData.content ?? [];
 
-    let proposedPlan: unknown;
-    try {
-      proposedPlan = JSON.parse(jsonText);
-    } catch {
-      return jsonResponse({ error: 'AI trả về dữ liệu không đúng định dạng JSON.', raw: text }, 502);
+    const replyText = blocks
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text as string)
+      .join('\n')
+      .trim();
+
+    const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === 'propose_plan_update');
+    let proposedPlan: unknown = null;
+    if (toolUse) {
+      proposedPlan = toolUse.input;
+      if (!isValidPlanShape(proposedPlan)) {
+        return jsonResponse({ error: 'AI đề xuất kế hoạch nhưng thiếu trường bắt buộc.', raw: proposedPlan }, 502);
+      }
+      // Best-effort audit log; failure here should not block returning the proposal.
+      await supabase.from('plan_update_requests').insert({
+        user_id: auditUserId,
+        instruction: lastMessage.content,
+        proposed_plan_json: proposedPlan,
+        applied: false,
+      });
     }
 
-    if (!isValidPlanShape(proposedPlan)) {
-      return jsonResponse({ error: 'AI trả về JSON nhưng thiếu trường bắt buộc.', raw: proposedPlan }, 502);
-    }
-
-    // Best-effort audit log; failure here should not block returning the proposal.
-    await supabase.from('plan_update_requests').insert({
-      user_id: auditUserId,
-      instruction,
-      proposed_plan_json: proposedPlan,
-      applied: false,
+    return jsonResponse({
+      reply: replyText || (proposedPlan ? 'Mình đã cập nhật kế hoạch, bạn xem thử nhé.' : ''),
+      plan: proposedPlan,
     });
-
-    return jsonResponse({ plan: proposedPlan });
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : 'Lỗi không xác định.' }, 500);
   }
@@ -156,11 +229,6 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, 'content-type': 'application/json' },
   });
-}
-
-function extractJson(text: string): string {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  return (fenced ? fenced[1] : text).trim();
 }
 
 function isValidPlanShape(value: unknown): value is {
