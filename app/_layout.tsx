@@ -13,6 +13,7 @@ export default function RootLayout() {
   const session = useAuthStore((s) => s.session);
   const onboardingDone = useSettingsStore((s) => s.onboardingDone);
   const roleChosen = useSettingsStore((s) => s.roleChosen);
+  const role = useSettingsStore((s) => s.role);
   const hydrateFromRemote = useSettingsStore((s) => s.hydrateFromRemote);
   const segments = useSegments();
 
@@ -56,9 +57,9 @@ export default function RootLayout() {
       return;
     }
     if (segment0 === 'auth' || segment0 === 'role-select') {
-      router.replace('/(tabs)');
+      router.replace(role === 'coach' ? '/(tabs)/clients' : '/(tabs)');
     }
-  }, [ready, session, roleChosen, segments]);
+  }, [ready, session, roleChosen, role, segments]);
 
   return (
     <SafeAreaProvider>

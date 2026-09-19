@@ -17,7 +17,7 @@ export default function RoleSelectScreen() {
     setBusy(true);
     await chooseCoachRole();
     setBusy(false);
-    router.replace('/(tabs)');
+    router.replace('/(tabs)/clients');
   }
 
   return (

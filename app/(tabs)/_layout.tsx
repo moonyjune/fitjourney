@@ -38,7 +38,10 @@ export default function TabsLayout() {
   }, [onboardingDone, remindersEnabled, isCoach, plan]);
 
   return (
-    <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: '#4F8EF7' }}>
+    <Tabs
+      initialRouteName={isCoach ? 'clients' : 'index'}
+      screenOptions={{ headerShown: false, tabBarActiveTintColor: '#4F8EF7' }}
+    >
       <Tabs.Screen
         name="index"
         options={{ title: 'Hôm nay', tabBarIcon: () => <TabIcon symbol="🏠" />, href: isCoach ? null : undefined }}
