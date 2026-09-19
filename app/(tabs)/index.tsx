@@ -10,6 +10,8 @@ import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { getDayType, MEAL_TEMPLATES } from '../../src/constants/plan';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
+import { computeMilestones } from '../../src/utils/milestones';
+import { formatDateVi, toDateKey } from '../../src/utils/date';
 
 export default function TodayScreen() {
   const [now, setNow] = useState(new Date());
@@ -42,6 +44,17 @@ export default function TodayScreen() {
   const currentWeight = latestWeight?.weightKg ?? settings.startWeightKg;
   const weightChange = currentWeight - settings.startWeightKg;
 
+  const nextMilestone = useMemo(() => {
+    const milestones = computeMilestones(
+      settings.startDateISO,
+      settings.startWeightKg,
+      settings.goalWeightKg,
+      currentWeight,
+      now
+    );
+    return milestones.find((m) => m.status === 'upcoming') ?? milestones[milestones.length - 1];
+  }, [settings.startDateISO, settings.startWeightKg, settings.goalWeightKg, currentWeight, now]);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.dateLabel}>
@@ -67,6 +80,14 @@ export default function TodayScreen() {
           </Text>
         </View>
         <Text style={styles.goalLabel}>Mục tiêu: {settings.goalWeightKg} kg</Text>
+      </Card>
+
+      <Card>
+        <Text style={styles.cardTitle}>{nextMilestone.label}</Text>
+        <Text style={styles.milestoneMeta}>
+          Hạn {formatDateVi(toDateKey(nextMilestone.targetDate))} · Mục tiêu {nextMilestone.targetWeightKg.toFixed(1)} kg
+          {nextMilestone.status === 'upcoming' ? ` · còn ${nextMilestone.daysRemaining} ngày` : ''}
+        </Text>
       </Card>
 
       <Card>
@@ -100,6 +121,7 @@ const styles = StyleSheet.create({
   weightValue: { fontSize: 28, fontWeight: '800', color: '#222' },
   weightChange: { fontSize: 12, fontWeight: '600' },
   goalLabel: { fontSize: 13, color: '#888', marginTop: 4 },
+  milestoneMeta: { fontSize: 12, color: '#666' },
   workoutSummary: { fontSize: 14, color: '#333' },
   restNote: { fontSize: 12, color: '#888', marginTop: 6 },
 });

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card } from '../../src/components/Card';
 import { ProgressBar } from '../../src/components/ProgressBar';
+import { ProofCapture } from '../../src/components/ProofCapture';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, MEAL_TEMPLATES, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
@@ -82,6 +83,7 @@ export default function NutritionScreen() {
               <Text style={styles.mealMacro}>
                 {meal.calories} kcal · {meal.proteinG}g protein
               </Text>
+              <ProofCapture dateKey={dateKey} taskType="meal" taskRefId={meal.slot} />
             </Card>
           </TouchableOpacity>
         );

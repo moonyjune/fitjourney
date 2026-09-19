@@ -1,7 +1,10 @@
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card } from '../../src/components/Card';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { useAuthStore } from '../../src/store/useAuthStore';
+import { supabase } from '../../src/lib/supabase';
+import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import {
   CARB_SWAP_OPTIONS,
   MEAL_TEMPLATES,
@@ -17,6 +20,7 @@ function formatVnd(amount: number): string {
 
 export default function PlanScreen() {
   const settings = useSettingsStore();
+  const session = useAuthStore((s) => s.session);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
 
   const [calorieTarget, setCalorieTarget] = useState(String(settings.calorieTargetKcal));
@@ -37,8 +41,33 @@ export default function PlanScreen() {
     Alert.alert('Đã lưu', 'Mục tiêu đã được cập nhật.');
   }
 
+  async function handleToggleReminders(value: boolean) {
+    if (value) {
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        Alert.alert('Chưa cấp quyền', 'Bạn cần cho phép thông báo để bật nhắc nhở.');
+        return;
+      }
+      await scheduleAllReminders();
+    } else {
+      await cancelAllReminders();
+    }
+    updateSettings({ remindersEnabled: value });
+  }
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.sectionTitle}>Nhắc nhở</Text>
+      <Card>
+        <View style={styles.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fieldLabel}>Nhắc giờ ăn, giờ tập, uống nước</Text>
+            <Text style={styles.switchHint}>Thông báo local trên thiết bị (không hoạt động trên web).</Text>
+          </View>
+          <Switch value={settings.remindersEnabled} onValueChange={handleToggleReminders} />
+        </View>
+      </Card>
+
       <Text style={styles.sectionTitle}>Mục tiêu cá nhân</Text>
       <Card>
         <Text style={styles.fieldLabel}>Cân nặng mục tiêu (kg)</Text>
@@ -121,6 +150,14 @@ export default function PlanScreen() {
           </View>
         ))}
       </Card>
+
+      <Text style={styles.sectionTitle}>Tài khoản</Text>
+      <Card>
+        <Text style={styles.fieldLabel}>{session?.user.email ?? 'Chưa đăng nhập'}</Text>
+        <TouchableOpacity style={styles.signOutButton} onPress={() => supabase.auth.signOut()}>
+          <Text style={styles.signOutText}>Đăng xuất</Text>
+        </TouchableOpacity>
+      </Card>
     </ScrollView>
   );
 }
@@ -130,6 +167,10 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32 },
   sectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 8, marginBottom: 8, color: '#222' },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 4 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  switchHint: { fontSize: 11, color: '#999', marginTop: 2 },
+  signOutButton: { backgroundColor: '#FDEDEA', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
+  signOutText: { color: '#E0563A', fontWeight: '700' },
   input: {
     borderWidth: 1,
     borderColor: '#DDD',

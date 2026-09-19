@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { WeightEntry } from '../types';
+import { pushWeightEntry } from '../sync/cloudSync';
 
 interface WeightState {
   entries: WeightEntry[];
@@ -25,6 +26,7 @@ export const useWeightStore = create<WeightState>()(
           const entries = [...state.entries, entry].sort(
             (a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime()
           );
+          pushWeightEntry(entry);
           return { entries };
         }),
       removeEntry: (id) => set((state) => ({ entries: state.entries.filter((e) => e.id !== id) })),

@@ -14,7 +14,20 @@ export const WEEKLY_FAT_LOSS_TARGET_KG = [0.9, 1.1] as const;
 
 // Thứ 2,3,5,6 là ngày tập (training); Thứ 4,7,CN là ngày nghỉ (rest).
 // getDay(): 0 = Chủ Nhật, 1 = Thứ 2, ... 6 = Thứ 7
-const TRAINING_WEEKDAYS = new Set([1, 2, 4, 5]);
+export const TRAINING_WEEKDAYS = new Set([1, 2, 4, 5]);
+
+export const WATER_REMINDER_TIMES = [
+  { hour: 9, minute: 0 },
+  { hour: 13, minute: 0 },
+  { hour: 16, minute: 0 },
+  { hour: 18, minute: 30 },
+] as const;
+
+export const MILESTONES = [
+  { key: '1m', label: 'Mốc 1 tháng', monthsFromStart: 1 },
+  { key: '3m', label: 'Mốc 3 tháng', monthsFromStart: 3 },
+  { key: '6m', label: 'Mốc 6 tháng', monthsFromStart: 6 },
+] as const;
 
 export function getDayType(date: Date = new Date()): DayType {
   return TRAINING_WEEKDAYS.has(date.getDay()) ? 'training' : 'rest';
@@ -26,6 +39,8 @@ export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       slot: 'meal1',
       label: 'Bữa 1 - Trưa (Phá cỗ)',
       timeRange: '12:00 - 12:45',
+      startHour: 12,
+      startMinute: 0,
       description:
         '4 lòng trắng trứng luộc, 2 quả trứng nguyên, 120g xúc xích gà nạc áp chảo, 1 lát bánh mì nguyên cám, 1 hũ sữa chua không đường, 30g yến mạch + 1/2 quả chuối, 8 hạt hạnh nhân.',
       calories: 741,
@@ -35,6 +50,8 @@ export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       slot: 'meal2',
       label: 'Bữa 2 - Chiều (Trước tập)',
       timeRange: '15:30 - 16:00',
+      startHour: 15,
+      startMinute: 30,
       description: 'Bát miến gà: 200g lườn gà xé phay không da, 40g miến khô, rau cải/mộc nhĩ, nước dùng gà trong.',
       calories: 500,
       proteinG: 64,
@@ -43,6 +60,8 @@ export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       slot: 'meal3',
       label: 'Bữa 3 - Tối (Chốt cửa sổ ăn)',
       timeRange: '19:15 - 20:00',
+      startHour: 19,
+      startMinute: 15,
       description:
         '200g ức gà áp chảo/nướng mộc, 180g khoai tây nghiền (hoặc 150g khoai lang), 1 bát salad lớn, 2 quả trứng luộc, 1 ly sữa tươi tách béo không đường (200ml).',
       calories: 713,
@@ -54,6 +73,8 @@ export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       slot: 'meal1',
       label: 'Bữa 1 - Trưa (Phá cỗ)',
       timeRange: '12:00 - 12:45',
+      startHour: 12,
+      startMinute: 0,
       description:
         '4 lòng trắng trứng luộc, 2 quả trứng nguyên, 80g xúc xích gà, 1 hũ sữa chua không đường, 30g yến mạch + 1/2 quả chuối, 8 hạt hạnh nhân (bỏ bánh mì).',
       calories: 661,
@@ -63,6 +84,8 @@ export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       slot: 'meal2',
       label: 'Bữa 2 - Chiều',
       timeRange: '15:30 - 16:00',
+      startHour: 15,
+      startMinute: 30,
       description: '200g lườn gà/thăn bò/phi lê cá + 20g miến khô (hoặc 80g cơm gạo lứt) + rau củ hấp.',
       calories: 470,
       proteinG: 60,
@@ -71,6 +94,8 @@ export const MEAL_TEMPLATES: Record<DayType, MealTemplate[]> = {
       slot: 'meal3',
       label: 'Bữa 3 - Tối',
       timeRange: '19:15 - 20:00',
+      startHour: 19,
+      startMinute: 15,
       description: '200g ức gà/phi lê cá + 120g khoai lang + salad rau củ lớn + 200ml sữa tươi tách béo (bỏ trứng luộc).',
       calories: 650,
       proteinG: 80,
@@ -87,6 +112,9 @@ export const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     caloriesBurned: 420,
     description:
       'Bơi lội (đi bộ nước + bơi ếch + đập chân phao + bơi sải) HOẶC đi bộ dốc Incline 12-15%, tốc độ 3.5-4.0 km/h.',
+    reminderSlot: 'morning',
+    startHour: 6,
+    startMinute: 30,
   },
   {
     id: 'evening-cardio-machine',
@@ -95,6 +123,9 @@ export const WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     durationMin: 45,
     caloriesBurned: 380,
     description: '25 phút đi bộ dốc Incline 10-12% (4.0 km/h) + 20 phút Elliptical hoặc xe đạp tựa lưng.',
+    reminderSlot: 'evening',
+    startHour: 17,
+    startMinute: 30,
   },
   {
     id: 'swim-detailed',

@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DailyNutritionLog, MealSlot } from '../types';
 import { toDateKey } from '../utils/date';
+import { pushNutritionLog } from '../sync/cloudSync';
 
 interface NutritionState {
   logs: Record<string, DailyNutritionLog>;
@@ -26,32 +27,35 @@ export const useNutritionStore = create<NutritionState>()(
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const mealsEaten = { ...current.mealsEaten, [slot]: !current.mealsEaten[slot] };
-          return { logs: { ...state.logs, [dateKey]: { ...current, mealsEaten } } };
+          const updated = { ...current, mealsEaten };
+          pushNutritionLog(updated);
+          return { logs: { ...state.logs, [dateKey]: updated } };
         }),
       addWater: (dateKey, ml) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const waterMl = Math.max(0, current.waterMl + ml);
-          return { logs: { ...state.logs, [dateKey]: { ...current, waterMl } } };
+          const updated = { ...current, waterMl };
+          pushNutritionLog(updated);
+          return { logs: { ...state.logs, [dateKey]: updated } };
         }),
       resetWater: (dateKey) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
-          return { logs: { ...state.logs, [dateKey]: { ...current, waterMl: 0 } } };
+          const updated = { ...current, waterMl: 0 };
+          pushNutritionLog(updated);
+          return { logs: { ...state.logs, [dateKey]: updated } };
         }),
       addExtra: (dateKey, calories, proteinG) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
-          return {
-            logs: {
-              ...state.logs,
-              [dateKey]: {
-                ...current,
-                extraCalories: current.extraCalories + calories,
-                extraProteinG: current.extraProteinG + proteinG,
-              },
-            },
+          const updated = {
+            ...current,
+            extraCalories: current.extraCalories + calories,
+            extraProteinG: current.extraProteinG + proteinG,
           };
+          pushNutritionLog(updated);
+          return { logs: { ...state.logs, [dateKey]: updated } };
         }),
     }),
     {

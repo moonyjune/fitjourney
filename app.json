@@ -25,10 +25,24 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "output": "static"
+      "output": "single"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép truy cập thư viện ảnh để đính kèm ảnh minh chứng hoàn thành bữa ăn/buổi tập.",
+          "cameraPermission": "Cho phép dùng camera để chụp ảnh minh chứng hoàn thành bữa ăn/buổi tập."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#4F8EF7"
+        }
+      ]
     ]
   }
 }

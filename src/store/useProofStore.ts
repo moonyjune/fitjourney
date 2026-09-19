@@ -1,0 +1,53 @@
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { ProofPhoto, ProofTaskType } from '../types';
+import { toDateKey } from '../utils/date';
+import { deletePersistedPhoto } from '../utils/photoStorage';
+import { pushProofPhoto } from '../sync/cloudSync';
+
+interface ProofState {
+  photos: ProofPhoto[];
+  addProof: (input: { taskType: ProofTaskType; taskRefId: string; photoUri: string; note: string; dateISO?: string }) => ProofPhoto;
+  removeProof: (id: string) => void;
+  proofsForDateKey: (dateKey: string) => ProofPhoto[];
+  proofFor: (dateKey: string, taskType: ProofTaskType, taskRefId: string) => ProofPhoto | undefined;
+}
+
+export const useProofStore = create<ProofState>()(
+  persist(
+    (set, get) => ({
+      photos: [],
+      addProof: ({ taskType, taskRefId, photoUri, note, dateISO }) => {
+        const proof: ProofPhoto = {
+          id: `${Date.now()}`,
+          dateISO: dateISO ?? new Date().toISOString(),
+          taskType,
+          taskRefId,
+          photoUri,
+          note,
+          createdAtISO: new Date().toISOString(),
+        };
+        set((state) => ({ photos: [...state.photos, proof] }));
+        pushProofPhoto(proof);
+        return proof;
+      },
+      removeProof: (id) => {
+        const target = get().photos.find((p) => p.id === id);
+        if (target) {
+          deletePersistedPhoto(target.photoUri).catch(() => {});
+        }
+        set((state) => ({ photos: state.photos.filter((p) => p.id !== id) }));
+      },
+      proofsForDateKey: (dateKey) => get().photos.filter((p) => toDateKey(new Date(p.dateISO)) === dateKey),
+      proofFor: (dateKey, taskType, taskRefId) =>
+        get().photos.find(
+          (p) => toDateKey(new Date(p.dateISO)) === dateKey && p.taskType === taskType && p.taskRefId === taskRefId
+        ),
+    }),
+    {
+      name: 'proof-store',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);

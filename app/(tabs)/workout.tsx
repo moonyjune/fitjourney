@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card } from '../../src/components/Card';
+import { ProofCapture } from '../../src/components/ProofCapture';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { todayKey } from '../../src/store/useNutritionStore';
 import { getDayType, WORKOUT_TEMPLATES } from '../../src/constants/plan';
@@ -101,17 +102,20 @@ export default function WorkoutScreen() {
       <Text style={styles.sectionTitle}>Đã tập hôm nay ({todayEntries.length})</Text>
       {todayEntries.length === 0 && <Text style={styles.emptyText}>Chưa có buổi tập nào hôm nay.</Text>}
       {todayEntries.map((e) => (
-        <View key={e.id} style={styles.historyRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.historyLabel}>{e.label}</Text>
-            <Text style={styles.historyMeta}>
-              {e.durationMin} phút · {e.caloriesBurned} kcal
-            </Text>
+        <Card key={e.id}>
+          <View style={styles.historyTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.historyLabel}>{e.label}</Text>
+              <Text style={styles.historyMeta}>
+                {e.durationMin} phút · {e.caloriesBurned} kcal
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => removeEntry(e.id)}>
+              <Text style={styles.deleteText}>Xóa</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => removeEntry(e.id)}>
-            <Text style={styles.deleteText}>Xóa</Text>
-          </TouchableOpacity>
-        </View>
+          <ProofCapture dateKey={dateKey} taskType="workout" taskRefId={e.id} />
+        </Card>
       ))}
 
       {recentEntries.length > 0 && (
@@ -161,6 +165,7 @@ const styles = StyleSheet.create({
   rowInput: { flex: 1 },
   addButton: { backgroundColor: '#4F8EF7', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   addButtonText: { color: '#fff', fontWeight: '700' },
+  historyTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   historyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
