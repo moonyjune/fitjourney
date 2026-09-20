@@ -24,6 +24,8 @@ interface ShoppingListState {
   ensureCurrentWeek: () => void;
   toggleChecked: (name: string) => void;
   setActualPrice: (name: string, vnd: number) => void;
+  /** Removes the override entirely — falls back to the plan's (AI-referenced) estimated price, not 0. */
+  clearActualPrice: (name: string) => void;
   setActualQuantity: (name: string, qty: string) => void;
   addCustomItem: (item: Omit<ShoppingCustomItem, 'id'>) => void;
   removeCustomItem: (id: string) => void;
@@ -52,6 +54,11 @@ export const useShoppingListStore = create<ShoppingListState>()(
       },
       toggleChecked: (name) => set((state) => ({ checkedItems: { ...state.checkedItems, [name]: !state.checkedItems[name] } })),
       setActualPrice: (name, vnd) => set((state) => ({ actualPrices: { ...state.actualPrices, [name]: vnd } })),
+      clearActualPrice: (name) =>
+        set((state) => {
+          const { [name]: _removed, ...rest } = state.actualPrices;
+          return { actualPrices: rest };
+        }),
       setActualQuantity: (name, qty) => set((state) => ({ actualQuantities: { ...state.actualQuantities, [name]: qty } })),
       addCustomItem: (item) =>
         set((state) => ({ customItems: [...state.customItems, { ...item, id: `${Date.now()}` }] })),

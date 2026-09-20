@@ -28,6 +28,7 @@ export function ShoppingListEditor({ plan }: { plan: PlanData }) {
   const customItems = useShoppingListStore((s) => s.customItems);
   const toggleChecked = useShoppingListStore((s) => s.toggleChecked);
   const setActualPrice = useShoppingListStore((s) => s.setActualPrice);
+  const clearActualPrice = useShoppingListStore((s) => s.clearActualPrice);
   const setActualQuantity = useShoppingListStore((s) => s.setActualQuantity);
   const addCustomItem = useShoppingListStore((s) => s.addCustomItem);
   const removeCustomItem = useShoppingListStore((s) => s.removeCustomItem);
@@ -110,8 +111,16 @@ export function ShoppingListEditor({ plan }: { plan: PlanData }) {
                       style={styles.editInput}
                       placeholder={t('shoppingEditor.pricePlaceholder')}
                       keyboardType="decimal-pad"
-                      value={actualPrices[row.name] != null ? String(actualPrices[row.name]) : ''}
-                      onChangeText={(v) => setActualPrice(row.name, parseFloat(v.replace(',', '.')) || 0)}
+                      value={row.estimatedPriceVnd > 0 ? String(row.estimatedPriceVnd) : ''}
+                      onChangeText={(v) => {
+                        const trimmed = v.trim();
+                        if (!trimmed) {
+                          clearActualPrice(row.name);
+                          return;
+                        }
+                        const parsed = parseFloat(trimmed.replace(',', '.'));
+                        if (!Number.isNaN(parsed)) setActualPrice(row.name, parsed);
+                      }}
                     />
                   </View>
                 )}

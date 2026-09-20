@@ -4,12 +4,15 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
+import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { PlanPreview } from '../../src/components/PlanPreview';
 import { ShoppingListEditor } from '../../src/components/ShoppingListEditor';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
+import { useWeightStore } from '../../src/store/useWeightStore';
+import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { useSyncQueueStore } from '../../src/sync/syncQueue';
 import { signOutAndReset } from '../../src/auth/signOut';
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
@@ -18,10 +21,12 @@ import { useTranslation } from '../../src/i18n/useTranslation';
 import { useAccentColors } from '../../src/theme/useAccentColors';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
 import type { PlanData } from '../../src/types';
 
 export default function PlanScreen() {
   const { t } = useTranslation();
+  const ambientBg = useAmbientBackground();
   const accent = useAccentColors();
   const settings = useSettingsStore();
   const session = useAuthStore((s) => s.session);
@@ -36,6 +41,21 @@ export default function PlanScreen() {
   const [proteinTarget, setProteinTarget] = useState(String(settings.proteinTargetG));
   const [waterTarget, setWaterTarget] = useState(String(settings.waterTargetMl));
   const [goalWeight, setGoalWeight] = useState(String(settings.goalWeightKg));
+  const [startDateDraft, setStartDateDraft] = useState(() => new Date(settings.startDateISO));
+  const latestWeight = useWeightStore((s) => s.latest());
+
+  function handleSaveStartDate() {
+    updateSettings({ startDateISO: startDateDraft.toISOString() });
+    Alert.alert(t('plan.savedTitle'), t('plan.startDateSavedMessage'));
+  }
+
+  function handleStartNewPlan() {
+    const currentWeight = latestWeight?.weightKg ?? settings.startWeightKg;
+    const today = new Date();
+    updateSettings({ startDateISO: today.toISOString(), startWeightKg: currentWeight });
+    setStartDateDraft(today);
+    Alert.alert(t('plan.newPlanStartedTitle'), t('plan.newPlanStartedMessage', { kg: currentWeight.toFixed(1) }));
+  }
 
   const submitCoachCode = useSettingsStore((s) => s.submitCoachCode);
   const switchToCoachMode = useSettingsStore((s) => s.switchToCoachMode);
@@ -103,7 +123,7 @@ export default function PlanScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('mode.title')}</Text>
       <Card>
         <Text style={styles.fieldLabel}>{settings.coachEnabled ? t('plan.coachFieldEnabled') : t('plan.coachFieldDisabled')}</Text>
@@ -144,6 +164,19 @@ export default function PlanScreen() {
             <Text style={styles.switchHint}>{t('plan.remindersHint')}</Text>
           </View>
           <Switch value={settings.remindersEnabled} onValueChange={handleToggleReminders} />
+        </View>
+      </Card>
+
+      <Text style={styles.sectionTitle}>{t('plan.startDateTitle')}</Text>
+      <Card>
+        <Text style={styles.fieldLabel}>
+          {t('plan.startDateCurrentLabel', { date: formatDateVi(toDateKey(new Date(settings.startDateISO))) })}
+        </Text>
+        <Text style={styles.switchHint}>{t('plan.startDateHint')}</Text>
+        <DateOffsetPicker selectedDate={startDateDraft} onChange={setStartDateDraft} />
+        <View style={styles.planStartActions}>
+          <Button title={t('common.save')} size="sm" onPress={handleSaveStartDate} flex />
+          <Button title={t('plan.startNewPlanButton')} size="sm" variant="outline" onPress={handleStartNewPlan} flex />
         </View>
       </Card>
 
@@ -231,6 +264,7 @@ const styles = StyleSheet.create({
   swapGroupTitle: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
   swapItem: { fontSize: 13, color: '#444', marginTop: 4, lineHeight: 18 },
   languageRow: { flexDirection: 'row', gap: spacing.sm },
+  planStartActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   languageButton: { flex: 1, backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingVertical: spacing.md, alignItems: 'center' },
   languageButtonText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
   languageButtonTextActive: { color: colors.white },

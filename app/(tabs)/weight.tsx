@@ -7,12 +7,13 @@ import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { predictedWeightKgAt } from '../../src/utils/milestones';
+import { predictedWeightKgAt, addDays } from '../../src/utils/milestones';
 import { thinLabels } from '../../src/utils/chartLabels';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
 
 const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
   { key: 'weight.range1w', days: 7 },
@@ -24,6 +25,7 @@ const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
 
 export default function WeightScreen() {
   const { t } = useTranslation();
+  const ambientBg = useAmbientBackground();
   const entries = useWeightStore((s) => s.entries);
   const addEntry = useWeightStore((s) => s.addEntry);
   const removeEntry = useWeightStore((s) => s.removeEntry);
@@ -33,6 +35,7 @@ export default function WeightScreen() {
   const [input, setInput] = useState('');
   const [logDate, setLogDate] = useState(new Date());
   const [rangeDays, setRangeDays] = useState(30);
+  const screenWidth = Dimensions.get('window').width - 32;
 
   // Always renders something (default chart): with no/one actual entry, only the predicted
   // trend line (from start weight to goal, following the same curve milestones are scored
@@ -54,8 +57,31 @@ export default function WeightScreen() {
           ]
         : [{ data: predictedData, color: () => 'rgba(150,150,150,0.7)', strokeWidth: 2, withDots: false, strokeDashArray: [6, 4] }];
 
-    return { labels, datasets, hasActual: inRange.length > 0 };
+    // The window always ends "now", so the last point is always today — used to draw the red
+    // today marker (see todayLineX below).
+    return { labels, datasets, hasActual: inRange.length > 0, todayIndex: pointDates.length - 1 };
   }, [entries, rangeDays, startDateISO, startWeightKg, goalWeightKg]);
+
+  // Prediction result for the selected milestone range: what the trend line projects for that
+  // date, shown as text since chart-kit has no clean way to extend one dataset past the chart's
+  // shared x-axis into the future while the other stops at today.
+  const milestonePrediction = useMemo(() => {
+    const startDate = new Date(startDateISO);
+    const targetDate = addDays(startDate, rangeDays);
+    const targetWeightKg = predictedWeightKgAt(targetDate, startDateISO, startWeightKg, goalWeightKg);
+    const daysRemaining = Math.ceil((targetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    return { targetDate, targetWeightKg, daysRemaining };
+  }, [rangeDays, startDateISO, startWeightKg, goalWeightKg]);
+
+  // Replicates react-native-chart-kit's internal point-x formula (paddingRight/paddingTop
+  // default to 64/16 when not overridden via the chart's `style`, which we don't) so we can draw
+  // a "today" marker without fighting the library's lack of native vertical-reference-line support.
+  const chartHeight = 200;
+  const todayLineX = useMemo(() => {
+    const paddingRight = 64;
+    const xMax = Math.max(chartData.labels.length, 1);
+    return paddingRight + (chartData.todayIndex * (screenWidth - paddingRight)) / xMax;
+  }, [chartData, screenWidth]);
 
   function handleAdd() {
     const value = parseFloat(input.replace(',', '.'));
@@ -65,12 +91,10 @@ export default function WeightScreen() {
     setLogDate(new Date());
   }
 
-  const screenWidth = Dimensions.get('window').width - 32;
-
   const historyEntries = [...entries].reverse();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Card>
         <Text style={styles.cardTitle}>{t('weight.logTitle')}</Text>
         <DateOffsetPicker selectedDate={logDate} onChange={setLogDate} />
@@ -113,24 +137,42 @@ export default function WeightScreen() {
             <Text style={styles.legendText}>{t('weight.predictedLegend')}</Text>
           </View>
         </View>
-        <LineChart
-          data={chartData}
-          width={screenWidth}
-          height={200}
-          yAxisSuffix="kg"
-          chartConfig={{
-            backgroundColor: colors.surface,
-            backgroundGradientFrom: colors.surface,
-            backgroundGradientTo: colors.surface,
-            decimalPlaces: 1,
-            color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
-            labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
-            propsForDots: { r: '3' },
-          }}
-          bezier
-          style={{ borderRadius: radius.lg }}
-        />
+        <View style={{ position: 'relative' }}>
+          <LineChart
+            data={chartData}
+            width={screenWidth}
+            height={chartHeight}
+            yAxisSuffix="kg"
+            chartConfig={{
+              backgroundColor: colors.surface,
+              backgroundGradientFrom: colors.surface,
+              backgroundGradientTo: colors.surface,
+              decimalPlaces: 1,
+              color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
+              propsForDots: { r: '3' },
+            }}
+            bezier
+            style={{ borderRadius: radius.lg }}
+          />
+          <View pointerEvents="none" style={[styles.todayLine, { left: todayLineX, height: chartHeight - 34 }]} />
+        </View>
+        <Text style={styles.todayLineCaption}>{t('weight.todayMarker')}</Text>
         {entries.length === 0 && <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>}
+        <View style={styles.predictionCard}>
+          <Text style={styles.predictionText}>
+            {milestonePrediction.daysRemaining > 0
+              ? t('weight.predictionFuture', {
+                  kg: milestonePrediction.targetWeightKg.toFixed(1),
+                  date: formatDateVi(toDateKey(milestonePrediction.targetDate)),
+                  n: milestonePrediction.daysRemaining,
+                })
+              : t('weight.predictionPast', {
+                  kg: milestonePrediction.targetWeightKg.toFixed(1),
+                  date: formatDateVi(toDateKey(milestonePrediction.targetDate)),
+                })}
+          </Text>
+        </View>
         <Text style={styles.goalNote}>{t('common.goalLabel', { kg: goalWeightKg })}</Text>
       </Card>
 
@@ -175,6 +217,10 @@ const styles = StyleSheet.create({
   legendDotPredicted: { backgroundColor: '#969696' },
   legendText: { fontSize: 11, color: colors.textSecondary },
   goalNote: { textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
+  todayLine: { position: 'absolute', top: 16, width: 1.5, backgroundColor: colors.danger, opacity: 0.7 },
+  todayLineCaption: { textAlign: 'right', color: colors.danger, fontSize: 10, marginTop: -spacing.sm, opacity: 0.8 },
+  predictionCard: { backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
+  predictionText: { fontSize: 12, color: colors.primaryDark, lineHeight: 17, fontWeight: '600' },
   historyTitle: { ...typography.title, marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textPrimary },
   historyRow: {
     flexDirection: 'row',

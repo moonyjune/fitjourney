@@ -43,3 +43,14 @@
 13. **Login**
    Giữ trạng thái login nếu open vào trong 24h. Quá 24h mới yêu cầu login lại.
    Lưu trữ user name, password login.
+14. **Update Fixing**
+    Điều chỉnh weight chart, start date cố định kể từ ngày start plan hoặc có input cho start date cho 1 kế hoạch max 3 tháng.   
+    Start date không đổi cho đến khi move sang kế hoạch mới.
+    Today là điểm hiện tại, có vạch đỏ.
+    Chuyển 1 week, 2 week, 1month, ... các milestone sẽ đổi range end date và hiển thị prediction result tương ứng.                                                      
+    Weekly shoping list là điền price được tham khảo từ giá AI checking. Field editable, nếu xoá đi hiển thị placeholder Actual price paid, người dùng có thể input      
+    actual price vào.
+    Background màu theo thời gian nhịn, ăn được apply cho tất cả các tab và màn hình, không chỉ tab Home/
+15. **Emotional chart**
+    Đưa ra Pie chart hoặc chart dạng web để mô tả tracking, analyze về feeling, emotional data.
+    Đưa ra nhận định AI tương ứng theo từng update, nhận định mang tính cố vũ, nhận xét thực tế, lạc quan, giúp người dùng tiến tới đích.

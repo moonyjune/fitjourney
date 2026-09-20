@@ -20,6 +20,7 @@ import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
 
 export default function TodayScreen() {
   const { t, language } = useTranslation();
@@ -77,11 +78,7 @@ export default function TodayScreen() {
   const badges = unlockedStreakBadges(streak);
 
   const dateLocale = language === 'en' ? 'en-US' : 'vi-VN';
-
-  // Ambient mood background for the Fatty/Client dashboard: green while eating is allowed,
-  // red during the fasting window. Coach mode never renders this screen, but guard anyway.
-  const ambientBg =
-    settings.role === 'client' ? (ifStatus.isEatingWindow ? colors.ifEatingBackground : colors.ifFastingBackground) : colors.background;
+  const ambientBg = useAmbientBackground();
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>

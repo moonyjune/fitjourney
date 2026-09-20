@@ -14,9 +14,11 @@ import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
 
 export default function WorkoutScreen() {
   const { t } = useTranslation();
+  const ambientBg = useAmbientBackground();
   const dateKey = todayKey();
   const dayType = useMemo(() => getDayType(new Date()), []);
   const workoutTemplates = usePlanStore((s) => s.plan.workoutTemplates);
@@ -56,7 +58,7 @@ export default function WorkoutScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('workout.dayTraining') : t('workout.dayRest')}</Text>
 
       <Text style={styles.sectionTitle}>{t('common.logDateTitle')}</Text>

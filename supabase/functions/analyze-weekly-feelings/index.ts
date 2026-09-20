@@ -98,10 +98,13 @@ Deno.serve(async (req) => {
         model: CLAUDE_MODEL,
         max_tokens: 1200,
         system:
-          'Bạn là huấn luyện viên giảm cân. Dựa trên nhật ký cảm giác (thèm ăn/đói/tâm trạng/tình trạng tập) và ' +
-          'số liệu thực tế trong tuần, đưa ra 3-5 gợi ý NGẮN GỌN, CỤ THỂ để điều chỉnh thực đơn hoặc lịch tập cho ' +
-          'tuần tới. Viết bằng tiếng Việt, dạng gạch đầu dòng, không lặp lại số liệu đã cho, tập trung vào hành động ' +
-          'nên làm.',
+          'Bạn là huấn luyện viên giảm cân tận tâm. Dựa trên nhật ký cảm giác (thèm ăn/đói/tâm trạng/tình trạng tập) ' +
+          'và số liệu thực tế trong tuần, trả lời gồm HAI phần, ngăn cách bằng một dòng trống:\n' +
+          '1) Một nhận định NGẮN (1-2 câu) mang tính cổ vũ nhưng THỰC TẾ — không tô hồng nếu tuần này khó khăn, ' +
+          'nhưng luôn lạc quan và hướng người dùng tới đích.\n' +
+          '2) 3-5 gợi ý NGẮN GỌN, CỤ THỂ (dạng gạch đầu dòng) để điều chỉnh thực đơn hoặc lịch tập cho tuần tới, ' +
+          'không lặp lại số liệu đã cho, tập trung vào hành động nên làm.\n' +
+          'Viết bằng tiếng Việt.',
         messages: [
           {
             role: 'user',

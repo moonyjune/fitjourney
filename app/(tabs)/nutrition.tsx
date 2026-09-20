@@ -15,6 +15,7 @@ import { useTranslation } from '../../src/i18n/useTranslation';
 import { toDateKey } from '../../src/utils/date';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.toDateString() === b.toDateString();
@@ -28,6 +29,7 @@ function endOfDay(d: Date): Date {
 
 export default function NutritionScreen() {
   const { t } = useTranslation();
+  const ambientBg = useAmbientBackground();
   const [viewDate, setViewDate] = useState(new Date());
   const dateKey = toDateKey(viewDate);
   const dayType = useMemo(() => getDayType(viewDate), [viewDate]);
@@ -74,7 +76,7 @@ export default function NutritionScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('common.logDateTitle')}</Text>
       <DateOffsetPicker selectedDate={viewDate} onChange={setViewDate} />
 

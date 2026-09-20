@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { LineChart, BarChart } from 'react-native-chart-kit';
+import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
@@ -23,7 +23,8 @@ import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import type { CoachFeedback } from '../../src/types';
+import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import type { CoachFeedback, Mood } from '../../src/types';
 
 interface DaySummary {
   dateKey: string;
@@ -60,8 +61,25 @@ const baseChartConfig = {
   propsForDots: { r: '3' },
 };
 
+const MOOD_COLORS: Record<Mood, string> = {
+  great: colors.success,
+  good: '#8BC34A',
+  neutral: colors.warning,
+  stressed: colors.danger,
+  tired: colors.textMuted,
+};
+
+const MOOD_LABEL_KEY: Record<Mood, StringKey> = {
+  great: 'feeling.moodGreat',
+  good: 'feeling.moodGood',
+  neutral: 'feeling.moodNeutral',
+  stressed: 'feeling.moodStressed',
+  tired: 'feeling.moodTired',
+};
+
 export default function HistoryScreen() {
   const { t } = useTranslation();
+  const ambientBg = useAmbientBackground();
   const nutritionLogs = useNutritionStore((s) => s.logs);
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const weightEntries = useWeightStore((s) => s.entries);
@@ -150,6 +168,22 @@ export default function HistoryScreen() {
   );
   const thisWeekSummary = weeklySummaries.find((w) => w.weekKey === thisWeekKey) ?? null;
 
+  const moodPieData = useMemo(() => {
+    const counts: Record<Mood, number> = { great: 0, good: 0, neutral: 0, stressed: 0, tired: 0 };
+    thisWeekFeelings.forEach((r) => {
+      counts[r.mood] += 1;
+    });
+    return (Object.keys(counts) as Mood[])
+      .filter((mood) => counts[mood] > 0)
+      .map((mood) => ({
+        name: t(MOOD_LABEL_KEY[mood]),
+        population: counts[mood],
+        color: MOOD_COLORS[mood],
+        legendFontColor: colors.textSecondary,
+        legendFontSize: 12,
+      }));
+  }, [thisWeekFeelings, t]);
+
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
@@ -206,7 +240,7 @@ export default function HistoryScreen() {
   }, [weeklySummaries]);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('history.achievementsTitle')}</Text>
       <Card>
         <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>
@@ -232,6 +266,24 @@ export default function HistoryScreen() {
               {t('feeling.hungerShort', { n: r.hungerLevel })} ({r.mood})
             </Text>
           ))
+        )}
+      </Card>
+
+      <Text style={styles.sectionTitle}>{t('feeling.chartTitle')}</Text>
+      <Card>
+        {moodPieData.length > 0 ? (
+          <PieChart
+            data={moodPieData}
+            width={chartWidth}
+            height={160}
+            chartConfig={baseChartConfig}
+            accessor="population"
+            backgroundColor="transparent"
+            paddingLeft="8"
+            absolute
+          />
+        ) : (
+          <Text style={styles.dayMeta}>{t('feeling.chartEmpty')}</Text>
         )}
       </Card>
 
