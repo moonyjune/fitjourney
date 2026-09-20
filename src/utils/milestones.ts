@@ -20,6 +20,14 @@ function addDays(date: Date, days: number): Date {
   return result;
 }
 
+/** The same weight-loss curve milestones are scored against, usable for any date — e.g. to draw
+ *  a predicted trend line on the weight chart. */
+export function predictedWeightKgAt(date: Date, startDateISO: string, startWeightKg: number, goalWeightKg: number): number {
+  const daysFromStart = Math.max(0, (date.getTime() - new Date(startDateISO).getTime()) / (1000 * 60 * 60 * 24));
+  const projectedLoss = AVG_WEEKLY_LOSS_KG * (daysFromStart / 7);
+  return Math.max(goalWeightKg, startWeightKg - projectedLoss);
+}
+
 export function computeMilestones(
   startDateISO: string,
   startWeightKg: number,
@@ -31,8 +39,7 @@ export function computeMilestones(
 
   return MILESTONES.map((milestone) => {
     const targetDate = addDays(startDate, milestone.daysFromStart);
-    const projectedLoss = AVG_WEEKLY_LOSS_KG * (milestone.daysFromStart / 7);
-    const targetWeightKg = Math.max(goalWeightKg, startWeightKg - projectedLoss);
+    const targetWeightKg = predictedWeightKgAt(targetDate, startDateISO, startWeightKg, goalWeightKg);
     const daysRemaining = Math.ceil((targetDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
     let status: MilestoneStatus;

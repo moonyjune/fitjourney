@@ -77,8 +77,13 @@ export default function TodayScreen() {
 
   const dateLocale = language === 'en' ? 'en-US' : 'vi-VN';
 
+  // Ambient mood background for the Fatty/Client dashboard: green while eating is allowed,
+  // red during the fasting window. Coach mode never renders this screen, but guard anyway.
+  const ambientBg =
+    settings.role === 'client' ? (ifStatus.isEatingWindow ? colors.ifEatingBackground : colors.ifFastingBackground) : colors.background;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.dateLabel}>
         {now.toLocaleDateString(dateLocale, { weekday: 'long', day: '2-digit', month: '2-digit' })} ·{' '}
         {dayType === 'training' ? t('today.dayTraining') : t('today.dayRest')}
@@ -130,9 +135,9 @@ export default function TodayScreen() {
 
       <Card>
         <Text style={styles.cardTitle}>{t('today.nutritionTitle')}</Text>
-        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" color={colors.warning} />
-        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" color={colors.primary} />
-        <ProgressBar label={t('common.water')} current={nutritionLog.waterMl} target={settings.waterTargetMl} unit="ml" color={colors.info} />
+        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" />
+        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
+        <ProgressBar label={t('common.water')} current={nutritionLog.waterMl} target={settings.waterTargetMl} unit="ml" />
       </Card>
 
       <Card>

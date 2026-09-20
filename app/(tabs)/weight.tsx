@@ -6,6 +6,7 @@ import { Button } from '../../src/components/Button';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
+import { predictedWeightKgAt } from '../../src/utils/milestones';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
@@ -32,19 +33,33 @@ export default function WeightScreen() {
   const addEntry = useWeightStore((s) => s.addEntry);
   const removeEntry = useWeightStore((s) => s.removeEntry);
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
+  const startWeightKg = useSettingsStore((s) => s.startWeightKg);
+  const startDateISO = useSettingsStore((s) => s.startDateISO);
   const [input, setInput] = useState('');
   const [rangeDays, setRangeDays] = useState(30);
 
+  // Always renders something (default chart): with no/one actual entry, only the predicted
+  // trend line (from start weight to goal, following the same curve milestones are scored
+  // against) spans the selected range; real entries overlay it as soon as they exist.
   const chartData = useMemo(() => {
-    const cutoff = Date.now() - rangeDays * 24 * 60 * 60 * 1000;
+    const now = new Date();
+    const cutoff = now.getTime() - rangeDays * 24 * 60 * 60 * 1000;
     const inRange = entries.filter((e) => new Date(e.dateISO).getTime() >= cutoff);
-    if (inRange.length === 0) return null;
-    const labels = inRange.map((e) => formatDateVi(toDateKey(new Date(e.dateISO))).slice(0, 5));
-    return {
-      labels: thinLabels(labels),
-      datasets: [{ data: inRange.map((e) => e.weightKg) }],
-    };
-  }, [entries, rangeDays]);
+    const pointDates = inRange.length > 0 ? inRange.map((e) => new Date(e.dateISO)) : [new Date(cutoff), now];
+
+    const labels = thinLabels(pointDates.map((d) => formatDateVi(toDateKey(d)).slice(0, 5)));
+    const predictedData = pointDates.map((d) => predictedWeightKgAt(d, startDateISO, startWeightKg, goalWeightKg));
+
+    const datasets =
+      inRange.length > 0
+        ? [
+            { data: inRange.map((e) => e.weightKg), color: () => colors.primary, strokeWidth: 3 },
+            { data: predictedData, color: () => 'rgba(150,150,150,0.7)', strokeWidth: 2, withDots: false, strokeDashArray: [6, 4] },
+          ]
+        : [{ data: predictedData, color: () => 'rgba(150,150,150,0.7)', strokeWidth: 2, withDots: false, strokeDashArray: [6, 4] }];
+
+    return { labels, datasets, hasActual: inRange.length > 0 };
+  }, [entries, rangeDays, startDateISO, startWeightKg, goalWeightKg]);
 
   function handleAdd() {
     const value = parseFloat(input.replace(',', '.'));
@@ -92,27 +107,36 @@ export default function WeightScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            {chartData && chartData.datasets[0].data.length > 1 ? (
-              <LineChart
-                data={chartData}
-                width={screenWidth}
-                height={200}
-                yAxisSuffix="kg"
-                chartConfig={{
-                  backgroundColor: colors.surface,
-                  backgroundGradientFrom: colors.surface,
-                  backgroundGradientTo: colors.surface,
-                  decimalPlaces: 1,
-                  color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
-                  labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
-                  propsForDots: { r: '3' },
-                }}
-                bezier
-                style={{ borderRadius: radius.lg }}
-              />
-            ) : (
-              <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>
-            )}
+            <View style={styles.legendRow}>
+              {chartData.hasActual && (
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+                  <Text style={styles.legendText}>{t('weight.actualLegend')}</Text>
+                </View>
+              )}
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, styles.legendDotPredicted]} />
+                <Text style={styles.legendText}>{t('weight.predictedLegend')}</Text>
+              </View>
+            </View>
+            <LineChart
+              data={chartData}
+              width={screenWidth}
+              height={200}
+              yAxisSuffix="kg"
+              chartConfig={{
+                backgroundColor: colors.surface,
+                backgroundGradientFrom: colors.surface,
+                backgroundGradientTo: colors.surface,
+                decimalPlaces: 1,
+                color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
+                propsForDots: { r: '3' },
+              }}
+              bezier
+              style={{ borderRadius: radius.lg }}
+            />
+            {entries.length === 0 && <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>}
             <Text style={styles.goalNote}>{t('common.goalLabel', { kg: goalWeightKg })}</Text>
           </Card>
 
@@ -153,6 +177,11 @@ const styles = StyleSheet.create({
   rangeButtonText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
   rangeButtonTextActive: { color: colors.white },
   emptyChartText: { textAlign: 'center', color: colors.textMuted, paddingVertical: 24 },
+  legendRow: { flexDirection: 'row', gap: spacing.base, marginBottom: spacing.sm },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendDotPredicted: { backgroundColor: '#969696' },
+  legendText: { fontSize: 11, color: colors.textSecondary },
   goalNote: { textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
   historyTitle: { ...typography.title, marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textPrimary },
   historyRow: {

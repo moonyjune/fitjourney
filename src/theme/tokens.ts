@@ -19,6 +19,11 @@ export const colors = {
   neutral: '#666666',
   neutralLight: '#F0F0F0',
   background: '#F5F7FA',
+  // Ambient screen backgrounds for the Fatty/Client dashboard during the IF eating vs. fasting
+  // window — deliberately more saturated than any card/badge tint above so they read as a
+  // full-screen mood wash, not as another component color.
+  ifEatingBackground: '#DCF3E0',
+  ifFastingBackground: '#F8DCE0',
   surface: '#FFFFFF',
   border: '#DDDDDD',
   textPrimary: '#222222',

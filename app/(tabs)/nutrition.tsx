@@ -32,6 +32,14 @@ export default function NutritionScreen() {
   const [extraName, setExtraName] = useState('');
   const [extraCalories, setExtraCalories] = useState('');
   const [extraProtein, setExtraProtein] = useState('');
+  const [customWaterMl, setCustomWaterMl] = useState('');
+
+  function handleAddCustomWater() {
+    const ml = parseFloat(customWaterMl.replace(',', '.'));
+    if (!ml || ml <= 0) return;
+    addWater(dateKey, ml);
+    setCustomWaterMl('');
+  }
 
   const eatenCalories = meals.filter((m) => log.mealsEaten[m.slot]).reduce((s, m) => s + m.calories, 0);
   const eatenProtein = meals.filter((m) => log.mealsEaten[m.slot]).reduce((s, m) => s + m.proteinG, 0);
@@ -57,13 +65,13 @@ export default function NutritionScreen() {
 
       <Card>
         <Text style={styles.cardTitle}>{t('nutrition.totalTitle')}</Text>
-        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" color={colors.warning} />
-        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" color={colors.primary} />
+        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" />
+        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
       </Card>
 
       <Card>
         <Text style={styles.cardTitle}>{t('nutrition.waterTitle')}</Text>
-        <ProgressBar label={t('common.water')} current={log.waterMl} target={settings.waterTargetMl} unit="ml" color={colors.info} />
+        <ProgressBar label={t('common.water')} current={log.waterMl} target={settings.waterTargetMl} unit="ml" />
         <View style={styles.waterButtons}>
           {WATER_QUICK_ADD_ML.map((ml) => (
             <TouchableOpacity key={ml} style={styles.waterButton} onPress={() => addWater(dateKey, ml)}>
@@ -73,6 +81,16 @@ export default function NutritionScreen() {
           <TouchableOpacity style={styles.waterResetButton} onPress={() => resetWater(dateKey)}>
             <Text style={styles.waterResetText}>{t('common.reset')}</Text>
           </TouchableOpacity>
+        </View>
+        <View style={styles.customWaterRow}>
+          <TextInput
+            style={[styles.input, styles.customWaterInput]}
+            keyboardType="decimal-pad"
+            placeholder={t('nutrition.customWaterPlaceholder')}
+            value={customWaterMl}
+            onChangeText={setCustomWaterMl}
+          />
+          <Button title={t('common.add')} size="sm" onPress={handleAddCustomWater} />
         </View>
       </Card>
 
@@ -143,6 +161,8 @@ const styles = StyleSheet.create({
   waterButtonText: { color: '#0288D1', fontWeight: '700', fontSize: 13 },
   waterResetButton: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   waterResetText: { color: colors.textSecondary, fontSize: 13 },
+  customWaterRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, alignItems: 'center' },
+  customWaterInput: { flex: 1, marginBottom: 0 },
   mealCardDone: { backgroundColor: colors.successLight },
   mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   mealLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, flex: 1 },

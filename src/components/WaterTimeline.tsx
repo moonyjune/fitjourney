@@ -38,6 +38,8 @@ export function WaterTimeline({ schedule, currentMl, now = new Date() }: WaterTi
       {schedule.map((checkpoint, index) => {
         const status = getStatus(checkpoint, currentMl, now);
         const isLast = index === schedule.length - 1;
+        const previousTarget = index > 0 ? schedule[index - 1].cumulativeTargetMl : 0;
+        const incrementMl = checkpoint.cumulativeTargetMl - previousTarget;
         return (
           <View key={`${checkpoint.hour}-${checkpoint.minute}-${index}`} style={styles.row}>
             <View style={styles.markerColumn}>
@@ -52,7 +54,9 @@ export function WaterTimeline({ schedule, currentMl, now = new Date() }: WaterTi
                 <Text style={[styles.statusText, { color: STATUS_COLOR[status] }]}>{t(STATUS_KEY[status])}</Text>
               </View>
               <Text style={styles.label}>{checkpoint.label}</Text>
-              <Text style={styles.target}>{t('waterTimeline.target', { ml: checkpoint.cumulativeTargetMl })}</Text>
+              <Text style={styles.target}>
+                {t('waterTimeline.increment', { ml: incrementMl })} · {t('waterTimeline.target', { ml: checkpoint.cumulativeTargetMl })}
+              </Text>
             </View>
           </View>
         );
