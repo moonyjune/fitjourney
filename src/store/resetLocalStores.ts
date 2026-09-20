@@ -5,6 +5,7 @@ import {
   DEFAULT_START_WEIGHT_KG,
   DEFAULT_WATER_TARGET_ML,
 } from '../constants/plan';
+import { useFeelingStore } from './useFeelingStore';
 import { useNutritionStore } from './useNutritionStore';
 import { usePlanStore } from './usePlanStore';
 import { useProofStore } from './useProofStore';
@@ -13,6 +14,7 @@ import { useShoppingListStore } from './useShoppingListStore';
 import { useWeightStore } from './useWeightStore';
 import { useWorkoutStore } from './useWorkoutStore';
 import { weekStartKey } from '../utils/weekKey';
+import { useSyncQueueStore } from '../sync/syncQueue';
 
 /**
  * Every persisted store is keyed by store name in device AsyncStorage, not by account.
@@ -48,5 +50,9 @@ export function resetAllLocalStores() {
   // Epoch timestamp guarantees the next syncFromRemote() treats any remote plan as newer.
   usePlanStore.setState({ plan: DEFAULT_PLAN, updatedAtISO: new Date(0).toISOString() });
   useProofStore.setState({ photos: [] });
+  useFeelingStore.setState({ records: [] });
   useShoppingListStore.setState({ weekKey: weekStartKey(new Date()), checkedItems: {}, actualPrices: {}, actualQuantities: {}, customItems: [] });
+  // Discard rather than misattribute: a queued offline write has no owner id of its own, so
+  // replaying it after switching accounts would silently write to the wrong user.
+  useSyncQueueStore.setState({ pending: [] });
 }

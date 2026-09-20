@@ -124,6 +124,30 @@ create table if not exists public.plan_chat_messages (
   created_at timestamptz not null default now()
 );
 
+-- 7. Feeling record: điểm cảm giác thèm ăn/đói/tâm trạng/tình trạng tập luyện tại 1 thời điểm.
+-- Dùng làm input để AI gợi ý điều chỉnh thực đơn/lịch tập hàng tuần (xem weekly_suggestions).
+create table if not exists public.feeling_records (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  logged_at timestamptz not null default now(),
+  craving_level smallint not null check (craving_level between 1 and 5),
+  hunger_level smallint not null check (hunger_level between 1 and 5),
+  mood text not null check (mood in ('great', 'good', 'neutral', 'stressed', 'tired')),
+  workout_condition text check (workout_condition in ('energetic', 'normal', 'tired', 'sore', 'skipped')),
+  note text,
+  created_at timestamptz not null default now()
+);
+
+-- Cached AI weekly suggestion so re-opening the screen doesn't re-spend a Claude call.
+create table if not exists public.weekly_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  week_key date not null,
+  suggestion_text text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, week_key)
+);
+
 -- Tự động tạo profile khi có user đăng ký mới.
 create or replace function public.handle_new_user()
 returns trigger
@@ -190,6 +214,8 @@ alter table public.plan_update_requests enable row level security;
 alter table public.coach_feedback enable row level security;
 alter table public.plan_chat_sessions enable row level security;
 alter table public.plan_chat_messages enable row level security;
+alter table public.feeling_records enable row level security;
+alter table public.weekly_suggestions enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
@@ -225,6 +251,17 @@ create policy "proof_photos_all_own" on public.proof_photos for all
 drop policy if exists "proof_photos_select_by_coach" on public.proof_photos;
 create policy "proof_photos_select_by_coach" on public.proof_photos for select
   using (public.is_coach_of(user_id));
+
+drop policy if exists "feeling_records_all_own" on public.feeling_records;
+create policy "feeling_records_all_own" on public.feeling_records for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "feeling_records_select_by_coach" on public.feeling_records;
+create policy "feeling_records_select_by_coach" on public.feeling_records for select
+  using (public.is_coach_of(user_id));
+
+drop policy if exists "weekly_suggestions_all_own" on public.weekly_suggestions;
+create policy "weekly_suggestions_all_own" on public.weekly_suggestions for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Plans: Coach có thể xem VÀ sửa kế hoạch của Client (đây là cơ chế "Coach cập nhật menu/lịch tập").
 drop policy if exists "plans_all_own" on public.plans;

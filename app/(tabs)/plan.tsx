@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import { Card } from '../../src/components/Card';
+import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
 import { PlanPreview } from '../../src/components/PlanPreview';
 import { ShoppingListEditor } from '../../src/components/ShoppingListEditor';
@@ -9,6 +10,7 @@ import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
+import { useSyncQueueStore } from '../../src/sync/syncQueue';
 import { signOutAndReset } from '../../src/auth/signOut';
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { CARB_SWAP_OPTIONS, PROTEIN_SWAP_OPTIONS } from '../../src/constants/plan';
@@ -26,6 +28,7 @@ export default function PlanScreen() {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const plan = usePlanStore((s) => s.plan);
   const applyPlan = usePlanStore((s) => s.applyPlan);
+  const pendingSyncCount = useSyncQueueStore((s) => s.pending.length);
 
   const [calorieTarget, setCalorieTarget] = useState(String(settings.calorieTargetKcal));
   const [proteinTarget, setProteinTarget] = useState(String(settings.proteinTargetG));
@@ -197,7 +200,10 @@ export default function PlanScreen() {
       <Text style={styles.sectionTitle}>{t('tab.account')}</Text>
       <Card>
         <Text style={styles.fieldLabel}>{session?.user.email ?? t('common.notSignedIn')}</Text>
-        <Button title={t('common.signOut')} onPress={() => signOutAndReset()} variant="danger" />
+        {pendingSyncCount > 0 && (
+          <Badge tone="warning" label={t('sync.pendingCount', { n: pendingSyncCount })} />
+        )}
+        <Button title={t('common.signOut')} onPress={() => signOutAndReset()} variant="danger" style={{ marginTop: spacing.sm }} />
       </Card>
     </ScrollView>
   );

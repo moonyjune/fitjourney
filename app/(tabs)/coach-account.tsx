@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
 import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Card } from '../../src/components/Card';
+import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { useSyncQueueStore } from '../../src/sync/syncQueue';
 import { signOutAndReset } from '../../src/auth/signOut';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { useAccentColors } from '../../src/theme/useAccentColors';
@@ -13,6 +15,7 @@ export default function CoachAccountScreen() {
   const { t } = useTranslation();
   const colors = useAccentColors();
   const session = useAuthStore((s) => s.session);
+  const pendingSyncCount = useSyncQueueStore((s) => s.pending.length);
   const coachCode = useSettingsStore((s) => s.coachCode);
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
   const clientSetupDone = useSettingsStore((s) => s.clientSetupDone);
@@ -73,7 +76,8 @@ export default function CoachAccountScreen() {
       <Text style={styles.sectionTitle}>{t('tab.account')}</Text>
       <Card>
         <Text style={styles.fieldLabel}>{session?.user.email ?? t('common.notSignedIn')}</Text>
-        <Button title={t('common.signOut')} onPress={() => signOutAndReset()} variant="danger" />
+        {pendingSyncCount > 0 && <Badge tone="warning" label={t('sync.pendingCount', { n: pendingSyncCount })} />}
+        <Button title={t('common.signOut')} onPress={() => signOutAndReset()} variant="danger" style={{ marginTop: 8 }} />
       </Card>
     </ScrollView>
   );

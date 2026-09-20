@@ -5,6 +5,7 @@ import { useCallback } from 'react';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { ProgressBar } from '../../src/components/ProgressBar';
+import { FeelingRecordCard } from '../../src/components/FeelingRecordCard';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
@@ -147,6 +148,8 @@ export default function TodayScreen() {
         </Text>
         {dayType === 'rest' && <Text style={styles.restNote}>{t('today.restNote')}</Text>}
       </Card>
+
+      <FeelingRecordCard />
     </ScrollView>
   );
 }

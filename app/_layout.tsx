@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import NetInfo from '@react-native-community/netinfo';
 import { Stack, router, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { resetAllLocalStores } from '../src/store/resetLocalStores';
-import { pullProfile } from '../src/sync/cloudSync';
+import { pullProfile, flushSyncQueue } from '../src/sync/cloudSync';
 import { AppIntro } from '../src/components/AppIntro';
 
 // Minimum time the branded intro stays on screen, so it isn't just a 1-frame flash on warm starts.
@@ -58,6 +59,19 @@ export default function RootLayout() {
       setProfileChecked(true);
     });
   }, [session, hydrateFromRemote]);
+
+  // Retries any writes that failed (or were skipped entirely) while offline: once now that we
+  // have a session, and again every time connectivity comes back.
+  useEffect(() => {
+    if (!session) return;
+    flushSyncQueue();
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      if (state.isConnected && state.isInternetReachable !== false) {
+        flushSyncQueue();
+      }
+    });
+    return unsubscribe;
+  }, [session]);
 
   const ready = initialized && (!session || profileChecked) && minIntroElapsed;
 

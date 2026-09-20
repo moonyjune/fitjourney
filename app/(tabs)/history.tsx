@@ -3,15 +3,17 @@ import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
+import { Button } from '../../src/components/Button';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useProofStore } from '../../src/store/useProofStore';
+import { useFeelingStore } from '../../src/store/useFeelingStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { getDayType } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
-import { fetchFeedback } from '../../src/sync/cloudSync';
+import { fetchFeedback, fetchWeeklySuggestion, pushWeeklySuggestion, requestWeeklySuggestion } from '../../src/sync/cloudSync';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { computeMilestones } from '../../src/utils/milestones';
@@ -140,6 +142,40 @@ export default function HistoryScreen() {
     [settings.startDateISO, settings.startWeightKg, settings.goalWeightKg, latestWeight]
   );
 
+  const feelingRecords = useFeelingStore((s) => s.records);
+  const thisWeekKey = weekStartKey(new Date());
+  const thisWeekFeelings = useMemo(
+    () => [...feelingRecords].filter((r) => weekStartKey(new Date(r.loggedAtISO)) === thisWeekKey).reverse(),
+    [feelingRecords, thisWeekKey]
+  );
+  const thisWeekSummary = weeklySummaries.find((w) => w.weekKey === thisWeekKey) ?? null;
+
+  const [suggestion, setSuggestion] = useState<string | null>(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [suggestionError, setSuggestionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!session) return;
+    fetchWeeklySuggestion(session.user.id, thisWeekKey).then(setSuggestion);
+  }, [session, thisWeekKey]);
+
+  async function handleGetSuggestion() {
+    setSuggestionLoading(true);
+    setSuggestionError(null);
+    const result = await requestWeeklySuggestion(thisWeekFeelings, {
+      avgCaloriesPerDay: thisWeekSummary?.avgCalories ?? 0,
+      totalWorkouts: thisWeekSummary?.totalWorkouts ?? 0,
+      weightChangeKg: thisWeekSummary?.weightChange ?? null,
+    });
+    setSuggestionLoading(false);
+    if (result.ok) {
+      setSuggestion(result.suggestion);
+      pushWeeklySuggestion(thisWeekKey, result.suggestion);
+    } else {
+      setSuggestionError(result.message);
+    }
+  }
+
   const streak = useMemo(
     () => computeCurrentStreak(nutritionLogs, 3, settings.waterTargetMl),
     [nutritionLogs, settings.waterTargetMl]
@@ -182,6 +218,38 @@ export default function HistoryScreen() {
           </View>
         ) : (
           <Text style={styles.dayMeta}>{t('history.emptyBadges')}</Text>
+        )}
+      </Card>
+
+      <Text style={styles.sectionTitle}>{t('feeling.weeklyTitle')}</Text>
+      <Card>
+        {thisWeekFeelings.length === 0 ? (
+          <Text style={styles.dayMeta}>{t('feeling.emptyWeek')}</Text>
+        ) : (
+          thisWeekFeelings.map((r) => (
+            <Text key={r.id} style={styles.dayMeta}>
+              {formatDateVi(toDateKey(new Date(r.loggedAtISO)))} · {t('feeling.cravingShort', { n: r.cravingLevel })} ·{' '}
+              {t('feeling.hungerShort', { n: r.hungerLevel })} ({r.mood})
+            </Text>
+          ))
+        )}
+      </Card>
+
+      <Text style={styles.sectionTitle}>{t('feeling.suggestionTitle')}</Text>
+      <Card>
+        {thisWeekFeelings.length < 3 ? (
+          <Text style={styles.dayMeta}>{t('feeling.suggestionNeedsMore')}</Text>
+        ) : (
+          <>
+            {suggestion && <Text style={styles.dayMeta}>{suggestion}</Text>}
+            {suggestionError && <Text style={[styles.dayMeta, { color: colors.danger }]}>{t('feeling.suggestionError')}</Text>}
+            <Button
+              title={t('feeling.getSuggestionButton')}
+              onPress={handleGetSuggestion}
+              loading={suggestionLoading}
+              style={{ marginTop: spacing.sm }}
+            />
+          </>
         )}
       </Card>
 

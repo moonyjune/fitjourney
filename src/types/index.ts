@@ -185,3 +185,17 @@ export interface PlanData {
   shoppingList: ShoppingListItem[];
   waterSchedule: WaterCheckpoint[];
 }
+
+export type Mood = 'great' | 'good' | 'neutral' | 'stressed' | 'tired';
+export type WorkoutCondition = 'energetic' | 'normal' | 'tired' | 'sore' | 'skipped';
+
+/** A point-in-time log of craving/hunger/mood/workout-condition — input for the weekly AI suggestion. */
+export interface FeelingRecord {
+  id: string;
+  loggedAtISO: string;
+  cravingLevel: number;
+  hungerLevel: number;
+  mood: Mood;
+  workoutCondition: WorkoutCondition | null;
+  note: string;
+}
