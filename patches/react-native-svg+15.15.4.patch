@@ -1,0 +1,72 @@
+diff --git a/node_modules/react-native-svg/lib/commonjs/web/utils/prepare.js b/node_modules/react-native-svg/lib/commonjs/web/utils/prepare.js
+index d57e7c8..6f24eb7 100644
+--- a/node_modules/react-native-svg/lib/commonjs/web/utils/prepare.js
++++ b/node_modules/react-native-svg/lib/commonjs/web/utils/prepare.js
+@@ -45,10 +45,19 @@ const prepare = (self, props = self.props) => {
+     } : null),
+     ...rest
+   };
++  // `transform-origin` is a CSS property, not a real SVG/HTML attribute — sending it as a plain
++  // (kebab-case) JSX prop makes React log "Invalid DOM property `transform-origin`. Did you mean
++  // `transformOrigin`?" on every render. Route it through `style` instead (see `styles` below),
++  // which is the form React expects and applies without warning. Unlike the SVG presentation
++  // attribute (which accepts bare numbers as user-space units), the CSS property requires a unit,
++  // so bare numbers need a `px` suffix — safe here because `<Svg>` on web never sets a `viewBox`
++  // unless the caller passes one, so 1 user-space unit is already 1px.
++  const withPx = value => value.toString().replace(/(-?\d*\.?\d+)(?!\d*%|[a-z])/gi, '$1px');
++  let transformOrigin;
+   if (origin != null) {
+-    clean['transform-origin'] = origin.toString().replace(',', ' ');
++    transformOrigin = withPx(origin.toString().replace(',', ' '));
+   } else if (originX != null || originY != null) {
+-    clean['transform-origin'] = `${originX || 0} ${originY || 0}`;
++    transformOrigin = withPx(`${originX || 0} ${originY || 0}`);
+   }
+ 
+   // we do it like this because setting transform as undefined causes error in web
+@@ -85,6 +94,9 @@ const prepare = (self, props = self.props) => {
+   if (fontStyle != null) {
+     styles.fontStyle = fontStyle;
+   }
++  if (transformOrigin != null) {
++    styles.transformOrigin = transformOrigin;
++  }
+   clean.style = (0, _resolve.resolve)(style, styles);
+   if (onPress !== null) {
+     clean.onClick = props.onPress;
+diff --git a/node_modules/react-native-svg/lib/module/web/utils/prepare.js b/node_modules/react-native-svg/lib/module/web/utils/prepare.js
+index 113eb2b..7259616 100644
+--- a/node_modules/react-native-svg/lib/module/web/utils/prepare.js
++++ b/node_modules/react-native-svg/lib/module/web/utils/prepare.js
+@@ -39,10 +39,19 @@ export const prepare = (self, props = self.props) => {
+     } : null),
+     ...rest
+   };
++  // `transform-origin` is a CSS property, not a real SVG/HTML attribute — sending it as a plain
++  // (kebab-case) JSX prop makes React log "Invalid DOM property `transform-origin`. Did you mean
++  // `transformOrigin`?" on every render. Route it through `style` instead (see `styles` below),
++  // which is the form React expects and applies without warning. Unlike the SVG presentation
++  // attribute (which accepts bare numbers as user-space units), the CSS property requires a unit,
++  // so bare numbers need a `px` suffix — safe here because `<Svg>` on web never sets a `viewBox`
++  // unless the caller passes one, so 1 user-space unit is already 1px.
++  const withPx = (value) => value.toString().replace(/(-?\d*\.?\d+)(?!\d*%|[a-z])/gi, '$1px');
++  let transformOrigin;
+   if (origin != null) {
+-    clean['transform-origin'] = origin.toString().replace(',', ' ');
++    transformOrigin = withPx(origin.toString().replace(',', ' '));
+   } else if (originX != null || originY != null) {
+-    clean['transform-origin'] = `${originX || 0} ${originY || 0}`;
++    transformOrigin = withPx(`${originX || 0} ${originY || 0}`);
+   }
+ 
+   // we do it like this because setting transform as undefined causes error in web
+@@ -79,6 +88,9 @@ export const prepare = (self, props = self.props) => {
+   if (fontStyle != null) {
+     styles.fontStyle = fontStyle;
+   }
++  if (transformOrigin != null) {
++    styles.transformOrigin = transformOrigin;
++  }
+   clean.style = resolve(style, styles);
+   if (onPress !== null) {
+     clean.onClick = props.onPress;
