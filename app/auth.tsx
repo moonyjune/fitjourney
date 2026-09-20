@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../src/lib/supabase';
 import { Button } from '../src/components/Button';
@@ -6,6 +6,7 @@ import { Logo } from '../src/components/Logo';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
+import { loadRememberedCredentials, saveRememberedCredentials } from '../src/utils/rememberedCredentials';
 
 export default function AuthScreen() {
   const { t } = useTranslation();
@@ -13,6 +14,17 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Pre-fill from the last successful sign-in, so re-authenticating after the 24h session
+  // expiry (see app/_layout.tsx) doesn't mean retyping credentials from scratch.
+  useEffect(() => {
+    loadRememberedCredentials().then((saved) => {
+      if (saved) {
+        setEmail(saved.email);
+        setPassword(saved.password);
+      }
+    });
+  }, []);
 
   async function handleSubmit() {
     if (!email || !password) {
@@ -24,9 +36,11 @@ export default function AuthScreen() {
       if (mode === 'signIn') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        await saveRememberedCredentials(email, password);
       } else {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
+        await saveRememberedCredentials(email, password);
         Alert.alert(t('auth.checkEmailTitle'), t('auth.checkEmailMessage'));
       }
       // RootLayout listens to auth state changes and will navigate away automatically.

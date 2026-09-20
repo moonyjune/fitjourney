@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card } from './Card';
 import { Button } from './Button';
+import { DateOffsetPicker } from './DateOffsetPicker';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useTranslation } from '../i18n/useTranslation';
-import { toDateKey } from '../utils/date';
+import { formatDateVi, toDateKey } from '../utils/date';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { Mood, WorkoutCondition } from '../types';
 
@@ -36,23 +37,29 @@ export function FeelingRecordCard() {
   const [hungerLevel, setHungerLevel] = useState<number | null>(null);
   const [workoutCondition, setWorkoutCondition] = useState<WorkoutCondition | null>(null);
   const [note, setNote] = useState('');
+  const [logDate, setLogDate] = useState(new Date());
 
-  const todayKey = toDateKey(new Date());
-  const todayRecords = [...records].filter((r) => toDateKey(new Date(r.loggedAtISO)) === todayKey).reverse();
+  const recentRecords = [...records]
+    .sort((a, b) => (a.loggedAtISO < b.loggedAtISO ? 1 : -1))
+    .slice(0, 5);
 
   function handleSubmit() {
     if (!mood || !cravingLevel || !hungerLevel) return;
-    addRecord({ cravingLevel, hungerLevel, mood, workoutCondition, note: note.trim() });
+    addRecord({ cravingLevel, hungerLevel, mood, workoutCondition, note: note.trim(), loggedAtISO: logDate.toISOString() });
     setMood(null);
     setCravingLevel(null);
     setHungerLevel(null);
     setWorkoutCondition(null);
     setNote('');
+    setLogDate(new Date());
   }
 
   return (
     <Card>
       <Text style={styles.title}>{t('feeling.title')}</Text>
+
+      <Text style={styles.label}>{t('common.logDateTitle')}</Text>
+      <DateOffsetPicker selectedDate={logDate} onChange={setLogDate} />
 
       <Text style={styles.label}>{t('feeling.moodLabel')}</Text>
       <View style={styles.row}>
@@ -97,16 +104,17 @@ export function FeelingRecordCard() {
       <TextInput style={styles.input} placeholder={t('feeling.notePlaceholder')} value={note} onChangeText={setNote} />
       <Button title={t('feeling.saveButton')} onPress={handleSubmit} disabled={!mood || !cravingLevel || !hungerLevel} />
 
-      {todayRecords.length > 0 && (
+      {recentRecords.length > 0 && (
         <View style={styles.historyList}>
-          {todayRecords.map((r) => {
+          {recentRecords.map((r) => {
             const moodEmoji = MOOD_OPTIONS.find((m) => m.key === r.mood)?.emoji;
             const conditionEmoji = WORKOUT_CONDITION_OPTIONS.find((w) => w.key === r.workoutCondition)?.emoji;
+            const loggedDate = new Date(r.loggedAtISO);
             return (
               <View key={r.id} style={styles.historyRow}>
                 <Text style={styles.historyText}>
-                  {new Date(r.loggedAtISO).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} {moodEmoji} ·{' '}
-                  {t('feeling.cravingShort', { n: r.cravingLevel })} · {t('feeling.hungerShort', { n: r.hungerLevel })}
+                  {formatDateVi(toDateKey(loggedDate))} {loggedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}{' '}
+                  {moodEmoji} · {t('feeling.cravingShort', { n: r.cravingLevel })} · {t('feeling.hungerShort', { n: r.hungerLevel })}
                   {conditionEmoji ? ` · ${conditionEmoji}` : ''}
                   {r.note ? ` · ${r.note}` : ''}
                 </Text>

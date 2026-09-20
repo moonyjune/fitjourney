@@ -6,18 +6,32 @@ import { ProgressBar } from '../../src/components/ProgressBar';
 import { ProofCapture } from '../../src/components/ProofCapture';
 import { MealItemRows } from '../../src/components/PlanPreview';
 import { WaterTimeline } from '../../src/components/WaterTimeline';
-import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
+import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
+import { useNutritionStore } from '../../src/store/useNutritionStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
 import { useTranslation } from '../../src/i18n/useTranslation';
+import { toDateKey } from '../../src/utils/date';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 
+function isSameDay(a: Date, b: Date): boolean {
+  return a.toDateString() === b.toDateString();
+}
+
+function endOfDay(d: Date): Date {
+  const copy = new Date(d);
+  copy.setHours(23, 59, 0, 0);
+  return copy;
+}
+
 export default function NutritionScreen() {
   const { t } = useTranslation();
-  const dateKey = todayKey();
-  const dayType = useMemo(() => getDayType(new Date()), []);
+  const [viewDate, setViewDate] = useState(new Date());
+  const dateKey = toDateKey(viewDate);
+  const dayType = useMemo(() => getDayType(viewDate), [viewDate]);
+  const isToday = isSameDay(viewDate, new Date());
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
   const waterSchedule = usePlanStore((s) => s.plan.waterSchedule);
   const meals = mealTemplates[dayType];
@@ -61,6 +75,9 @@ export default function NutritionScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+      <Text style={styles.sectionTitle}>{t('common.logDateTitle')}</Text>
+      <DateOffsetPicker selectedDate={viewDate} onChange={setViewDate} />
+
       <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('nutrition.dayTraining') : t('nutrition.dayRest')}</Text>
 
       <Card>
@@ -96,7 +113,9 @@ export default function NutritionScreen() {
 
       <Text style={styles.sectionTitle}>{t('nutrition.waterScheduleTitle')}</Text>
       <Card>
-        <WaterTimeline schedule={waterSchedule} currentMl={log.waterMl} />
+        {/* For a backdated day, treat every checkpoint's time as already past — "behind/complete"
+            should be judged purely by ml logged, not by comparing to today's clock. */}
+        <WaterTimeline schedule={waterSchedule} currentMl={log.waterMl} now={isToday ? new Date() : endOfDay(viewDate)} />
       </Card>
 
       <Text style={styles.sectionTitle}>{t('nutrition.mealsTitle')}</Text>

@@ -20,6 +20,10 @@ export const STRINGS = {
     'tab.clients': 'Học viên',
     'tab.account': 'Tài khoản',
 
+    'dateOffset.today': 'Hôm nay',
+    'dateOffset.yesterday': 'Hôm qua',
+    'dateOffset.daysAgo': '{n} ngày trước',
+    'dateOffset.customPlaceholder': 'Hoặc nhập ngày khác: DD/MM/YYYY',
     'common.save': 'Lưu',
     'common.cancel': 'Hủy',
     'common.confirm': 'Xác nhận',
@@ -151,6 +155,7 @@ export const STRINGS = {
 
     'workout.dayTraining': 'Ngày tập luyện - 2 buổi/ngày theo kế hoạch',
     'workout.dayRest': 'Ngày nghỉ - tập nhẹ hoặc nghỉ ngơi',
+    'common.logDateTitle': 'Ngày ghi nhận',
     'workout.suggestedTitle': 'Bài tập gợi ý',
     'workout.templateMacro': '{min} phút · {kcal} kcal',
     'workout.logTemplateButton': '+ Ghi nhận',
@@ -322,6 +327,10 @@ export const STRINGS = {
     'tab.clients': 'Clients',
     'tab.account': 'Account',
 
+    'dateOffset.today': 'Today',
+    'dateOffset.yesterday': 'Yesterday',
+    'dateOffset.daysAgo': '{n} days ago',
+    'dateOffset.customPlaceholder': 'Or enter another date: DD/MM/YYYY',
     'common.save': 'Save',
     'common.cancel': 'Cancel',
     'common.confirm': 'Confirm',
@@ -453,6 +462,7 @@ export const STRINGS = {
 
     'workout.dayTraining': 'Training day - 2 sessions/day on plan',
     'workout.dayRest': 'Rest day - light activity or rest',
+    'common.logDateTitle': 'Log date',
     'workout.suggestedTitle': 'Suggested workouts',
     'workout.templateMacro': '{min} min · {kcal} kcal',
     'workout.logTemplateButton': '+ Log',

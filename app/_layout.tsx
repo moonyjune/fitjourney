@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { Stack, router, useSegments } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
+import { useSessionActivityStore, SESSION_MAX_IDLE_MS } from '../src/store/useSessionActivityStore';
 import { resetAllLocalStores } from '../src/store/resetLocalStores';
 import { pullProfile, flushSyncQueue } from '../src/sync/cloudSync';
 import { AppIntro } from '../src/components/AppIntro';
@@ -23,6 +26,7 @@ export default function RootLayout() {
 
   const [profileChecked, setProfileChecked] = useState(false);
   const [minIntroElapsed, setMinIntroElapsed] = useState(false);
+  const [expiryChecked, setExpiryChecked] = useState(false);
   const checkedForUserId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -30,6 +34,29 @@ export default function RootLayout() {
     const timer = setTimeout(() => setMinIntroElapsed(true), MIN_INTRO_MS);
     return () => clearTimeout(timer);
   }, [init]);
+
+  // Force a fresh login after 24h since the app was last opened/foregrounded — gated into
+  // `ready` below so an expired session never briefly flashes authenticated content before the
+  // redirect to /auth kicks in. Using the app at least once a day keeps the session alive
+  // indefinitely; only real inactivity triggers a re-login (credentials stay pre-filled, see
+  // auth.tsx + rememberedCredentials).
+  useEffect(() => {
+    (async () => {
+      const lastActive = useSessionActivityStore.getState().lastActiveAtISO;
+      if (lastActive && Date.now() - new Date(lastActive).getTime() > SESSION_MAX_IDLE_MS) {
+        await supabase.auth.signOut();
+      }
+      useSessionActivityStore.getState().touch();
+      setExpiryChecked(true);
+    })();
+
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && useAuthStore.getState().session) {
+        useSessionActivityStore.getState().touch();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   // Runs once per distinct signed-in user id (on cold start and on every account switch).
   // The DB profile is always the source of truth for role/setup state: local AsyncStorage is
@@ -73,7 +100,7 @@ export default function RootLayout() {
     return unsubscribe;
   }, [session]);
 
-  const ready = initialized && (!session || profileChecked) && minIntroElapsed;
+  const ready = initialized && expiryChecked && (!session || profileChecked) && minIntroElapsed;
 
   useEffect(() => {
     if (!ready) return;

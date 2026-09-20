@@ -5,6 +5,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { ProofCapture } from '../../src/components/ProofCapture';
 import { WorkoutStepsList } from '../../src/components/PlanPreview';
+import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { todayKey } from '../../src/store/useNutritionStore';
 import { getDayType } from '../../src/constants/plan';
@@ -35,9 +36,10 @@ export default function WorkoutScreen() {
   const [customLabel, setCustomLabel] = useState('');
   const [customDuration, setCustomDuration] = useState('');
   const [customCalories, setCustomCalories] = useState('');
+  const [logDate, setLogDate] = useState(new Date());
 
   function logTemplate(templateId: string, label: string, durationMin: number, caloriesBurned: number) {
-    addEntry({ templateId, label, durationMin, caloriesBurned });
+    addEntry({ templateId, label, durationMin, caloriesBurned }, logDate.toISOString());
   }
 
   function logCustom() {
@@ -47,7 +49,7 @@ export default function WorkoutScreen() {
       Alert.alert(t('common.error'), t('workout.errorMissingFields'));
       return;
     }
-    addEntry({ templateId: null, label: customLabel, durationMin: duration, caloriesBurned: calories });
+    addEntry({ templateId: null, label: customLabel, durationMin: duration, caloriesBurned: calories }, logDate.toISOString());
     setCustomLabel('');
     setCustomDuration('');
     setCustomCalories('');
@@ -56,6 +58,9 @@ export default function WorkoutScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('workout.dayTraining') : t('workout.dayRest')}</Text>
+
+      <Text style={styles.sectionTitle}>{t('common.logDateTitle')}</Text>
+      <DateOffsetPicker selectedDate={logDate} onChange={setLogDate} />
 
       <Text style={styles.sectionTitle}>{t('workout.suggestedTitle')}</Text>
       {workoutTemplates.map((template) => (

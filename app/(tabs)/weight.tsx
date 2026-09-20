@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
+import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
@@ -30,6 +31,7 @@ export default function WeightScreen() {
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
   const startDateISO = useSettingsStore((s) => s.startDateISO);
   const [input, setInput] = useState('');
+  const [logDate, setLogDate] = useState(new Date());
   const [rangeDays, setRangeDays] = useState(30);
 
   // Always renders something (default chart): with no/one actual entry, only the predicted
@@ -58,96 +60,92 @@ export default function WeightScreen() {
   function handleAdd() {
     const value = parseFloat(input.replace(',', '.'));
     if (!value || value <= 0) return;
-    addEntry(value);
+    addEntry(value, undefined, logDate.toISOString());
     setInput('');
+    setLogDate(new Date());
   }
 
   const screenWidth = Dimensions.get('window').width - 32;
 
+  const historyEntries = [...entries].reverse();
+
   return (
-    <FlatList
-      style={styles.container}
-      contentContainerStyle={[styles.content, screenMaxWidthStyle]}
-      data={[...entries].reverse()}
-      keyExtractor={(item) => item.id}
-      ListHeaderComponent={
-        <>
-          <Card>
-            <Text style={styles.cardTitle}>{t('weight.logTitle')}</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={styles.input}
-                keyboardType="decimal-pad"
-                placeholder={t('weight.inputPlaceholder')}
-                value={input}
-                onChangeText={setInput}
-              />
-              <Button title={t('common.save')} onPress={handleAdd} />
-            </View>
-          </Card>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+      <Card>
+        <Text style={styles.cardTitle}>{t('weight.logTitle')}</Text>
+        <DateOffsetPicker selectedDate={logDate} onChange={setLogDate} />
+        <View style={styles.inputRow}>
+          <TextInput
+            style={styles.input}
+            keyboardType="decimal-pad"
+            placeholder={t('weight.inputPlaceholder')}
+            value={input}
+            onChangeText={setInput}
+          />
+          <Button title={t('common.save')} onPress={handleAdd} />
+        </View>
+      </Card>
 
-          <Card>
-            <Text style={styles.cardTitle}>{t('weight.chartTitle')}</Text>
-            <View style={styles.rangeRow}>
-              {RANGE_OPTIONS.map((opt) => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.rangeButton, rangeDays === opt.days && styles.rangeButtonActive]}
-                  onPress={() => setRangeDays(opt.days)}
-                >
-                  <Text style={[styles.rangeButtonText, rangeDays === opt.days && styles.rangeButtonTextActive]}>
-                    {t(opt.key)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+      <Card>
+        <Text style={styles.cardTitle}>{t('weight.chartTitle')}</Text>
+        <View style={styles.rangeRow}>
+          {RANGE_OPTIONS.map((opt) => (
+            <TouchableOpacity
+              key={opt.key}
+              style={[styles.rangeButton, rangeDays === opt.days && styles.rangeButtonActive]}
+              onPress={() => setRangeDays(opt.days)}
+            >
+              <Text style={[styles.rangeButtonText, rangeDays === opt.days && styles.rangeButtonTextActive]}>
+                {t(opt.key)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={styles.legendRow}>
+          {chartData.hasActual && (
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
+              <Text style={styles.legendText}>{t('weight.actualLegend')}</Text>
             </View>
-            <View style={styles.legendRow}>
-              {chartData.hasActual && (
-                <View style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-                  <Text style={styles.legendText}>{t('weight.actualLegend')}</Text>
-                </View>
-              )}
-              <View style={styles.legendItem}>
-                <View style={[styles.legendDot, styles.legendDotPredicted]} />
-                <Text style={styles.legendText}>{t('weight.predictedLegend')}</Text>
-              </View>
-            </View>
-            <LineChart
-              data={chartData}
-              width={screenWidth}
-              height={200}
-              yAxisSuffix="kg"
-              chartConfig={{
-                backgroundColor: colors.surface,
-                backgroundGradientFrom: colors.surface,
-                backgroundGradientTo: colors.surface,
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
-                propsForDots: { r: '3' },
-              }}
-              bezier
-              style={{ borderRadius: radius.lg }}
-            />
-            {entries.length === 0 && <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>}
-            <Text style={styles.goalNote}>{t('common.goalLabel', { kg: goalWeightKg })}</Text>
-          </Card>
+          )}
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, styles.legendDotPredicted]} />
+            <Text style={styles.legendText}>{t('weight.predictedLegend')}</Text>
+          </View>
+        </View>
+        <LineChart
+          data={chartData}
+          width={screenWidth}
+          height={200}
+          yAxisSuffix="kg"
+          chartConfig={{
+            backgroundColor: colors.surface,
+            backgroundGradientFrom: colors.surface,
+            backgroundGradientTo: colors.surface,
+            decimalPlaces: 1,
+            color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
+            labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
+            propsForDots: { r: '3' },
+          }}
+          bezier
+          style={{ borderRadius: radius.lg }}
+        />
+        {entries.length === 0 && <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>}
+        <Text style={styles.goalNote}>{t('common.goalLabel', { kg: goalWeightKg })}</Text>
+      </Card>
 
-          <Text style={styles.historyTitle}>{t('tab.history')}</Text>
-        </>
-      }
-      renderItem={({ item }) => (
-        <View style={styles.historyRow}>
+      <Text style={styles.historyTitle}>{t('tab.history')}</Text>
+      {historyEntries.length === 0 && <Text style={styles.emptyText}>{t('weight.emptyHistory')}</Text>}
+      {historyEntries.map((item) => (
+        <View key={item.id} style={styles.historyRow}>
           <Text style={styles.historyDate}>{formatDateVi(toDateKey(new Date(item.dateISO)))}</Text>
           <Text style={styles.historyWeight}>{item.weightKg.toFixed(1)} kg</Text>
           <TouchableOpacity onPress={() => removeEntry(item.id)}>
             <Text style={styles.deleteText}>{t('common.delete')}</Text>
           </TouchableOpacity>
         </View>
-      )}
-      ListEmptyComponent={<Text style={styles.emptyText}>{t('weight.emptyHistory')}</Text>}
-    />
+      ))}
+    </ScrollView>
   );
 }
 

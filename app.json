@@ -42,7 +42,8 @@
           "icon": "./assets/icon.png",
           "color": "#4F8EF7"
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
