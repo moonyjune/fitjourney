@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fatty & Coach — Screens Export</title>
+<style>
+  :root {
+    --coach-primary: #3B72D6; --client-primary: #F2704F;
+    --background: #F5F7FA; --surface: #fff; --text-primary: #222; --text-secondary: #666; --text-muted: #999;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding-bottom: 60px; }
+  header.hero { background: linear-gradient(135deg, var(--client-primary), var(--coach-primary)); color: #fff; padding: 48px 24px 56px; text-align: center; animation: fadeIn 0.6s ease-out both; }
+  header.hero h1 { margin: 0 0 8px; font-size: 30px; font-weight: 800; }
+  header.hero p { margin: 0; opacity: 0.92; font-size: 14px; }
+  nav.crumbs { max-width: 1200px; margin: 20px auto 0; padding: 0 24px; }
+  nav.crumbs a { color: var(--coach-primary); text-decoration: none; font-weight: 700; font-size: 13px; }
+  nav.crumbs a:hover { text-decoration: underline; }
+
+  main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+  h2.group-title { font-size: 20px; font-weight: 800; margin: 40px 0 4px; display: flex; align-items: center; gap: 10px; }
+  h2.group-title .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  p.group-sub { margin: 0 0 20px; color: var(--text-secondary); font-size: 13.5px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; }
+  figure { margin: 0; background: var(--surface); border-radius: 18px; padding: 14px 14px 16px; box-shadow: 0 6px 20px rgba(20,30,60,0.08); opacity: 0; animation: fadeUp 0.5s ease-out forwards; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+  figure:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(20,30,60,0.16); }
+  figure img { width: 100%; border-radius: 12px; display: block; border: 1px solid #eee; cursor: zoom-in; }
+  figcaption { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+  figcaption small { display: block; font-weight: 500; color: var(--text-muted); margin-top: 2px; font-size: 11px; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+  .lightbox { position: fixed; inset: 0; background: rgba(10,14,25,0.82); display: none; align-items: center; justify-content: center; z-index: 50; padding: 30px; animation: fadeIn 0.2s ease-out both; }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-height: 92vh; max-width: 92vw; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .lightbox .hint { position: absolute; top: 20px; right: 26px; color: #fff; font-size: 13px; opacity: 0.75; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>📱 Screens Export</h1>
+  <p>Ảnh chụp thật từ app đang chạy (web build) — không phải mockup tĩnh. Nhấp vào ảnh để phóng to.</p>
+</header>
+
+<nav class="crumbs"><a href="design-system.html">← Xem Design System (màu sắc, thang chữ, animation)</a></nav>
+
+<main>
+  <h2 class="group-title"><span class="dot" style="background:var(--client-primary)"></span>Hành trình Fatty (Client)</h2>
+  <p class="group-sub">Theme cam năng động. Nền màn hình đổi theo trạng thái nhịn ăn/trong giờ ăn (IF 16:8) — áp dụng ở mọi tab.</p>
+  <div class="grid" id="grid-fatty"></div>
+
+  <h2 class="group-title"><span class="dot" style="background:var(--coach-primary)"></span>Hành trình Coach</h2>
+  <p class="group-sub">Theme xanh dương chuyên nghiệp. Coach xem danh sách học viên, chi tiết tiến trình, và dùng trợ lý AI chỉnh kế hoạch.</p>
+  <div class="grid" id="grid-coach"></div>
+</main>
+
+<div class="lightbox" id="lightbox"><span class="hint">Nhấp để đóng</span><img id="lightbox-img" src="" alt="" /></div>
+
+<script>
+  const fatty = [
+    ['01-splash-intro.png', 'Splash / Intro', 'Logo tỉ lệ vàng + slogan động lực'],
+    ['02-auth-signup.png', 'Đăng nhập / Đăng ký', 'Form xác thực qua Supabase Auth'],
+    ['03-role-select.png', 'Chọn vai trò', 'Thẻ Fatty (cam) vs Coach (xanh)'],
+    ['04-onboarding.png', 'Onboarding', 'Nhập cân nặng/mục tiêu + mã Coach tuỳ chọn'],
+    ['05-today.png', 'Hôm nay', 'Ambient background theo giờ nhịn/ăn + streak + tiến độ'],
+    ['06-weight.png', 'Cân nặng', 'Biểu đồ + đường mốc "Hôm nay" + dự đoán ngày đạt mục tiêu'],
+    ['07-nutrition.png', 'Dinh dưỡng', 'Progress bar animated + lịch trình uống nước'],
+    ['08-workout.png', 'Tập luyện', 'Gợi ý bài tập + ghi nhận nhanh + chỉnh bằng AI'],
+    ['09-history.png', 'Lịch sử', 'Nhật ký cảm giác + biểu đồ cảm xúc tuần'],
+    ['10-plan.png', 'Kế hoạch', 'Ngày bắt đầu kế hoạch + mục tiêu cá nhân'],
+  ];
+  const coach = [
+    ['11-coach-clients.png', 'Học viên', 'Mã mời + danh sách học viên đã liên kết'],
+    ['13-coach-client-detail.png', 'Chi tiết học viên', 'Tiến trình, ảnh minh chứng, nhận xét định kỳ, trợ lý AI'],
+    ['12-coach-account.png', 'Tài khoản Coach', 'Mã của bạn + chuyển đổi chế độ + đăng xuất'],
+  ];
+
+  function render(list, elId) {
+    const el = document.getElementById(elId);
+    list.forEach(([src, title, sub], i) => {
+      const fig = document.createElement('figure');
+      fig.style.animationDelay = (i * 0.06) + 's';
+      fig.innerHTML = `<img src="screens/${src}" alt="${title}" loading="lazy" />
+        <figcaption>${title}<small>${sub}</small></figcaption>`;
+      fig.querySelector('img').addEventListener('click', () => openLightbox(`screens/${src}`, title));
+      el.appendChild(fig);
+    });
+  }
+  function openLightbox(src, alt) {
+    const lb = document.getElementById('lightbox');
+    document.getElementById('lightbox-img').src = src;
+    document.getElementById('lightbox-img').alt = alt;
+    lb.classList.add('open');
+  }
+  document.getElementById('lightbox').addEventListener('click', () => {
+    document.getElementById('lightbox').classList.remove('open');
+  });
+  render(fatty, 'grid-fatty');
+  render(coach, 'grid-coach');
+</script>
+
+</body>
+</html>

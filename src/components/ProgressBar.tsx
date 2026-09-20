@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../theme/tokens';
 
 interface ProgressBarProps {
@@ -24,6 +25,14 @@ export function ProgressBar({ label, current, target, unit, color }: ProgressBar
   const pct = target > 0 ? current / target : 0;
   const fillRatio = Math.min(pct, 1);
   const barColor = color ?? colorForRatio(pct);
+
+  // Animate width changes (new log entries, tab re-focus) instead of snapping, so the bar
+  // reads as "filling up" rather than jumping — matches the app's other Animated affordances.
+  const widthAnim = useRef(new Animated.Value(fillRatio)).current;
+  useEffect(() => {
+    Animated.timing(widthAnim, { toValue: fillRatio, duration: 450, useNativeDriver: false }).start();
+  }, [fillRatio, widthAnim]);
+
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
@@ -33,7 +42,12 @@ export function ProgressBar({ label, current, target, unit, color }: ProgressBar
         </Text>
       </View>
       <View style={styles.track}>
-        <View style={[styles.fill, { width: `${fillRatio * 100}%`, backgroundColor: barColor }]} />
+        <Animated.View
+          style={[
+            styles.fill,
+            { width: widthAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), backgroundColor: barColor },
+          ]}
+        />
       </View>
     </View>
   );

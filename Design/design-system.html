@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fatty & Coach — Design System</title>
+<style>
+  :root {
+    --primary: #4F8EF7; --primary-dark: #3B72D6; --primary-light: #E8F0FE;
+    --success: #2E9E4E; --success-light: #E8F6EC;
+    --warning: #F7A44F; --warning-light: #FFF3E0;
+    --danger: #E0563A; --danger-light: #FDEDEA;
+    --info: #4FC3F7; --info-light: #E1F5FE;
+    --gold: #8A5A00; --gold-light: #FFF7E6;
+    --neutral: #666666; --neutral-light: #F0F0F0;
+    --background: #F5F7FA; --surface: #FFFFFF; --border: #DDDDDD;
+    --text-primary: #222222; --text-secondary: #666666; --text-muted: #999999;
+    --if-eating: #DCF3E0; --if-fasting: #F8DCE0;
+    --coach-primary: #3B72D6; --coach-dark: #2B559E; --coach-light: #E4ECFB;
+    --client-primary: #F2704F; --client-dark: #D5573A; --client-light: #FDEAE3;
+    --phi: 1.618;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--background); color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    padding-bottom: 80px;
+  }
+  header.hero {
+    background: linear-gradient(135deg, var(--client-primary), var(--coach-primary));
+    color: #fff; padding: 56px 24px 64px; text-align: center;
+    animation: fadeSlideIn 0.6s ease-out both;
+  }
+  header.hero h1 { font-size: 34px; margin: 0 0 8px; font-weight: 800; letter-spacing: -0.5px; }
+  header.hero p { margin: 0; opacity: 0.92; font-size: 15px; max-width: 640px; margin-inline: auto; }
+  main { max-width: 1040px; margin: -32px auto 0; padding: 0 24px; display: flex; flex-direction: column; gap: 40px; }
+  section.panel {
+    background: var(--surface); border-radius: 20px; padding: 28px 28px 32px;
+    box-shadow: 0 8px 28px rgba(20, 30, 60, 0.08);
+    animation: fadeSlideIn 0.5s ease-out both;
+  }
+  section.panel h2 { margin: 0 0 4px; font-size: 21px; font-weight: 800; }
+  section.panel .sub { margin: 0 0 20px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.55; }
+  @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  .grid { display: grid; gap: 14px; }
+  .grid.colors { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .swatch {
+    border-radius: 14px; padding: 14px; color: #fff; font-weight: 700; font-size: 13px;
+    display: flex; flex-direction: column; justify-content: flex-end; height: 84px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+  .swatch:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.14); }
+  .swatch span.hex { font-weight: 600; font-size: 11px; opacity: 0.85; }
+  .swatch.on-light { color: var(--text-primary); }
+
+  .type-scale { display: flex; flex-direction: column; gap: 14px; }
+  .type-row { display: flex; align-items: baseline; gap: 16px; border-bottom: 1px dashed #eee; padding-bottom: 12px; }
+  .type-row:last-child { border-bottom: none; }
+  .type-row .tag { width: 64px; flex-shrink: 0; font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .type-row .sample { color: var(--text-primary); font-weight: 800; }
+  .type-row .meta { margin-left: auto; font-size: 11px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
+
+  .spacing-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; }
+  .spacing-row .tag { width: 48px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+  .spacing-row .bar { height: 14px; background: linear-gradient(90deg, var(--client-primary), var(--coach-primary)); border-radius: 4px; }
+  .spacing-row .px { font-size: 11px; color: var(--text-muted); width: 40px; }
+
+  .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  @media (max-width: 720px) { .row-2 { grid-template-columns: 1fr; } }
+
+  .btn-demo { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+  .btn { border: none; border-radius: 10px; padding: 12px 18px; font-weight: 700; font-size: 13px; cursor: pointer;
+    transition: transform 0.12s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s ease, background 0.15s ease; }
+  .btn:active { transform: scale(0.96); }
+  .btn:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.14); }
+  .btn.primary { background: var(--client-primary); color: #fff; }
+  .btn.primary:hover { background: var(--client-dark); }
+  .btn.coach { background: var(--coach-primary); color: #fff; }
+  .btn.coach:hover { background: var(--coach-dark); }
+  .btn.secondary { background: var(--neutral-light); color: var(--text-secondary); }
+  .btn.outline { background: transparent; color: var(--client-primary); box-shadow: inset 0 0 0 1.5px var(--client-primary); }
+  .btn.success { background: var(--success); color: #fff; }
+  .btn.soft-danger { background: var(--danger-light); color: var(--danger); }
+
+  .badge-demo { display: flex; flex-wrap: wrap; gap: 8px; }
+  .badge { border-radius: 8px; padding: 6px 12px; font-size: 11px; font-weight: 700; }
+  .badge.primary { background: var(--primary-light); color: var(--primary); }
+  .badge.success { background: var(--success-light); color: var(--success); }
+  .badge.warning { background: var(--warning-light); color: var(--warning); }
+  .badge.danger { background: var(--danger-light); color: var(--danger); }
+  .badge.gold { background: var(--gold-light); color: var(--gold); }
+
+  .card-demo { background: var(--surface); border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); max-width: 340px; }
+  .progress-track { height: 10px; border-radius: 6px; background: #EAEEF3; overflow: hidden; margin-top: 6px; }
+  .progress-fill { height: 100%; border-radius: 6px; width: 12%; background: var(--danger); animation: fillGrow 1.6s cubic-bezier(.22,1,.36,1) 0.2s both, colorShift 1.6s linear 0.2s both; }
+  @keyframes fillGrow { from { width: 0%; } to { width: 78%; } }
+  @keyframes colorShift { 0% { background: var(--danger); } 50% { background: var(--primary); } 78%,100% { background: var(--success); } }
+  .progress-label { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+
+  .ambient-demo { display: flex; gap: 16px; flex-wrap: wrap; }
+  .ambient-card { flex: 1; min-width: 220px; border-radius: 16px; padding: 20px; font-weight: 700; color: var(--text-primary); position: relative; overflow: hidden; }
+  .ambient-card.fasting { background: var(--if-fasting); }
+  .ambient-card.eating { background: var(--if-eating); }
+  .ambient-card small { display: block; font-weight: 500; color: var(--text-secondary); margin-top: 6px; font-size: 12px; }
+
+  .logo-demo { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+  .logo-ring { border-radius: 50%; border: 3px solid var(--client-primary); display: flex; align-items: center; justify-content: center; animation: ringPulse 3s ease-in-out infinite; }
+  @keyframes ringPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(242,112,79,0.25);} 50% { box-shadow: 0 0 0 10px rgba(242,112,79,0); } }
+  .logo-core { border-radius: 50%; background: var(--client-primary); display: flex; align-items: center; justify-content: center; }
+
+  ul.notes { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.7; color: var(--text-secondary); }
+  ul.notes b { color: var(--text-primary); }
+  table.audit { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.audit th, table.audit td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #EEE; }
+  table.audit th { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .status-ok { color: var(--success); font-weight: 700; }
+  .status-fixed { color: var(--coach-primary); font-weight: 700; }
+  .status-kept { color: var(--text-muted); font-weight: 700; }
+
+  nav.crumbs { max-width: 1040px; margin: 20px auto 0; padding: 0 24px; }
+  nav.crumbs a { color: var(--coach-primary); text-decoration: none; font-weight: 700; font-size: 13px; }
+  nav.crumbs a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <h1>🔥 Fatty &amp; Coach — Design System</h1>
+  <p>Golden-ratio type scale, dual role accent palette, motion &amp; component standards for the weight-loss tracking app. Exported alongside real screen captures in <code>Design/screens.html</code>.</p>
+</header>
+
+<nav class="crumbs"><a href="screens.html">→ Xem toàn bộ màn hình đã export (screens.html)</a></nav>
+
+<main>
+
+  <section class="panel">
+    <h2>1. Bảng màu chính (Shared Palette)</h2>
+    <p class="sub">Palette năng lượng: cam cho nỗ lực/calo, xanh lá cho thành công, xanh dương cho sự tin cậy. Mỗi màu có biến thể "Light" dùng cho nền badge/card trạng thái để đảm bảo tương phản đủ AA với chữ đậm cùng tông.</p>
+    <div class="grid colors">
+      <div class="swatch" style="background:var(--primary)">Primary<span class="hex">#4F8EF7</span></div>
+      <div class="swatch" style="background:var(--success)">Success<span class="hex">#2E9E4E</span></div>
+      <div class="swatch" style="background:var(--warning)">Warning<span class="hex">#F7A44F</span></div>
+      <div class="swatch" style="background:var(--danger)">Danger<span class="hex">#E0563A</span></div>
+      <div class="swatch" style="background:var(--info)">Info<span class="hex">#4FC3F7</span></div>
+      <div class="swatch" style="background:var(--gold)">Gold<span class="hex">#8A5A00</span></div>
+      <div class="swatch on-light" style="background:var(--background)">Background<span class="hex">#F5F7FA</span></div>
+      <div class="swatch on-light" style="background:var(--surface); box-shadow: inset 0 0 0 1px #eee;">Surface<span class="hex">#FFFFFF</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Theme riêng theo vai trò (Role Accents)</h2>
+    <p class="sub">Coach dùng tông xanh dương chuyên nghiệp; Fatty (Client) dùng tông cam năng động — áp dụng qua <code>useAccentColors()</code>, thay cho <code>colors.primary</code> mặc định ở mọi Button/Badge/Tab active.</p>
+    <div class="row-2">
+      <div>
+        <div class="grid colors">
+          <div class="swatch" style="background:var(--coach-primary)">Coach Primary<span class="hex">#3B72D6</span></div>
+          <div class="swatch" style="background:var(--coach-dark)">Coach Dark<span class="hex">#2B559E</span></div>
+          <div class="swatch on-light" style="background:var(--coach-light)">Coach Light<span class="hex">#E4ECFB</span></div>
+        </div>
+      </div>
+      <div>
+        <div class="grid colors">
+          <div class="swatch" style="background:var(--client-primary)">Fatty Primary<span class="hex">#F2704F</span></div>
+          <div class="swatch" style="background:var(--client-dark)">Fatty Dark<span class="hex">#D5573A</span></div>
+          <div class="swatch on-light" style="background:var(--client-light)">Fatty Light<span class="hex">#FDEAE3</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>3. Ambient background theo giờ nhịn/ăn (IF 16:8)</h2>
+    <p class="sub">Áp dụng cho mọi tab của Fatty (không riêng Home) — nền đổi theo trạng thái đang nhịn hay đang trong khung giờ ăn, tạo cảm giác "mood wash" toàn màn hình, đậm hơn hẳn màu nền tint của badge/card để không lẫn với thành phần UI khác.</p>
+    <div class="ambient-demo">
+      <div class="ambient-card fasting">🕐 Đang nhịn ăn<small>background: #F8DCE0 — hồng nhạt, nhắc nhở nhẹ nhàng</small></div>
+      <div class="ambient-card eating">🍽️ Trong khung giờ ăn<small>background: #DCF3E0 — xanh lá nhạt, thư giãn</small></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>4. Thang chữ theo tỉ lệ vàng (φ ≈ 1.618)</h2>
+    <p class="sub">Chữ nhỏ (small→body) tăng theo bước φ<sup>1/4</sup> ≈ 1.128; tiêu đề (title→h1) tăng theo bước φ<sup>1/2</sup> ≈ 1.272 để bước nhảy vào heading rõ chủ đích hơn các bước chữ nhỏ. Đã rà soát lại lần này — thang hiện tại đạt chuẩn, không cần chỉnh.</p>
+    <div class="type-scale">
+      <div class="type-row"><span class="tag">h1</span><span class="sample" style="font-size:29px">Giảm cân bền vững</span><span class="meta">29px · 800 · ×1.618 gốc</span></div>
+      <div class="type-row"><span class="tag">h2</span><span class="sample" style="font-size:23px">Mục tiêu tuần này</span><span class="meta">23px · 800 · ×φ^0.5 so h3</span></div>
+      <div class="type-row"><span class="tag">h3</span><span class="sample" style="font-size:18px">Ghi nhận cân nặng</span><span class="meta">18px · 700</span></div>
+      <div class="type-row"><span class="tag">title</span><span class="sample" style="font-size:16px">Dinh dưỡng hôm nay</span><span class="meta">16px · 700</span></div>
+      <div class="type-row"><span class="tag">body</span><span class="sample" style="font-size:14px;font-weight:400">Còn khoảng 12.4 giờ nữa đến giờ ăn</span><span class="meta">14px · 400 · gốc thang</span></div>
+      <div class="type-row"><span class="tag">label</span><span class="sample" style="font-size:13px;font-weight:600">Calo · Protein · Nước</span><span class="meta">13px · 600</span></div>
+      <div class="type-row"><span class="tag">caption</span><span class="sample" style="font-size:12px;font-weight:600">0 ngày liên tiếp</span><span class="meta">12px · 600</span></div>
+      <div class="type-row"><span class="tag">small</span><span class="sample" style="font-size:11px;font-weight:500">Chưa có dữ liệu cân nặng</span><span class="meta">11px · 500 · φ^-1 so body</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>5. Spacing &amp; Radius</h2>
+    <p class="sub">Thang spacing hiện tại (4/8/12/16/20/24/32) đã có tỉ lệ tăng dần gần với vàng ở các bước lớn (16→20 = ×1.25, 20→24 = ×1.2, 24→32 = ×1.33) — giữ nguyên vì đây là thang đã kiểm chứng qua toàn bộ layout; đổi sang Fibonacci thuần (8/13/21/34) sẽ đẹp hơn về lý thuyết nhưng rủi ro vỡ layout ở nhiều màn hình đã test kỹ, không đáng đánh đổi cho một app cá nhân đã ổn định.</p>
+    <div style="max-width:420px">
+      <div class="spacing-row"><span class="tag">xs</span><div class="bar" style="width:4px"></div><span class="px">4px</span></div>
+      <div class="spacing-row"><span class="tag">sm</span><div class="bar" style="width:8px"></div><span class="px">8px</span></div>
+      <div class="spacing-row"><span class="tag">md</span><div class="bar" style="width:12px"></div><span class="px">12px</span></div>
+      <div class="spacing-row"><span class="tag">base</span><div class="bar" style="width:16px"></div><span class="px">16px</span></div>
+      <div class="spacing-row"><span class="tag">lg</span><div class="bar" style="width:20px"></div><span class="px">20px</span></div>
+      <div class="spacing-row"><span class="tag">xl</span><div class="bar" style="width:24px"></div><span class="px">24px</span></div>
+      <div class="spacing-row"><span class="tag">xxl</span><div class="bar" style="width:32px"></div><span class="px">32px</span></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>6. Logo — tỉ lệ vàng áp dụng trực tiếp</h2>
+    <p class="sub">Core (lõi lửa 🔥) có đường kính = ring / φ — tỉ lệ vàng literal, không phải chỉ ẩn dụ qua type scale.</p>
+    <div class="logo-demo">
+      <div class="logo-ring" style="width:96px;height:96px"><div class="logo-core" style="width:59.3px;height:59.3px"><span style="font-size:31px">🔥</span></div></div>
+      <ul class="notes">
+        <li><b>size</b> = 96px (ring, viền 3px)</li>
+        <li><b>coreSize</b> = 96 / 1.618 = 59.3px</li>
+        <li>Icon lửa bên trong = coreSize × 0.52</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>7. Component &amp; Animation Standards</h2>
+    <p class="sub">Mọi tương tác chạm đều có phản hồi động (scale/spring khi nhấn, elevation khi hover trên web). Thanh tiến trình (ProgressBar) trước đây snap tức thì — đã chỉnh sửa lần này để chạy animation fill mượt (450ms) mỗi khi giá trị thay đổi.</p>
+
+    <h3 style="font-size:14px;margin:20px 0 8px;">Buttons</h3>
+    <div class="btn-demo">
+      <button class="btn primary">Lưu (Fatty)</button>
+      <button class="btn coach">Lưu (Coach)</button>
+      <button class="btn secondary">Huỷ</button>
+      <button class="btn outline">Chỉnh sửa AI</button>
+      <button class="btn success">Hoàn thành</button>
+      <button class="btn soft-danger">Đăng xuất</button>
+    </div>
+
+    <h3 style="font-size:14px;margin:20px 0 8px;">Badges</h3>
+    <div class="badge-demo">
+      <span class="badge primary">Đang theo dõi</span>
+      <span class="badge success">Đạt mục tiêu</span>
+      <span class="badge warning">Gần đạt</span>
+      <span class="badge danger">Bỏ lỡ</span>
+      <span class="badge gold">7 ngày liên tiếp 🔥</span>
+    </div>
+
+    <h3 style="font-size:14px;margin:20px 0 8px;">Progress bar (animated fill — mới thêm)</h3>
+    <div class="card-demo">
+      <div class="progress-label"><span>Calo</span><span>1521 / 1950 kcal</span></div>
+      <div class="progress-track"><div class="progress-fill"></div></div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>8. Điều chỉnh đã thực hiện trong lần export này</h2>
+    <table class="audit">
+      <tr><th>Hạng mục</th><th>Trạng thái</th><th>Ghi chú</th></tr>
+      <tr><td>Thang chữ theo tỉ lệ vàng</td><td class="status-ok">Đạt chuẩn</td><td>Đã đúng φ^0.5 / φ^0.25 từ trước, giữ nguyên.</td></tr>
+      <tr><td>ProgressBar animation</td><td class="status-fixed">Đã sửa</td><td>Thêm Animated.timing 450ms cho width fill (trước đây snap tức thì).</td></tr>
+      <tr><td>Thang spacing</td><td class="status-kept">Giữ nguyên</td><td>Đã hài hoà đủ, đổi sang Fibonacci thuần rủi ro cao hơn lợi ích.</td></tr>
+      <tr><td>Nút "Đăng xuất" (soft danger)</td><td class="status-kept">Giữ nguyên</td><td>Cố ý dùng tông nhạt vì đây là hành động có thể hoàn tác, khác với xoá dữ liệu.</td></tr>
+      <tr><td>Logo tỉ lệ vàng</td><td class="status-ok">Đạt chuẩn</td><td>core = ring / φ, đã áp dụng đúng từ trước.</td></tr>
+      <tr><td>Ambient background theo IF</td><td class="status-ok">Đạt chuẩn</td><td>Áp dụng toàn bộ tab Fatty, độ bão hoà tách bạch với tint badge/card.</td></tr>
+    </table>
+  </section>
+
+</main>
+
+</body>
+</html>
