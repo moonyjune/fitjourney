@@ -1,0 +1,28 @@
+diff --git a/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js b/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js
+index 57119c2..de3410d 100644
+--- a/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js
++++ b/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js
+@@ -34,7 +34,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+     return to.concat(ar || Array.prototype.slice.call(from));
+ };
+ import React from "react";
+-import { Animated, ScrollView, StyleSheet, TextInput, View } from "react-native";
++import { Animated, Platform, ScrollView, StyleSheet, TextInput, View } from "react-native";
+ import { Circle, G, Path, Polygon, Polyline, Rect, Svg } from "react-native-svg";
+ import AbstractChart from "../../shared/AbstractChart";
+ import { getNumberProp } from "../../shared/utils";
+@@ -111,7 +111,13 @@ var LineChart = /** @class */ (function (_super) {
+                             getColor: function (opacity) { return _this.getColor(dataset, opacity); }
+                         });
+                     };
+-                    var pressProps = { onPressIn: onPressIn, onClick: onPressIn };
++                    // react-native-svg's <Circle> renders straight to an SVG DOM element on web, which
++                    // has no concept of onPressIn (that's a native GestureResponderEvent handler) — React
++                    // logs "Unknown event handler property `onPressIn`" for every dot. Only `onClick` is a
++                    // real DOM event there, so send just that on web and keep both on native.
++                    var pressProps = Platform.OS === "web"
++                        ? { onClick: onPressIn }
++                        : { onPressIn: onPressIn, onClick: onPressIn };
+                     output.push(<Circle key={"dot-".concat(datasetIndex, "-").concat(i)} cx={cx} cy={cy} fill={typeof getDotColor === "function"
+                             ? getDotColor(x, i)
+                             : _this.getColor(dataset, 0.9)} {...pressProps} {..._this.getPropsForDots(x, i)}/>, <Circle key={"dot-touch-".concat(datasetIndex, "-").concat(i)} cx={cx} cy={cy} r="14" fill="#fff" fillOpacity={0} {...pressProps}/>, <React.Fragment key={"dot-content-".concat(datasetIndex, "-").concat(i)}>

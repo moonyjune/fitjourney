@@ -7,8 +7,7 @@ import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { predictedWeightKgAt, addDays } from '../../src/utils/milestones';
-import { thinLabels } from '../../src/utils/chartLabels';
+import { buildWeightChartData, computeMilestonePrediction, computeTodayLineX } from '../../src/utils/weightChart';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
@@ -37,51 +36,24 @@ export default function WeightScreen() {
   const [rangeDays, setRangeDays] = useState(30);
   const screenWidth = Dimensions.get('window').width - 32;
 
-  // Always renders something (default chart): with no/one actual entry, only the predicted
-  // trend line (from start weight to goal, following the same curve milestones are scored
-  // against) spans the selected range; real entries overlay it as soon as they exist.
-  const chartData = useMemo(() => {
-    const now = new Date();
-    const cutoff = now.getTime() - rangeDays * 24 * 60 * 60 * 1000;
-    const inRange = entries.filter((e) => new Date(e.dateISO).getTime() >= cutoff);
-    const pointDates = inRange.length > 0 ? inRange.map((e) => new Date(e.dateISO)) : [new Date(cutoff), now];
+  // Chart data, milestone prediction, and the today-marker pixel offset are pure functions in
+  // src/utils/weightChart.ts (unit tested there) — kept out of this component so the
+  // reverse-engineered chart-kit interop doesn't need RN rendering to verify.
+  const chartData = useMemo(
+    () => buildWeightChartData(entries, rangeDays, startDateISO, startWeightKg, goalWeightKg),
+    [entries, rangeDays, startDateISO, startWeightKg, goalWeightKg]
+  );
 
-    const labels = thinLabels(pointDates.map((d) => formatDateVi(toDateKey(d)).slice(0, 5)));
-    const predictedData = pointDates.map((d) => predictedWeightKgAt(d, startDateISO, startWeightKg, goalWeightKg));
+  const milestonePrediction = useMemo(
+    () => computeMilestonePrediction(rangeDays, startDateISO, startWeightKg, goalWeightKg),
+    [rangeDays, startDateISO, startWeightKg, goalWeightKg]
+  );
 
-    const datasets =
-      inRange.length > 0
-        ? [
-            { data: inRange.map((e) => e.weightKg), color: () => colors.primary, strokeWidth: 3 },
-            { data: predictedData, color: () => 'rgba(150,150,150,0.7)', strokeWidth: 2, withDots: false, strokeDashArray: [6, 4] },
-          ]
-        : [{ data: predictedData, color: () => 'rgba(150,150,150,0.7)', strokeWidth: 2, withDots: false, strokeDashArray: [6, 4] }];
-
-    // The window always ends "now", so the last point is always today — used to draw the red
-    // today marker (see todayLineX below).
-    return { labels, datasets, hasActual: inRange.length > 0, todayIndex: pointDates.length - 1 };
-  }, [entries, rangeDays, startDateISO, startWeightKg, goalWeightKg]);
-
-  // Prediction result for the selected milestone range: what the trend line projects for that
-  // date, shown as text since chart-kit has no clean way to extend one dataset past the chart's
-  // shared x-axis into the future while the other stops at today.
-  const milestonePrediction = useMemo(() => {
-    const startDate = new Date(startDateISO);
-    const targetDate = addDays(startDate, rangeDays);
-    const targetWeightKg = predictedWeightKgAt(targetDate, startDateISO, startWeightKg, goalWeightKg);
-    const daysRemaining = Math.ceil((targetDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    return { targetDate, targetWeightKg, daysRemaining };
-  }, [rangeDays, startDateISO, startWeightKg, goalWeightKg]);
-
-  // Replicates react-native-chart-kit's internal point-x formula (paddingRight/paddingTop
-  // default to 64/16 when not overridden via the chart's `style`, which we don't) so we can draw
-  // a "today" marker without fighting the library's lack of native vertical-reference-line support.
   const chartHeight = 200;
-  const todayLineX = useMemo(() => {
-    const paddingRight = 64;
-    const xMax = Math.max(chartData.labels.length, 1);
-    return paddingRight + (chartData.todayIndex * (screenWidth - paddingRight)) / xMax;
-  }, [chartData, screenWidth]);
+  const todayLineX = useMemo(
+    () => computeTodayLineX(chartData.todayIndex, chartData.labels.length, screenWidth),
+    [chartData, screenWidth]
+  );
 
   function handleAdd() {
     const value = parseFloat(input.replace(',', '.'));
