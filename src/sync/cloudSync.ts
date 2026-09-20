@@ -207,14 +207,18 @@ export async function pushWorkoutEntry(entry: WorkoutLogEntry): Promise<void> {
   await pushOrQueue(
     { type: 'workoutEntry', payload: entry },
     () =>
-      supabase.from('workout_entries').insert({
-        user_id: userId,
-        entry_date: entry.dateISO.slice(0, 10),
-        template_id: entry.templateId,
-        label: entry.label,
-        duration_min: entry.durationMin,
-        calories_burned: entry.caloriesBurned,
-      }),
+      supabase.from('workout_entries').upsert(
+        {
+          user_id: userId,
+          client_id: entry.id,
+          entry_date: entry.dateISO.slice(0, 10),
+          template_id: entry.templateId,
+          label: entry.label,
+          duration_min: entry.durationMin,
+          calories_burned: entry.caloriesBurned,
+        },
+        { onConflict: 'user_id,client_id' }
+      ),
     'pushWorkoutEntry'
   );
 }
@@ -520,6 +524,32 @@ export async function requestWeeklySuggestion(
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error };
     return { ok: true, suggestion: data.suggestion };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
+
+export interface PhotoAnalysisResult {
+  estimatedCaloriesKcal?: number;
+  estimatedWaterMl?: number;
+  estimatedCaloriesBurned?: number;
+  reasoning: string;
+}
+
+/** Calls the analyze-proof-photo edge function; requires ANTHROPIC_API_KEY to be configured server-side. */
+export async function requestPhotoAnalysis(
+  taskType: 'meal' | 'workout',
+  imageBase64: string,
+  mediaType: string,
+  context: { label?: string; plannedCalories?: number }
+): Promise<{ ok: true; result: PhotoAnalysisResult } | { ok: false; message: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('analyze-proof-photo', {
+      body: { taskType, imageBase64, mediaType, context },
+    });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error };
+    return { ok: true, result: data.result as PhotoAnalysisResult };
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'Unknown error' };
   }

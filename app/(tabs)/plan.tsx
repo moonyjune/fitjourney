@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
@@ -29,6 +29,8 @@ export default function PlanScreen() {
   const plan = usePlanStore((s) => s.plan);
   const applyPlan = usePlanStore((s) => s.applyPlan);
   const pendingSyncCount = useSyncQueueStore((s) => s.pending.length);
+  const { editWorkout } = useLocalSearchParams<{ editWorkout?: string }>();
+  const editWorkoutDraft = editWorkout ? t('workout.editDraftTemplate', { label: decodeURIComponent(editWorkout) }) : undefined;
 
   const [calorieTarget, setCalorieTarget] = useState(String(settings.calorieTargetKcal));
   const [proteinTarget, setProteinTarget] = useState(String(settings.proteinTargetG));
@@ -132,7 +134,7 @@ export default function PlanScreen() {
 
       <Text style={styles.sectionTitle}>{t('plan.aiTitle')}</Text>
       <Text style={styles.aiHint}>{t('plan.aiHint')}</Text>
-      <PlanChatAssistant livePlan={plan} onApply={handleApplyPlan} />
+      <PlanChatAssistant livePlan={plan} onApply={handleApplyPlan} initialDraft={editWorkoutDraft} />
 
       <Text style={styles.sectionTitle}>{t('plan.remindersTitle')}</Text>
       <Card>

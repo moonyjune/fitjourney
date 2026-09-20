@@ -19,6 +19,8 @@ interface PlanChatAssistantProps {
   /** Set when a Coach is editing a Client's plan; omit for editing your own plan. */
   targetUserId?: string;
   onApply: (plan: PlanData) => Promise<void> | void;
+  /** Pre-fills the message input (e.g. from a workout card's "Edit with AI" shortcut). */
+  initialDraft?: string;
 }
 
 function sessionTitleFrom(text: string): string {
@@ -26,7 +28,7 @@ function sessionTitleFrom(text: string): string {
   return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed;
 }
 
-export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatAssistantProps) {
+export function PlanChatAssistant({ livePlan, targetUserId, onApply, initialDraft }: PlanChatAssistantProps) {
   const { t } = useTranslation();
   const selfId = useAuthStore((s) => s.session?.user.id);
   const ownerId = targetUserId ?? selfId;
@@ -75,6 +77,10 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply }: PlanChatA
     setSessions((prev) => prev);
     loadSession(null);
   }
+
+  useEffect(() => {
+    if (initialDraft) setInput(initialDraft);
+  }, [initialDraft]);
 
   const hasPendingChanges = JSON.stringify(workingPlan) !== JSON.stringify(baselinePlan);
 

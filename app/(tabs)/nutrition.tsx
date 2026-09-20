@@ -114,7 +114,7 @@ export default function NutritionScreen() {
               <Text style={styles.mealTime}>{meal.timeRange}</Text>
               <MealItemRows items={meal.items} />
               <Text style={styles.mealMacro}>{t('nutrition.mealTotal', { kcal: meal.calories, protein: meal.proteinG })}</Text>
-              <ProofCapture dateKey={dateKey} taskType="meal" taskRefId={meal.slot} />
+              <ProofCapture dateKey={dateKey} taskType="meal" taskRefId={meal.slot} contextLabel={meal.label} plannedCalories={meal.calories} />
             </Card>
           </TouchableOpacity>
         );

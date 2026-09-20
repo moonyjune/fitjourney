@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { ProofCapture } from '../../src/components/ProofCapture';
@@ -68,12 +69,20 @@ export default function WorkoutScreen() {
           )}
           <View style={styles.templateFooter}>
             <Text style={styles.templateMacro}>{t('workout.templateMacro', { min: template.durationMin, kcal: template.caloriesBurned })}</Text>
-            <TouchableOpacity
-              style={styles.logButton}
-              onPress={() => logTemplate(template.id, template.label, template.durationMin, template.caloriesBurned)}
-            >
-              <Text style={styles.logButtonText}>{t('workout.logTemplateButton')}</Text>
-            </TouchableOpacity>
+            <View style={styles.templateActions}>
+              <TouchableOpacity
+                style={styles.editButton}
+                onPress={() => router.push(`/(tabs)/plan?editWorkout=${encodeURIComponent(template.label)}`)}
+              >
+                <Text style={styles.editButtonText}>{t('workout.editWithAiButton')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logButton}
+                onPress={() => logTemplate(template.id, template.label, template.durationMin, template.caloriesBurned)}
+              >
+                <Text style={styles.logButtonText}>{t('workout.logTemplateButton')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </Card>
       ))}
@@ -113,7 +122,7 @@ export default function WorkoutScreen() {
               <Text style={styles.deleteText}>{t('common.delete')}</Text>
             </TouchableOpacity>
           </View>
-          <ProofCapture dateKey={dateKey} taskType="workout" taskRefId={e.id} />
+          <ProofCapture dateKey={dateKey} taskType="workout" taskRefId={e.id} contextLabel={e.label} plannedCalories={e.caloriesBurned} />
         </Card>
       ))}
 
@@ -147,8 +156,11 @@ const styles = StyleSheet.create({
   templateLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   templateTime: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   templateDescription: { fontSize: 13, color: '#444', marginTop: spacing.sm, lineHeight: 18 },
-  templateFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md },
+  templateFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md, flexWrap: 'wrap', gap: spacing.sm },
   templateMacro: { fontSize: 13, color: colors.primary, fontWeight: '700' },
+  templateActions: { flexDirection: 'row', gap: spacing.sm },
+  editButton: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2 },
+  editButtonText: { color: colors.textSecondary, fontWeight: '700', fontSize: 12 },
   logButton: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2 },
   logButtonText: { color: colors.white, fontWeight: '700', fontSize: 12 },
   input: {

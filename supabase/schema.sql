@@ -58,8 +58,13 @@ create table if not exists public.workout_entries (
   label text not null,
   duration_min numeric not null,
   calories_burned numeric not null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- The client-generated WorkoutLogEntry.id (a timestamp string, not a uuid). Lets pushWorkoutEntry
+  -- upsert (e.g. after an AI photo analysis refines calories_burned) instead of only ever inserting.
+  client_id text
 );
+alter table public.workout_entries add column if not exists client_id text;
+create unique index if not exists workout_entries_user_client_id_key on public.workout_entries (user_id, client_id);
 
 -- 5. Ảnh minh chứng (file ảnh lưu trong Storage bucket "proofs", bảng này lưu metadata).
 create table if not exists public.proof_photos (

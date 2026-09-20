@@ -39,4 +39,7 @@
    Từ đó làm input để phân tích đưa ra sugguest điều chỉnh hoạt động workout, meal sau mỗi tuần.
 12. **Log record**
    Hỗ trợ ghi các log record muộn, không nhất thiết phải real time data.
-   Hỗ trợ cho log muộn của tất cả activvities của người dùng
+   Hỗ trợ cho log muộn của tất cả activvities của người
+13. **Login**
+   Giữ trạng thái login nếu open vào trong 24h. Quá 24h mới yêu cầu login lại.
+   Lưu trữ user name, password login.
