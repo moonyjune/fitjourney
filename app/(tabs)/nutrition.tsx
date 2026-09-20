@@ -12,6 +12,7 @@ import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 
 export default function NutritionScreen() {
   const { t } = useTranslation();
@@ -51,7 +52,7 @@ export default function NutritionScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('nutrition.dayTraining') : t('nutrition.dayRest')}</Text>
 
       <Card>

@@ -9,6 +9,7 @@ import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 
 const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
   { key: 'weight.range1w', days: 7 },
@@ -57,7 +58,7 @@ export default function WeightScreen() {
   return (
     <FlatList
       style={styles.container}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle]}
       data={[...entries].reverse()}
       keyExtractor={(item) => item.id}
       ListHeaderComponent={

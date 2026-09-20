@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { supabase } from '../src/lib/supabase';
 import { Button } from '../src/components/Button';
 import { Logo } from '../src/components/Logo';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { screenMaxWidthStyle } from '../src/theme/responsive';
 
 export default function AuthScreen() {
   const { t } = useTranslation();
@@ -38,35 +39,37 @@ export default function AuthScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Logo size={64} showWordmark />
-      <Text style={styles.subtitle}>{mode === 'signIn' ? t('auth.subtitleSignIn') : t('auth.subtitleSignUp')}</Text>
+      <View style={screenMaxWidthStyle}>
+        <Logo size={64} showWordmark />
+        <Text style={styles.subtitle}>{mode === 'signIn' ? t('auth.subtitleSignIn') : t('auth.subtitleSignUp')}</Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder={t('auth.email')}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder={t('auth.password')}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+        <TextInput
+          style={styles.input}
+          placeholder={t('auth.email')}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder={t('auth.password')}
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
 
-      <Button
-        title={busy ? t('common.loading') : mode === 'signIn' ? t('auth.signIn') : t('auth.signUp')}
-        onPress={handleSubmit}
-        loading={busy}
-        style={{ marginTop: spacing.md }}
-      />
+        <Button
+          title={busy ? t('common.loading') : mode === 'signIn' ? t('auth.signIn') : t('auth.signUp')}
+          onPress={handleSubmit}
+          loading={busy}
+          style={{ marginTop: spacing.md }}
+        />
 
-      <TouchableOpacity onPress={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')}>
-        <Text style={styles.switchModeText}>{mode === 'signIn' ? t('auth.switchToSignUp') : t('auth.switchToSignIn')}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity onPress={() => setMode(mode === 'signIn' ? 'signUp' : 'signIn')}>
+          <Text style={styles.switchModeText}>{mode === 'signIn' ? t('auth.switchToSignUp') : t('auth.switchToSignIn')}</Text>
+        </TouchableOpacity>
+      </View>
     </KeyboardAvoidingView>
   );
 }

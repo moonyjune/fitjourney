@@ -15,6 +15,7 @@ import { weekStartKey } from '../../src/utils/weekKey';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import type { CoachFeedback, DailyNutritionLog, FeedbackPeriodType, MealSlot, PlanData, ProofTaskType } from '../../src/types';
 
 interface RecentProof {
@@ -284,7 +285,7 @@ export default function ClientDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ title: t('clientDetail.headerTitle'), headerShown: true }} />
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
         <Card>
           <Text style={styles.cardTitle}>{t('clientDetail.weightProgressTitle')}</Text>
           <Text style={styles.weightText}>

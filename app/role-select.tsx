@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { colors, radius, spacing, typography, ROLE_ACCENTS } from '../src/theme/tokens';
+import { screenMaxWidthStyle } from '../src/theme/responsive';
 
 export default function RoleSelectScreen() {
   const { t } = useTranslation();
@@ -25,29 +26,31 @@ export default function RoleSelectScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{t('role.title')}</Text>
-      <Text style={styles.subtitle}>{t('role.subtitle')}</Text>
+      <View style={screenMaxWidthStyle}>
+        <Text style={styles.title}>{t('role.title')}</Text>
+        <Text style={styles.subtitle}>{t('role.subtitle')}</Text>
 
-      <TouchableOpacity
-        style={[styles.card, { borderColor: ROLE_ACCENTS.client.primary, backgroundColor: ROLE_ACCENTS.client.primaryLight }]}
-        onPress={handleClient}
-        disabled={busy}
-      >
-        <Text style={styles.cardEmoji}>🔥</Text>
-        <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.client.primaryDark }]}>{t('role.clientTitle')}</Text>
-        <Text style={styles.cardDescription}>{t('role.clientDescription')}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.card, { borderColor: ROLE_ACCENTS.client.primary, backgroundColor: ROLE_ACCENTS.client.primaryLight }]}
+          onPress={handleClient}
+          disabled={busy}
+        >
+          <Text style={styles.cardEmoji}>🔥</Text>
+          <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.client.primaryDark }]}>{t('role.clientTitle')}</Text>
+          <Text style={styles.cardDescription}>{t('role.clientDescription')}</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={[styles.card, { borderColor: ROLE_ACCENTS.coach.primary, backgroundColor: ROLE_ACCENTS.coach.primaryLight }]}
-        onPress={handleCoach}
-        disabled={busy}
-      >
-        <Text style={styles.cardEmoji}>🧑‍🏫</Text>
-        <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.coach.primaryDark }]}>{t('role.coachTitle')}</Text>
-        <Text style={styles.cardDescription}>{t('role.coachDescription')}</Text>
-        {busy && <ActivityIndicator style={{ marginTop: spacing.md }} color={ROLE_ACCENTS.coach.primary} />}
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.card, { borderColor: ROLE_ACCENTS.coach.primary, backgroundColor: ROLE_ACCENTS.coach.primaryLight }]}
+          onPress={handleCoach}
+          disabled={busy}
+        >
+          <Text style={styles.cardEmoji}>🧑‍🏫</Text>
+          <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.coach.primaryDark }]}>{t('role.coachTitle')}</Text>
+          <Text style={styles.cardDescription}>{t('role.coachDescription')}</Text>
+          {busy && <ActivityIndicator style={{ marginTop: spacing.md }} color={ROLE_ACCENTS.coach.primary} />}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

@@ -18,6 +18,7 @@ import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/stre
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 
 export default function TodayScreen() {
   const { t, language } = useTranslation();
@@ -77,7 +78,7 @@ export default function TodayScreen() {
   const dateLocale = language === 'en' ? 'en-US' : 'vi-VN';
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.dateLabel}>
         {now.toLocaleDateString(dateLocale, { weekday: 'long', day: '2-digit', month: '2-digit' })} ·{' '}
         {dayType === 'training' ? t('today.dayTraining') : t('today.dayRest')}

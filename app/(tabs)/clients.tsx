@@ -6,6 +6,7 @@ import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { fetchCoachClients } from '../../src/sync/cloudSync';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { colors, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import type { CoachClientSummary } from '../../src/types';
 
 export default function ClientsScreen() {
@@ -28,7 +29,7 @@ export default function ClientsScreen() {
   );
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('clients.yourCodeTitle')}</Text>
       <Card>
         <Text style={styles.codeLabel}>{t('clients.shareCodeHint')}</Text>

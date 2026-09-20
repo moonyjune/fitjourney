@@ -7,6 +7,7 @@ import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { signOutAndReset } from '../../src/auth/signOut';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { useAccentColors } from '../../src/theme/useAccentColors';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 
 export default function CoachAccountScreen() {
   const { t } = useTranslation();
@@ -25,7 +26,7 @@ export default function CoachAccountScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('mode.title')}</Text>
       <Card>
         <Text style={styles.fieldLabel}>

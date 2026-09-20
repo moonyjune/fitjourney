@@ -6,6 +6,7 @@ import { DEFAULT_START_WEIGHT_KG } from '../src/constants/plan';
 import { Button } from '../src/components/Button';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../src/theme/tokens';
+import { screenMaxWidthStyle } from '../src/theme/responsive';
 
 export default function OnboardingScreen() {
   const { t } = useTranslation();
@@ -44,7 +45,7 @@ export default function OnboardingScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, screenMaxWidthStyle]}>
       <Text style={styles.title}>{t('onboarding.title')}</Text>
       <Text style={styles.subtitle}>{t('onboarding.subtitle')}</Text>
 

@@ -14,6 +14,7 @@ import { CARB_SWAP_OPTIONS, PROTEIN_SWAP_OPTIONS } from '../../src/constants/pla
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { useAccentColors } from '../../src/theme/useAccentColors';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import type { PlanData } from '../../src/types';
 
 export default function PlanScreen() {
@@ -96,7 +97,7 @@ export default function PlanScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('mode.title')}</Text>
       <Card>
         <Text style={styles.fieldLabel}>{settings.coachEnabled ? t('plan.coachFieldEnabled') : t('plan.coachFieldDisabled')}</Text>

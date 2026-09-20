@@ -18,6 +18,7 @@ import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/stre
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import type { CoachFeedback } from '../../src/types';
 
 interface DaySummary {
@@ -133,7 +134,7 @@ export default function HistoryScreen() {
   const badges = unlockedStreakBadges(streak);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('history.achievementsTitle')}</Text>
       <Card>
         <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>

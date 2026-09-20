@@ -10,6 +10,7 @@ import { usePlanStore } from '../../src/store/usePlanStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
 
 export default function WorkoutScreen() {
   const { t } = useTranslation();
@@ -51,7 +52,7 @@ export default function WorkoutScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('workout.dayTraining') : t('workout.dayRest')}</Text>
 
       <Text style={styles.sectionTitle}>{t('workout.suggestedTitle')}</Text>
