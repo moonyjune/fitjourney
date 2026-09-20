@@ -7,6 +7,7 @@ import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { predictedWeightKgAt } from '../../src/utils/milestones';
+import { thinLabels } from '../../src/utils/chartLabels';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
@@ -19,13 +20,6 @@ const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
   { key: 'weight.range2m', days: 61 },
   { key: 'weight.range3m', days: 91 },
 ];
-
-// Chart labels get unreadable with many points — only show every Nth label.
-function thinLabels(labels: string[], maxVisible = 7): string[] {
-  if (labels.length <= maxVisible) return labels;
-  const step = Math.ceil(labels.length / maxVisible);
-  return labels.map((label, i) => (i % step === 0 || i === labels.length - 1 ? label : ''));
-}
 
 export default function WeightScreen() {
   const { t } = useTranslation();

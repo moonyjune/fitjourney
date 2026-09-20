@@ -65,11 +65,26 @@ const PLAN_TOOL = {
             durationMin: { type: 'number' },
             caloriesBurned: { type: 'number' },
             description: { type: 'string' },
+            steps: {
+              type: 'array',
+              description:
+                'Step-by-step breakdown (warm-up, main set, cooldown, ...). durationMin/caloriesBurned of each step must sum to the template totals above. Always fill this in fully — never leave it empty.',
+              items: {
+                type: 'object',
+                properties: {
+                  label: { type: 'string' },
+                  instruction: { type: 'string' },
+                  durationMin: { type: 'number' },
+                  caloriesBurned: { type: 'number' },
+                },
+                required: ['label', 'instruction', 'durationMin', 'caloriesBurned'],
+              },
+            },
             reminderSlot: { type: 'string', enum: ['morning', 'evening'] },
             startHour: { type: 'number' },
             startMinute: { type: 'number' },
           },
-          required: ['id', 'label', 'timeRange', 'durationMin', 'caloriesBurned', 'description'],
+          required: ['id', 'label', 'timeRange', 'durationMin', 'caloriesBurned', 'description', 'steps'],
         },
       },
       shoppingList: {

@@ -3,6 +3,7 @@ import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { ProofCapture } from '../../src/components/ProofCapture';
+import { WorkoutStepsList } from '../../src/components/PlanPreview';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { todayKey } from '../../src/store/useNutritionStore';
 import { getDayType } from '../../src/constants/plan';
@@ -60,7 +61,11 @@ export default function WorkoutScreen() {
         <Card key={template.id}>
           <Text style={styles.templateLabel}>{template.label}</Text>
           <Text style={styles.templateTime}>{template.timeRange}</Text>
-          <Text style={styles.templateDescription}>{template.description}</Text>
+          {template.steps && template.steps.length > 0 ? (
+            <WorkoutStepsList steps={template.steps} />
+          ) : (
+            <Text style={styles.templateDescription}>{template.description}</Text>
+          )}
           <View style={styles.templateFooter}>
             <Text style={styles.templateMacro}>{t('workout.templateMacro', { min: template.durationMin, kcal: template.caloriesBurned })}</Text>
             <TouchableOpacity

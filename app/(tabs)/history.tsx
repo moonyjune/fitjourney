@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LineChart, BarChart } from 'react-native-chart-kit';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
@@ -14,6 +15,7 @@ import { fetchFeedback } from '../../src/sync/cloudSync';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { computeMilestones } from '../../src/utils/milestones';
+import { thinLabels } from '../../src/utils/chartLabels';
 import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
@@ -43,6 +45,17 @@ const MILESTONE_STATUS_COLOR: Record<string, string> = {
   upcoming: colors.textMuted,
   achieved: colors.success,
   missed: colors.danger,
+};
+
+const chartWidth = Dimensions.get('window').width - 32;
+const baseChartConfig = {
+  backgroundColor: colors.surface,
+  backgroundGradientFrom: colors.surface,
+  backgroundGradientTo: colors.surface,
+  decimalPlaces: 0,
+  color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
+  propsForDots: { r: '3' },
 };
 
 export default function HistoryScreen() {
@@ -133,6 +146,29 @@ export default function HistoryScreen() {
   );
   const badges = unlockedStreakBadges(streak);
 
+  // Daily timelines, oldest -> newest, last 14 logged days. Calories in/out get separate charts
+  // (not a shared y-axis) since exercise calories burned are naturally an order of magnitude
+  // smaller than calories eaten — sharing one axis would flatten the burned-calories line.
+  const dailyCharts = useMemo(() => {
+    const chronological = [...daySummaries].reverse().slice(-14);
+    if (chronological.length < 2) return null;
+    const labels = thinLabels(chronological.map((d) => formatDateVi(d.dateKey).slice(0, 5)));
+    return {
+      caloriesIn: { labels, datasets: [{ data: chronological.map((d) => d.calories), color: () => colors.warning, strokeWidth: 3 }] },
+      caloriesOut: { labels, datasets: [{ data: chronological.map((d) => d.caloriesBurned), color: () => colors.success, strokeWidth: 3 }] },
+    };
+  }, [daySummaries]);
+
+  // Weekly summary bar chart (avg daily calories), oldest -> newest, last 8 weeks.
+  const weeklyChart = useMemo(() => {
+    const chronological = [...weeklySummaries].reverse().slice(-8);
+    if (chronological.length < 2) return null;
+    return {
+      labels: thinLabels(chronological.map((w) => formatDateVi(w.weekKey).slice(0, 5)), 6),
+      datasets: [{ data: chronological.map((w) => Math.round(w.avgCalories)) }],
+    };
+  }, [weeklySummaries]);
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
       <Text style={styles.sectionTitle}>{t('history.achievementsTitle')}</Text>
@@ -181,7 +217,53 @@ export default function HistoryScreen() {
         </Card>
       ))}
 
+      <Text style={styles.sectionTitle}>{t('history.dailyChartTitle')}</Text>
+      {dailyCharts ? (
+        <Card>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
+            <Text style={styles.legendText}>{t('history.legendCaloriesIn')}</Text>
+          </View>
+          <LineChart
+            data={dailyCharts.caloriesIn}
+            width={chartWidth}
+            height={160}
+            chartConfig={baseChartConfig}
+            bezier
+            style={styles.chartStyle}
+          />
+          <View style={[styles.legendItem, { marginTop: spacing.sm }]}>
+            <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
+            <Text style={styles.legendText}>{t('history.legendCaloriesOut')}</Text>
+          </View>
+          <LineChart
+            data={dailyCharts.caloriesOut}
+            width={chartWidth}
+            height={160}
+            chartConfig={baseChartConfig}
+            bezier
+            style={styles.chartStyle}
+          />
+        </Card>
+      ) : (
+        <Text style={styles.emptyText}>{t('history.emptyChart')}</Text>
+      )}
+
       <Text style={styles.sectionTitle}>{t('history.weeklyTitle')}</Text>
+      {weeklyChart && (
+        <Card>
+          <BarChart
+            data={weeklyChart}
+            width={chartWidth}
+            height={180}
+            yAxisLabel=""
+            yAxisSuffix=" kcal"
+            chartConfig={baseChartConfig}
+            fromZero
+            style={styles.chartStyle}
+          />
+        </Card>
+      )}
       {weeklySummaries.length === 0 && <Text style={styles.emptyText}>{t('history.emptyData')}</Text>}
       {weeklySummaries.map((w) => (
         <Card key={w.weekKey}>
@@ -230,4 +312,8 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginTop: spacing.md },
   feedbackPeriod: { fontSize: 12, fontWeight: '700', color: colors.primary },
   feedbackDate: { fontSize: 11, color: colors.textMuted, marginTop: spacing.md - 4 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 11, color: colors.textSecondary },
+  chartStyle: { borderRadius: radius.lg },
 });

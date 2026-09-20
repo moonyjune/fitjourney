@@ -19,6 +19,14 @@ export interface MealTemplate {
   proteinG: number;
 }
 
+/** One phase of a workout template (warm-up, main set, cooldown, ...). */
+export interface WorkoutStep {
+  label: string;
+  instruction: string;
+  durationMin: number;
+  caloriesBurned: number;
+}
+
 export interface WorkoutTemplate {
   id: string;
   label: string;
@@ -26,6 +34,9 @@ export interface WorkoutTemplate {
   durationMin: number;
   caloriesBurned: number;
   description: string;
+  /** Step-by-step breakdown; durationMin/caloriesBurned above should equal the sum of these.
+   *  Optional so plans saved before this field existed still render (as a single implicit step). */
+  steps?: WorkoutStep[];
   /** Only templates with a reminder slot get a scheduled daily notification. */
   reminderSlot?: 'morning' | 'evening';
   startHour?: number;

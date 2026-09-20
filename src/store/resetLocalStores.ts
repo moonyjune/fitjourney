@@ -9,8 +9,10 @@ import { useNutritionStore } from './useNutritionStore';
 import { usePlanStore } from './usePlanStore';
 import { useProofStore } from './useProofStore';
 import { useSettingsStore } from './useSettingsStore';
+import { useShoppingListStore } from './useShoppingListStore';
 import { useWeightStore } from './useWeightStore';
 import { useWorkoutStore } from './useWorkoutStore';
+import { weekStartKey } from '../utils/weekKey';
 
 /**
  * Every persisted store is keyed by store name in device AsyncStorage, not by account.
@@ -46,4 +48,5 @@ export function resetAllLocalStores() {
   // Epoch timestamp guarantees the next syncFromRemote() treats any remote plan as newer.
   usePlanStore.setState({ plan: DEFAULT_PLAN, updatedAtISO: new Date(0).toISOString() });
   useProofStore.setState({ photos: [] });
+  useShoppingListStore.setState({ weekKey: weekStartKey(new Date()), checkedItems: {}, actualPrices: {}, actualQuantities: {}, customItems: [] });
 }

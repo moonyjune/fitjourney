@@ -155,6 +155,16 @@ export const DEFAULT_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     caloriesBurned: 420,
     description:
       'Bơi lội (đi bộ nước + bơi ếch + đập chân phao + bơi sải) HOẶC đi bộ dốc Incline 12-15%, tốc độ 3.5-4.0 km/h.',
+    steps: [
+      { label: 'Khởi động', instruction: 'Đi bộ nhẹ hoặc bơi thả lỏng làm nóng cơ.', durationMin: 5, caloriesBurned: 35 },
+      {
+        label: 'Bài chính',
+        instruction: 'Bơi lội (đi bộ nước + bơi ếch + đập chân phao + bơi sải) HOẶC đi bộ dốc Incline 12-15%, tốc độ 3.5-4.0 km/h.',
+        durationMin: 35,
+        caloriesBurned: 350,
+      },
+      { label: 'Thả lỏng', instruction: 'Giảm tốc độ dần, hít thở sâu, giãn cơ nhẹ.', durationMin: 5, caloriesBurned: 35 },
+    ],
     reminderSlot: 'morning',
     startHour: 6,
     startMinute: 30,
@@ -166,6 +176,10 @@ export const DEFAULT_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     durationMin: 45,
     caloriesBurned: 380,
     description: '25 phút đi bộ dốc Incline 10-12% (4.0 km/h) + 20 phút Elliptical hoặc xe đạp tựa lưng.',
+    steps: [
+      { label: 'Đi bộ dốc Incline', instruction: 'Đi bộ dốc Incline 10-12%, tốc độ 4.0 km/h.', durationMin: 25, caloriesBurned: 211 },
+      { label: 'Elliptical / xe đạp tựa lưng', instruction: 'Elliptical hoặc xe đạp tựa lưng, nhịp độ vừa phải.', durationMin: 20, caloriesBurned: 169 },
+    ],
     reminderSlot: 'evening',
     startHour: 17,
     startMinute: 30,
@@ -178,6 +192,13 @@ export const DEFAULT_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     caloriesBurned: 399,
     description:
       '10p đi bộ dưới nước, 15p bơi ếch, 10p đập chân với phao, 5p bơi sải tốc độ nhanh, 5p thả lỏng vẩy tay chân dưới nước.',
+    steps: [
+      { label: 'Đi bộ dưới nước', instruction: 'Đi bộ dưới nước khởi động.', durationMin: 10, caloriesBurned: 89 },
+      { label: 'Bơi ếch', instruction: 'Bơi ếch nhịp độ vừa phải.', durationMin: 15, caloriesBurned: 133 },
+      { label: 'Đập chân với phao', instruction: 'Đập chân với phao, tập trung cơ chân.', durationMin: 10, caloriesBurned: 89 },
+      { label: 'Bơi sải tốc độ nhanh', instruction: 'Bơi sải với tốc độ nhanh.', durationMin: 5, caloriesBurned: 44 },
+      { label: 'Thả lỏng', instruction: 'Vẩy tay chân dưới nước thả lỏng.', durationMin: 5, caloriesBurned: 44 },
+    ],
   },
 ];
 

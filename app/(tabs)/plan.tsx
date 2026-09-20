@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { PlanPreview } from '../../src/components/PlanPreview';
+import { ShoppingListEditor } from '../../src/components/ShoppingListEditor';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
@@ -155,7 +156,8 @@ export default function PlanScreen() {
       </Card>
 
       <Text style={styles.sectionTitle}>{t('plan.currentPlanTitle')}</Text>
-      <PlanPreview plan={plan} />
+      <PlanPreview plan={plan} hideShoppingList />
+      <ShoppingListEditor plan={plan} />
 
       <Text style={styles.sectionTitle}>{t('plan.swapTitle')}</Text>
       <Card>
