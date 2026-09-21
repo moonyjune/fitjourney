@@ -26,24 +26,42 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px; }
   figure { margin: 0; background: var(--surface); border-radius: 18px; padding: 14px 14px 16px; box-shadow: 0 6px 20px rgba(20,30,60,0.08); opacity: 0; animation: fadeUp 0.5s ease-out forwards; transition: transform 0.2s ease, box-shadow 0.2s ease; }
   figure:hover { transform: translateY(-4px); box-shadow: 0 14px 30px rgba(20,30,60,0.16); }
-  figure img { width: 100%; border-radius: 12px; display: block; border: 1px solid #eee; cursor: zoom-in; }
+
+  /* Thumbnails are capped to a fixed height and cropped to the top of the screenshot — the PNG
+     itself keeps the full scrolled content (that's the point), the crop is only a gallery-card
+     framing device. A gradient fade + "scroll to see more" badge signals there's more below. */
+  .thumb-wrap { position: relative; height: 340px; border-radius: 12px; overflow: hidden; border: 1px solid #eee; cursor: zoom-in; background: #fafafa; }
+  .thumb-wrap img { width: 100%; display: block; object-fit: cover; object-position: top center; }
+  .thumb-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 70px; background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.96)); pointer-events: none; }
+  .scroll-badge {
+    position: absolute; left: 10px; bottom: 10px; background: rgba(20,24,34,0.78); color: #fff;
+    font-size: 10.5px; font-weight: 700; padding: 5px 9px; border-radius: 999px; display: flex; align-items: center; gap: 4px;
+    backdrop-filter: blur(2px);
+  }
+  .scroll-badge svg { width: 10px; height: 10px; animation: bob 1.4s ease-in-out infinite; }
+  @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(3px); } }
+
   figcaption { margin-top: 10px; font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
   figcaption small { display: block; font-weight: 500; color: var(--text-muted); margin-top: 2px; font-size: 11px; }
 
   @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
 
-  .lightbox { position: fixed; inset: 0; background: rgba(10,14,25,0.82); display: none; align-items: center; justify-content: center; z-index: 50; padding: 30px; animation: fadeIn 0.2s ease-out both; }
-  .lightbox.open { display: flex; }
-  .lightbox img { max-height: 92vh; max-width: 92vw; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
-  .lightbox .hint { position: absolute; top: 20px; right: 26px; color: #fff; font-size: 13px; opacity: 0.75; }
+  /* Lightbox: scrolls internally rather than shrinking the image to fit, since screenshots can
+     be many screen-heights tall — shrinking to fit the viewport would make long ones unreadable. */
+  .lightbox { position: fixed; inset: 0; background: rgba(10,14,25,0.88); display: none; z-index: 50; overflow-y: auto; animation: fadeIn 0.2s ease-out both; }
+  .lightbox.open { display: block; }
+  .lightbox-inner { min-height: 100%; display: flex; flex-direction: column; align-items: center; padding: 70px 20px 40px; }
+  .lightbox img { width: min(92vw, 460px); height: auto; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+  .lightbox .hint { position: fixed; top: 18px; right: 22px; color: #fff; font-size: 13px; opacity: 0.85; background: rgba(20,24,34,0.6); padding: 8px 14px; border-radius: 999px; cursor: pointer; z-index: 51; }
+  .lightbox .caption { color: #fff; font-size: 13px; font-weight: 700; margin-bottom: 16px; opacity: 0.9; text-align: center; }
 </style>
 </head>
 <body>
 
 <header class="hero">
   <h1>📱 Screens Export</h1>
-  <p>Ảnh chụp thật từ app đang chạy (web build) — không phải mockup tĩnh. Nhấp vào ảnh để phóng to.</p>
+  <p>Ảnh chụp thật từ app đang chạy (web build), cao đủ để thấy toàn bộ nội dung khi cuộn — không phải mockup tĩnh hay ảnh bị cắt ở viewport. Nhấp vào ảnh để xem đầy đủ.</p>
 </header>
 
 <nav class="crumbs"><a href="design-system.html">← Xem Design System (màu sắc, thang chữ, animation)</a></nav>
@@ -58,7 +76,13 @@
   <div class="grid" id="grid-coach"></div>
 </main>
 
-<div class="lightbox" id="lightbox"><span class="hint">Nhấp để đóng</span><img id="lightbox-img" src="" alt="" /></div>
+<div class="lightbox" id="lightbox">
+  <span class="hint" id="lightbox-close">✕ Đóng</span>
+  <div class="lightbox-inner">
+    <div class="caption" id="lightbox-caption"></div>
+    <img id="lightbox-img" src="" alt="" />
+  </div>
+</div>
 
 <script>
   const fatty = [
@@ -66,39 +90,65 @@
     ['02-auth-signup.png', 'Đăng nhập / Đăng ký', 'Form xác thực qua Supabase Auth'],
     ['03-role-select.png', 'Chọn vai trò', 'Thẻ Fatty (cam) vs Coach (xanh)'],
     ['04-onboarding.png', 'Onboarding', 'Nhập cân nặng/mục tiêu + mã Coach tuỳ chọn'],
-    ['05-today.png', 'Hôm nay', 'Ambient background theo giờ nhịn/ăn + streak + tiến độ'],
+    ['05-today.png', 'Hôm nay', 'Ambient background theo giờ nhịn/ăn + streak + tiến độ + ghi cảm giác'],
     ['06-weight.png', 'Cân nặng', 'Biểu đồ + đường mốc "Hôm nay" + dự đoán ngày đạt mục tiêu'],
-    ['07-nutrition.png', 'Dinh dưỡng', 'Progress bar animated + lịch trình uống nước'],
+    ['07-nutrition.png', 'Dinh dưỡng', 'Progress bar animated + đủ 3 bữa + lịch trình uống nước'],
     ['08-workout.png', 'Tập luyện', 'Gợi ý bài tập + ghi nhận nhanh + chỉnh bằng AI'],
-    ['09-history.png', 'Lịch sử', 'Nhật ký cảm giác + biểu đồ cảm xúc tuần'],
-    ['10-plan.png', 'Kế hoạch', 'Ngày bắt đầu kế hoạch + mục tiêu cá nhân'],
+    ['09-history.png', 'Lịch sử', 'Nhật ký cảm giác + biểu đồ cảm xúc tuần + gợi ý AI'],
+    ['10-plan.png', 'Kế hoạch', 'Toàn bộ thực đơn tuần + danh sách đi chợ + tài khoản'],
   ];
   const coach = [
     ['11-coach-clients.png', 'Học viên', 'Mã mời + danh sách học viên đã liên kết'],
-    ['13-coach-client-detail.png', 'Chi tiết học viên', 'Tiến trình, ảnh minh chứng, nhận xét định kỳ, trợ lý AI'],
+    ['13-coach-client-detail.png', 'Chi tiết học viên', 'Toàn bộ tiến trình, kế hoạch, bài tập, danh sách đi chợ của học viên'],
     ['12-coach-account.png', 'Tài khoản Coach', 'Mã của bạn + chuyển đổi chế độ + đăng xuất'],
   ];
+
+  function scrollBadgeSvg() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 4v16M6 14l6 6 6-6"/></svg>';
+  }
 
   function render(list, elId) {
     const el = document.getElementById(elId);
     list.forEach(([src, title, sub], i) => {
       const fig = document.createElement('figure');
       fig.style.animationDelay = (i * 0.06) + 's';
-      fig.innerHTML = `<img src="screens/${src}" alt="${title}" loading="lazy" />
+      fig.innerHTML = `
+        <div class="thumb-wrap">
+          <img src="screens/${src}" alt="${title}" loading="lazy" />
+          <div class="thumb-fade"></div>
+          <div class="scroll-badge" hidden>${scrollBadgeSvg()}<span class="scroll-badge-text"></span></div>
+        </div>
         <figcaption>${title}<small>${sub}</small></figcaption>`;
-      fig.querySelector('img').addEventListener('click', () => openLightbox(`screens/${src}`, title));
+      const img = fig.querySelector('img');
+      const badge = fig.querySelector('.scroll-badge');
+      img.addEventListener('load', () => {
+        const ratio = img.naturalHeight / img.naturalWidth;
+        // A single phone screen is roughly 2.17:1 (932/430) tall:wide — anything noticeably
+        // taller than that had extra content revealed by growing the viewport before capture.
+        if (ratio > 2.6) {
+          badge.hidden = false;
+          badge.querySelector('.scroll-badge-text').textContent = `Cuộn ${(ratio / 2.17).toFixed(1)}x`;
+        }
+      });
+      fig.querySelector('.thumb-wrap').addEventListener('click', () => openLightbox(`screens/${src}`, title));
       el.appendChild(fig);
     });
   }
   function openLightbox(src, alt) {
-    const lb = document.getElementById('lightbox');
     document.getElementById('lightbox-img').src = src;
     document.getElementById('lightbox-img').alt = alt;
-    lb.classList.add('open');
+    document.getElementById('lightbox-caption').textContent = alt;
+    document.getElementById('lightbox').classList.add('open');
+    document.getElementById('lightbox').scrollTop = 0;
   }
-  document.getElementById('lightbox').addEventListener('click', () => {
+  function closeLightbox() {
     document.getElementById('lightbox').classList.remove('open');
+  }
+  document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+  document.getElementById('lightbox').addEventListener('click', (e) => {
+    if (e.target.id === 'lightbox') closeLightbox();
   });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLightbox(); });
   render(fatty, 'grid-fatty');
   render(coach, 'grid-coach');
 </script>
