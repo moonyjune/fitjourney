@@ -54,3 +54,8 @@
 15. **Emotional chart**
     Đưa ra Pie chart hoặc chart dạng web để mô tả tracking, analyze về feeling, emotional data.
     Đưa ra nhận định AI tương ứng theo từng update, nhận định mang tính cố vũ, nhận xét thực tế, lạc quan, giúp người dùng tiến tới đích.
+16. **Asume** 
+    This is eating hour, update design for background color at eating hour.
+    Ở phần tuỳ biến món ăn, update design sao cho lựa chọn gợi ý các món ăn khác nhau, kèm ảnh minh hoạ.
+    Có keyword Receipe và Ingredient, thông tin duration, độ khó 1~5 . 
+    Các thông tin này được tích hợp câu trả lời gợi ý của AI và store vào DB để hiển thị cho lần access/open screen mới. Có button refresh để gen lại món ăn khác, tương ứng về dinh dưỡng, tuy nhiên món ăn lại khác. Khi bấm vào nút [How to cook] Sẽ mở ra dialog hiển thị receipt, ingredient, duration, độ khó 1-5, bao gồm thêm các step hướng dẫn khác nữa. Đảm bảo branch ở trạng thái hotfix, ít ảnh hưởng tới hệ thôngs hoặc function cũ đã ổn định
