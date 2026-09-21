@@ -199,3 +199,21 @@ export interface FeelingRecord {
   workoutCondition: WorkoutCondition | null;
   note: string;
 }
+
+export interface RecipeIngredient {
+  name: string;
+  quantity: string;
+}
+
+/** AI-suggested alternative dish for one meal slot — matches the plan's calorie/protein target
+ *  for that slot but is a different dish, cached per (dayType, mealSlot) until refreshed. */
+export interface MealRecipeSuggestion {
+  dishName: string;
+  emoji: string;
+  durationMinutes: number;
+  difficulty: number;
+  caloriesKcal: number;
+  proteinG: number;
+  ingredients: RecipeIngredient[];
+  steps: string[];
+}

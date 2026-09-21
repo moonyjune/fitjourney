@@ -4,6 +4,7 @@ import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { ProofCapture } from '../../src/components/ProofCapture';
+import { MealRecipeSuggestion } from '../../src/components/MealRecipeSuggestion';
 import { MealItemRows } from '../../src/components/PlanPreview';
 import { WaterTimeline } from '../../src/components/WaterTimeline';
 import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
@@ -136,6 +137,13 @@ export default function NutritionScreen() {
               <MealItemRows items={meal.items} />
               <Text style={styles.mealMacro}>{t('nutrition.mealTotal', { kcal: meal.calories, protein: meal.proteinG })}</Text>
               <ProofCapture dateKey={dateKey} taskType="meal" taskRefId={meal.slot} contextLabel={meal.label} plannedCalories={meal.calories} />
+              <MealRecipeSuggestion
+                dayType={dayType}
+                mealSlot={meal.slot}
+                mealLabel={meal.label}
+                targetCalories={meal.calories}
+                targetProtein={meal.proteinG}
+              />
             </Card>
           </TouchableOpacity>
         );

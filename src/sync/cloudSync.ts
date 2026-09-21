@@ -10,6 +10,7 @@ import type {
   DailyNutritionLog,
   FeedbackPeriodType,
   FeelingRecord,
+  MealRecipeSuggestion,
   Mood,
   PlanData,
   ProofPhoto,
@@ -527,6 +528,103 @@ export async function requestWeeklySuggestion(
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'Unknown error' };
   }
+}
+
+/** Cached alternative-dish suggestion for one meal slot — null if never generated (or not yet
+ *  synced; the table is new, so a not-found error here is expected until schema.sql is re-run). */
+export async function fetchMealRecipe(dayType: 'training' | 'rest', mealSlot: string): Promise<MealRecipeSuggestion | null> {
+  const userId = currentUserId();
+  if (!userId) return null;
+  try {
+    const { data, error } = await supabase
+      .from('meal_recipe_suggestions')
+      .select('dish_name, emoji, duration_minutes, difficulty, calories_kcal, protein_g, ingredients, steps')
+      .eq('user_id', userId)
+      .eq('day_type', dayType)
+      .eq('meal_slot', mealSlot)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      dishName: data.dish_name,
+      emoji: data.emoji,
+      durationMinutes: data.duration_minutes,
+      difficulty: data.difficulty,
+      caloriesKcal: data.calories_kcal,
+      proteinG: data.protein_g,
+      ingredients: data.ingredients ?? [],
+      steps: data.steps ?? [],
+    };
+  } catch (error) {
+    logSyncError('fetchMealRecipe', error);
+    return null;
+  }
+}
+
+export async function pushMealRecipe(dayType: 'training' | 'rest', mealSlot: string, recipe: MealRecipeSuggestion): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  try {
+    const { error } = await supabase.from('meal_recipe_suggestions').upsert(
+      {
+        user_id: userId,
+        day_type: dayType,
+        meal_slot: mealSlot,
+        dish_name: recipe.dishName,
+        emoji: recipe.emoji,
+        duration_minutes: recipe.durationMinutes,
+        difficulty: recipe.difficulty,
+        calories_kcal: recipe.caloriesKcal,
+        protein_g: recipe.proteinG,
+        ingredients: recipe.ingredients,
+        steps: recipe.steps,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id,day_type,meal_slot' }
+    );
+    if (error) throw error;
+  } catch (error) {
+    logSyncError('pushMealRecipe', error);
+  }
+}
+
+/** Calls the generate-meal-recipe edge function; requires ANTHROPIC_API_KEY to be configured
+ *  server-side. Does not write to the DB itself — the caller does that via pushMealRecipe once it
+ *  decides to keep the suggestion (always, in practice, but keeps the same division as the other
+ *  AI features: this function only talks to Claude). */
+export async function requestMealRecipe(
+  mealLabel: string,
+  dayType: 'training' | 'rest',
+  targetCalories: number,
+  targetProtein: number,
+  avoidDishNames?: string[]
+): Promise<{ ok: true; recipe: MealRecipeSuggestion } | { ok: false; message: string }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-meal-recipe', {
+      body: { mealLabel, dayType, targetCalories, targetProtein, avoidDishNames },
+    });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error };
+    return { ok: true, recipe: data.recipe as MealRecipeSuggestion };
+  } catch (error) {
+    return { ok: false, message: await describeFunctionsError(error) };
+  }
+}
+
+/** A non-2xx Edge Function response surfaces as a bare "non-2xx status code" FunctionsHttpError —
+ *  the actual `{ error: "..." }` body (e.g. "chưa cấu hình ANTHROPIC_API_KEY") is on
+ *  `error.context`, a Response, not on the caught error's `message`. Unwrap it when possible. */
+async function describeFunctionsError(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown })?.context;
+  if (context instanceof Response) {
+    try {
+      const body = await context.clone().json();
+      if (typeof body?.error === 'string') return body.error;
+    } catch {
+      // context wasn't JSON — fall through to the generic message below.
+    }
+  }
+  return error instanceof Error ? error.message : 'Unknown error';
 }
 
 export interface PhotoAnalysisResult {

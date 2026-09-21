@@ -153,6 +153,27 @@ create table if not exists public.weekly_suggestions (
   unique (user_id, week_key)
 );
 
+-- AI-suggested alternative dish per meal slot ("tuỳ biến món ăn"), matching the plan's calorie/
+-- protein target for that slot but a different dish — cached so re-opening Nutrition shows the
+-- same suggestion until the user taps refresh (which overwrites this row, one per user+slot).
+-- Keyed by day_type too since meal1/meal2/meal3 differ between training and rest days.
+create table if not exists public.meal_recipe_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  day_type text not null check (day_type in ('training', 'rest')),
+  meal_slot text not null check (meal_slot in ('meal1', 'meal2', 'meal3')),
+  dish_name text not null,
+  emoji text not null default '🍽️',
+  duration_minutes integer not null,
+  difficulty smallint not null check (difficulty between 1 and 5),
+  calories_kcal numeric not null,
+  protein_g numeric not null,
+  ingredients jsonb not null default '[]'::jsonb,
+  steps jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now(),
+  unique (user_id, day_type, meal_slot)
+);
+
 -- Tự động tạo profile khi có user đăng ký mới.
 create or replace function public.handle_new_user()
 returns trigger
@@ -221,6 +242,7 @@ alter table public.plan_chat_sessions enable row level security;
 alter table public.plan_chat_messages enable row level security;
 alter table public.feeling_records enable row level security;
 alter table public.weekly_suggestions enable row level security;
+alter table public.meal_recipe_suggestions enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
@@ -266,6 +288,10 @@ create policy "feeling_records_select_by_coach" on public.feeling_records for se
 
 drop policy if exists "weekly_suggestions_all_own" on public.weekly_suggestions;
 create policy "weekly_suggestions_all_own" on public.weekly_suggestions for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "meal_recipe_suggestions_all_own" on public.meal_recipe_suggestions;
+create policy "meal_recipe_suggestions_all_own" on public.meal_recipe_suggestions for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Plans: Coach có thể xem VÀ sửa kế hoạch của Client (đây là cơ chế "Coach cập nhật menu/lịch tập").
