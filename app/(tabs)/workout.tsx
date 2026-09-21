@@ -146,24 +146,31 @@ export default function WorkoutScreen() {
 
       <Text style={styles.sectionTitle}>{t('workout.todayTitle', { n: todayEntries.length })}</Text>
       {todayEntries.length === 0 && <Text style={styles.emptyText}>{t('workout.emptyToday')}</Text>}
-      {todayEntries.map((e) => (
-        <Card key={e.id}>
-          <View style={styles.historyTopRow}>
-            <View style={[styles.templateIcon, styles.historyIcon, { backgroundColor: accent.primaryLight }]}>
-              <Text style={styles.templateIconEmoji}>{iconForWorkoutLabel(e.label)}</Text>
+      {todayEntries.map((e) => {
+        // A logged entry from a suggested template should show the same numbered step breakdown
+        // as the template itself (and the Plan tab's own copy of it) — otherwise the log just
+        // collapses "Tập sáng ... 45 phút · 420 kcal" into one line with no idea what it involved.
+        const sourceTemplate = e.templateId ? workoutTemplates.find((wt) => wt.id === e.templateId) : undefined;
+        return (
+          <Card key={e.id}>
+            <View style={styles.historyTopRow}>
+              <View style={[styles.templateIcon, styles.historyIcon, { backgroundColor: accent.primaryLight }]}>
+                <Text style={styles.templateIconEmoji}>{iconForWorkoutLabel(e.label)}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.historyLabel}>{e.label}</Text>
+                <Text style={styles.historyMeta}>{t('workout.templateMacro', { min: e.durationMin, kcal: e.caloriesBurned })}</Text>
+              </View>
+              <IntensityBadge caloriesBurned={e.caloriesBurned} durationMin={e.durationMin} />
+              <TouchableOpacity onPress={() => removeEntry(e.id)}>
+                <Text style={styles.deleteText}>{t('common.delete')}</Text>
+              </TouchableOpacity>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.historyLabel}>{e.label}</Text>
-              <Text style={styles.historyMeta}>{t('workout.templateMacro', { min: e.durationMin, kcal: e.caloriesBurned })}</Text>
-            </View>
-            <IntensityBadge caloriesBurned={e.caloriesBurned} durationMin={e.durationMin} />
-            <TouchableOpacity onPress={() => removeEntry(e.id)}>
-              <Text style={styles.deleteText}>{t('common.delete')}</Text>
-            </TouchableOpacity>
-          </View>
-          <ProofCapture dateKey={dateKey} taskType="workout" taskRefId={e.id} contextLabel={e.label} plannedCalories={e.caloriesBurned} />
-        </Card>
-      ))}
+            {sourceTemplate?.steps && sourceTemplate.steps.length > 0 && <WorkoutStepsList steps={sourceTemplate.steps} />}
+            <ProofCapture dateKey={dateKey} taskType="workout" taskRefId={e.id} contextLabel={e.label} plannedCalories={e.caloriesBurned} />
+          </Card>
+        );
+      })}
 
       {recentEntries.length > 0 && (
         <>
