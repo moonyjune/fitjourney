@@ -193,6 +193,9 @@ export const STRINGS = {
     'workout.emptyToday': 'Chưa có buổi tập nào hôm nay.',
     'workout.recentTitle': 'Lịch sử gần đây',
     'workout.errorMissingFields': 'Nhập đầy đủ tên buổi tập, thời lượng và calo đốt.',
+    'workout.intensityLight': 'Nhẹ',
+    'workout.intensityMedium': 'Vừa',
+    'workout.intensityHigh': 'Cao',
 
     'history.milestoneUpcoming': 'Chưa tới ngày',
     'history.milestoneAchieved': 'Đã đạt mục tiêu',
@@ -530,6 +533,9 @@ export const STRINGS = {
     'workout.emptyToday': 'No sessions logged today yet.',
     'workout.recentTitle': 'Recent history',
     'workout.errorMissingFields': 'Enter the session name, duration, and calories burned.',
+    'workout.intensityLight': 'Light',
+    'workout.intensityMedium': 'Medium',
+    'workout.intensityHigh': 'High',
 
     'history.milestoneUpcoming': 'Not due yet',
     'history.milestoneAchieved': 'Goal reached',
