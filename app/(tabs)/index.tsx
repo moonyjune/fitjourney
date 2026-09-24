@@ -141,6 +141,11 @@ export default function TodayScreen() {
 
       <TdeeCard
         calorieTargetKcal={settings.calorieTargetKcal}
+        heightCm={settings.heightCm}
+        age={settings.age}
+        gender={settings.gender}
+        activityLevel={settings.activityLevel}
+        weightKg={currentWeight}
         caloriesConsumedToday={totalCalories}
         caloriesBurnedExerciseToday={caloriesBurnedToday}
       />

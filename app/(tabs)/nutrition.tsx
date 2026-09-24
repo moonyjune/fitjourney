@@ -11,6 +11,7 @@ import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { TdeeCard } from '../../src/components/TdeeCard';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
+import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
@@ -47,6 +48,8 @@ export default function NutritionScreen() {
   const resetWater = useNutritionStore((s) => s.resetWater);
   const addExtra = useNutritionStore((s) => s.addExtra);
   const settings = useSettingsStore();
+  const latestWeight = useWeightStore((s) => s.latest());
+  const currentWeight = latestWeight?.weightKg ?? settings.startWeightKg;
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const caloriesBurnedOnViewDate = useMemo(
     () => workoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey).reduce((sum, e) => sum + e.caloriesBurned, 0),
@@ -98,6 +101,11 @@ export default function NutritionScreen() {
 
       <TdeeCard
         calorieTargetKcal={settings.calorieTargetKcal}
+        heightCm={settings.heightCm}
+        age={settings.age}
+        gender={settings.gender}
+        activityLevel={settings.activityLevel}
+        weightKg={currentWeight}
         caloriesConsumedToday={totalCalories}
         caloriesBurnedExerciseToday={caloriesBurnedOnViewDate}
       />

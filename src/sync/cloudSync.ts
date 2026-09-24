@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { generateCoachCode } from '../utils/coachCode';
 import { isOnline, useSyncQueueStore, type SyncOp } from './syncQueue';
 import type {
+  ActivityLevel,
   ChatRole,
   ChatSessionSummary,
   CoachClientSummary,
@@ -10,6 +11,7 @@ import type {
   DailyNutritionLog,
   FeedbackPeriodType,
   FeelingRecord,
+  Gender,
   MealRecipeSuggestion,
   Mood,
   PlanData,
@@ -57,6 +59,9 @@ export interface RemoteProfile {
   startWeightKg: number;
   goalWeightKg: number;
   heightCm: number | null;
+  age: number | null;
+  gender: Gender | null;
+  activityLevel: ActivityLevel | null;
   calorieTargetKcal: number;
   proteinTargetG: number;
   waterTargetMl: number;
@@ -85,6 +90,9 @@ export async function pullProfile(): Promise<RemoteProfile | null> {
       startWeightKg: data.start_weight_kg ?? 110,
       goalWeightKg: data.goal_weight_kg ?? 95,
       heightCm: data.height_cm,
+      age: data.age,
+      gender: (data.gender as Gender) ?? null,
+      activityLevel: (data.activity_level as ActivityLevel) ?? null,
       calorieTargetKcal: data.calorie_target_kcal ?? 1950,
       proteinTargetG: data.protein_target_g ?? 200,
       waterTargetMl: data.water_target_ml ?? 4500,
@@ -114,6 +122,9 @@ export async function pushProfile(settings: UserSettings): Promise<void> {
           start_weight_kg: settings.startWeightKg,
           goal_weight_kg: settings.goalWeightKg,
           height_cm: settings.heightCm,
+          age: settings.age,
+          gender: settings.gender,
+          activity_level: settings.activityLevel,
           calorie_target_kcal: settings.calorieTargetKcal,
           protein_target_g: settings.proteinTargetG,
           water_target_ml: settings.waterTargetMl,

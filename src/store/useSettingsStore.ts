@@ -12,7 +12,12 @@ import { ensureCoachCode, linkToCoach, pullProfile, pushProfile, type RemoteProf
 
 interface SettingsState extends UserSettings {
   updateSettings: (patch: Partial<UserSettings>) => void;
-  completeOnboarding: (startWeightKg: number, goalWeightKg: number, heightCm: number | null) => void;
+  completeOnboarding: (
+    startWeightKg: number,
+    goalWeightKg: number,
+    heightCm: number | null,
+    demographics?: Pick<UserSettings, 'age' | 'gender' | 'activityLevel'>
+  ) => void;
   /** Adopts a profile pulled from Supabase (e.g. first login on a new device) without re-pushing it. */
   hydrateFromRemote: (profile: RemoteProfile) => void;
   /** First-launch pick: start in Client mode; still needs the weight/goal onboarding screen next. */
@@ -33,6 +38,9 @@ export const useSettingsStore = create<SettingsState>()(
       startWeightKg: DEFAULT_START_WEIGHT_KG,
       goalWeightKg: DEFAULT_START_WEIGHT_KG - 15,
       heightCm: null,
+      age: null,
+      gender: null,
+      activityLevel: null,
       calorieTargetKcal: DEFAULT_CALORIE_TARGET,
       proteinTargetG: DEFAULT_PROTEIN_TARGET_G,
       waterTargetMl: DEFAULT_WATER_TARGET_ML,
@@ -52,12 +60,13 @@ export const useSettingsStore = create<SettingsState>()(
           pushProfile(updated);
           return updated;
         }),
-      completeOnboarding: (startWeightKg, goalWeightKg, heightCm) => {
+      completeOnboarding: (startWeightKg, goalWeightKg, heightCm, demographics) => {
         set((state) => ({
           ...state,
           startWeightKg,
           goalWeightKg,
           heightCm,
+          ...demographics,
           clientSetupDone: true,
           startDateISO: new Date().toISOString(),
         }));

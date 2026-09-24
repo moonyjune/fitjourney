@@ -69,10 +69,23 @@ export interface DailyNutritionLog {
 
 export type UserRole = 'coach' | 'client';
 
+/** For the Mifflin-St Jeor BMR formula, which branches on sex — inherent to the formula itself,
+ *  not a simplification we chose. */
+export type Gender = 'male' | 'female';
+
+/** Standard activity-multiplier tiers (sedentary through extra-active) used to scale BMR into
+ *  TDEE — same tiers most fitness calculators use. */
+export type ActivityLevel = 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+
 export interface UserSettings {
   startWeightKg: number;
   goalWeightKg: number;
   heightCm: number | null;
+  /** All optional/nullable — filled in during onboarding or later in Plan, used to compute a real
+   *  BMR-based TDEE (see src/utils/tdee.ts) instead of the cruder plan-target-derived fallback. */
+  age: number | null;
+  gender: Gender | null;
+  activityLevel: ActivityLevel | null;
   calorieTargetKcal: number;
   proteinTargetG: number;
   waterTargetMl: number;

@@ -1,11 +1,17 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Card } from './Card';
 import { useTranslation } from '../i18n/useTranslation';
-import { actualDailyDeficitKcal, estimateTdeeKcal, TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
+import { actualDailyDeficitKcal, resolveTdeeKcal, TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 import { colors, spacing, typography } from '../theme/tokens';
+import type { ActivityLevel, Gender } from '../types';
 
 interface TdeeCardProps {
   calorieTargetKcal: number;
+  heightCm: number | null;
+  age: number | null;
+  gender: Gender | null;
+  activityLevel: ActivityLevel | null;
+  weightKg: number;
   caloriesConsumedToday: number;
   /** Calories burned through logged exercise today — on top of TDEE, not part of it. */
   caloriesBurnedExerciseToday: number;
@@ -13,11 +19,22 @@ interface TdeeCardProps {
 
 /** Estimated TDEE + today's real calorie balance — shown on Today and Nutrition, the two screens
  *  that already track a day's intake/burn. Purely informational (read-only), doesn't touch any
- *  existing calorie/protein/water tracking. */
-export function TdeeCard({ calorieTargetKcal, caloriesConsumedToday, caloriesBurnedExerciseToday }: TdeeCardProps) {
+ *  existing calorie/protein/water tracking. Prefers a real Mifflin-St Jeor calculation once
+ *  age/gender/height/activity level are known (see Plan tab); falls back to a plan-target-derived
+ *  estimate otherwise, with a hint pointing at where to fill those in. */
+export function TdeeCard({
+  calorieTargetKcal,
+  heightCm,
+  age,
+  gender,
+  activityLevel,
+  weightKg,
+  caloriesConsumedToday,
+  caloriesBurnedExerciseToday,
+}: TdeeCardProps) {
   const { t } = useTranslation();
-  const tdee = estimateTdeeKcal(calorieTargetKcal);
-  const balance = actualDailyDeficitKcal(tdee, caloriesBurnedExerciseToday, caloriesConsumedToday);
+  const { tdeeKcal, source } = resolveTdeeKcal({ gender, age, heightCm, activityLevel, weightKg, calorieTargetKcal });
+  const balance = actualDailyDeficitKcal(tdeeKcal, caloriesBurnedExerciseToday, caloriesConsumedToday);
   const isDeficit = balance >= 0;
 
   return (
@@ -26,7 +43,7 @@ export function TdeeCard({ calorieTargetKcal, caloriesConsumedToday, caloriesBur
       <View style={styles.row}>
         <View style={styles.column}>
           <Text style={styles.label}>{t('tdee.tdeeLabel')}</Text>
-          <Text style={styles.value}>{Math.round(tdee)} kcal</Text>
+          <Text style={styles.value}>{Math.round(tdeeKcal)} kcal</Text>
         </View>
         <View style={styles.column}>
           <Text style={styles.label}>{isDeficit ? t('tdee.deficitLabel') : t('tdee.surplusLabel')}</Text>
@@ -34,7 +51,7 @@ export function TdeeCard({ calorieTargetKcal, caloriesConsumedToday, caloriesBur
         </View>
       </View>
       <Text style={styles.hint}>{t('tdee.targetHint', { kcal: TARGET_DAILY_DEFICIT_KCAL })}</Text>
-      <Text style={styles.estimateHint}>{t('tdee.estimateHint')}</Text>
+      <Text style={styles.estimateHint}>{t(source === 'profile' ? 'tdee.sourceProfile' : 'tdee.sourcePlanTarget')}</Text>
     </Card>
   );
 }

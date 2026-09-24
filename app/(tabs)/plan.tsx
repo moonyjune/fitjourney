@@ -8,6 +8,7 @@ import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { PlanPreview } from '../../src/components/PlanPreview';
 import { ShoppingListEditor } from '../../src/components/ShoppingListEditor';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
+import { DemographicsFields } from '../../src/components/DemographicsFields';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
@@ -22,7 +23,7 @@ import { useAccentColors } from '../../src/theme/useAccentColors';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
-import type { PlanData } from '../../src/types';
+import type { ActivityLevel, Gender, PlanData } from '../../src/types';
 
 export default function PlanScreen() {
   const { t } = useTranslation();
@@ -42,6 +43,10 @@ export default function PlanScreen() {
   const [waterTarget, setWaterTarget] = useState(String(settings.waterTargetMl));
   const [goalWeight, setGoalWeight] = useState(String(settings.goalWeightKg));
   const [startDateDraft, setStartDateDraft] = useState(() => new Date(settings.startDateISO));
+  const [heightText, setHeightText] = useState(settings.heightCm != null ? String(settings.heightCm) : '');
+  const [ageText, setAgeText] = useState(settings.age != null ? String(settings.age) : '');
+  const [genderDraft, setGenderDraft] = useState<Gender | null>(settings.gender);
+  const [activityLevelDraft, setActivityLevelDraft] = useState<ActivityLevel | null>(settings.activityLevel);
   const latestWeight = useWeightStore((s) => s.latest());
 
   function handleSaveStartDate() {
@@ -94,6 +99,13 @@ export default function PlanScreen() {
     }
     updateSettings({ calorieTargetKcal: cal, proteinTargetG: protein, waterTargetMl: water, goalWeightKg: goal });
     Alert.alert(t('plan.savedTitle'), t('plan.savedMessage'));
+  }
+
+  function saveDemographics() {
+    const heightCm = heightText ? parseFloat(heightText.replace(',', '.')) : null;
+    const age = ageText ? parseInt(ageText, 10) : null;
+    updateSettings({ heightCm, age, gender: genderDraft, activityLevel: activityLevelDraft });
+    Alert.alert(t('plan.savedTitle'), t('plan.demographicsSavedMessage'));
   }
 
   async function handleToggleReminders(value: boolean) {
@@ -193,6 +205,25 @@ export default function PlanScreen() {
         <Button title={t('plan.saveGoalsButton')} onPress={saveTargets} />
       </Card>
 
+      <Text style={styles.sectionTitle}>{t('plan.demographicsTitle')}</Text>
+      <Card>
+        <Text style={styles.demographicsHint}>{t('plan.demographicsHint')}</Text>
+        <Text style={styles.fieldLabel}>{t('plan.heightLabel')}</Text>
+        <TextInput style={styles.input} keyboardType="decimal-pad" value={heightText} onChangeText={setHeightText} placeholder="170" />
+        <DemographicsFields
+          ageText={ageText}
+          onAgeTextChange={setAgeText}
+          ageLabelKey="plan.ageLabel"
+          gender={genderDraft}
+          onGenderChange={setGenderDraft}
+          genderLabelKey="plan.genderLabel"
+          activityLevel={activityLevelDraft}
+          onActivityLevelChange={setActivityLevelDraft}
+          activityLevelLabelKey="plan.activityLevelLabel"
+        />
+        <Button title={t('plan.saveDemographicsButton')} onPress={saveDemographics} style={{ marginTop: spacing.md }} />
+      </Card>
+
       <Text style={styles.sectionTitle}>{t('plan.currentPlanTitle')}</Text>
       <PlanPreview plan={plan} hideShoppingList />
       <ShoppingListEditor plan={plan} />
@@ -252,6 +283,7 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   switchHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   aiHint: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 17 },
+  demographicsHint: { fontSize: 11, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 15 },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

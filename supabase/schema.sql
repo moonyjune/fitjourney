@@ -13,6 +13,9 @@ create table if not exists public.profiles (
   start_weight_kg numeric,
   goal_weight_kg numeric,
   height_cm numeric,
+  age integer,
+  gender text check (gender in ('male', 'female')),
+  activity_level text check (activity_level in ('sedentary', 'light', 'moderate', 'active', 'very_active')),
   calorie_target_kcal numeric,
   protein_target_g numeric,
   water_target_ml numeric,
@@ -25,6 +28,10 @@ create table if not exists public.profiles (
 -- Nâng cấp cho project đã chạy schema từ trước khi có Coach/Client (an toàn nếu cột đã tồn tại).
 alter table public.profiles add column if not exists email text;
 alter table public.profiles add column if not exists coach_code text unique;
+alter table public.profiles add column if not exists age integer;
+alter table public.profiles add column if not exists gender text check (gender in ('male', 'female'));
+alter table public.profiles add column if not exists activity_level text
+  check (activity_level in ('sedentary', 'light', 'moderate', 'active', 'very_active'));
 
 -- 2. Lịch sử cân nặng.
 create table if not exists public.weight_entries (
