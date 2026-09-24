@@ -6,6 +6,7 @@ import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { FeelingRecordCard } from '../../src/components/FeelingRecordCard';
+import { TdeeCard } from '../../src/components/TdeeCard';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
@@ -137,6 +138,12 @@ export default function TodayScreen() {
         <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
         <ProgressBar label={t('common.water')} current={nutritionLog.waterMl} target={settings.waterTargetMl} unit="ml" />
       </Card>
+
+      <TdeeCard
+        calorieTargetKcal={settings.calorieTargetKcal}
+        caloriesConsumedToday={totalCalories}
+        caloriesBurnedExerciseToday={caloriesBurnedToday}
+      />
 
       <Card>
         <Text style={styles.cardTitle}>{t('today.workoutTitle')}</Text>

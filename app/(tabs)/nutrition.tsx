@@ -8,7 +8,9 @@ import { MealRecipeSuggestion } from '../../src/components/MealRecipeSuggestion'
 import { MealItemRows } from '../../src/components/PlanPreview';
 import { WaterTimeline } from '../../src/components/WaterTimeline';
 import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
+import { TdeeCard } from '../../src/components/TdeeCard';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
+import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
@@ -45,6 +47,11 @@ export default function NutritionScreen() {
   const resetWater = useNutritionStore((s) => s.resetWater);
   const addExtra = useNutritionStore((s) => s.addExtra);
   const settings = useSettingsStore();
+  const workoutEntries = useWorkoutStore((s) => s.entries);
+  const caloriesBurnedOnViewDate = useMemo(
+    () => workoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey).reduce((sum, e) => sum + e.caloriesBurned, 0),
+    [workoutEntries, dateKey]
+  );
 
   const [extraName, setExtraName] = useState('');
   const [extraCalories, setExtraCalories] = useState('');
@@ -88,6 +95,12 @@ export default function NutritionScreen() {
         <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" />
         <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
       </Card>
+
+      <TdeeCard
+        calorieTargetKcal={settings.calorieTargetKcal}
+        caloriesConsumedToday={totalCalories}
+        caloriesBurnedExerciseToday={caloriesBurnedOnViewDate}
+      />
 
       <Card>
         <Text style={styles.cardTitle}>{t('nutrition.waterTitle')}</Text>
