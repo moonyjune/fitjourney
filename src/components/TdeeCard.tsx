@@ -1,8 +1,10 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Card } from './Card';
 import { useTranslation } from '../i18n/useTranslation';
-import { actualDailyDeficitKcal, resolveTdeeKcal, TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
-import { colors, spacing, typography } from '../theme/tokens';
+import type { StringKey } from '../i18n/strings';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { ACTIVITY_MULTIPLIER, actualDailyDeficitKcal, resolveTdeeKcal, TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
+import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { ActivityLevel, Gender } from '../types';
 
 interface TdeeCardProps {
@@ -17,11 +19,20 @@ interface TdeeCardProps {
   caloriesBurnedExerciseToday: number;
 }
 
+const ACTIVITY_OPTIONS: { value: ActivityLevel; labelKey: StringKey }[] = [
+  { value: 'sedentary', labelKey: 'activityLevel.sedentary' },
+  { value: 'light', labelKey: 'activityLevel.light' },
+  { value: 'moderate', labelKey: 'activityLevel.moderate' },
+  { value: 'active', labelKey: 'activityLevel.active' },
+  { value: 'very_active', labelKey: 'activityLevel.very_active' },
+];
+
 /** Estimated TDEE + today's real calorie balance — shown on Today and Nutrition, the two screens
- *  that already track a day's intake/burn. Purely informational (read-only), doesn't touch any
- *  existing calorie/protein/water tracking. Prefers a real Mifflin-St Jeor calculation once
- *  age/gender/height/activity level are known (see Plan tab); falls back to a plan-target-derived
- *  estimate otherwise, with a hint pointing at where to fill those in. */
+ *  that already track a day's intake/burn. Prefers a real Mifflin-St Jeor calculation once
+ *  age/gender/height/activity level are known; falls back to a plan-target-derived estimate
+ *  otherwise. The activity-level tier (the multiplier most directly under the user's control, and
+ *  the one people most often want to double-check/correct) is adjustable right here, showing its
+ *  exact multiplier — updating it writes straight to settings, same as the Plan tab fields. */
 export function TdeeCard({
   calorieTargetKcal,
   heightCm,
@@ -33,6 +44,7 @@ export function TdeeCard({
   caloriesBurnedExerciseToday,
 }: TdeeCardProps) {
   const { t } = useTranslation();
+  const updateSettings = useSettingsStore((s) => s.updateSettings);
   const { tdeeKcal, source } = resolveTdeeKcal({ gender, age, heightCm, activityLevel, weightKg, calorieTargetKcal });
   const balance = actualDailyDeficitKcal(tdeeKcal, caloriesBurnedExerciseToday, caloriesConsumedToday);
   const isDeficit = balance >= 0;
@@ -52,6 +64,24 @@ export function TdeeCard({
       </View>
       <Text style={styles.hint}>{t('tdee.targetHint', { kcal: TARGET_DAILY_DEFICIT_KCAL })}</Text>
       <Text style={styles.estimateHint}>{t(source === 'profile' ? 'tdee.sourceProfile' : 'tdee.sourcePlanTarget')}</Text>
+
+      <Text style={styles.adjustLabel}>{t('tdee.adjustActivityLabel')}</Text>
+      <View style={styles.activityRow}>
+        {ACTIVITY_OPTIONS.map((opt) => {
+          const active = activityLevel === opt.value;
+          return (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.activityChip, active && styles.activityChipActive]}
+              onPress={() => updateSettings({ activityLevel: opt.value })}
+            >
+              <Text style={[styles.activityChipText, active && styles.activityChipTextActive]}>
+                {t(opt.labelKey)} ×{ACTIVITY_MULTIPLIER[opt.value]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </Card>
   );
 }
@@ -64,4 +94,10 @@ const styles = StyleSheet.create({
   value: { ...typography.h3, color: colors.textPrimary },
   hint: { ...typography.caption, fontWeight: '400', color: colors.textMuted, marginTop: spacing.sm },
   estimateHint: { ...typography.small, fontWeight: '400', color: colors.textMuted, marginTop: 2, lineHeight: 15 },
+  adjustLabel: { ...typography.small, fontWeight: '700', color: colors.textSecondary, marginTop: spacing.md, marginBottom: spacing.xs },
+  activityRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 },
+  activityChip: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.sm + 2, paddingVertical: spacing.xs + 2 },
+  activityChipActive: { backgroundColor: colors.primary },
+  activityChipText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
+  activityChipTextActive: { color: colors.white },
 });

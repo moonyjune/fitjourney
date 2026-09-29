@@ -2,6 +2,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { useTranslation } from '../i18n/useTranslation';
 import type { StringKey } from '../i18n/strings';
 import { colors, radius, spacing, typography } from '../theme/tokens';
+import { ACTIVITY_MULTIPLIER } from '../utils/tdee';
 import type { ActivityLevel, Gender } from '../types';
 
 const GENDERS: { value: Gender; labelKey: StringKey }[] = [
@@ -73,7 +74,9 @@ export function DemographicsFields({
               style={[styles.activityCard, active && styles.activityCardActive]}
               onPress={() => onActivityLevelChange(a.value)}
             >
-              <Text style={[styles.activityLabel, active && styles.activityLabelActive]}>{t(a.labelKey)}</Text>
+              <Text style={[styles.activityLabel, active && styles.activityLabelActive]}>
+                {t(a.labelKey)} · ×{ACTIVITY_MULTIPLIER[a.value]}
+              </Text>
               <Text style={[styles.activityHint, active && styles.activityHintActive]}>{t(a.hintKey)}</Text>
             </TouchableOpacity>
           );

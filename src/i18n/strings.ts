@@ -155,6 +155,7 @@ export const STRINGS = {
     'tdee.targetHint': 'Mục tiêu kế hoạch: thâm hụt ~{kcal} kcal/ngày',
     'tdee.sourceProfile': 'Tính theo công thức Mifflin-St Jeor từ hồ sơ cá nhân (tuổi, giới tính, chiều cao, mức vận động) — chỉ mang tính ước tính, không thay thế đo lường y tế.',
     'tdee.sourcePlanTarget': 'Chưa đủ thông tin cá nhân nên đang ước tính TDEE từ mục tiêu calo của kế hoạch. Điền tuổi, giới tính, chiều cao, mức vận động ở tab Kế hoạch để có kết quả chính xác hơn.',
+    'tdee.adjustActivityLabel': 'Điều chỉnh mức vận động:',
 
     'weight.range1w': '1 tuần',
     'weight.range2w': '2 tuần',
@@ -526,6 +527,7 @@ export const STRINGS = {
     'tdee.targetHint': 'Plan target: ~{kcal} kcal/day deficit',
     'tdee.sourceProfile': "Calculated with the Mifflin-St Jeor formula from your profile (age, gender, height, activity level) — an estimate only, not a medical measurement.",
     'tdee.sourcePlanTarget': "Not enough profile info yet, so TDEE is estimated from your plan's calorie target instead. Fill in your age, gender, height, and activity level in Plan for a more accurate result.",
+    'tdee.adjustActivityLabel': 'Adjust activity level:',
 
     'weight.range1w': '1 week',
     'weight.range2w': '2 weeks',
