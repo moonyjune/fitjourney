@@ -7,7 +7,7 @@ import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { buildWeightChartData, computeMilestonePrediction, computeTodayLineX } from '../../src/utils/weightChart';
+import { buildWeightChartData, buildWeightLossMilestoneViews, computeTodayLineX } from '../../src/utils/weightChart';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
@@ -44,9 +44,9 @@ export default function WeightScreen() {
     [entries, rangeDays, startDateISO, startWeightKg, goalWeightKg]
   );
 
-  const milestonePrediction = useMemo(
-    () => computeMilestonePrediction(rangeDays, startDateISO, startWeightKg, goalWeightKg),
-    [rangeDays, startDateISO, startWeightKg, goalWeightKg]
+  const lossMilestones = useMemo(
+    () => buildWeightLossMilestoneViews(startWeightKg, goalWeightKg, startDateISO),
+    [startWeightKg, goalWeightKg, startDateISO]
   );
 
   const chartHeight = 200;
@@ -125,26 +125,25 @@ export default function WeightScreen() {
               propsForDots: { r: '3' },
             }}
             bezier
+            hidePointsAtIndex={chartData.nonEntryIndices}
             style={{ borderRadius: radius.lg }}
           />
           <View pointerEvents="none" style={[styles.todayLine, { left: todayLineX, height: chartHeight - 34 }]} />
         </View>
         <Text style={styles.todayLineCaption}>{t('weight.todayMarker')}</Text>
         {entries.length === 0 && <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>}
-        <View style={styles.predictionCard}>
-          <Text style={styles.predictionText}>
-            {milestonePrediction.daysRemaining > 0
-              ? t('weight.predictionFuture', {
-                  kg: milestonePrediction.targetWeightKg.toFixed(1),
-                  date: formatDateVi(toDateKey(milestonePrediction.targetDate)),
-                  n: milestonePrediction.daysRemaining,
-                })
-              : t('weight.predictionPast', {
-                  kg: milestonePrediction.targetWeightKg.toFixed(1),
-                  date: formatDateVi(toDateKey(milestonePrediction.targetDate)),
-                })}
-          </Text>
-        </View>
+        <Text style={styles.milestonesTitle}>{t('weight.lossMilestonesTitle')}</Text>
+        {lossMilestones.map((m) => (
+          <View key={m.targetWeightKg} style={styles.milestoneRow}>
+            <Text style={styles.milestoneWeight}>
+              {m.targetWeightKg.toFixed(1)} kg{m.isGoal ? ` (${t('weight.goalBadge')})` : ''}
+            </Text>
+            <Text style={[styles.milestoneDate, m.daysRemaining <= 0 && styles.milestoneDatePast]}>
+              {formatDateVi(toDateKey(m.date))}
+              {m.daysRemaining > 0 ? t('weight.milestoneDaysRemaining', { n: m.daysRemaining }) : t('weight.milestonePast')}
+            </Text>
+          </View>
+        ))}
         <Text style={styles.goalNote}>{t('common.goalLabel', { kg: goalWeightKg })}</Text>
       </Card>
 
@@ -191,8 +190,20 @@ const styles = StyleSheet.create({
   goalNote: { textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
   todayLine: { position: 'absolute', top: 16, width: 1.5, backgroundColor: colors.danger, opacity: 0.7 },
   todayLineCaption: { textAlign: 'right', color: colors.danger, fontSize: 10, marginTop: -spacing.sm, opacity: 0.8 },
-  predictionCard: { backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
-  predictionText: { fontSize: 12, color: colors.primaryDark, lineHeight: 17, fontWeight: '600' },
+  milestonesTitle: { ...typography.label, color: colors.textPrimary, marginTop: spacing.md, marginBottom: spacing.sm },
+  milestoneRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginBottom: spacing.xs + 2,
+  },
+  milestoneWeight: { fontSize: 13, fontWeight: '800', color: colors.primaryDark },
+  milestoneDate: { fontSize: 11, color: colors.primaryDark, fontWeight: '600' },
+  milestoneDatePast: { color: colors.textMuted },
   historyTitle: { ...typography.title, marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textPrimary },
   historyRow: {
     flexDirection: 'row',
