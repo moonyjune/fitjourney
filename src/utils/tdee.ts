@@ -57,17 +57,21 @@ export type TdeeSource = 'profile' | 'planTargetWithActivity' | 'planTarget';
  *  scaled by that tier's multiplier relative to "moderate" — the activity level the plan's built-in
  *  workout schedule implicitly assumes — so picking a lower/higher tier always visibly moves the
  *  number instead of being silently ignored until the full profile is filled in. */
-export function resolveTdeeKcal(input: TdeeProfileInput): { tdeeKcal: number; source: TdeeSource } {
+export function resolveTdeeKcal(input: TdeeProfileInput): { tdeeKcal: number; bmrKcal: number | null; source: TdeeSource } {
   const { gender, age, heightCm, activityLevel, weightKg, calorieTargetKcal, targetDailyDeficitKcal } = input;
   if (gender != null && age != null && heightCm != null && activityLevel != null) {
     const bmr = computeBmrKcal(gender, weightKg, heightCm, age);
-    return { tdeeKcal: bmr * ACTIVITY_MULTIPLIER[activityLevel], source: 'profile' };
+    return { tdeeKcal: bmr * ACTIVITY_MULTIPLIER[activityLevel], bmrKcal: bmr, source: 'profile' };
   }
   const planTargetTdee = estimateTdeeFromPlanTarget(calorieTargetKcal, targetDailyDeficitKcal);
   if (activityLevel != null) {
-    return { tdeeKcal: planTargetTdee * (ACTIVITY_MULTIPLIER[activityLevel] / ACTIVITY_MULTIPLIER.moderate), source: 'planTargetWithActivity' };
+    return {
+      tdeeKcal: planTargetTdee * (ACTIVITY_MULTIPLIER[activityLevel] / ACTIVITY_MULTIPLIER.moderate),
+      bmrKcal: null,
+      source: 'planTargetWithActivity',
+    };
   }
-  return { tdeeKcal: planTargetTdee, source: 'planTarget' };
+  return { tdeeKcal: planTargetTdee, bmrKcal: null, source: 'planTarget' };
 }
 
 /** Actual energy balance so far today: TDEE plus any extra calories burned through logged

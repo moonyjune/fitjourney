@@ -90,6 +90,16 @@ describe('buildWeightChartData', () => {
     expect(result.labels).toHaveLength(result.datasets[0].data.length);
     expect(result.labels.filter((l) => l !== '').length).toBeLessThan(result.labels.length);
   });
+
+  it("always keeps the start date, today, and end date labels visible, even when thinning would otherwise blank them", () => {
+    // NOW is 21 days after start; a 30-day window puts "today" at index 21, not a multiple of the
+    // ~5-step thinning stride computed for ~31 labels — the exact case that used to silently drop
+    // the "today" label even though the red today-line was still drawn at that x position.
+    const result = buildWeightChartData([], 30, START_DATE_ISO, START_WEIGHT, GOAL_WEIGHT, NOW);
+    expect(result.labels[0]).not.toBe('');
+    expect(result.labels[result.todayIndex]).not.toBe('');
+    expect(result.labels[result.labels.length - 1]).not.toBe('');
+  });
 });
 
 describe('buildWeightLossMilestoneViews', () => {

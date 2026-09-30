@@ -88,17 +88,22 @@ export async function pullProfile(): Promise<RemoteProfile | null> {
     // Either capability having been set up is evidence role-select already happened on another device.
     if (!data || (!clientSetupDone && !coachEnabled)) return null;
 
+    // PostgREST returns `numeric` columns as strings (to avoid float precision loss), not JS
+    // numbers — every numeric field below must be explicitly coerced, or e.g.
+    // calorieTargetKcal + targetDailyDeficitKcal silently does STRING CONCATENATION ("1950" +
+    // "1100" -> "19501100") instead of addition once both operands are strings. This is exactly
+    // the kind of wildly-wrong TDEE a user would immediately notice and report as "tính sai".
     return {
-      startWeightKg: data.start_weight_kg ?? 110,
-      goalWeightKg: data.goal_weight_kg ?? 95,
-      heightCm: data.height_cm,
-      age: data.age,
+      startWeightKg: Number(data.start_weight_kg ?? 110),
+      goalWeightKg: Number(data.goal_weight_kg ?? 95),
+      heightCm: data.height_cm != null ? Number(data.height_cm) : null,
+      age: data.age != null ? Number(data.age) : null,
       gender: (data.gender as Gender) ?? null,
       activityLevel: (data.activity_level as ActivityLevel) ?? null,
-      calorieTargetKcal: data.calorie_target_kcal ?? 1950,
-      targetDailyDeficitKcal: data.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
-      proteinTargetG: data.protein_target_g ?? 200,
-      waterTargetMl: data.water_target_ml ?? 4500,
+      calorieTargetKcal: Number(data.calorie_target_kcal ?? 1950),
+      targetDailyDeficitKcal: Number(data.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL),
+      proteinTargetG: Number(data.protein_target_g ?? 200),
+      waterTargetMl: Number(data.water_target_ml ?? 4500),
       startDateISO: data.start_date ? new Date(data.start_date).toISOString() : new Date().toISOString(),
       remindersEnabled: data.reminders_enabled ?? true,
       role: (data.role as UserRole) ?? 'client',

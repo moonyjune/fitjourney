@@ -68,7 +68,13 @@ export function buildWeightChartData(
     gridDates.splice(todayIndex, 0, clampedNow);
   }
 
-  const labels = thinLabels(gridDates.map((d) => formatDateVi(toDateKey(d)).slice(0, 5)));
+  // Always keep the start date, "today", and the end date readable — the 3 dates a user actually
+  // orients by — even if they don't land on the regular thinning step.
+  const labels = thinLabels(
+    gridDates.map((d) => formatDateVi(toDateKey(d)).slice(0, 5)),
+    7,
+    [0, todayIndex, gridDates.length - 1]
+  );
   const predictedData = gridDates.map((d) => predictedWeightKgAt(d, startDateISO, startWeightKg, goalWeightKg));
   const predictedDataset: WeightChartDataset = {
     data: predictedData,

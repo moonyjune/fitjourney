@@ -55,6 +55,24 @@ export default function WeightScreen() {
     [chartData, screenWidth]
   );
 
+  // react-native-chart-kit scales its y-axis to the exact min/max across all datasets, with zero
+  // headroom — the lowest/highest point sits flush against the chart edge. Add an invisible
+  // dataset spanning [min - pad, max + pad] so the current-weight dot and the trend line's
+  // extremes always have breathing room instead of clipping at the border.
+  const chartDataWithPadding = useMemo(() => {
+    const allValues = chartData.datasets.flatMap((ds) => ds.data);
+    const dataMin = Math.min(...allValues);
+    const dataMax = Math.max(...allValues);
+    const pad = Math.max(0.5, (dataMax - dataMin) * 0.12);
+    const paddingData = chartData.labels.map((_, i) =>
+      i === 0 ? dataMin - pad : i === chartData.labels.length - 1 ? dataMax + pad : (dataMin + dataMax) / 2
+    );
+    return {
+      labels: chartData.labels,
+      datasets: [...chartData.datasets, { data: paddingData, color: () => 'rgba(0,0,0,0)', strokeWidth: 0, withDots: false }],
+    };
+  }, [chartData]);
+
   function handleAdd() {
     const value = parseFloat(input.replace(',', '.'));
     if (!value || value <= 0) return;
@@ -111,7 +129,7 @@ export default function WeightScreen() {
         </View>
         <View style={{ position: 'relative' }}>
           <LineChart
-            data={chartData}
+            data={chartDataWithPadding}
             width={screenWidth}
             height={chartHeight}
             yAxisSuffix="kg"

@@ -62,10 +62,17 @@ describe('resolveTdeeKcal', () => {
     targetDailyDeficitKcal: DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
   };
 
-  it('uses the real BMR-based formula when gender/age/height/activity are all present', () => {
+  it('uses the real BMR-based formula when gender/age/height/activity are all present, and reports the raw BMR too', () => {
     const result = resolveTdeeKcal(fullProfile);
     expect(result.source).toBe('profile');
+    expect(result.bmrKcal).toBeCloseTo(computeBmrKcal('male', 90, 175, 35), 5);
     expect(result.tdeeKcal).toBeCloseTo(computeBmrKcal('male', 90, 175, 35) * ACTIVITY_MULTIPLIER.moderate, 5);
+    expect(result.tdeeKcal).toBeCloseTo(result.bmrKcal! * ACTIVITY_MULTIPLIER.moderate, 5);
+  });
+
+  it('reports bmrKcal as null in both fallback modes, since there is no real BMR to show', () => {
+    expect(resolveTdeeKcal({ ...fullProfile, activityLevel: null }).bmrKcal).toBeNull();
+    expect(resolveTdeeKcal({ ...fullProfile, gender: null }).bmrKcal).toBeNull();
   });
 
   it('falls back to a pure plan-target estimate (using the user-set deficit) only when activityLevel is also missing', () => {

@@ -50,7 +50,15 @@ export function TdeeCard({
   caloriesBurnedExerciseToday,
 }: TdeeCardProps) {
   const { t } = useTranslation();
-  const { tdeeKcal, source } = resolveTdeeKcal({ gender, age, heightCm, activityLevel, weightKg, calorieTargetKcal, targetDailyDeficitKcal });
+  const { tdeeKcal, bmrKcal, source } = resolveTdeeKcal({
+    gender,
+    age,
+    heightCm,
+    activityLevel,
+    weightKg,
+    calorieTargetKcal,
+    targetDailyDeficitKcal,
+  });
   const balance = actualDailyDeficitKcal(tdeeKcal, caloriesBurnedExerciseToday, caloriesConsumedToday);
   const isDeficit = balance >= 0;
 
@@ -68,6 +76,7 @@ export function TdeeCard({
         </View>
       </View>
       <Text style={styles.hint}>{t('tdee.targetHint', { kcal: targetDailyDeficitKcal })}</Text>
+      {bmrKcal != null && <Text style={styles.hint}>{t('tdee.bmrLabel', { kcal: Math.round(bmrKcal) })}</Text>}
       {activityLevel && (
         <Text style={styles.hint}>
           {t('tdee.activityLevelLabel')} {t(ACTIVITY_LABEL_KEY[activityLevel])} ×{ACTIVITY_MULTIPLIER[activityLevel]}

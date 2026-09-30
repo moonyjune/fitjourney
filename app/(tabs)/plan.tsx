@@ -23,7 +23,7 @@ import { useAccentColors } from '../../src/theme/useAccentColors';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
-import { resolveTdeeKcal } from '../../src/utils/tdee';
+import { ACTIVITY_MULTIPLIER, resolveTdeeKcal } from '../../src/utils/tdee';
 import type { ActivityLevel, Gender, PlanData } from '../../src/types';
 
 export default function PlanScreen() {
@@ -52,10 +52,13 @@ export default function PlanScreen() {
   const [activityLevelDraft, setActivityLevelDraft] = useState<ActivityLevel | null>(settings.activityLevel);
   const latestWeight = useWeightStore((s) => s.latest());
 
-  const currentWeightKg = latestWeight?.weightKg ?? settings.startWeightKg;
-  // Live preview as the user types/picks, before saving — always uses the current (most recently
-  // logged) weight, same as the TDEE card on Today/Nutrition, not the draft starting-weight field
-  // above (that one is only the plan's baseline, per the earlier clarification on this).
+  // Plan's BMR/TDEE preview uses the plan's STARTING weight (the draft field right above it, so it
+  // updates live as the user edits it) — a fixed reference point for the plan itself. Today/
+  // Nutrition's TdeeCard is the one that tracks day-to-day progress via the current logged weight.
+  const startWeightForPreview = useMemo(() => {
+    const parsed = parseFloat(startWeightText.replace(',', '.'));
+    return parsed > 0 ? parsed : settings.startWeightKg;
+  }, [startWeightText, settings.startWeightKg]);
   const tdeePreview = useMemo(
     () =>
       resolveTdeeKcal({
@@ -63,11 +66,11 @@ export default function PlanScreen() {
         age: ageText ? parseInt(ageText, 10) : null,
         heightCm: heightText ? parseFloat(heightText.replace(',', '.')) : null,
         activityLevel: activityLevelDraft,
-        weightKg: currentWeightKg,
+        weightKg: startWeightForPreview,
         calorieTargetKcal: settings.calorieTargetKcal,
         targetDailyDeficitKcal: settings.targetDailyDeficitKcal,
       }),
-    [genderDraft, ageText, heightText, activityLevelDraft, currentWeightKg, settings.calorieTargetKcal, settings.targetDailyDeficitKcal]
+    [genderDraft, ageText, heightText, activityLevelDraft, startWeightForPreview, settings.calorieTargetKcal, settings.targetDailyDeficitKcal]
   );
 
   function handleSaveStartDate() {
@@ -263,6 +266,14 @@ export default function PlanScreen() {
         <View style={styles.tdeePreviewBox}>
           <Text style={styles.tdeePreviewLabel}>{t('plan.tdeePreviewLabel')}</Text>
           <Text style={styles.tdeePreviewValue}>{Math.round(tdeePreview.tdeeKcal)} kcal</Text>
+          {tdeePreview.bmrKcal != null && activityLevelDraft && (
+            <Text style={styles.tdeePreviewBmr}>
+              {t('plan.bmrPreviewLabel', {
+                kcal: Math.round(tdeePreview.bmrKcal),
+                multiplier: ACTIVITY_MULTIPLIER[activityLevelDraft],
+              })}
+            </Text>
+          )}
           <Text style={styles.tdeePreviewHint}>
             {t(tdeePreview.source === 'profile' ? 'tdee.sourceProfile' : 'plan.tdeePreviewIncompleteHint')}
           </Text>
@@ -333,6 +344,7 @@ const styles = StyleSheet.create({
   tdeePreviewBox: { backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm },
   tdeePreviewLabel: { fontSize: 11, fontWeight: '700', color: colors.primary },
   tdeePreviewValue: { fontSize: 20, fontWeight: '800', color: colors.primaryDark, marginTop: 2 },
+  tdeePreviewBmr: { fontSize: 11, color: colors.primaryDark, marginTop: 2, fontWeight: '600' },
   tdeePreviewHint: { fontSize: 11, color: colors.textSecondary, marginTop: spacing.xs, lineHeight: 15 },
   input: {
     borderWidth: 1,

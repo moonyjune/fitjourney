@@ -166,25 +166,21 @@ export default function ClientDetailScreen() {
         caloriesBurned: row.calories_burned ?? 0,
       }));
       const plan = remotePlan?.plan ?? DEFAULT_PLAN;
-      const currentWeightKg = latestWeightRes.data?.weight_kg ?? profileRes.data?.start_weight_kg ?? DEFAULT_START_WEIGHT_KG;
+      // PostgREST returns `numeric` columns as strings (avoids float precision loss) — must coerce
+      // explicitly, or e.g. calorieTargetKcal + targetDailyDeficitKcal silently string-concatenates
+      // instead of adding once both are strings, producing a wildly-wrong TDEE.
+      const currentWeightKg = Number(latestWeightRes.data?.weight_kg ?? profileRes.data?.start_weight_kg ?? DEFAULT_START_WEIGHT_KG);
+      const targetDailyDeficitKcal = Number(profileRes.data?.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL);
       const { tdeeKcal } = resolveTdeeKcal({
         gender: (profileRes.data?.gender as Gender) ?? null,
-        age: profileRes.data?.age ?? null,
-        heightCm: profileRes.data?.height_cm ?? null,
+        age: profileRes.data?.age != null ? Number(profileRes.data.age) : null,
+        heightCm: profileRes.data?.height_cm != null ? Number(profileRes.data.height_cm) : null,
         activityLevel: (profileRes.data?.activity_level as ActivityLevel) ?? null,
         weightKg: currentWeightKg,
-        calorieTargetKcal: profileRes.data?.calorie_target_kcal ?? DEFAULT_CALORIE_TARGET,
-        targetDailyDeficitKcal: profileRes.data?.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
+        calorieTargetKcal: Number(profileRes.data?.calorie_target_kcal ?? DEFAULT_CALORIE_TARGET),
+        targetDailyDeficitKcal,
       });
-      setStreak(
-        computeCurrentStreak(
-          logsMap,
-          plan.mealTemplates,
-          streakWorkoutEntries,
-          tdeeKcal,
-          profileRes.data?.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL
-        )
-      );
+      setStreak(computeCurrentStreak(logsMap, plan.mealTemplates, streakWorkoutEntries, tdeeKcal, targetDailyDeficitKcal));
 
       const workoutById: Record<string, WorkoutEntryRow> = {};
       for (const row of workoutEntriesRes.data ?? []) {

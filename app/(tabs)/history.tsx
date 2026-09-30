@@ -17,6 +17,7 @@ import { fetchFeedback, fetchWeeklySuggestion, pushWeeklySuggestion, requestWeek
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { computeMilestones } from '../../src/utils/milestones';
+import { buildDeficitChartData } from '../../src/utils/deficitChart';
 import { thinLabels } from '../../src/utils/chartLabels';
 import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
 import { useTranslation } from '../../src/i18n/useTranslation';
@@ -76,6 +77,25 @@ const MOOD_COLORS: Record<Mood, string> = {
   stressed: colors.danger,
   tired: colors.textMuted,
 };
+
+/** Calories eaten/burned for one calendar day, independent of whether that day shows up in
+ *  daySummaries (which only lists days with SOME tracked entry) — a day with no log at all is
+ *  just 0/0, same as a logged day where nothing was eaten. */
+function computeDayCaloriesBurn(
+  dateKey: string,
+  nutritionLogs: ReturnType<typeof useNutritionStore.getState>['logs'],
+  mealTemplates: ReturnType<typeof usePlanStore.getState>['plan']['mealTemplates'],
+  workoutEntries: ReturnType<typeof useWorkoutStore.getState>['entries']
+): { calories: number; caloriesBurned: number } {
+  const meals = mealTemplates[getDayType(new Date(dateKey))];
+  const log = nutritionLogs[dateKey];
+  const eatenMeals = meals.filter((m) => log?.mealsEaten[m.slot]);
+  const calories = eatenMeals.reduce((s, m) => s + m.calories, 0) + (log?.extraCalories ?? 0);
+  const caloriesBurned = workoutEntries
+    .filter((e) => toDateKey(new Date(e.dateISO)) === dateKey)
+    .reduce((s, w) => s + w.caloriesBurned, 0);
+  return { calories, caloriesBurned };
+}
 
 const MOOD_LABEL_KEY: Record<Mood, StringKey> = {
   great: 'feeling.moodGreat',
@@ -271,6 +291,22 @@ export default function HistoryScreen() {
     };
   }, [daySummaries]);
 
+  // Daily deficit trend, one point per calendar day from the plan's start date through today
+  // (not just days with logged data) — a fixed grid like the Weight tab's chart.
+  const deficitTrendChart = useMemo(
+    () =>
+      buildDeficitChartData(
+        settings.startDateISO,
+        (dateKey) => {
+          const { calories, caloriesBurned } = computeDayCaloriesBurn(dateKey, nutritionLogs, mealTemplates, workoutEntries);
+          return actualDailyDeficitKcal(currentTdeeKcal, caloriesBurned, calories);
+        },
+        new Date(),
+        colors.primary
+      ),
+    [settings.startDateISO, nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal]
+  );
+
   // Weekly summary bar chart (avg daily calories), oldest -> newest, last 8 weeks.
   const weeklyChart = useMemo(() => {
     const chronological = [...weeklySummaries].reverse().slice(-8);
@@ -378,6 +414,24 @@ export default function HistoryScreen() {
           </View>
         </Card>
       ))}
+
+      <Text style={styles.sectionTitle}>{t('history.deficitChartTitle')}</Text>
+      {deficitTrendChart ? (
+        <Card>
+          <LineChart
+            data={deficitTrendChart}
+            width={chartWidth}
+            height={180}
+            chartConfig={baseChartConfig}
+            bezier
+            fromZero={false}
+            style={styles.chartStyle}
+          />
+          <Text style={styles.legendText}>{t('history.deficitChartHint')}</Text>
+        </Card>
+      ) : (
+        <Text style={styles.emptyText}>{t('history.emptyChart')}</Text>
+      )}
 
       <Text style={styles.sectionTitle}>{t('history.dailyChartTitle')}</Text>
       {dailyCharts ? (
