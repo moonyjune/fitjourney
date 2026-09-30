@@ -3,7 +3,7 @@ import { Card } from './Card';
 import { useTranslation } from '../i18n/useTranslation';
 import type { StringKey } from '../i18n/strings';
 import { useSettingsStore } from '../store/useSettingsStore';
-import { ACTIVITY_MULTIPLIER, actualDailyDeficitKcal, resolveTdeeKcal, TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
+import { ACTIVITY_MULTIPLIER, actualDailyDeficitKcal, resolveTdeeKcal, TARGET_DAILY_DEFICIT_KCAL, type TdeeSource } from '../utils/tdee';
 import { colors, radius, spacing, typography } from '../theme/tokens';
 import type { ActivityLevel, Gender } from '../types';
 
@@ -26,6 +26,12 @@ const ACTIVITY_OPTIONS: { value: ActivityLevel; labelKey: StringKey }[] = [
   { value: 'active', labelKey: 'activityLevel.active' },
   { value: 'very_active', labelKey: 'activityLevel.very_active' },
 ];
+
+const SOURCE_HINT_KEY: Record<TdeeSource, StringKey> = {
+  profile: 'tdee.sourceProfile',
+  planTargetWithActivity: 'tdee.sourcePlanTargetWithActivity',
+  planTarget: 'tdee.sourcePlanTarget',
+};
 
 /** Estimated TDEE + today's real calorie balance — shown on Today and Nutrition, the two screens
  *  that already track a day's intake/burn. Prefers a real Mifflin-St Jeor calculation once
@@ -63,7 +69,7 @@ export function TdeeCard({
         </View>
       </View>
       <Text style={styles.hint}>{t('tdee.targetHint', { kcal: TARGET_DAILY_DEFICIT_KCAL })}</Text>
-      <Text style={styles.estimateHint}>{t(source === 'profile' ? 'tdee.sourceProfile' : 'tdee.sourcePlanTarget')}</Text>
+      <Text style={styles.estimateHint}>{t(SOURCE_HINT_KEY[source])}</Text>
 
       <Text style={styles.adjustLabel}>{t('tdee.adjustActivityLabel')}</Text>
       <View style={styles.activityRow}>

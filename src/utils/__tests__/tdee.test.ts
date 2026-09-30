@@ -53,11 +53,30 @@ describe('resolveTdeeKcal', () => {
     expect(result.tdeeKcal).toBeCloseTo(computeBmrKcal('male', 90, 175, 35) * ACTIVITY_MULTIPLIER.moderate, 5);
   });
 
-  it('falls back to the plan-target estimate when any profile field is missing', () => {
-    for (const missing of ['gender', 'age', 'heightCm', 'activityLevel'] as const) {
+  it('falls back to a pure plan-target estimate only when activityLevel is also missing', () => {
+    const result = resolveTdeeKcal({ ...fullProfile, activityLevel: null });
+    expect(result.source).toBe('planTarget');
+    expect(result.tdeeKcal).toBe(estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal));
+  });
+
+  it('scales the plan-target estimate by the chosen activity tier when age/gender/height are missing', () => {
+    // moderate is the plan-target's implicit baseline, so it's unscaled (ratio 1).
+    const moderate = resolveTdeeKcal({ ...fullProfile, gender: null, age: null, heightCm: null, activityLevel: 'moderate' });
+    expect(moderate.source).toBe('planTargetWithActivity');
+    expect(moderate.tdeeKcal).toBeCloseTo(estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal), 5);
+
+    // A lower tier scales the number down proportionally, instead of being ignored entirely.
+    const sedentary = resolveTdeeKcal({ ...fullProfile, gender: null, age: null, heightCm: null, activityLevel: 'sedentary' });
+    expect(sedentary.source).toBe('planTargetWithActivity');
+    const expected = estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal) * (ACTIVITY_MULTIPLIER.sedentary / ACTIVITY_MULTIPLIER.moderate);
+    expect(sedentary.tdeeKcal).toBeCloseTo(expected, 5);
+    expect(sedentary.tdeeKcal).toBeLessThan(moderate.tdeeKcal);
+  });
+
+  it('missing any single one of gender/age/height (with activity present) still uses the activity-scaled fallback, not the full profile formula', () => {
+    for (const missing of ['gender', 'age', 'heightCm'] as const) {
       const result = resolveTdeeKcal({ ...fullProfile, [missing]: null });
-      expect(result.source).toBe('planTarget');
-      expect(result.tdeeKcal).toBe(estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal));
+      expect(result.source).toBe('planTargetWithActivity');
     }
   });
 

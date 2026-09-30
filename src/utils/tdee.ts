@@ -43,19 +43,28 @@ export interface TdeeProfileInput {
   calorieTargetKcal: number;
 }
 
-export type TdeeSource = 'profile' | 'planTarget';
+export type TdeeSource = 'profile' | 'planTargetWithActivity' | 'planTarget';
 
 /** Prefers a real Mifflin-St Jeor + activity-level TDEE whenever gender/age/height/activity level
  *  are all known; falls back to the cruder plan-target-derived estimate otherwise (e.g. a user who
  *  hasn't filled in their profile yet). Reports which method was used so the UI can be transparent
- *  about it rather than silently showing two different numbers for the same person over time. */
+ *  about it rather than silently showing two different numbers for the same person over time.
+ *
+ *  If only activityLevel is known (age/gender/height still missing), the plan-target estimate is
+ *  scaled by that tier's multiplier relative to "moderate" — the activity level the plan's built-in
+ *  workout schedule implicitly assumes — so picking a lower/higher tier always visibly moves the
+ *  number instead of being silently ignored until the full profile is filled in. */
 export function resolveTdeeKcal(input: TdeeProfileInput): { tdeeKcal: number; source: TdeeSource } {
   const { gender, age, heightCm, activityLevel, weightKg, calorieTargetKcal } = input;
   if (gender != null && age != null && heightCm != null && activityLevel != null) {
     const bmr = computeBmrKcal(gender, weightKg, heightCm, age);
     return { tdeeKcal: bmr * ACTIVITY_MULTIPLIER[activityLevel], source: 'profile' };
   }
-  return { tdeeKcal: estimateTdeeFromPlanTarget(calorieTargetKcal), source: 'planTarget' };
+  const planTargetTdee = estimateTdeeFromPlanTarget(calorieTargetKcal);
+  if (activityLevel != null) {
+    return { tdeeKcal: planTargetTdee * (ACTIVITY_MULTIPLIER[activityLevel] / ACTIVITY_MULTIPLIER.moderate), source: 'planTargetWithActivity' };
+  }
+  return { tdeeKcal: planTargetTdee, source: 'planTarget' };
 }
 
 /** Actual energy balance so far today: TDEE plus any extra calories burned through logged
