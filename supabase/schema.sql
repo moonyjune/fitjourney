@@ -17,6 +17,7 @@ create table if not exists public.profiles (
   gender text check (gender in ('male', 'female')),
   activity_level text check (activity_level in ('sedentary', 'light', 'moderate', 'active', 'very_active')),
   calorie_target_kcal numeric,
+  target_daily_deficit_kcal numeric,
   protein_target_g numeric,
   water_target_ml numeric,
   start_date date,
@@ -32,6 +33,7 @@ alter table public.profiles add column if not exists age integer;
 alter table public.profiles add column if not exists gender text check (gender in ('male', 'female'));
 alter table public.profiles add column if not exists activity_level text
   check (activity_level in ('sedentary', 'light', 'moderate', 'active', 'very_active'));
+alter table public.profiles add column if not exists target_daily_deficit_kcal numeric;
 
 -- 2. Lịch sử cân nặng.
 create table if not exists public.weight_entries (
@@ -51,10 +53,12 @@ create table if not exists public.nutrition_logs (
   meals_eaten jsonb not null default '{}'::jsonb,
   extra_calories numeric not null default 0,
   extra_protein_g numeric not null default 0,
+  extra_items jsonb not null default '[]'::jsonb,
   water_ml numeric not null default 0,
   updated_at timestamptz not null default now(),
   unique (user_id, entry_date)
 );
+alter table public.nutrition_logs add column if not exists extra_items jsonb not null default '[]'::jsonb;
 
 -- 4. Buổi tập đã ghi nhận.
 create table if not exists public.workout_entries (

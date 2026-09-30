@@ -9,6 +9,7 @@ import { MealItemRows } from '../../src/components/PlanPreview';
 import { WaterTimeline } from '../../src/components/WaterTimeline';
 import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { TdeeCard } from '../../src/components/TdeeCard';
+import { DailyMealBreakdownTable } from '../../src/components/DailyMealBreakdownTable';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
@@ -16,7 +17,9 @@ import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
 import { useTranslation } from '../../src/i18n/useTranslation';
+import type { StringKey } from '../../src/i18n/strings';
 import { toDateKey } from '../../src/utils/date';
+import type { ExtraMealTime } from '../../src/types';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
@@ -30,6 +33,16 @@ function endOfDay(d: Date): Date {
   copy.setHours(23, 59, 0, 0);
   return copy;
 }
+
+const EXTRA_MEAL_TIME_OPTIONS: { value: ExtraMealTime; labelKey: StringKey }[] = [
+  { value: 'breakfast', labelKey: 'extraMealTime.breakfast' },
+  { value: 'morning_snack', labelKey: 'extraMealTime.morning_snack' },
+  { value: 'lunch', labelKey: 'extraMealTime.lunch' },
+  { value: 'afternoon_snack', labelKey: 'extraMealTime.afternoon_snack' },
+  { value: 'late_afternoon_snack', labelKey: 'extraMealTime.late_afternoon_snack' },
+  { value: 'dinner', labelKey: 'extraMealTime.dinner' },
+  { value: 'evening_snack', labelKey: 'extraMealTime.evening_snack' },
+];
 
 export default function NutritionScreen() {
   const { t } = useTranslation();
@@ -47,6 +60,7 @@ export default function NutritionScreen() {
   const addWater = useNutritionStore((s) => s.addWater);
   const resetWater = useNutritionStore((s) => s.resetWater);
   const addExtra = useNutritionStore((s) => s.addExtra);
+  const removeExtraItem = useNutritionStore((s) => s.removeExtraItem);
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
   const currentWeight = latestWeight?.weightKg ?? settings.startWeightKg;
@@ -59,6 +73,7 @@ export default function NutritionScreen() {
   const [extraName, setExtraName] = useState('');
   const [extraCalories, setExtraCalories] = useState('');
   const [extraProtein, setExtraProtein] = useState('');
+  const [extraMealTime, setExtraMealTime] = useState<ExtraMealTime | null>(null);
   const [customWaterMl, setCustomWaterMl] = useState('');
 
   function handleAddCustomWater() {
@@ -80,10 +95,11 @@ export default function NutritionScreen() {
       Alert.alert(t('common.error'), t('nutrition.errorMissingValue'));
       return;
     }
-    addExtra(dateKey, cal, protein);
+    addExtra(dateKey, extraName.trim(), cal, protein, extraMealTime);
     setExtraName('');
     setExtraCalories('');
     setExtraProtein('');
+    setExtraMealTime(null);
   }
 
   return (
@@ -101,6 +117,7 @@ export default function NutritionScreen() {
 
       <TdeeCard
         calorieTargetKcal={settings.calorieTargetKcal}
+        targetDailyDeficitKcal={settings.targetDailyDeficitKcal}
         heightCm={settings.heightCm}
         age={settings.age}
         gender={settings.gender}
@@ -178,6 +195,21 @@ export default function NutritionScreen() {
           value={extraName}
           onChangeText={setExtraName}
         />
+        <Text style={styles.fieldLabel}>{t('nutrition.extraMealTimeLabel')}</Text>
+        <View style={styles.mealTimeChipRow}>
+          {EXTRA_MEAL_TIME_OPTIONS.map((opt) => {
+            const active = extraMealTime === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.mealTimeChip, active && styles.mealTimeChipActive]}
+                onPress={() => setExtraMealTime(active ? null : opt.value)}
+              >
+                <Text style={[styles.mealTimeChipText, active && styles.mealTimeChipTextActive]}>{t(opt.labelKey)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <View style={styles.extraRow}>
           <TextInput
             style={[styles.input, styles.extraInput]}
@@ -195,6 +227,16 @@ export default function NutritionScreen() {
           />
         </View>
         <Button title={t('nutrition.addExtraButton')} onPress={handleAddExtra} />
+      </Card>
+
+      <Text style={styles.sectionTitle}>{t('nutrition.diaryTitle')}</Text>
+      <Card>
+        <DailyMealBreakdownTable
+          meals={meals}
+          mealsEaten={log.mealsEaten}
+          extraItems={log.extraItems}
+          onRemoveExtra={(itemId) => removeExtraItem(dateKey, itemId)}
+        />
       </Card>
     </ScrollView>
   );
@@ -240,4 +282,10 @@ const styles = StyleSheet.create({
   },
   extraRow: { flexDirection: 'row', gap: spacing.sm },
   extraInput: { flex: 1 },
+  fieldLabel: { ...typography.label, color: '#444', marginBottom: spacing.xs },
+  mealTimeChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2, marginBottom: spacing.sm },
+  mealTimeChip: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.sm + 2, paddingVertical: spacing.xs + 2 },
+  mealTimeChipActive: { backgroundColor: colors.primary },
+  mealTimeChipText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  mealTimeChipTextActive: { color: colors.white },
 });

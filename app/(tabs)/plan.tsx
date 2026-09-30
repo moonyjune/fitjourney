@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Card } from '../../src/components/Card';
@@ -23,6 +23,7 @@ import { useAccentColors } from '../../src/theme/useAccentColors';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import { resolveTdeeKcal } from '../../src/utils/tdee';
 import type { ActivityLevel, Gender, PlanData } from '../../src/types';
 
 export default function PlanScreen() {
@@ -39,15 +40,35 @@ export default function PlanScreen() {
   const editWorkoutDraft = editWorkout ? t('workout.editDraftTemplate', { label: decodeURIComponent(editWorkout) }) : undefined;
 
   const [calorieTarget, setCalorieTarget] = useState(String(settings.calorieTargetKcal));
+  const [targetDeficit, setTargetDeficit] = useState(String(settings.targetDailyDeficitKcal));
   const [proteinTarget, setProteinTarget] = useState(String(settings.proteinTargetG));
   const [waterTarget, setWaterTarget] = useState(String(settings.waterTargetMl));
   const [goalWeight, setGoalWeight] = useState(String(settings.goalWeightKg));
   const [startDateDraft, setStartDateDraft] = useState(() => new Date(settings.startDateISO));
+  const [startWeightText, setStartWeightText] = useState(String(settings.startWeightKg));
   const [heightText, setHeightText] = useState(settings.heightCm != null ? String(settings.heightCm) : '');
   const [ageText, setAgeText] = useState(settings.age != null ? String(settings.age) : '');
   const [genderDraft, setGenderDraft] = useState<Gender | null>(settings.gender);
   const [activityLevelDraft, setActivityLevelDraft] = useState<ActivityLevel | null>(settings.activityLevel);
   const latestWeight = useWeightStore((s) => s.latest());
+
+  const currentWeightKg = latestWeight?.weightKg ?? settings.startWeightKg;
+  // Live preview as the user types/picks, before saving — always uses the current (most recently
+  // logged) weight, same as the TDEE card on Today/Nutrition, not the draft starting-weight field
+  // above (that one is only the plan's baseline, per the earlier clarification on this).
+  const tdeePreview = useMemo(
+    () =>
+      resolveTdeeKcal({
+        gender: genderDraft,
+        age: ageText ? parseInt(ageText, 10) : null,
+        heightCm: heightText ? parseFloat(heightText.replace(',', '.')) : null,
+        activityLevel: activityLevelDraft,
+        weightKg: currentWeightKg,
+        calorieTargetKcal: settings.calorieTargetKcal,
+        targetDailyDeficitKcal: settings.targetDailyDeficitKcal,
+      }),
+    [genderDraft, ageText, heightText, activityLevelDraft, currentWeightKg, settings.calorieTargetKcal, settings.targetDailyDeficitKcal]
+  );
 
   function handleSaveStartDate() {
     updateSettings({ startDateISO: startDateDraft.toISOString() });
@@ -93,18 +114,30 @@ export default function PlanScreen() {
     const protein = parseFloat(proteinTarget);
     const water = parseFloat(waterTarget);
     const goal = parseFloat(goalWeight);
-    if (!cal || !protein || !water || !goal) {
+    const deficit = parseFloat(targetDeficit);
+    if (!cal || !protein || !water || !goal || !deficit) {
       Alert.alert(t('common.error'), t('plan.invalidValuesMessage'));
       return;
     }
-    updateSettings({ calorieTargetKcal: cal, proteinTargetG: protein, waterTargetMl: water, goalWeightKg: goal });
+    updateSettings({
+      calorieTargetKcal: cal,
+      targetDailyDeficitKcal: deficit,
+      proteinTargetG: protein,
+      waterTargetMl: water,
+      goalWeightKg: goal,
+    });
     Alert.alert(t('plan.savedTitle'), t('plan.savedMessage'));
   }
 
   function saveDemographics() {
     const heightCm = heightText ? parseFloat(heightText.replace(',', '.')) : null;
     const age = ageText ? parseInt(ageText, 10) : null;
-    updateSettings({ heightCm, age, gender: genderDraft, activityLevel: activityLevelDraft });
+    const startWeightKg = parseFloat(startWeightText.replace(',', '.'));
+    if (!startWeightKg || startWeightKg <= 0) {
+      Alert.alert(t('common.error'), t('plan.invalidValuesMessage'));
+      return;
+    }
+    updateSettings({ startWeightKg, heightCm, age, gender: genderDraft, activityLevel: activityLevelDraft });
     Alert.alert(t('plan.savedTitle'), t('plan.demographicsSavedMessage'));
   }
 
@@ -198,6 +231,9 @@ export default function PlanScreen() {
         <TextInput style={styles.input} keyboardType="decimal-pad" value={goalWeight} onChangeText={setGoalWeight} />
         <Text style={styles.fieldLabel}>{t('plan.calorieTargetLabel')}</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={calorieTarget} onChangeText={setCalorieTarget} />
+        <Text style={styles.fieldLabel}>{t('plan.targetDeficitLabel')}</Text>
+        <TextInput style={styles.input} keyboardType="decimal-pad" value={targetDeficit} onChangeText={setTargetDeficit} />
+        <Text style={styles.demographicsHint}>{t('plan.targetDeficitHint')}</Text>
         <Text style={styles.fieldLabel}>{t('plan.proteinTargetLabel')}</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={proteinTarget} onChangeText={setProteinTarget} />
         <Text style={styles.fieldLabel}>{t('plan.waterTargetLabel')}</Text>
@@ -208,6 +244,9 @@ export default function PlanScreen() {
       <Text style={styles.sectionTitle}>{t('plan.demographicsTitle')}</Text>
       <Card>
         <Text style={styles.demographicsHint}>{t('plan.demographicsHint')}</Text>
+        <Text style={styles.fieldLabel}>{t('plan.startWeightLabel')}</Text>
+        <TextInput style={styles.input} keyboardType="decimal-pad" value={startWeightText} onChangeText={setStartWeightText} />
+        <Text style={styles.demographicsHint}>{t('plan.startWeightHint')}</Text>
         <Text style={styles.fieldLabel}>{t('plan.heightLabel')}</Text>
         <TextInput style={styles.input} keyboardType="decimal-pad" value={heightText} onChangeText={setHeightText} placeholder="170" />
         <DemographicsFields
@@ -221,6 +260,13 @@ export default function PlanScreen() {
           onActivityLevelChange={setActivityLevelDraft}
           activityLevelLabelKey="plan.activityLevelLabel"
         />
+        <View style={styles.tdeePreviewBox}>
+          <Text style={styles.tdeePreviewLabel}>{t('plan.tdeePreviewLabel')}</Text>
+          <Text style={styles.tdeePreviewValue}>{Math.round(tdeePreview.tdeeKcal)} kcal</Text>
+          <Text style={styles.tdeePreviewHint}>
+            {t(tdeePreview.source === 'profile' ? 'tdee.sourceProfile' : 'plan.tdeePreviewIncompleteHint')}
+          </Text>
+        </View>
         <Button title={t('plan.saveDemographicsButton')} onPress={saveDemographics} style={{ marginTop: spacing.md }} />
       </Card>
 
@@ -284,6 +330,10 @@ const styles = StyleSheet.create({
   switchHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   aiHint: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 17 },
   demographicsHint: { fontSize: 11, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 15 },
+  tdeePreviewBox: { backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm },
+  tdeePreviewLabel: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  tdeePreviewValue: { fontSize: 20, fontWeight: '800', color: colors.primaryDark, marginTop: 2 },
+  tdeePreviewHint: { fontSize: 11, color: colors.textSecondary, marginTop: spacing.xs, lineHeight: 15 },
   input: {
     borderWidth: 1,
     borderColor: colors.border,

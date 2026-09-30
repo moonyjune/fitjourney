@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import { generateCoachCode } from '../utils/coachCode';
+import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 import { isOnline, useSyncQueueStore, type SyncOp } from './syncQueue';
 import type {
   ActivityLevel,
@@ -63,6 +64,7 @@ export interface RemoteProfile {
   gender: Gender | null;
   activityLevel: ActivityLevel | null;
   calorieTargetKcal: number;
+  targetDailyDeficitKcal: number;
   proteinTargetG: number;
   waterTargetMl: number;
   startDateISO: string;
@@ -94,6 +96,7 @@ export async function pullProfile(): Promise<RemoteProfile | null> {
       gender: (data.gender as Gender) ?? null,
       activityLevel: (data.activity_level as ActivityLevel) ?? null,
       calorieTargetKcal: data.calorie_target_kcal ?? 1950,
+      targetDailyDeficitKcal: data.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
       proteinTargetG: data.protein_target_g ?? 200,
       waterTargetMl: data.water_target_ml ?? 4500,
       startDateISO: data.start_date ? new Date(data.start_date).toISOString() : new Date().toISOString(),
@@ -126,6 +129,7 @@ export async function pushProfile(settings: UserSettings): Promise<void> {
           gender: settings.gender,
           activity_level: settings.activityLevel,
           calorie_target_kcal: settings.calorieTargetKcal,
+          target_daily_deficit_kcal: settings.targetDailyDeficitKcal,
           protein_target_g: settings.proteinTargetG,
           water_target_ml: settings.waterTargetMl,
           start_date: settings.startDateISO.slice(0, 10),
@@ -248,6 +252,7 @@ export async function pushNutritionLog(log: DailyNutritionLog): Promise<void> {
           meals_eaten: log.mealsEaten,
           extra_calories: log.extraCalories,
           extra_protein_g: log.extraProteinG,
+          extra_items: log.extraItems,
           water_ml: log.waterMl,
           updated_at: new Date().toISOString(),
         },

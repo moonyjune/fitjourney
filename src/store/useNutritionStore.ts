@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { DailyNutritionLog, MealSlot } from '../types';
+import type { DailyNutritionLog, ExtraFoodItem, ExtraMealTime, MealSlot } from '../types';
 import { toDateKey } from '../utils/date';
 import { pushNutritionLog } from '../sync/cloudSync';
 
@@ -11,7 +11,8 @@ interface NutritionState {
   toggleMeal: (dateKey: string, slot: MealSlot) => void;
   addWater: (dateKey: string, ml: number) => void;
   resetWater: (dateKey: string) => void;
-  addExtra: (dateKey: string, calories: number, proteinG: number) => void;
+  addExtra: (dateKey: string, name: string, calories: number, proteinG: number, mealTime: ExtraMealTime | null) => void;
+  removeExtraItem: (dateKey: string, itemId: string) => void;
 }
 
 // Cached per dateKey so `getLog` returns a stable reference when no log exists yet.
@@ -21,7 +22,7 @@ const emptyLogCache = new Map<string, DailyNutritionLog>();
 function emptyLog(dateKey: string): DailyNutritionLog {
   let log = emptyLogCache.get(dateKey);
   if (!log) {
-    log = { dateISO: dateKey, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, waterMl: 0 };
+    log = { dateISO: dateKey, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 0 };
     emptyLogCache.set(dateKey, log);
   }
   return log;
@@ -55,13 +56,29 @@ export const useNutritionStore = create<NutritionState>()(
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
-      addExtra: (dateKey, calories, proteinG) =>
+      addExtra: (dateKey, name, calories, proteinG, mealTime) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
+          const item: ExtraFoodItem = { id: `${Date.now()}`, name, calories, proteinG, mealTime, loggedAtISO: new Date().toISOString() };
           const updated = {
             ...current,
+            extraItems: [...(current.extraItems ?? []), item],
             extraCalories: current.extraCalories + calories,
             extraProteinG: current.extraProteinG + proteinG,
+          };
+          pushNutritionLog(updated);
+          return { logs: { ...state.logs, [dateKey]: updated } };
+        }),
+      removeExtraItem: (dateKey, itemId) =>
+        set((state) => {
+          const current = state.logs[dateKey] ?? emptyLog(dateKey);
+          const item = (current.extraItems ?? []).find((i) => i.id === itemId);
+          if (!item) return state;
+          const updated = {
+            ...current,
+            extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId),
+            extraCalories: Math.max(0, current.extraCalories - item.calories),
+            extraProteinG: Math.max(0, current.extraProteinG - item.proteinG),
           };
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };

@@ -8,15 +8,26 @@ import { PlanPreview } from '../../src/components/PlanPreview';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { supabase } from '../../src/lib/supabase';
 import { fetchFeedback, pullPlan, pushCoachFeedback, pushPlan } from '../../src/sync/cloudSync';
-import { DEFAULT_PLAN, DEFAULT_WATER_TARGET_ML, getDayType } from '../../src/constants/plan';
+import { DEFAULT_CALORIE_TARGET, DEFAULT_PLAN, DEFAULT_START_WEIGHT_KG, getDayType } from '../../src/constants/plan';
 import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
+import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL, resolveTdeeKcal } from '../../src/utils/tdee';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import type { CoachFeedback, DailyNutritionLog, FeedbackPeriodType, MealSlot, PlanData, ProofTaskType } from '../../src/types';
+import type {
+  ActivityLevel,
+  CoachFeedback,
+  DailyNutritionLog,
+  FeedbackPeriodType,
+  Gender,
+  MealSlot,
+  PlanData,
+  ProofTaskType,
+  WorkoutLogEntry,
+} from '../../src/types';
 
 interface RecentProof {
   id: string;
@@ -100,7 +111,11 @@ export default function ClientDetailScreen() {
       setLoading(true);
       const [remotePlan, profileRes, latestWeightRes, nutritionLogsRes, proofsRes, workoutEntriesRes, feedbackRes] = await Promise.all([
         pullPlan(clientId),
-        supabase.from('profiles').select('start_weight_kg, water_target_ml').eq('id', clientId).maybeSingle(),
+        supabase
+          .from('profiles')
+          .select('start_weight_kg, water_target_ml, age, gender, height_cm, activity_level, calorie_target_kcal, target_daily_deficit_kcal')
+          .eq('id', clientId)
+          .maybeSingle(),
         supabase
           .from('weight_entries')
           .select('weight_kg')
@@ -136,12 +151,40 @@ export default function ClientDetailScreen() {
           mealsEaten: row.meals_eaten ?? {},
           extraCalories: row.extra_calories ?? 0,
           extraProteinG: row.extra_protein_g ?? 0,
+          extraItems: row.extra_items ?? [],
           waterMl: row.water_ml ?? 0,
         };
       }
-      const waterTarget = profileRes.data?.water_target_ml ?? DEFAULT_WATER_TARGET_ML;
-      setStreak(computeCurrentStreak(logsMap, 3, waterTarget));
       setNutritionLogsByDate(logsMap);
+
+      const streakWorkoutEntries: WorkoutLogEntry[] = (workoutEntriesRes.data ?? []).map((row) => ({
+        id: row.id,
+        dateISO: row.entry_date,
+        templateId: row.template_id,
+        label: row.label,
+        durationMin: 0,
+        caloriesBurned: row.calories_burned ?? 0,
+      }));
+      const plan = remotePlan?.plan ?? DEFAULT_PLAN;
+      const currentWeightKg = latestWeightRes.data?.weight_kg ?? profileRes.data?.start_weight_kg ?? DEFAULT_START_WEIGHT_KG;
+      const { tdeeKcal } = resolveTdeeKcal({
+        gender: (profileRes.data?.gender as Gender) ?? null,
+        age: profileRes.data?.age ?? null,
+        heightCm: profileRes.data?.height_cm ?? null,
+        activityLevel: (profileRes.data?.activity_level as ActivityLevel) ?? null,
+        weightKg: currentWeightKg,
+        calorieTargetKcal: profileRes.data?.calorie_target_kcal ?? DEFAULT_CALORIE_TARGET,
+        targetDailyDeficitKcal: profileRes.data?.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
+      });
+      setStreak(
+        computeCurrentStreak(
+          logsMap,
+          plan.mealTemplates,
+          streakWorkoutEntries,
+          tdeeKcal,
+          profileRes.data?.target_daily_deficit_kcal ?? DEFAULT_TARGET_DAILY_DEFICIT_KCAL
+        )
+      );
 
       const workoutById: Record<string, WorkoutEntryRow> = {};
       for (const row of workoutEntriesRes.data ?? []) {

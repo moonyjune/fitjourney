@@ -9,6 +9,7 @@ import {
   DEFAULT_WATER_TARGET_ML,
 } from '../constants/plan';
 import { ensureCoachCode, linkToCoach, pullProfile, pushProfile, type RemoteProfile } from '../sync/cloudSync';
+import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 
 interface SettingsState extends UserSettings {
   updateSettings: (patch: Partial<UserSettings>) => void;
@@ -42,6 +43,7 @@ export const useSettingsStore = create<SettingsState>()(
       gender: null,
       activityLevel: null,
       calorieTargetKcal: DEFAULT_CALORIE_TARGET,
+      targetDailyDeficitKcal: DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
       proteinTargetG: DEFAULT_PROTEIN_TARGET_G,
       waterTargetMl: DEFAULT_WATER_TARGET_ML,
       clientSetupDone: false,

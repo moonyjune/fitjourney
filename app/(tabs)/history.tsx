@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
@@ -24,7 +24,9 @@ import type { StringKey } from '../../src/i18n/strings';
 import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
-import type { CoachFeedback, Mood } from '../../src/types';
+import { DailyMealBreakdownTable } from '../../src/components/DailyMealBreakdownTable';
+import { actualDailyDeficitKcal, resolveTdeeKcal } from '../../src/utils/tdee';
+import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood } from '../../src/types';
 
 interface DaySummary {
   dateKey: string;
@@ -36,6 +38,12 @@ interface DaySummary {
   caloriesBurned: number;
   proofsCount: number;
   weightKg: number | null;
+  meals: MealTemplate[];
+  mealsEaten: Partial<Record<MealSlot, boolean>>;
+  extraItems: ExtraFoodItem[];
+  /** Deficit for that day using TODAY's TDEE (current weight/profile) — not a historical
+   *  reconstruction, since weight/profile aren't necessarily known as of each past day. */
+  deficitKcal: number;
 }
 
 const MILESTONE_STATUS_KEY: Record<string, StringKey> = {
@@ -81,6 +89,8 @@ export default function HistoryScreen() {
   const { t } = useTranslation();
   const ambientBg = useAmbientBackground();
   const nutritionLogs = useNutritionStore((s) => s.logs);
+  const toggleMeal = useNutritionStore((s) => s.toggleMeal);
+  const removeExtraItem = useNutritionStore((s) => s.removeExtraItem);
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const weightEntries = useWeightStore((s) => s.entries);
   const proofs = useProofStore((s) => s.photos);
@@ -94,6 +104,29 @@ export default function HistoryScreen() {
     if (!session) return;
     fetchFeedback(session.user.id).then(setFeedbackList);
   }, [session]);
+
+  const currentWeightKg = latestWeight?.weightKg ?? settings.startWeightKg;
+  const currentTdeeKcal = useMemo(
+    () =>
+      resolveTdeeKcal({
+        gender: settings.gender,
+        age: settings.age,
+        heightCm: settings.heightCm,
+        activityLevel: settings.activityLevel,
+        weightKg: currentWeightKg,
+        calorieTargetKcal: settings.calorieTargetKcal,
+        targetDailyDeficitKcal: settings.targetDailyDeficitKcal,
+      }).tdeeKcal,
+    [
+      settings.gender,
+      settings.age,
+      settings.heightCm,
+      settings.activityLevel,
+      currentWeightKg,
+      settings.calorieTargetKcal,
+      settings.targetDailyDeficitKcal,
+    ]
+  );
 
   const daySummaries = useMemo<DaySummary[]>(() => {
     const dateKeys = new Set<string>();
@@ -126,9 +159,13 @@ export default function HistoryScreen() {
           caloriesBurned: dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0),
           proofsCount: dayProofs.length,
           weightKg: dayWeight?.weightKg ?? null,
+          deficitKcal: actualDailyDeficitKcal(currentTdeeKcal, dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0), calories),
+          meals,
+          mealsEaten: log?.mealsEaten ?? {},
+          extraItems: log?.extraItems ?? [],
         };
       });
-  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates]);
+  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal]);
 
   const weeklySummaries = useMemo(() => {
     const groups = new Map<string, DaySummary[]>();
@@ -211,10 +248,15 @@ export default function HistoryScreen() {
   }
 
   const streak = useMemo(
-    () => computeCurrentStreak(nutritionLogs, 3, settings.waterTargetMl),
-    [nutritionLogs, settings.waterTargetMl]
+    () => computeCurrentStreak(nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, settings.targetDailyDeficitKcal),
+    [nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, settings.targetDailyDeficitKcal]
   );
   const badges = unlockedStreakBadges(streak);
+
+  const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+  function toggleDayExpanded(dateKey: string) {
+    setExpandedDays((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));
+  }
 
   // Daily timelines, oldest -> newest, last 14 logged days. Calories in/out get separate charts
   // (not a shared y-axis) since exercise calories burned are naturally an order of magnitude
@@ -399,17 +441,35 @@ export default function HistoryScreen() {
 
       <Text style={styles.sectionTitle}>{t('history.dailyTitle')}</Text>
       {daySummaries.length === 0 && <Text style={styles.emptyText}>{t('history.emptyData')}</Text>}
-      {daySummaries.map((d) => (
-        <Card key={d.dateKey}>
-          <Text style={styles.dayLabel}>{formatDateVi(d.dateKey)}</Text>
-          <Text style={styles.dayMeta}>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Text>
-          <Text style={styles.dayMeta}>
-            {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
-            {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}
-          </Text>
-          {d.proofsCount > 0 && <Text style={styles.proofBadge}>{t('history.proofBadge', { n: d.proofsCount })}</Text>}
-        </Card>
-      ))}
+      {daySummaries.map((d) => {
+        const expanded = !!expandedDays[d.dateKey];
+        return (
+          <Card key={d.dateKey}>
+            <Text style={styles.dayLabel}>{formatDateVi(d.dateKey)}</Text>
+            <Text style={styles.dayMeta}>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Text>
+            <Text style={styles.dayMeta}>
+              {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
+              {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}
+            </Text>
+            <Text style={[styles.dayMeta, { color: d.deficitKcal >= 0 ? colors.success : colors.warning, fontWeight: '700' }]}>
+              {t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: {Math.round(Math.abs(d.deficitKcal))} kcal
+            </Text>
+            {d.proofsCount > 0 && <Text style={styles.proofBadge}>{t('history.proofBadge', { n: d.proofsCount })}</Text>}
+            <TouchableOpacity onPress={() => toggleDayExpanded(d.dateKey)}>
+              <Text style={styles.expandToggle}>{t(expanded ? 'history.collapseButton' : 'history.expandButton')}</Text>
+            </TouchableOpacity>
+            {expanded && (
+              <DailyMealBreakdownTable
+                meals={d.meals}
+                mealsEaten={d.mealsEaten}
+                extraItems={d.extraItems}
+                onToggleMeal={(slot) => toggleMeal(d.dateKey, slot)}
+                onRemoveExtra={(itemId) => removeExtraItem(d.dateKey, itemId)}
+              />
+            )}
+          </Card>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -427,6 +487,7 @@ const styles = StyleSheet.create({
   dayLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   dayMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
   proofBadge: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: spacing.sm - 2 },
+  expandToggle: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: spacing.sm },
   emptyText: { textAlign: 'center', color: colors.textMuted, marginBottom: spacing.md },
   streakValue: { fontSize: 20, fontWeight: '800', color: colors.gold },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginTop: spacing.md },

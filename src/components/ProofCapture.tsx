@@ -112,7 +112,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
       const water = parseFloat(estimatedWaterMl.replace(',', '.'));
       const burned = parseFloat(estimatedCaloriesBurned.replace(',', '.'));
       if (taskType === 'meal') {
-        if (cal > 0) addExtra(dateKey, cal, 0);
+        if (cal > 0) addExtra(dateKey, contextLabel ?? '', cal, 0, null);
         if (water > 0) addWater(dateKey, water);
       } else if (taskType === 'workout' && burned > 0) {
         updateEntryCaloriesBurned(taskRefId, burned);

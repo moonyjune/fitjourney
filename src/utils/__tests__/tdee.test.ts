@@ -3,15 +3,15 @@ import {
   ACTIVITY_MULTIPLIER,
   actualDailyDeficitKcal,
   computeBmrKcal,
+  DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
   estimateTdeeFromPlanTarget,
   resolveTdeeKcal,
-  TARGET_DAILY_DEFICIT_KCAL,
 } from '../tdee';
 
-describe('TARGET_DAILY_DEFICIT_KCAL', () => {
+describe('DEFAULT_TARGET_DAILY_DEFICIT_KCAL', () => {
   it('matches the average of WEEKLY_FAT_LOSS_TARGET_KG (0.9-1.1kg) converted to a daily kcal deficit', () => {
     // avg 1.0kg/week * 7700 kcal/kg / 7 days ≈ 1100 kcal/day
-    expect(TARGET_DAILY_DEFICIT_KCAL).toBe(1100);
+    expect(DEFAULT_TARGET_DAILY_DEFICIT_KCAL).toBe(1100);
   });
 });
 
@@ -44,8 +44,23 @@ describe('ACTIVITY_MULTIPLIER', () => {
   });
 });
 
+describe('estimateTdeeFromPlanTarget', () => {
+  it('adds the given target deficit onto the intake target, whatever the user set it to', () => {
+    expect(estimateTdeeFromPlanTarget(1950, 1100)).toBe(3050);
+    expect(estimateTdeeFromPlanTarget(1950, 700)).toBe(2650);
+  });
+});
+
 describe('resolveTdeeKcal', () => {
-  const fullProfile = { gender: 'male' as const, age: 35, heightCm: 175, activityLevel: 'moderate' as const, weightKg: 90, calorieTargetKcal: 1950 };
+  const fullProfile = {
+    gender: 'male' as const,
+    age: 35,
+    heightCm: 175,
+    activityLevel: 'moderate' as const,
+    weightKg: 90,
+    calorieTargetKcal: 1950,
+    targetDailyDeficitKcal: DEFAULT_TARGET_DAILY_DEFICIT_KCAL,
+  };
 
   it('uses the real BMR-based formula when gender/age/height/activity are all present', () => {
     const result = resolveTdeeKcal(fullProfile);
@@ -53,22 +68,28 @@ describe('resolveTdeeKcal', () => {
     expect(result.tdeeKcal).toBeCloseTo(computeBmrKcal('male', 90, 175, 35) * ACTIVITY_MULTIPLIER.moderate, 5);
   });
 
-  it('falls back to a pure plan-target estimate only when activityLevel is also missing', () => {
+  it('falls back to a pure plan-target estimate (using the user-set deficit) only when activityLevel is also missing', () => {
     const result = resolveTdeeKcal({ ...fullProfile, activityLevel: null });
     expect(result.source).toBe('planTarget');
-    expect(result.tdeeKcal).toBe(estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal));
+    expect(result.tdeeKcal).toBe(estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal, fullProfile.targetDailyDeficitKcal));
+  });
+
+  it('uses a custom (non-default) target deficit in the fallback when the user has edited it in Plan', () => {
+    const result = resolveTdeeKcal({ ...fullProfile, activityLevel: null, targetDailyDeficitKcal: 500 });
+    expect(result.tdeeKcal).toBe(fullProfile.calorieTargetKcal + 500);
   });
 
   it('scales the plan-target estimate by the chosen activity tier when age/gender/height are missing', () => {
     // moderate is the plan-target's implicit baseline, so it's unscaled (ratio 1).
     const moderate = resolveTdeeKcal({ ...fullProfile, gender: null, age: null, heightCm: null, activityLevel: 'moderate' });
     expect(moderate.source).toBe('planTargetWithActivity');
-    expect(moderate.tdeeKcal).toBeCloseTo(estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal), 5);
+    const planTarget = estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal, fullProfile.targetDailyDeficitKcal);
+    expect(moderate.tdeeKcal).toBeCloseTo(planTarget, 5);
 
     // A lower tier scales the number down proportionally, instead of being ignored entirely.
     const sedentary = resolveTdeeKcal({ ...fullProfile, gender: null, age: null, heightCm: null, activityLevel: 'sedentary' });
     expect(sedentary.source).toBe('planTargetWithActivity');
-    const expected = estimateTdeeFromPlanTarget(fullProfile.calorieTargetKcal) * (ACTIVITY_MULTIPLIER.sedentary / ACTIVITY_MULTIPLIER.moderate);
+    const expected = planTarget * (ACTIVITY_MULTIPLIER.sedentary / ACTIVITY_MULTIPLIER.moderate);
     expect(sedentary.tdeeKcal).toBeCloseTo(expected, 5);
     expect(sedentary.tdeeKcal).toBeLessThan(moderate.tdeeKcal);
   });
@@ -94,7 +115,7 @@ describe('resolveTdeeKcal', () => {
 });
 
 describe('actualDailyDeficitKcal', () => {
-  const tdee = estimateTdeeFromPlanTarget(1950); // 3050
+  const tdee = estimateTdeeFromPlanTarget(1950, DEFAULT_TARGET_DAILY_DEFICIT_KCAL); // 3050
 
   it('is positive (a real deficit) when intake stays under TDEE', () => {
     expect(actualDailyDeficitKcal(tdee, 0, 1800)).toBe(tdee - 1800);

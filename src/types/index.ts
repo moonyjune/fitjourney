@@ -59,11 +59,35 @@ export interface WorkoutLogEntry {
   caloriesBurned: number;
 }
 
+/** Which meal-time an off-plan item belongs to — finer-grained than the plan's own 3 meal slots,
+ *  since off-plan food (snacks especially) doesn't map cleanly onto meal1/meal2/meal3. */
+export type ExtraMealTime =
+  | 'breakfast'
+  | 'morning_snack'
+  | 'lunch'
+  | 'afternoon_snack'
+  | 'late_afternoon_snack'
+  | 'dinner'
+  | 'evening_snack';
+
+export interface ExtraFoodItem {
+  id: string;
+  name: string;
+  calories: number;
+  proteinG: number;
+  loggedAtISO: string;
+  /** Null for older entries logged before this field existed. */
+  mealTime: ExtraMealTime | null;
+}
+
 export interface DailyNutritionLog {
   dateISO: string;
   mealsEaten: Partial<Record<MealSlot, boolean>>;
   extraCalories: number;
   extraProteinG: number;
+  /** Itemized off-plan food entries — extraCalories/extraProteinG above are their running sum,
+   *  kept in lockstep for any existing consumer that only needs the totals. */
+  extraItems: ExtraFoodItem[];
   waterMl: number;
 }
 
@@ -87,6 +111,9 @@ export interface UserSettings {
   gender: Gender | null;
   activityLevel: ActivityLevel | null;
   calorieTargetKcal: number;
+  /** Editable in Plan > Mục tiêu cá nhân; defaults to DEFAULT_TARGET_DAILY_DEFICIT_KCAL. Used by
+   *  the TDEE card's plan-target fallback whenever a real BMR can't be computed. */
+  targetDailyDeficitKcal: number;
   proteinTargetG: number;
   waterTargetMl: number;
   /** Whether the weight/goal onboarding has been completed — independent of `role`, since a

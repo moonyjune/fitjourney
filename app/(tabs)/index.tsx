@@ -17,6 +17,7 @@ import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { computeMilestones } from '../../src/utils/milestones';
 import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
+import { resolveTdeeKcal } from '../../src/utils/tdee';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { colors, spacing, typography } from '../../src/theme/tokens';
@@ -72,9 +73,31 @@ export default function TodayScreen() {
     return milestones.find((m) => m.status === 'upcoming') ?? milestones[milestones.length - 1];
   }, [settings.startDateISO, settings.startWeightKg, settings.goalWeightKg, currentWeight, now]);
 
+  const tdeeKcal = useMemo(
+    () =>
+      resolveTdeeKcal({
+        gender: settings.gender,
+        age: settings.age,
+        heightCm: settings.heightCm,
+        activityLevel: settings.activityLevel,
+        weightKg: currentWeight,
+        calorieTargetKcal: settings.calorieTargetKcal,
+        targetDailyDeficitKcal: settings.targetDailyDeficitKcal,
+      }).tdeeKcal,
+    [
+      settings.gender,
+      settings.age,
+      settings.heightCm,
+      settings.activityLevel,
+      currentWeight,
+      settings.calorieTargetKcal,
+      settings.targetDailyDeficitKcal,
+    ]
+  );
+
   const streak = useMemo(
-    () => computeCurrentStreak(allNutritionLogs, 3, settings.waterTargetMl, now),
-    [allNutritionLogs, settings.waterTargetMl, now]
+    () => computeCurrentStreak(allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, settings.targetDailyDeficitKcal, now),
+    [allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, settings.targetDailyDeficitKcal, now]
   );
   const badges = unlockedStreakBadges(streak);
 
@@ -141,6 +164,7 @@ export default function TodayScreen() {
 
       <TdeeCard
         calorieTargetKcal={settings.calorieTargetKcal}
+        targetDailyDeficitKcal={settings.targetDailyDeficitKcal}
         heightCm={settings.heightCm}
         age={settings.age}
         gender={settings.gender}

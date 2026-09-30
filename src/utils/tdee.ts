@@ -6,9 +6,10 @@ export const KCAL_PER_KG_FAT = 7700;
 
 const AVG_WEEKLY_LOSS_KG = (WEEKLY_FAT_LOSS_TARGET_KG[0] + WEEKLY_FAT_LOSS_TARGET_KG[1]) / 2;
 
-/** The plan's target daily calorie deficit, implied by its weekly fat-loss goal (the same
- *  WEEKLY_FAT_LOSS_TARGET_KG the weight-prediction curve in milestones.ts is built from). */
-export const TARGET_DAILY_DEFICIT_KCAL = Math.round((AVG_WEEKLY_LOSS_KG * KCAL_PER_KG_FAT) / 7);
+/** Default target daily calorie deficit, implied by the plan's default weekly fat-loss goal (the
+ *  same WEEKLY_FAT_LOSS_TARGET_KG the weight-prediction curve in milestones.ts is built from).
+ *  Used to seed UserSettings.targetDailyDeficitKcal, which the user can then edit in Plan. */
+export const DEFAULT_TARGET_DAILY_DEFICIT_KCAL = Math.round((AVG_WEEKLY_LOSS_KG * KCAL_PER_KG_FAT) / 7);
 
 /** Standard activity-multiplier tiers (Harris-Benedict/Mifflin convention) scaling BMR into TDEE. */
 export const ACTIVITY_MULTIPLIER: Record<ActivityLevel, number> = {
@@ -27,11 +28,12 @@ export function computeBmrKcal(gender: Gender, weightKg: number, heightCm: numbe
   return gender === 'male' ? base + 5 : base - 161;
 }
 
-/** Estimated TDEE, back-derived from the plan's daily calorie intake target plus the deficit that
- *  target was sized to create. Used only as a fallback when a real BMR can't be computed (missing
- *  age/gender/height/activity level) — see resolveTdeeKcal below. */
-export function estimateTdeeFromPlanTarget(calorieTargetKcal: number): number {
-  return calorieTargetKcal + TARGET_DAILY_DEFICIT_KCAL;
+/** Estimated TDEE, back-derived from the plan's daily calorie intake target plus the user's own
+ *  target daily deficit (editable in Plan > Mục tiêu cá nhân, defaults to
+ *  DEFAULT_TARGET_DAILY_DEFICIT_KCAL). Used only as a fallback when a real BMR can't be computed
+ *  (missing age/gender/height/activity level) — see resolveTdeeKcal below. */
+export function estimateTdeeFromPlanTarget(calorieTargetKcal: number, targetDailyDeficitKcal: number): number {
+  return calorieTargetKcal + targetDailyDeficitKcal;
 }
 
 export interface TdeeProfileInput {
@@ -41,6 +43,7 @@ export interface TdeeProfileInput {
   activityLevel: ActivityLevel | null;
   weightKg: number;
   calorieTargetKcal: number;
+  targetDailyDeficitKcal: number;
 }
 
 export type TdeeSource = 'profile' | 'planTargetWithActivity' | 'planTarget';
@@ -55,12 +58,12 @@ export type TdeeSource = 'profile' | 'planTargetWithActivity' | 'planTarget';
  *  workout schedule implicitly assumes — so picking a lower/higher tier always visibly moves the
  *  number instead of being silently ignored until the full profile is filled in. */
 export function resolveTdeeKcal(input: TdeeProfileInput): { tdeeKcal: number; source: TdeeSource } {
-  const { gender, age, heightCm, activityLevel, weightKg, calorieTargetKcal } = input;
+  const { gender, age, heightCm, activityLevel, weightKg, calorieTargetKcal, targetDailyDeficitKcal } = input;
   if (gender != null && age != null && heightCm != null && activityLevel != null) {
     const bmr = computeBmrKcal(gender, weightKg, heightCm, age);
     return { tdeeKcal: bmr * ACTIVITY_MULTIPLIER[activityLevel], source: 'profile' };
   }
-  const planTargetTdee = estimateTdeeFromPlanTarget(calorieTargetKcal);
+  const planTargetTdee = estimateTdeeFromPlanTarget(calorieTargetKcal, targetDailyDeficitKcal);
   if (activityLevel != null) {
     return { tdeeKcal: planTargetTdee * (ACTIVITY_MULTIPLIER[activityLevel] / ACTIVITY_MULTIPLIER.moderate), source: 'planTargetWithActivity' };
   }
