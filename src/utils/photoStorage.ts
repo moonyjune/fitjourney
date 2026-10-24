@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Platform } from 'react-native';
 
 const PROOFS_DIR = `${FileSystem.documentDirectory ?? ''}proofs/`;
@@ -41,8 +42,26 @@ function extensionToMediaType(uri: string): string {
   return 'image/jpeg';
 }
 
-/** Reads a local/blob image URI into base64 + its media type, for sending to a vision API. */
-export async function imageUriToBase64(uri: string): Promise<{ base64: string; mediaType: string }> {
+/** Longest edge (px) of a photo sent to the AI: enough to read a meal or a small display, far cheaper than a raw 12 MP shot. */
+export const AI_MAX_EDGE_PX = 1280;
+/** Longest edge when the user opts into Full HD uploads (settings). */
+export const AI_FULL_HD_EDGE_PX = 1920;
+const AI_JPEG_QUALITY = 0.8;
+
+/** Shrinks a photo so its longest edge is at most `maxEdge` (never enlarges) and re-encodes it as JPEG. Returns base64. */
+async function downscaleToBase64(uri: string, maxEdge: number): Promise<{ base64: string; mediaType: string } | null> {
+  const context = ImageManipulator.manipulate(uri);
+  const source = await context.renderAsync();
+  const longest = Math.max(source.width, source.height);
+  if (longest > maxEdge) {
+    context.resize(source.width >= source.height ? { width: maxEdge } : { height: maxEdge });
+  }
+  const rendered = await context.renderAsync();
+  const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: AI_JPEG_QUALITY, base64: true });
+  return saved.base64 ? { base64: saved.base64, mediaType: 'image/jpeg' } : null;
+}
+
+async function readOriginalBase64(uri: string): Promise<{ base64: string; mediaType: string }> {
   if (Platform.OS === 'web') {
     const response = await fetch(uri);
     const blob = await response.blob();
@@ -58,4 +77,19 @@ export async function imageUriToBase64(uri: string): Promise<{ base64: string; m
   }
   const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
   return { base64, mediaType: extensionToMediaType(uri) };
+}
+
+/** Reads a local/blob image URI into base64 + its media type, for sending to a vision API.
+ *  The photo is downscaled first (longest edge `maxEdge`); if that fails for any reason the original is sent instead. */
+export async function imageUriToBase64(
+  uri: string,
+  options: { maxEdge?: number } = {}
+): Promise<{ base64: string; mediaType: string }> {
+  try {
+    const small = await downscaleToBase64(uri, options.maxEdge ?? AI_MAX_EDGE_PX);
+    if (small) return small;
+  } catch {
+    // fall through to the original file
+  }
+  return readOriginalBase64(uri);
 }

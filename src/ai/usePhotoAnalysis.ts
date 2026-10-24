@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { requestPhotoAnalysis, type AiErrorKind, type PhotoAnalysisResult } from '../sync/cloudSync';
 import { useGameText, type GameKey } from '../game/strings';
-import { imageUriToBase64 } from '../utils/photoStorage';
+import { AI_FULL_HD_EDGE_PX, AI_MAX_EDGE_PX, imageUriToBase64 } from '../utils/photoStorage';
+import { useAiPhotoStore } from '../store/useAiPhotoStore';
 import { buildBodyProfile } from './bodyProfile';
 
 export type AnalysisStatus = 'idle' | 'analyzing' | 'done' | 'error';
@@ -42,7 +43,9 @@ export function usePhotoAnalysis(taskType: 'meal' | 'workout', context: Analysis
       setStatus('analyzing');
       setError(null);
       try {
-        const { base64, mediaType } = await imageUriToBase64(uri);
+        const { base64, mediaType } = await imageUriToBase64(uri, {
+          maxEdge: useAiPhotoStore.getState().fullHd ? AI_FULL_HD_EDGE_PX : AI_MAX_EDGE_PX,
+        });
         const outcome = await requestPhotoAnalysis(taskType, base64, mediaType, contextRef.current, buildBodyProfile());
         if (!mounted.current) return outcome.ok ? outcome.result : null;
         if (!outcome.ok) {

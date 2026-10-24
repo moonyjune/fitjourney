@@ -18,6 +18,7 @@ import { useAchievements, useGameState, useNow } from '../../src/game/useGameSta
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
+import { useAiPhotoStore } from '../../src/store/useAiPhotoStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { quest, questFonts, questRadius } from '../../src/theme/quest';
@@ -114,6 +115,8 @@ export default function ProfileScreen() {
   const session = useAuthStore((s) => s.session);
   const language = useSettingsStore((s) => s.language);
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
+  const aiFullHd = useAiPhotoStore((s) => s.fullHd);
+  const setAiFullHd = useAiPhotoStore((s) => s.setFullHd);
   const coachId = useSettingsStore((s) => s.coachId);
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -285,6 +288,23 @@ export default function ProfileScreen() {
           accessibilityLabel={g('profile.reminders')}
           value={remindersEnabled}
           onValueChange={toggleReminders}
+          trackColor={{ false: quest.raised2, true: quest.gold }}
+          thumbColor={quest.text}
+        />
+      </View>
+
+      <View style={styles.settingRow}>
+        <QuestIcon name="camera" size={20} color={quest.gold} />
+        <View style={styles.flex}>
+          <HudText size={15}>{g('profile.aiFullHd')}</HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('profile.aiFullHdHint')}
+          </HudText>
+        </View>
+        <Switch
+          accessibilityLabel={g('profile.aiFullHd')}
+          value={aiFullHd}
+          onValueChange={setAiFullHd}
           trackColor={{ false: quest.raised2, true: quest.gold }}
           thumbColor={quest.text}
         />

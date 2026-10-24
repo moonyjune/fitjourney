@@ -48,6 +48,7 @@ jest.mock('../../sync/cloudSync', () => ({
 import MapScreen from '../../../app/(tabs)/map';
 import ProfileScreen from '../../../app/(tabs)/profile';
 import { QuestTabBar } from '../../components/quest/QuestTabBar';
+import { useAiPhotoStore } from '../../store/useAiPhotoStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useAchievementStore } from '../../store/useAchievementStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -246,6 +247,16 @@ describe('FitQuest tabs', () => {
         pressable(r, (l) => l === 'Về mặc định').props.onPress();
       });
       expect(useLimitsStore.getState()).toMatchObject({ purineMg: 1200, saltG: 7, sugarG: 25 });
+    });
+
+    it('has a Full HD photo switch for the AI that is off by default and remembers the choice', async () => {
+      useAiPhotoStore.getState().setFullHd(false);
+      const r = render(<ProfileScreen />);
+      const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Gửi ảnh Full HD cho AI' && typeof n.props.onValueChange === 'function')[0];
+      expect(toggle.props.value).toBe(false);
+      await act(async () => toggle.props.onValueChange(true));
+      expect(useAiPhotoStore.getState().fullHd).toBe(true);
+      useAiPhotoStore.getState().setFullHd(false);
     });
 
     it('opens the plan, weight, nutrition and history screens', () => {

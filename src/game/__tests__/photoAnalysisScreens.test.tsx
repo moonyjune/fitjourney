@@ -27,10 +27,16 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: () => mockLaunchLibrary(),
 }));
 
+const mockToBase64 = jest.fn();
 jest.mock('../../utils/photoStorage', () => ({
   persistPickedPhoto: async (_uri: string, id: string) => `file:///docs/proofs/${id}.jpg`,
   deletePersistedPhoto: jest.fn(async () => undefined),
-  imageUriToBase64: async () => ({ base64: 'QUJD', mediaType: 'image/png' }),
+  AI_MAX_EDGE_PX: 1280,
+  AI_FULL_HD_EDGE_PX: 1920,
+  imageUriToBase64: (...args: unknown[]) => {
+    mockToBase64(...args);
+    return Promise.resolve({ base64: 'QUJD', mediaType: 'image/png' });
+  },
 }));
 
 type Outcome =
@@ -57,6 +63,7 @@ import { usePhotoAnalysis } from '../../ai/usePhotoAnalysis';
 import { ProofCapture } from '../../components/ProofCapture';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
+import { useAiPhotoStore } from '../../store/useAiPhotoStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -154,6 +161,17 @@ describe('Photo → AI analysis in the screens', () => {
       expect(r.root.findAll((n) => n.props.accessibilityLabel === ANALYZE)).toHaveLength(0);
       await press(r, 'Chọn từ thư viện');
       expect(pressable(r, ANALYZE)).toBeDefined();
+    });
+
+    it('shrinks the photo for the AI by default and sends Full HD only when the setting is on', async () => {
+      const r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(mockToBase64).toHaveBeenLastCalledWith(PHOTO, { maxEdge: 1280 });
+
+      useAiPhotoStore.getState().setFullHd(true);
+      await press(r, ANALYZE);
+      expect(mockToBase64).toHaveBeenLastCalledWith(PHOTO, { maxEdge: 1920 });
+      useAiPhotoStore.getState().setFullHd(false);
     });
 
     it('sends the photo with the user’s body data and pre-fills name, calories and protein as an editable suggestion', async () => {
