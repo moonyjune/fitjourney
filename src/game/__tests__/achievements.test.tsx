@@ -304,7 +304,9 @@ describe('Achievements screen', () => {
   });
 
   it('is honest about what it does not track yet', () => {
-    expect(allText(render())).toContain('Chưa có: chuỗi purine/muối/đường');
+    const text = allText(render());
+    expect(text).toContain('Chưa có: nhịn ăn 16:8, đổi món AI và huy hiệu coach');
+    expect(text).toContain('ước tính theo tên món'); // the purine/salt/sugar streaks are estimates, and the note says so
   });
 
   it('lets only an earned banner be put on the profile, and removed again', async () => {
