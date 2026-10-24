@@ -131,7 +131,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style={ready ? 'dark' : 'light'} />
       {!ready ? (
-        <AppIntro />
+        <AppIntro durationMs={MIN_INTRO_MS} />
       ) : (
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="(tabs)" />

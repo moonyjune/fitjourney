@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,17 @@ import { useGameText, type GameKey } from '../../src/game/strings';
 import { estimateKcal, EXERCISE_BY_ID, type ExerciseId } from '../../src/game/training/exercises';
 import { exerciseName, formatAmount } from '../../src/game/training/format';
 import { applyRating, progressFor, type Rating } from '../../src/game/training/progress';
+import { speak, stopSpeaking } from '../../src/game/training/speech';
+import {
+  dueEvents,
+  repTimeline,
+  restScript,
+  resumeOffsetMs,
+  SPEECH,
+  shouldCallHold,
+  shouldCallRest,
+  workScript,
+} from '../../src/game/training/voice';
 import { buildSteps, sessionProgress, sessionReducer, startSession, totalSetsDone } from '../../src/game/training/session';
 import { useNow } from '../../src/game/useGameState';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
@@ -22,6 +33,7 @@ import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { toDateKey } from '../../src/utils/date';
+import { hiddenSvgProps } from '../../src/components/quest/hiddenSvg';
 
 const RING = 220;
 const STROKE = 14;
@@ -32,6 +44,7 @@ function leave() {
 }
 
 function confirmQuit(title: string, keep: string, quit: string, onQuit: () => void) {
+  // `onQuit` is responsible for silencing speech before leaving.
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined' && window.confirm(title)) onQuit();
     return;
@@ -52,7 +65,7 @@ function Ring({ fraction, children }: { fraction: number; children: React.ReactN
   const c = 2 * Math.PI * r;
   return (
     <View style={styles.ring}>
-      <Svg width={RING} height={RING} style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Svg width={RING} height={RING} style={StyleSheet.absoluteFill} {...hiddenSvgProps}>
         <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={quest.raised} strokeWidth={STROKE} fill="none" />
         <Circle
           cx={RING / 2}
@@ -80,6 +93,8 @@ export default function SessionScreen() {
   useLightStatusBar();
   const { ids, group } = useLocalSearchParams<{ ids?: string; group?: string }>();
   const progress = useTrainingStore((s) => s.progress);
+  const voiceOn = useTrainingStore((s) => s.voiceOn);
+  const setVoiceOn = useTrainingStore((s) => s.setVoiceOn);
   const commitRatings = useTrainingStore((s) => s.commitRatings);
   const addEntry = useWorkoutStore((s) => s.addEntry);
   const entries = useWorkoutStore((s) => s.entries);
@@ -102,6 +117,20 @@ export default function SessionScreen() {
   const [holdStartedAt, setHoldStartedAt] = useState<number | null>(null);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [result, setResult] = useState<{ durationMin: number; kcal: number } | null>(null);
+  // Timed auto count of a rep set: the clock (not the user's taps) decides when each rep is done and when the set ends.
+  const [auto, setAuto] = useState<{ startedAt: number; offsetMs: number } | null>(null);
+  const autoElapsed = useRef(0);
+  const side = useRef<1 | 2>(1);
+  // Read inside effects without re-running them: turning the voice on mid-set must not replay the briefing.
+  const voiceRef = useRef(voiceOn);
+  voiceRef.current = voiceOn;
+  const say = useCallback(
+    (text: string, queue = false) => {
+      if (voiceRef.current) speak(text, { queue });
+    },
+    []
+  );
+  useEffect(() => () => stopSpeaking(), []);
   const [ratings, setRatings] = useState<Partial<Record<ExerciseId, Rating>>>({});
   const logged = useRef(false);
 
@@ -114,9 +143,31 @@ export default function SessionScreen() {
     if (state.phase === 'rest') setRestEndsAt(Date.now() + state.restSec * 1000);
     else setRestEndsAt(null);
     setHoldStartedAt(null);
+    setAuto(null);
+    side.current = 1;
+  }, [state.phase, state.step, state.set, state.restSec]);
+
+  // Spoken briefing when a set is about to start: the full steps on an exercise's first set, just "Set n of N" after.
+  useEffect(() => {
+    if (state.phase !== 'work' || !step || !ex || !voiceRef.current) return;
+    stopSpeaking();
+    workScript(step, ex, state.set).forEach((line) => speak(line, { queue: true }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.phase, state.step, state.set]);
+
+  // Rest: say how long and what comes next, then count the last seconds.
+  useEffect(() => {
+    if (state.phase !== 'rest' || !voiceRef.current) return;
+    const next = state.steps[state.step];
+    speak(restScript(state.restSec, next, next ? EXERCISE_BY_ID[next.id] : undefined));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, state.step, state.set, state.restSec]);
 
   const restLeft = restEndsAt === null ? 0 : Math.ceil((restEndsAt - nowMs) / 1000);
+  useEffect(() => {
+    if (state.phase === 'rest' && restEndsAt !== null && shouldCallRest(restLeft, state.restSec)) say(String(restLeft));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.phase, restLeft]);
   useEffect(() => {
     if (state.phase === 'rest' && restEndsAt !== null && restLeft <= 0) dispatch({ type: 'skipRest' });
   }, [state.phase, restEndsAt, restLeft]);
@@ -125,6 +176,57 @@ export default function SessionScreen() {
   useEffect(() => {
     if (state.phase === 'work' && holdLeft !== null && holdLeft <= 0) dispatch({ type: 'finishSet' });
   }, [state.phase, holdLeft]);
+  useEffect(() => {
+    if (state.phase === 'work' && step && holdLeft !== null && shouldCallHold(holdLeft, step.amount)) say(String(holdLeft));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.phase, holdLeft]);
+
+  // The auto count. Every tick asks the pure timeline what became due since the last tick; time is the source of
+  // truth, so reaching the last rep ends the set with no tap needed.
+  useEffect(() => {
+    if (!auto || state.phase !== 'work' || !step || !ex || step.unit !== 'reps') return;
+    const timeline = repTimeline(step.amount, step.perSide, ex.repSec);
+    autoElapsed.current = auto.offsetMs;
+    const id = setInterval(() => {
+      const elapsed = auto.offsetMs + (Date.now() - auto.startedAt);
+      const due = dueEvents(timeline, autoElapsed.current, elapsed);
+      autoElapsed.current = elapsed;
+      for (const e of due) {
+        if (e.kind === 'rep') {
+          dispatch({ type: 'setCount', count: e.spoken });
+          say(String(e.spoken));
+        } else if (e.kind === 'switch') {
+          side.current = 2;
+          dispatch({ type: 'setCount', count: 0 });
+          say(SPEECH.switchSides, true);
+        } else {
+          setAuto(null);
+          dispatch({ type: 'finishSet' });
+        }
+      }
+    }, 200);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, state.phase, state.step, state.set]);
+
+  function startAuto() {
+    if (!step || !ex || step.unit !== 'reps') return;
+    const timeline = repTimeline(step.amount, step.perSide, ex.repSec);
+    const repsDone = side.current === 2 ? step.amount + state.count : state.count;
+    const offsetMs = resumeOffsetMs(timeline, repsDone);
+    stopSpeaking();
+    if (offsetMs === 0) say(SPEECH.ready);
+    setAuto({ startedAt: Date.now(), offsetMs });
+  }
+
+  /** A manual tap takes over from the timer: stop counting and silence what is queued. */
+  function manual(action: Parameters<typeof dispatch>[0]) {
+    if (auto) {
+      setAuto(null);
+      stopSpeaking();
+    }
+    dispatch(action);
+  }
 
   // Log the workout exactly once, the moment the last set is finished.
   useEffect(() => {
@@ -140,6 +242,8 @@ export default function SessionScreen() {
         : g('train.title');
     addEntry({ templateId: `home-${group || 'x'}`, label, durationMin, caloriesBurned: kcal });
     setResult({ durationMin, kcal });
+    say(SPEECH.allDone);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, state.steps, addEntry, latestWeight, startWeightKg, lang, g, group]);
 
   const bg = { backgroundColor: quest.bg };
@@ -161,6 +265,7 @@ export default function SessionScreen() {
     ];
 
     function finish() {
+      stopSpeaking();
       if (Object.keys(ratings).length > 0) commitRatings(ratings, new Date());
       router.replace('/(tabs)');
     }
@@ -308,7 +413,12 @@ export default function SessionScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={g('train.s.quit')}
-            onPress={() => confirmQuit(g('train.s.quitConfirm'), g('train.s.quitKeep'), g('train.s.quitLeave'), leave)}
+            onPress={() =>
+              confirmQuit(g('train.s.quitConfirm'), g('train.s.quitKeep'), g('train.s.quitLeave'), () => {
+                stopSpeaking();
+                leave();
+              })
+            }
             style={styles.close}
           >
             <QuestIcon name="x" size={20} color={quest.text} strokeWidth={2.4} />
@@ -321,6 +431,18 @@ export default function SessionScreen() {
               {name}
             </HudText>
           </View>
+          <Pressable
+            accessibilityRole="switch"
+            accessibilityLabel={g('train.v.label')}
+            accessibilityState={{ checked: voiceOn }}
+            onPress={() => {
+              if (voiceOn) stopSpeaking();
+              setVoiceOn(!voiceOn);
+            }}
+            style={[styles.close, voiceOn && { borderColor: quest.gold }]}
+          >
+            <QuestIcon name={voiceOn ? 'volume' : 'volumeOff'} size={20} color={voiceOn ? quest.gold : quest.textSecondary} strokeWidth={2.2} />
+          </Pressable>
           <HudText size={13} weight="medium" color={quest.textSecondary} accessibilityLabel={g('train.s.elapsed', { t: formatClock(elapsed) })}>
             {formatClock(elapsed)}
           </HudText>
@@ -379,25 +501,33 @@ export default function SessionScreen() {
           <QuestButton title={g('train.s.skipRest')} variant="ghost" onPress={() => dispatch({ type: 'skipRest' })} />
         ) : isTimed ? (
           holdStartedAt === null ? (
-            <QuestButton title={g('train.s.startTimer')} onPress={() => setHoldStartedAt(Date.now())} />
+            <QuestButton
+              title={g('train.s.startTimer')}
+              onPress={() => {
+                setHoldStartedAt(Date.now());
+                say(SPEECH.go);
+              }}
+            />
           ) : (
             <QuestButton title={g('train.s.finishSet')} icon="check" onPress={() => dispatch({ type: 'finishSet' })} />
           )
         ) : (
-          <View style={styles.footerRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={g('train.s.minusRep')}
-              onPress={() => dispatch({ type: 'removeRep' })}
-              style={styles.minus}
-            >
-              <QuestIcon name="minus" size={20} color={quest.text} strokeWidth={2.6} />
-            </Pressable>
-            <View style={styles.flex}>
-              <QuestButton title={g('train.s.plusRep')} variant="ghost" onPress={() => dispatch({ type: 'addRep' })} />
-            </View>
-            <View style={styles.flex}>
-              <QuestButton title={g('train.s.finishSet')} icon="check" onPress={() => dispatch({ type: 'finishSet' })} />
+          <View style={styles.footerCol}>
+            {auto ? (
+              <QuestButton title={g('train.s.autoStop')} variant="ghost" icon="x" onPress={() => manual({ type: 'setCount', count: state.count })} />
+            ) : (
+              <QuestButton title={g('train.s.autoStart')} icon="clock" onPress={startAuto} />
+            )}
+            <View style={styles.footerRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel={g('train.s.minusRep')} onPress={() => manual({ type: 'removeRep' })} style={styles.minus}>
+                <QuestIcon name="minus" size={20} color={quest.text} strokeWidth={2.6} />
+              </Pressable>
+              <View style={styles.flex}>
+                <QuestButton title={g('train.s.plusRep')} variant="ghost" onPress={() => manual({ type: 'addRep' })} />
+              </View>
+              <View style={styles.flex}>
+                <QuestButton title={g('train.s.finishSet')} icon="check" onPress={() => manual({ type: 'finishSet' })} />
+              </View>
             </View>
           </View>
         )}
@@ -426,6 +556,7 @@ const styles = StyleSheet.create({
   tip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   panel: { padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, gap: 10 },
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: quest.bg },
+  footerCol: { gap: 10 },
   footerRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   minus: { width: 56, height: 56, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, alignItems: 'center', justifyContent: 'center' },
   medal: { width: 84, height: 84, borderRadius: 22, backgroundColor: quest.gold, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '45deg' }], marginBottom: 14 },

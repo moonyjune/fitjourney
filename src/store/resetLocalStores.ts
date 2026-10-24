@@ -5,7 +5,11 @@ import {
   DEFAULT_START_WEIGHT_KG,
   DEFAULT_WATER_TARGET_ML,
 } from '../constants/plan';
+import { useAchievementStore } from './useAchievementStore';
+import { useCelebrationStore } from './useCelebrationStore';
 import { useFeelingStore } from './useFeelingStore';
+import { useLimitsStore } from './useLimitsStore';
+import { useTrainingStore } from './useTrainingStore';
 import { useNutritionStore } from './useNutritionStore';
 import { usePlanStore } from './usePlanStore';
 import { useProofStore } from './useProofStore';
@@ -51,6 +55,11 @@ export function resetAllLocalStores() {
   usePlanStore.setState({ plan: DEFAULT_PLAN, updatedAtISO: new Date(0).toISOString() });
   useProofStore.setState({ photos: [] });
   useFeelingStore.setState({ records: [] });
+  // Device-local game state belongs to the account too: another user must not inherit levels, banners or limits.
+  useTrainingStore.setState({ progress: {} });
+  useAchievementStore.setState({ equippedBannerId: null });
+  useCelebrationStore.setState({ seenLevel: null });
+  useLimitsStore.getState().reset();
   useShoppingListStore.setState({ weekKey: weekStartKey(new Date()), checkedItems: {}, actualPrices: {}, actualQuantities: {}, customItems: [] });
   // Discard rather than misattribute: a queued offline write has no owner id of its own, so
   // replaying it after switching accounts would silently write to the wrong user.

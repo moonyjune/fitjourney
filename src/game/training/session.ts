@@ -37,7 +37,13 @@ export function startSession(steps: SessionStep[]): SessionState {
   return { steps, step: 0, set: 0, phase: steps.length ? 'work' : 'done', count: 0, restSec: 0, setsDone: steps.map(() => 0) };
 }
 
-export type SessionAction = { type: 'addRep' } | { type: 'removeRep' } | { type: 'finishSet' } | { type: 'skipRest' };
+export type SessionAction =
+  | { type: 'addRep' }
+  | { type: 'removeRep' }
+  /** Sets the rep counter to an exact value — used by the timed auto count, which owns the clock. */
+  | { type: 'setCount'; count: number }
+  | { type: 'finishSet' }
+  | { type: 'skipRest' };
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
@@ -45,6 +51,8 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       return state.phase === 'work' ? { ...state, count: state.count + 1 } : state;
     case 'removeRep':
       return state.phase === 'work' ? { ...state, count: Math.max(0, state.count - 1) } : state;
+    case 'setCount':
+      return state.phase === 'work' ? { ...state, count: Math.max(0, Math.round(action.count)) } : state;
     case 'finishSet': {
       if (state.phase !== 'work') return state;
       const current = state.steps[state.step];

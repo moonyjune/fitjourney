@@ -30,6 +30,18 @@
     "plugins": [
       "expo-router",
       [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#110D22",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "dark": {
+            "backgroundColor": "#110D22",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
+      [
         "expo-image-picker",
         {
           "photosPermission": "Cho phép truy cập thư viện ảnh để đính kèm ảnh minh chứng hoàn thành bữa ăn/buổi tập.",

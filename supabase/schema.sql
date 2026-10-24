@@ -206,6 +206,25 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
+-- Mã Coach gắn với tài khoản: đã có thì không được đổi hay xoá (chỉ được tạo lần đầu khi đang trống).
+-- Tính duy nhất do ràng buộc unique của cột coach_code đảm bảo.
+create or replace function public.keep_coach_code()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.coach_code is not null and new.coach_code is distinct from old.coach_code then
+    raise exception 'Mã Coach không thể thay đổi.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_keep_coach_code on public.profiles;
+create trigger profiles_keep_coach_code
+  before update on public.profiles
+  for each row execute procedure public.keep_coach_code();
+
 -- Kiểm tra "user hiện tại có phải Coach của target_user_id không" — chạy với quyền definer để
 -- tránh đệ quy RLS khi được dùng bên trong policy của chính bảng profiles.
 create or replace function public.is_coach_of(target_user_id uuid)

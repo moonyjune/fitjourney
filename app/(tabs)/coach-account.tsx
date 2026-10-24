@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,6 +30,18 @@ export default function CoachAccountScreen() {
   const language = useSettingsStore((s) => s.language);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const switchToClientMode = useSettingsStore((s) => s.switchToClientMode);
+  const ensureOwnCoachCode = useSettingsStore((s) => s.ensureOwnCoachCode);
+  const [codeState, setCodeState] = useState<'idle' | 'loading' | 'failed'>('idle');
+
+  // The code belongs to the account and is created automatically; this just makes sure it has been fetched/created.
+  const loadCode = useCallback(async () => {
+    setCodeState('loading');
+    const code = await ensureOwnCoachCode();
+    setCodeState(code ? 'idle' : 'failed');
+  }, [ensureOwnCoachCode]);
+  useEffect(() => {
+    if (!coachCode) loadCode();
+  }, [coachCode, loadCode]);
 
   function handleSwitchToClient() {
     switchToClientMode();
@@ -50,9 +63,22 @@ export default function CoachAccountScreen() {
         <HudText size={11} color={quest.manaText} style={styles.eyebrow}>
           {t('coachAccount.codeTitle').toUpperCase()}
         </HudText>
-        <HudText size={30} selectable style={styles.code}>
-          {coachCode ?? '...'}
-        </HudText>
+        {coachCode ? (
+          <HudText size={30} selectable style={styles.code}>
+            {coachCode}
+          </HudText>
+        ) : codeState === 'failed' ? (
+          <>
+            <HudText size={13} weight="medium" color={quest.hpText}>
+              {g('coach.codeFailed')}
+            </HudText>
+            <QuestButton title={g('coach.codeRetry')} variant="mana" onPress={loadCode} />
+          </>
+        ) : (
+          <HudText size={16} weight="medium" color={quest.textSecondary}>
+            {g('coach.codeLoading')}
+          </HudText>
+        )}
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {t('coachAccount.codeHint')}
         </HudText>

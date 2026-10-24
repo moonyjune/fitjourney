@@ -5,6 +5,9 @@ import type { ExerciseId } from '../game/training/exercises';
 import { applyRating, progressFor, type ExerciseProgress, type Rating } from '../game/training/progress';
 
 interface TrainingState {
+  /** Spoken guidance during a session (steps, counting, rest). On by default. Local to this device. */
+  voiceOn: boolean;
+  setVoiceOn: (on: boolean) => void;
   progress: Partial<Record<ExerciseId, ExerciseProgress>>;
   /** Records how each exercise felt in a session and moves levels per the progression rules.
    *  Returns the exercises that levelled up. Local to this device (not synced to the cloud). */
@@ -14,6 +17,8 @@ interface TrainingState {
 export const useTrainingStore = create<TrainingState>()(
   persist(
     (set, get) => ({
+      voiceOn: true,
+      setVoiceOn: (on) => set({ voiceOn: on }),
       progress: {},
       commitRatings: (ratings, now = new Date()) => {
         const next = { ...get().progress };

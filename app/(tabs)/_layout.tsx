@@ -23,6 +23,8 @@ export default function TabsLayout() {
   const colors = useAccentColors();
   const plan = usePlanStore((s) => s.plan);
   const syncPlanFromRemote = usePlanStore((s) => s.syncFromRemote);
+  const coachCode = useSettingsStore((s) => s.coachCode);
+  const ensureOwnCoachCode = useSettingsStore((s) => s.ensureOwnCoachCode);
 
   // Client mode always needs the weight/goal onboarding done at least once, even if this
   // account switched here from Coach mode (a dual-role account may not have done it yet).
@@ -31,6 +33,11 @@ export default function TabsLayout() {
       router.replace('/onboarding');
     }
   }, [isCoach, clientSetupDone]);
+
+  // A Coach account always has its code: create/fetch it as soon as Coach mode is on and nothing is stored locally.
+  useEffect(() => {
+    if (isCoach && !coachCode) ensureOwnCoachCode();
+  }, [isCoach, coachCode, ensureOwnCoachCode]);
 
   useEffect(() => {
     if (!isCoach && clientSetupDone) syncPlanFromRemote();

@@ -26,7 +26,9 @@ import type {
 } from '../types';
 
 function currentUserId(): string | null {
-  return useAuthStore.getState().session?.user.id ?? null;
+  const { session, devMode } = useAuthStore.getState();
+  // The dev login is offline-only: pretending to be signed out makes every push/pull a no-op.
+  return devMode ? null : (session?.user.id ?? null);
 }
 
 function logSyncError(context: string, error: unknown) {
@@ -147,15 +149,46 @@ export async function pushProfile(settings: UserSettings): Promise<void> {
   );
 }
 
-/** Generates a unique coach code and saves it to the caller's own profile (retries once on collision). */
+const COACH_CODE_ATTEMPTS = 6;
+
+/** Returns this account's coach code, creating it the first time. The code belongs to the account: an existing one is
+ *  never replaced, and uniqueness across accounts comes from the `coach_code` unique constraint (a collision is retried
+ *  with a fresh code). Returns null when the backend can't confirm a saved code, so callers never show a code that
+ *  isn't actually stored. */
 export async function ensureCoachCode(): Promise<string | null> {
+  const { devMode } = useAuthStore.getState();
+  // Offline dev account: there is no backend row, so a local code is all there is.
+  if (devMode) return generateCoachCode();
   const userId = currentUserId();
   if (!userId) return null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+
+  const readExisting = async (): Promise<string | null> => {
+    const { data, error } = await supabase.from('profiles').select('coach_code').eq('id', userId).maybeSingle();
+    if (error) {
+      logSyncError('ensureCoachCode (read)', error);
+      return null;
+    }
+    return (data?.coach_code as string | null | undefined) ?? null;
+  };
+
+  const existing = await readExisting();
+  if (existing) return existing;
+
+  for (let attempt = 0; attempt < COACH_CODE_ATTEMPTS; attempt++) {
     const code = generateCoachCode();
-    const { error } = await supabase.from('profiles').update({ role: 'coach', coach_code: code }).eq('id', userId);
-    if (!error) return code;
-    // 23505 = unique_violation (rare code collision) — try again with a new code.
+    // `is null` makes this a no-op if another device set a code in the meantime; `.select()` proves a row was written
+    // (an update that matches no row, e.g. blocked by RLS, returns no error at all).
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ role: 'coach', coach_code: code })
+      .eq('id', userId)
+      .is('coach_code', null)
+      .select('coach_code');
+    if (!error) {
+      if (data && data.length > 0) return code;
+      return await readExisting(); // lost a race to another device, or no profile row — whatever is stored wins
+    }
+    // 23505 = unique_violation (code taken by another account) — try again with a new code.
     if (error.code !== '23505') {
       logSyncError('ensureCoachCode', error);
       return null;

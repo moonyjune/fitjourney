@@ -9,6 +9,8 @@ const mockSignUp = jest.fn<(a: { email: string; password: string }) => Promise<{
 const mockLoadSaved = jest.fn<() => Promise<{ email: string; password: string } | null>>();
 const mockSaveSaved = jest.fn<(e: string, p: string) => Promise<void>>();
 
+// The forgot-password link is switched off in src/config/flags.ts for now; these tests cover it for when it is back on.
+jest.mock('../../config/flags', () => ({ SHOW_FORGOT_PASSWORD: true }));
 jest.mock('expo-router', () => ({
   router: {
     push: (...a: unknown[]) => mockRouter.push(...a),

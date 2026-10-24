@@ -15,6 +15,13 @@ jest.mock('expo-router', () => ({
   useFocusEffect: () => undefined,
   useLocalSearchParams: () => mockParams,
 }));
+const mockSpeak = jest.fn<(text: string, o: { queue?: boolean }) => void>();
+const mockStop = jest.fn();
+jest.mock('../training/speech', () => ({
+  speak: (text: string, o: { queue?: boolean }) => mockSpeak(text, o),
+  stopSpeaking: () => mockStop(),
+  isSpeechAvailable: () => true,
+}));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -41,6 +48,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useTrainingStore } from '../../store/useTrainingStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
+import { EXERCISE_BY_ID } from '../training/exercises';
 
 function allText(renderer: ReactTestRenderer): string {
   const parts: string[] = [];
@@ -325,6 +333,192 @@ describe('Train tab, exercise detail and session', () => {
       const text = allText(render(<SessionScreen />));
       expect(text).toContain('Chair squat');
       expect(text).toContain('REPS');
+    });
+  });
+  describe('Session voice guidance', () => {
+    const spoken = () => mockSpeak.mock.calls.map(([text]) => text);
+
+    beforeEach(() => {
+      mockSpeak.mockClear();
+      mockStop.mockClear();
+      useTrainingStore.setState({ voiceOn: true });
+      mockParams = { ids: 'chairSquat', group: 'A' };
+    });
+
+    it('briefs the first set in order: name, amount, the steps, then asks to press start', () => {
+      render(<SessionScreen />);
+      expect(spoken()).toEqual([
+        'Chair squat',
+        '3 sets of 8 reps.',
+        ...EXERCISE_BY_ID.chairSquat.steps.map((st) => st.en),
+        'Press start when you are ready.',
+      ]);
+      // The script is queued sentence by sentence, behind a stop that clears anything stale.
+      expect(mockSpeak.mock.calls.every(([, o]) => o.queue === true)).toBe(true);
+      expect(mockStop).toHaveBeenCalled();
+    });
+
+    it('counts reps aloud on a timer, and ends the set by itself when the last rep is counted', () => {
+      const r = render(<SessionScreen />);
+      mockSpeak.mockClear();
+      press(r, 'Bắt đầu, tự đếm');
+      expect(spoken()).toEqual(['Get ready.']);
+      act(() => {
+        jest.advanceTimersByTime(2000 + 3000 + 200); // lead-in, then the first 3-second rep
+      });
+      expect(allText(r)).toMatch(/SỐ LẦN\s+1/);
+      expect(spoken()).toContain('1');
+      act(() => {
+        jest.advanceTimersByTime(3000 * 7);
+      });
+      expect(spoken().filter((t) => /^\d+$/.test(t))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+      // 8 reps done: nobody tapped "Xong set", the clock did. Now resting before set 2.
+      expect(allText(r)).toMatch(/NGHỈ\s+4[01]/); // 40 s rest (a tick of slack)
+      expect(spoken().some((t) => t.startsWith('Rest for 40 seconds. Next up: Chair squat'))).toBe(true);
+    });
+
+    it('hands over to the user on a manual tap: counting stops and the pending speech is cut', () => {
+      const r = render(<SessionScreen />);
+      press(r, 'Bắt đầu, tự đếm');
+      act(() => {
+        jest.advanceTimersByTime(2000 + 3000 * 2 + 200);
+      });
+      expect(allText(r)).toMatch(/SỐ LẦN\s+2/);
+      mockStop.mockClear();
+      press(r, '+1 lần');
+      expect(mockStop).toHaveBeenCalled();
+      expect(allText(r)).toMatch(/SỐ LẦN\s+3/);
+      mockSpeak.mockClear();
+      act(() => {
+        jest.advanceTimersByTime(20_000);
+      });
+      expect(allText(r)).toMatch(/SỐ LẦN\s+3/); // the timer no longer moves it
+      expect(spoken()).toEqual([]);
+      expect(allText(r)).toContain('Set 1 / 3');
+    });
+
+    it('can be started again and carries on after the reps already done', () => {
+      const r = render(<SessionScreen />);
+      press(r, 'Bắt đầu, tự đếm');
+      act(() => {
+        jest.advanceTimersByTime(2000 + 3000 * 2 + 200);
+      });
+      press(r, 'Dừng đếm');
+      expect(allText(r)).toMatch(/SỐ LẦN\s+2/);
+      mockSpeak.mockClear();
+      press(r, 'Bắt đầu, tự đếm');
+      expect(spoken()).toEqual([]); // resuming mid-set: no "get ready"
+      act(() => {
+        jest.advanceTimersByTime(3000 + 200);
+      });
+      expect(allText(r)).toMatch(/SỐ LẦN\s+3/);
+    });
+
+    it('calls out a timed hold and counts the last seconds', () => {
+      mockParams = { ids: 'kneePlank', group: 'A' };
+      const r = render(<SessionScreen />);
+      mockSpeak.mockClear();
+      press(r, 'Bắt đầu đếm');
+      expect(spoken()).toEqual(['Go!']);
+      // Advance one second at a time, the way the screen's own clock ticks.
+      for (let t = 0; t < 14; t++) {
+        act(() => {
+          jest.advanceTimersByTime(1000);
+        });
+      }
+      expect(spoken().filter((t) => /^\d+$/.test(t))).toEqual(['10', '5', '4', '3', '2', '1']);
+      expect(allText(r)).toMatch(/GIÂY\s+1/);
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(allText(r)).toMatch(/NGHỈ/); // zero reached: set over, no tap needed
+    });
+
+    it('counts the last three seconds of a rest', () => {
+      const r = render(<SessionScreen />);
+      press(r, 'Xong set');
+      mockSpeak.mockClear();
+      act(() => {
+        jest.advanceTimersByTime(37_000);
+      });
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(spoken().filter((t) => /^\d+$/.test(t))).toEqual(['3', '2', '1']);
+      expect(allText(r)).toContain('Set 2 / 3');
+      expect(spoken()).toContain('Set 2 of 3.'); // rest ran out by itself and the next set is briefed
+    });
+
+    it('is silent when the voice is switched off, and cuts what is being said', () => {
+      const r = render(<SessionScreen />);
+      mockStop.mockClear();
+      mockSpeak.mockClear();
+      act(() => pressable(r, byLabel('Giọng nói')).props.onPress());
+      expect(useTrainingStore.getState().voiceOn).toBe(false);
+      expect(mockStop).toHaveBeenCalled();
+      press(r, 'Bắt đầu, tự đếm');
+      act(() => {
+        jest.advanceTimersByTime(2000 + 3000 + 200);
+      });
+      expect(allText(r)).toMatch(/SỐ LẦN\s+1/); // still counts, just without sound
+      press(r, 'Xong set');
+      expect(spoken()).toEqual([]);
+    });
+
+    it('stays off for the next session once switched off, and starts silent', () => {
+      useTrainingStore.setState({ voiceOn: false });
+      render(<SessionScreen />);
+      expect(spoken()).toEqual([]);
+    });
+
+    it('stops speaking when the workout is quit and when the screen goes away', () => {
+      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const r = render(<SessionScreen />);
+      press(r, 'Thoát buổi tập');
+      const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
+      mockStop.mockClear();
+      act(() => buttons[1].onPress?.());
+      expect(mockStop).toHaveBeenCalled();
+      alert.mockRestore();
+      mockStop.mockClear();
+      act(() => renderer?.unmount());
+      renderer = undefined;
+      expect(mockStop).toHaveBeenCalled();
+    });
+
+    it('speaks English even though the screen is in Vietnamese (and in English too)', () => {
+      for (const language of ['vi', 'en'] as const) {
+        mockSpeak.mockClear();
+        useSettingsStore.setState({ language });
+        render(<SessionScreen />);
+        expect(spoken()[0]).toBe('Chair squat');
+        expect(spoken()[1]).toBe('3 sets of 8 reps.');
+        expect(spoken().every((t) => !/[À-ỹ]/.test(t))).toBe(true);
+        act(() => renderer?.unmount());
+        renderer = undefined;
+      }
+      // The on-screen text still follows the app language.
+      useSettingsStore.setState({ language: 'vi' });
+      expect(allText(render(<SessionScreen />))).toContain('Squat ngồi ghế');
+    });
+
+    it('cheers when the workout is complete', () => {
+      mockParams = { ids: 'kneePlank', group: 'A' };
+      const r = render(<SessionScreen />);
+      for (let i = 0; i < 3; i++) {
+        press(r, 'Bắt đầu đếm');
+        act(() => {
+          jest.advanceTimersByTime(15_000);
+        });
+        if (i < 2) press(r, 'Bỏ qua nghỉ');
+      }
+      expect(spoken()).toContain('Workout complete. Great job!');
     });
   });
 });

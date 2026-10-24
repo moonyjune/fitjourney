@@ -11,6 +11,8 @@ import { useTranslation } from '../src/i18n/useTranslation';
 import { quest } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { SHOW_FORGOT_PASSWORD } from '../src/config/flags';
+import { enterDevMode } from '../src/dev/devLogin';
 import { loadRememberedCredentials, saveRememberedCredentials } from '../src/utils/rememberedCredentials';
 
 type Mode = 'signIn' | 'signUp';
@@ -144,7 +146,7 @@ export default function AuthScreen() {
           icon="chevron"
         />
 
-        {mode === 'signIn' && (
+        {mode === 'signIn' && SHOW_FORGOT_PASSWORD && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={g('auth.forgot')}
@@ -157,6 +159,10 @@ export default function AuthScreen() {
               {resetBusy ? g('auth.forgotSending') : g('auth.forgot')}
             </HudText>
           </Pressable>
+        )}
+        {__DEV__ && (
+          // Development only (absent from production builds): skips sign-in and loads three weeks of dummy data.
+          <QuestButton variant="ghost" title="Login Dev (dữ liệu mẫu)" icon="flame" onPress={enterDevMode} />
         )}
         {resetNote && (
           <View

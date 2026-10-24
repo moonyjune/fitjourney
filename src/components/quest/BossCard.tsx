@@ -5,10 +5,11 @@ import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { XpBar } from './XpBar';
+import { hiddenSvgProps } from './hiddenSvg';
 
 export function BossFace({ size = 44, defeated }: { size?: number; defeated: boolean }) {
   return (
-    <Svg width={size} height={size} viewBox="0 0 64 64" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Svg width={size} height={size} viewBox="0 0 64 64" {...hiddenSvgProps}>
       <Path d="M16 20 L10 6 L24 15 Z M48 20 L54 6 L40 15 Z" fill={quest.hp} />
       <Path d="M8 40 C8 22 20 14 32 14 C44 14 56 22 56 40 C56 52 46 58 32 58 C18 58 8 52 8 40 Z" fill={quest.hp} />
       <Circle cx={24} cy={34} r={4} fill={quest.bg} />

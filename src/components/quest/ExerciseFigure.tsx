@@ -2,6 +2,7 @@ import Svg, { Circle, Polyline } from 'react-native-svg';
 import { POSES } from '../../game/training/poses';
 import type { ExerciseId } from '../../game/training/exercises';
 import { quest } from '../../theme/quest';
+import { hiddenSvgProps } from './hiddenSvg';
 
 interface ExerciseFigureProps {
   id: ExerciseId;
@@ -18,7 +19,7 @@ export function ExerciseFigure({ id, pose, width = 120 }: ExerciseFigureProps) {
   const p = def.poses[pose];
   const stroke = { strokeLinecap: 'round', strokeLinejoin: 'round', fill: 'none' } as const;
   return (
-    <Svg width={width} height={(width * 80) / 120} viewBox="0 0 120 80" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Svg width={width} height={(width * 80) / 120} viewBox="0 0 120 80" {...hiddenSvgProps}>
       {def.props.map((prop, i) => (
         <Polyline key={`p${i}`} {...stroke} points={toPoints(prop.pts)} stroke={quest.border} strokeWidth={3} />
       ))}

@@ -31,6 +31,9 @@ interface SettingsState extends UserSettings {
   switchToClientMode: () => void;
   /** Activates Coach capabilities if not already (generating a code) and switches to Coach mode. */
   switchToCoachMode: () => Promise<void>;
+  /** Makes sure this account has its (permanent, unique) coach code, fetching or creating it. Returns it, or null if the
+   *  backend couldn't confirm one — call again to retry. */
+  ensureOwnCoachCode: () => Promise<string | null>;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -81,8 +84,7 @@ export const useSettingsStore = create<SettingsState>()(
       },
       chooseCoachRole: async () => {
         set((state) => ({ ...state, role: 'coach', roleChosen: true }));
-        const code = await ensureCoachCode();
-        if (code) set((state) => ({ ...state, coachCode: code, coachEnabled: true }));
+        await get().ensureOwnCoachCode();
       },
       submitCoachCode: async (code) => {
         const result = await linkToCoach(code);
@@ -97,12 +99,18 @@ export const useSettingsStore = create<SettingsState>()(
         pushProfile(get());
       },
       switchToCoachMode: async () => {
-        if (!get().coachEnabled) {
-          const code = await ensureCoachCode();
-          if (code) set((state) => ({ ...state, coachCode: code, coachEnabled: true }));
-        }
+        // Always go through ensureOwnCoachCode: a missing local code (new device, earlier failure) is refetched,
+        // an existing one is returned untouched.
+        if (!get().coachCode) await get().ensureOwnCoachCode();
         set((state) => ({ ...state, role: 'coach' }));
         pushProfile(get());
+      },
+      ensureOwnCoachCode: async () => {
+        const existing = get().coachCode;
+        if (existing) return existing;
+        const code = await ensureCoachCode();
+        if (code) set((state) => ({ ...state, coachCode: code, coachEnabled: true }));
+        return code;
       },
     }),
     {
