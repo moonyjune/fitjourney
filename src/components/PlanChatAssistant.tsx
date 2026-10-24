@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card } from './Card';
 import { PlanPreview } from './PlanPreview';
+import { QuestPlanPreview } from './quest/QuestPlanPreview';
+import { quest, questFonts } from '../theme/quest';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
 import {
@@ -21,6 +23,8 @@ interface PlanChatAssistantProps {
   onApply: (plan: PlanData) => Promise<void> | void;
   /** Pre-fills the message input (e.g. from a workout card's "Edit with AI" shortcut). */
   initialDraft?: string;
+  /** FitQuest dark styling (default: classic light). */
+  dark?: boolean;
 }
 
 function sessionTitleFrom(text: string): string {
@@ -28,8 +32,10 @@ function sessionTitleFrom(text: string): string {
   return trimmed.length > 40 ? `${trimmed.slice(0, 40)}…` : trimmed;
 }
 
-export function PlanChatAssistant({ livePlan, targetUserId, onApply, initialDraft }: PlanChatAssistantProps) {
+export function PlanChatAssistant({ livePlan, targetUserId, onApply, initialDraft, dark = false }: PlanChatAssistantProps) {
   const { t } = useTranslation();
+  const Panel = dark ? DarkPanel : Card;
+  const spinner = dark ? quest.gold : colors.primary;
   const selfId = useAuthStore((s) => s.session?.user.id);
   const ownerId = targetUserId ?? selfId;
 
@@ -181,78 +187,107 @@ export function PlanChatAssistant({ livePlan, targetUserId, onApply, initialDraf
             {sessions.map((s) => (
               <TouchableOpacity
                 key={s.id}
-                style={[styles.sessionChip, s.id === activeSessionId && styles.sessionChipActive]}
+                style={[styles.sessionChip, dark && darkStyles.chip, s.id === activeSessionId && (dark ? darkStyles.chipActive : styles.sessionChipActive)]}
                 onPress={() => loadSession(s.id)}
               >
-                <Text style={[styles.sessionChipText, s.id === activeSessionId && styles.sessionChipTextActive]} numberOfLines={1}>
+                <Text style={[styles.sessionChipText, dark && darkStyles.chipText, s.id === activeSessionId && (dark ? darkStyles.chipTextActive : styles.sessionChipTextActive)]} numberOfLines={1}>
                   {s.title || t('chat.defaultSessionTitle')}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         )}
-        <TouchableOpacity style={styles.newButton} onPress={handleNewSession}>
-          <Text style={styles.newButtonText}>{t('common.new')}</Text>
+        <TouchableOpacity style={[styles.newButton, dark && darkStyles.newButton]} onPress={handleNewSession}>
+          <Text style={[styles.newButtonText, dark && darkStyles.newButtonText]}>{t('common.new')}</Text>
         </TouchableOpacity>
       </View>
 
       {loadingHistory ? (
-        <ActivityIndicator color={colors.primary} style={{ marginVertical: spacing.md }} />
+        <ActivityIndicator color={spinner} style={{ marginVertical: spacing.md }} />
       ) : (
         <>
           {messages.length > 0 && (
-            <Card>
+            <Panel>
               {messages.map((m) => (
                 <View key={m.id} style={[styles.bubbleRow, m.role === 'user' ? styles.bubbleRowUser : undefined]}>
-                  <View style={[styles.bubble, m.role === 'user' ? styles.bubbleUser : styles.bubbleAssistant]}>
-                    <Text style={m.role === 'user' ? styles.bubbleTextUser : styles.bubbleTextAssistant}>{m.content}</Text>
+                  <View style={[styles.bubble, m.role === 'user' ? (dark ? darkStyles.bubbleUser : styles.bubbleUser) : dark ? darkStyles.bubbleAssistant : styles.bubbleAssistant]}>
+                    <Text style={m.role === 'user' ? (dark ? darkStyles.bubbleTextUser : styles.bubbleTextUser) : dark ? darkStyles.bubbleTextAssistant : styles.bubbleTextAssistant}>{m.content}</Text>
                   </View>
                 </View>
               ))}
-              {sending && <ActivityIndicator style={{ marginTop: spacing.sm }} color={colors.primary} />}
-            </Card>
+              {sending && <ActivityIndicator style={{ marginTop: spacing.sm }} color={spinner} />}
+            </Panel>
           )}
 
-          <Card>
+          <Panel>
             <View style={styles.inputRow}>
               <TextInput
-                style={styles.chatInput}
+                style={[styles.chatInput, dark && darkStyles.chatInput]}
+                placeholderTextColor={dark ? quest.textSecondary : undefined}
                 placeholder={t('chat.inputPlaceholder')}
                 value={input}
                 onChangeText={setInput}
                 onSubmitEditing={handleSend}
                 editable={!sending}
               />
-              <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={sending || !input.trim()}>
-                <Text style={styles.sendButtonText}>{t('common.send')}</Text>
+              <TouchableOpacity style={[styles.sendButton, dark && darkStyles.sendButton]} onPress={handleSend} disabled={sending || !input.trim()}>
+                <Text style={[styles.sendButtonText, dark && darkStyles.sendButtonText]}>{t('common.send')}</Text>
               </TouchableOpacity>
             </View>
-          </Card>
+          </Panel>
 
           {hasPendingChanges && (
-            <Card style={styles.pendingCard}>
-              <Text style={styles.pendingText}>{t('chat.pendingBanner')}</Text>
+            <Panel style={dark ? darkStyles.pendingCard : styles.pendingCard}>
+              <Text style={[styles.pendingText, dark && darkStyles.pendingText]}>{t('chat.pendingBanner')}</Text>
               <View style={styles.pendingActions}>
                 <TouchableOpacity style={styles.linkButton} onPress={() => setShowPreview((v) => !v)}>
-                  <Text style={styles.linkButtonText}>{showPreview ? t('chat.hideDetails') : t('chat.showDetails')}</Text>
+                  <Text style={[styles.linkButtonText, dark && darkStyles.linkButtonText]}>{showPreview ? t('chat.hideDetails') : t('chat.showDetails')}</Text>
                 </TouchableOpacity>
                 <View style={{ flex: 1 }} />
-                <TouchableOpacity style={styles.discardButton} onPress={handleDiscard} disabled={applying}>
-                  <Text style={styles.discardButtonText}>{t('common.cancel')}</Text>
+                <TouchableOpacity style={[styles.discardButton, dark && darkStyles.discardButton]} onPress={handleDiscard} disabled={applying}>
+                  <Text style={[styles.discardButtonText, dark && darkStyles.discardButtonText]}>{t('common.cancel')}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.confirmButton} onPress={handleApply} disabled={applying}>
-                  {applying ? <ActivityIndicator color={colors.white} /> : <Text style={styles.confirmButtonText}>{t('chat.confirmApply')}</Text>}
+                <TouchableOpacity style={[styles.confirmButton, dark && darkStyles.confirmButton]} onPress={handleApply} disabled={applying}>
+                  {applying ? <ActivityIndicator color={dark ? quest.onGold : colors.white} /> : <Text style={[styles.confirmButtonText, dark && darkStyles.confirmButtonText]}>{t('chat.confirmApply')}</Text>}
                 </TouchableOpacity>
               </View>
-            </Card>
+            </Panel>
           )}
 
-          {showPreview && hasPendingChanges && <PlanPreview plan={workingPlan} />}
+          {showPreview && hasPendingChanges && (dark ? <QuestPlanPreview plan={workingPlan} /> : <PlanPreview plan={workingPlan} />)}
         </>
       )}
     </View>
   );
 }
+
+function DarkPanel({ children, style }: { children: React.ReactNode; style?: object }) {
+  return <View style={[darkStyles.panel, style]}>{children}</View>;
+}
+
+const darkStyles = StyleSheet.create({
+  panel: { backgroundColor: quest.panel, borderRadius: 16, borderWidth: 1.5, borderColor: quest.border, padding: 14, marginBottom: 8 },
+  pendingCard: { backgroundColor: quest.raised, borderColor: quest.gold },
+  chip: { backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, minHeight: 44, justifyContent: 'center' },
+  chipActive: { backgroundColor: quest.gold, borderColor: quest.gold },
+  chipText: { color: quest.textSecondary, fontFamily: questFonts.bold },
+  chipTextActive: { color: quest.onGold },
+  newButton: { backgroundColor: quest.raised, minHeight: 44, justifyContent: 'center' },
+  newButtonText: { color: quest.gold, fontFamily: questFonts.bold },
+  bubbleUser: { backgroundColor: quest.gold },
+  bubbleAssistant: { backgroundColor: quest.raised },
+  bubbleTextUser: { color: quest.onGold, fontSize: 13, fontFamily: questFonts.semibold },
+  bubbleTextAssistant: { color: quest.text, fontSize: 13, fontFamily: questFonts.medium },
+  chatInput: { backgroundColor: quest.bg, borderColor: quest.border, color: quest.text, minHeight: 44, fontFamily: questFonts.semibold },
+  sendButton: { backgroundColor: quest.gold, minHeight: 44 },
+  sendButtonText: { color: quest.onGold, fontFamily: questFonts.bold },
+  pendingText: { color: quest.goldLight, fontFamily: questFonts.semibold },
+  linkButtonText: { color: quest.gold, fontFamily: questFonts.bold },
+  discardButton: { backgroundColor: quest.raised2, minHeight: 44, justifyContent: 'center' },
+  discardButtonText: { color: quest.textTertiary, fontFamily: questFonts.bold },
+  confirmButton: { backgroundColor: quest.xp, minHeight: 44, justifyContent: 'center' },
+  confirmButtonText: { color: quest.onGold, fontFamily: questFonts.bold },
+});
 
 const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm, gap: spacing.sm },

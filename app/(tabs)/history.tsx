@@ -1,9 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View, type ViewProps } from 'react-native';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
-import { Button } from '../../src/components/Button';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestHeader } from '../../src/components/quest/QuestHeader';
+import { useGameText } from '../../src/game/strings';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { quest, questRadius } from '../../src/theme/quest';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
@@ -22,9 +27,7 @@ import { thinLabels } from '../../src/utils/chartLabels';
 import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
-import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import { chartWidthFor, screenMaxWidthStyle } from '../../src/theme/responsive';
 import { DailyMealBreakdownTable } from '../../src/components/DailyMealBreakdownTable';
 import { actualDailyDeficitKcal, resolveTdeeKcal } from '../../src/utils/tdee';
 import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood } from '../../src/types';
@@ -42,9 +45,12 @@ interface DaySummary {
   meals: MealTemplate[];
   mealsEaten: Partial<Record<MealSlot, boolean>>;
   extraItems: ExtraFoodItem[];
+  removedMealSlots: MealSlot[];
   /** Deficit for that day using TODAY's TDEE (current weight/profile) — not a historical
-   *  reconstruction, since weight/profile aren't necessarily known as of each past day. */
-  deficitKcal: number;
+   *  reconstruction, since weight/profile aren't necessarily known as of each past day. Null when
+   *  no nutrition log was ever entered for that day (a workout/weight/proof entry alone isn't
+   *  enough to say anything about that day's calorie balance). */
+  deficitKcal: number | null;
 }
 
 const MILESTONE_STATUS_KEY: Record<string, StringKey> = {
@@ -54,28 +60,27 @@ const MILESTONE_STATUS_KEY: Record<string, StringKey> = {
 };
 
 const MILESTONE_STATUS_COLOR: Record<string, string> = {
-  upcoming: colors.textMuted,
-  achieved: colors.success,
-  missed: colors.danger,
+  upcoming: quest.textSecondary,
+  achieved: quest.xp,
+  missed: quest.hpText,
 };
 
-const chartWidth = Dimensions.get('window').width - 32;
 const baseChartConfig = {
-  backgroundColor: colors.surface,
-  backgroundGradientFrom: colors.surface,
-  backgroundGradientTo: colors.surface,
+  backgroundColor: quest.panel,
+  backgroundGradientFrom: quest.panel,
+  backgroundGradientTo: quest.panel,
   decimalPlaces: 0,
-  color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
-  labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
+  color: (opacity = 1) => `rgba(255, 200, 61, ${opacity})`,
+  labelColor: (opacity = 1) => `rgba(179, 170, 207, ${opacity})`,
   propsForDots: { r: '3' },
 };
 
 const MOOD_COLORS: Record<Mood, string> = {
-  great: colors.success,
-  good: '#8BC34A',
-  neutral: colors.warning,
-  stressed: colors.danger,
-  tired: colors.textMuted,
+  great: quest.xp,
+  good: '#B5E86B',
+  neutral: quest.gold,
+  stressed: quest.hp,
+  tired: quest.textSecondary,
 };
 
 /** Calories eaten/burned for one calendar day, independent of whether that day shows up in
@@ -105,12 +110,36 @@ const MOOD_LABEL_KEY: Record<Mood, StringKey> = {
   tired: 'feeling.moodTired',
 };
 
+function Section({ children }: { children: string }) {
+  return (
+    <HudText size={17} accessibilityRole="header" style={styles.sectionTitle}>
+      {children}
+    </HudText>
+  );
+}
+
+function Panel({ style, ...rest }: ViewProps) {
+  return <View {...rest} style={[styles.panel, style]} />;
+}
+
+function Meta({ children, color = quest.textSecondary, style }: { children: ReactNode; color?: string; style?: object }) {
+  return (
+    <HudText size={12} weight="medium" color={color} style={[styles.meta, style]}>
+      {children}
+    </HudText>
+  );
+}
+
 export default function HistoryScreen() {
   const { t } = useTranslation();
-  const ambientBg = useAmbientBackground();
+  const g = useGameText();
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
+  const chartWidth = chartWidthFor(useWindowDimensions().width);
+  // Line charts draw their last x label centred on the right edge; leave room so it isn't cut off.
+  const lineChartWidth = chartWidth - 16;
   const nutritionLogs = useNutritionStore((s) => s.logs);
-  const toggleMeal = useNutritionStore((s) => s.toggleMeal);
-  const removeExtraItem = useNutritionStore((s) => s.removeExtraItem);
+  const saveDayLog = useNutritionStore((s) => s.saveDayLog);
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const weightEntries = useWeightStore((s) => s.entries);
   const proofs = useProofStore((s) => s.photos);
@@ -179,10 +208,13 @@ export default function HistoryScreen() {
           caloriesBurned: dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0),
           proofsCount: dayProofs.length,
           weightKg: dayWeight?.weightKg ?? null,
-          deficitKcal: actualDailyDeficitKcal(currentTdeeKcal, dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0), calories),
+          deficitKcal: log
+            ? actualDailyDeficitKcal(currentTdeeKcal, dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0), calories)
+            : null,
           meals,
           mealsEaten: log?.mealsEaten ?? {},
           extraItems: log?.extraItems ?? [],
+          removedMealSlots: log?.removedMealSlots ?? [],
         };
       });
   }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal]);
@@ -225,9 +257,11 @@ export default function HistoryScreen() {
   );
   const thisWeekSummary = weeklySummaries.find((w) => w.weekKey === thisWeekKey) ?? null;
 
+  // All-time mood distribution, not just this week — a single week rarely has enough check-ins to
+  // make a meaningful pie slice breakdown, so this pulls from every recorded feeling ever logged.
   const moodPieData = useMemo(() => {
     const counts: Record<Mood, number> = { great: 0, good: 0, neutral: 0, stressed: 0, tired: 0 };
-    thisWeekFeelings.forEach((r) => {
+    feelingRecords.forEach((r) => {
       counts[r.mood] += 1;
     });
     return (Object.keys(counts) as Mood[])
@@ -236,10 +270,10 @@ export default function HistoryScreen() {
         name: t(MOOD_LABEL_KEY[mood]),
         population: counts[mood],
         color: MOOD_COLORS[mood],
-        legendFontColor: colors.textSecondary,
+        legendFontColor: quest.textSecondary,
         legendFontSize: 12,
       }));
-  }, [thisWeekFeelings, t]);
+  }, [feelingRecords, t]);
 
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [suggestionLoading, setSuggestionLoading] = useState(false);
@@ -268,8 +302,8 @@ export default function HistoryScreen() {
   }
 
   const streak = useMemo(
-    () => computeCurrentStreak(nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, settings.targetDailyDeficitKcal),
-    [nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, settings.targetDailyDeficitKcal]
+    () => computeCurrentStreak(nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal),
+    [nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal]
   );
   const badges = unlockedStreakBadges(streak);
 
@@ -286,23 +320,26 @@ export default function HistoryScreen() {
     if (chronological.length < 2) return null;
     const labels = thinLabels(chronological.map((d) => formatDateVi(d.dateKey).slice(0, 5)));
     return {
-      caloriesIn: { labels, datasets: [{ data: chronological.map((d) => d.calories), color: () => colors.warning, strokeWidth: 3 }] },
-      caloriesOut: { labels, datasets: [{ data: chronological.map((d) => d.caloriesBurned), color: () => colors.success, strokeWidth: 3 }] },
+      caloriesIn: { labels, datasets: [{ data: chronological.map((d) => d.calories), color: () => quest.gold, strokeWidth: 3 }] },
+      caloriesOut: { labels, datasets: [{ data: chronological.map((d) => d.caloriesBurned), color: () => quest.xp, strokeWidth: 3 }] },
     };
   }, [daySummaries]);
 
   // Daily deficit trend, one point per calendar day from the plan's start date through today
-  // (not just days with logged data) — a fixed grid like the Weight tab's chart.
+  // (not just days with logged data) — a fixed grid like the Weight tab's chart. A day with no
+  // nutrition log at all (nobody entered anything) is a genuine gap, not a 0-kcal-eaten deficit —
+  // returning null here breaks the line there instead of drawing a fabricated slope through it.
   const deficitTrendChart = useMemo(
     () =>
       buildDeficitChartData(
         settings.startDateISO,
         (dateKey) => {
+          if (!nutritionLogs[dateKey]) return null;
           const { calories, caloriesBurned } = computeDayCaloriesBurn(dateKey, nutritionLogs, mealTemplates, workoutEntries);
           return actualDailyDeficitKcal(currentTdeeKcal, caloriesBurned, calories);
         },
         new Date(),
-        colors.primary
+        quest.gold
       ),
     [settings.startDateISO, nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal]
   );
@@ -318,37 +355,53 @@ export default function HistoryScreen() {
   }, [weeklySummaries]);
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-      <Text style={styles.sectionTitle}>{t('history.achievementsTitle')}</Text>
-      <Card>
-        <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+    >
+      <QuestHeader
+        title={g('historyScreen.title')}
+        eyebrow={g('historyScreen.eyebrow')}
+        backLabel={g('historyScreen.back')}
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+      />
+
+      <Section>{t('history.achievementsTitle')}</Section>
+      <Panel>
+        <HudText size={20} color={quest.gold}>
+          {t('today.streakDays', { n: streak })}
+        </HudText>
         {badges.length > 0 ? (
           <View style={styles.badgeRow}>
             {badges.map((b) => (
-              <Badge key={b} label={t('today.streakDays', { n: b })} tone="gold" />
+              <View key={b} style={styles.pill}>
+                <HudText size={12} color={quest.gold}>
+                  {t('today.streakDays', { n: b })}
+                </HudText>
+              </View>
             ))}
           </View>
         ) : (
-          <Text style={styles.dayMeta}>{t('history.emptyBadges')}</Text>
+          <Meta>{t('history.emptyBadges')}</Meta>
         )}
-      </Card>
+      </Panel>
 
-      <Text style={styles.sectionTitle}>{t('feeling.weeklyTitle')}</Text>
-      <Card>
+      <Section>{t('feeling.weeklyTitle')}</Section>
+      <Panel>
         {thisWeekFeelings.length === 0 ? (
-          <Text style={styles.dayMeta}>{t('feeling.emptyWeek')}</Text>
+          <Meta>{t('feeling.emptyWeek')}</Meta>
         ) : (
           thisWeekFeelings.map((r) => (
-            <Text key={r.id} style={styles.dayMeta}>
+            <Meta key={r.id}>
               {formatDateVi(toDateKey(new Date(r.loggedAtISO)))} · {t('feeling.cravingShort', { n: r.cravingLevel })} ·{' '}
               {t('feeling.hungerShort', { n: r.hungerLevel })} ({r.mood})
-            </Text>
+            </Meta>
           ))
         )}
-      </Card>
+      </Panel>
 
-      <Text style={styles.sectionTitle}>{t('feeling.chartTitle')}</Text>
-      <Card>
+      <Section>{t('feeling.chartTitle')}</Section>
+      <Panel>
         {moodPieData.length > 0 ? (
           <PieChart
             data={moodPieData}
@@ -361,113 +414,103 @@ export default function HistoryScreen() {
             absolute
           />
         ) : (
-          <Text style={styles.dayMeta}>{t('feeling.chartEmpty')}</Text>
+          <Meta>{t('feeling.chartEmpty')}</Meta>
         )}
-      </Card>
+      </Panel>
 
-      <Text style={styles.sectionTitle}>{t('feeling.suggestionTitle')}</Text>
-      <Card>
+      <Section>{t('feeling.suggestionTitle')}</Section>
+      <Panel>
         {thisWeekFeelings.length < 3 ? (
-          <Text style={styles.dayMeta}>{t('feeling.suggestionNeedsMore')}</Text>
+          <Meta>{t('feeling.suggestionNeedsMore')}</Meta>
         ) : (
           <>
-            {suggestion && <Text style={styles.dayMeta}>{suggestion}</Text>}
-            {suggestionError && <Text style={[styles.dayMeta, { color: colors.danger }]}>{t('feeling.suggestionError')}</Text>}
-            <Button
-              title={t('feeling.getSuggestionButton')}
-              onPress={handleGetSuggestion}
-              loading={suggestionLoading}
-              style={{ marginTop: spacing.sm }}
-            />
+            {suggestion && <Meta>{suggestion}</Meta>}
+            {suggestionError && <Meta color={quest.hpText}>{t('feeling.suggestionError')}</Meta>}
+            <View style={{ marginTop: 12 }}>
+              <QuestButton title={t('feeling.getSuggestionButton')} onPress={handleGetSuggestion} loading={suggestionLoading} />
+            </View>
           </>
         )}
-      </Card>
+      </Panel>
 
       {feedbackList.length > 0 && (
         <>
-          <Text style={styles.sectionTitle}>{t('history.coachFeedbackTitle')}</Text>
+          <Section>{t('history.coachFeedbackTitle')}</Section>
           {feedbackList.map((f) => (
-            <Card key={f.id}>
-              <Text style={styles.feedbackPeriod}>
+            <Panel key={f.id}>
+              <HudText size={12} color={quest.manaText}>
                 {f.periodLabel} · {f.periodType === 'weekly' ? t('history.periodWeek') : t('history.periodMonth')}
-              </Text>
-              <Text style={styles.dayMeta}>{f.feedbackText}</Text>
-              <Text style={styles.feedbackDate}>{formatDateVi(toDateKey(new Date(f.createdAtISO)))}</Text>
-            </Card>
+              </HudText>
+              <Meta>{f.feedbackText}</Meta>
+              <Meta color={quest.textSecondary} style={{ fontSize: 11 }}>
+                {formatDateVi(toDateKey(new Date(f.createdAtISO)))}
+              </Meta>
+            </Panel>
           ))}
         </>
       )}
 
-      <Text style={styles.sectionTitle}>{t('history.milestonesTitle')}</Text>
+      <Section>{t('history.milestonesTitle')}</Section>
       {milestones.map((m) => (
-        <Card key={m.key}>
+        <Panel key={m.key}>
           <View style={styles.milestoneRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.milestoneLabel}>{t(`milestone.${m.key}` as StringKey)}</Text>
-              <Text style={styles.milestoneMeta}>
-                {t('history.milestoneDue', { date: formatDateVi(toDateKey(m.targetDate)), kg: m.targetWeightKg.toFixed(1) })}
-              </Text>
+              <HudText size={14}>{t(`milestone.${m.key}` as StringKey)}</HudText>
+              <Meta>{t('history.milestoneDue', { date: formatDateVi(toDateKey(m.targetDate)), kg: m.targetWeightKg.toFixed(1) })}</Meta>
             </View>
-            <Text style={[styles.milestoneStatus, { color: MILESTONE_STATUS_COLOR[m.status] }]}>
+            <HudText size={12} color={MILESTONE_STATUS_COLOR[m.status]}>
               {t(MILESTONE_STATUS_KEY[m.status])}
-            </Text>
+            </HudText>
           </View>
-        </Card>
+        </Panel>
       ))}
 
-      <Text style={styles.sectionTitle}>{t('history.deficitChartTitle')}</Text>
+      <Section>{t('history.deficitChartTitle')}</Section>
       {deficitTrendChart ? (
-        <Card>
+        <Panel>
           <LineChart
-            data={deficitTrendChart}
-            width={chartWidth}
+            // chart-kit's types don't admit `null` in a dataset, but its runtime (patched — see
+            // patches/react-native-chart-kit+7.0.4.patch) treats it as a gap in the line, which is
+            // exactly what a day with no logged data should render as.
+            data={deficitTrendChart as any}
+            width={lineChartWidth}
             height={180}
             chartConfig={baseChartConfig}
             bezier
             fromZero={false}
+            withShadow={false}
+            hidePointsAtIndex={deficitTrendChart.datasets[0].data
+              .map((v, i) => (v == null ? i : -1))
+              .filter((i) => i >= 0)}
             style={styles.chartStyle}
           />
-          <Text style={styles.legendText}>{t('history.deficitChartHint')}</Text>
-        </Card>
+          <Meta>{t('history.deficitChartHint')}</Meta>
+        </Panel>
       ) : (
-        <Text style={styles.emptyText}>{t('history.emptyChart')}</Text>
+        <Meta style={styles.emptyText}>{t('history.emptyChart')}</Meta>
       )}
 
-      <Text style={styles.sectionTitle}>{t('history.dailyChartTitle')}</Text>
+      <Section>{t('history.dailyChartTitle')}</Section>
       {dailyCharts ? (
-        <Card>
+        <Panel>
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, { backgroundColor: colors.warning }]} />
-            <Text style={styles.legendText}>{t('history.legendCaloriesIn')}</Text>
+            <View style={[styles.legendDot, { backgroundColor: quest.gold }]} />
+            <Meta style={styles.legendText}>{t('history.legendCaloriesIn')}</Meta>
           </View>
-          <LineChart
-            data={dailyCharts.caloriesIn}
-            width={chartWidth}
-            height={160}
-            chartConfig={baseChartConfig}
-            bezier
-            style={styles.chartStyle}
-          />
-          <View style={[styles.legendItem, { marginTop: spacing.sm }]}>
-            <View style={[styles.legendDot, { backgroundColor: colors.success }]} />
-            <Text style={styles.legendText}>{t('history.legendCaloriesOut')}</Text>
+          <LineChart data={dailyCharts.caloriesIn} width={lineChartWidth} height={160} chartConfig={baseChartConfig} bezier style={styles.chartStyle} />
+          <View style={[styles.legendItem, { marginTop: 8 }]}>
+            <View style={[styles.legendDot, { backgroundColor: quest.xp }]} />
+            <Meta style={styles.legendText}>{t('history.legendCaloriesOut')}</Meta>
           </View>
-          <LineChart
-            data={dailyCharts.caloriesOut}
-            width={chartWidth}
-            height={160}
-            chartConfig={baseChartConfig}
-            bezier
-            style={styles.chartStyle}
-          />
-        </Card>
+          <LineChart data={dailyCharts.caloriesOut} width={lineChartWidth} height={160} chartConfig={baseChartConfig} bezier style={styles.chartStyle} />
+        </Panel>
       ) : (
-        <Text style={styles.emptyText}>{t('history.emptyChart')}</Text>
+        <Meta style={styles.emptyText}>{t('history.emptyChart')}</Meta>
       )}
 
-      <Text style={styles.sectionTitle}>{t('history.weeklyTitle')}</Text>
+      <Section>{t('history.weeklyTitle')}</Section>
       {weeklyChart && (
-        <Card>
+        <Panel>
           <BarChart
             data={weeklyChart}
             width={chartWidth}
@@ -478,50 +521,73 @@ export default function HistoryScreen() {
             fromZero
             style={styles.chartStyle}
           />
-        </Card>
+        </Panel>
       )}
-      {weeklySummaries.length === 0 && <Text style={styles.emptyText}>{t('history.emptyData')}</Text>}
+      {weeklySummaries.length === 0 && <Meta style={styles.emptyText}>{t('history.emptyData')}</Meta>}
       {weeklySummaries.map((w) => (
-        <Card key={w.weekKey}>
-          <Text style={styles.weekLabel}>{t('history.weekLabel', { date: formatDateVi(w.weekKey) })}</Text>
-          <Text style={styles.weekMeta}>
+        <Panel key={w.weekKey}>
+          <HudText size={14}>{t('history.weekLabel', { date: formatDateVi(w.weekKey) })}</HudText>
+          <Meta>
             {t('history.weekMeta', { kcal: Math.round(w.avgCalories), n: w.totalWorkouts })}
             {w.weightChange !== null
               ? t('history.weekWeightChange', { sign: w.weightChange > 0 ? '+' : '', kg: w.weightChange.toFixed(1) })
               : ''}
-          </Text>
-        </Card>
+          </Meta>
+        </Panel>
       ))}
 
-      <Text style={styles.sectionTitle}>{t('history.dailyTitle')}</Text>
-      {daySummaries.length === 0 && <Text style={styles.emptyText}>{t('history.emptyData')}</Text>}
+      <Section>{t('history.dailyTitle')}</Section>
+      {daySummaries.length === 0 && <Meta style={styles.emptyText}>{t('history.emptyData')}</Meta>}
       {daySummaries.map((d) => {
         const expanded = !!expandedDays[d.dateKey];
+        const toggleLabel = t(expanded ? 'history.collapseButton' : 'history.expandButton');
         return (
-          <Card key={d.dateKey}>
-            <Text style={styles.dayLabel}>{formatDateVi(d.dateKey)}</Text>
-            <Text style={styles.dayMeta}>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Text>
-            <Text style={styles.dayMeta}>
+          <Panel key={d.dateKey}>
+            <HudText size={14}>{formatDateVi(d.dateKey)}</HudText>
+            <Meta>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Meta>
+            <Meta>
               {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
               {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}
-            </Text>
-            <Text style={[styles.dayMeta, { color: d.deficitKcal >= 0 ? colors.success : colors.warning, fontWeight: '700' }]}>
-              {t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: {Math.round(Math.abs(d.deficitKcal))} kcal
-            </Text>
-            {d.proofsCount > 0 && <Text style={styles.proofBadge}>{t('history.proofBadge', { n: d.proofsCount })}</Text>}
-            <TouchableOpacity onPress={() => toggleDayExpanded(d.dateKey)}>
-              <Text style={styles.expandToggle}>{t(expanded ? 'history.collapseButton' : 'history.expandButton')}</Text>
-            </TouchableOpacity>
-            {expanded && (
-              <DailyMealBreakdownTable
-                meals={d.meals}
-                mealsEaten={d.mealsEaten}
-                extraItems={d.extraItems}
-                onToggleMeal={(slot) => toggleMeal(d.dateKey, slot)}
-                onRemoveExtra={(itemId) => removeExtraItem(d.dateKey, itemId)}
-              />
+            </Meta>
+            {d.deficitKcal == null ? (
+              <Meta>
+                {t('tdee.deficitLabel')}: {t('common.notAvailable')}
+              </Meta>
+            ) : (
+              <Meta color={d.deficitKcal >= 0 ? quest.xp : quest.gold}>
+                {t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: {Math.round(Math.abs(d.deficitKcal))} kcal
+              </Meta>
             )}
-          </Card>
+            {d.proofsCount > 0 && (
+              <HudText size={12} color={quest.manaText} style={{ marginTop: 6 }}>
+                {t('history.proofBadge', { n: d.proofsCount })}
+              </HudText>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${formatDateVi(d.dateKey)}. ${toggleLabel}`}
+              accessibilityState={{ expanded }}
+              onPress={() => toggleDayExpanded(d.dateKey)}
+              style={styles.toggle}
+            >
+              <HudText size={13} color={quest.gold}>
+                {toggleLabel}
+              </HudText>
+            </Pressable>
+            {expanded && (
+              <View>
+                <DailyMealBreakdownTable
+                  dark
+                  meals={d.meals}
+                  mealsEaten={d.mealsEaten}
+                  extraItems={d.extraItems}
+                  removedMealSlots={d.removedMealSlots}
+                  editable
+                  onSave={(draft) => saveDayLog(d.dateKey, draft)}
+                />
+              </View>
+            )}
+          </Panel>
         );
       })}
     </ScrollView>
@@ -529,26 +595,18 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
-  milestoneRow: { flexDirection: 'row', alignItems: 'center' },
-  milestoneLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  milestoneMeta: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
-  milestoneStatus: { fontSize: 12, fontWeight: '700' },
-  weekLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  weekMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
-  dayLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  dayMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
-  proofBadge: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: spacing.sm - 2 },
-  expandToggle: { fontSize: 12, color: colors.primary, fontWeight: '700', marginTop: spacing.sm },
-  emptyText: { textAlign: 'center', color: colors.textMuted, marginBottom: spacing.md },
-  streakValue: { fontSize: 20, fontWeight: '800', color: colors.gold },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginTop: spacing.md },
-  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: colors.primary },
-  feedbackDate: { fontSize: 11, color: colors.textMuted, marginTop: spacing.md - 4 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  container: { flex: 1, backgroundColor: quest.bg },
+  content: { paddingHorizontal: 16, paddingBottom: 120 },
+  sectionTitle: { marginTop: 20, marginBottom: 8 },
+  panel: { backgroundColor: quest.panel, borderColor: quest.border, borderWidth: 1.5, borderRadius: questRadius.panel, padding: 14, marginBottom: 10, overflow: 'hidden' },
+  meta: { marginTop: 4, lineHeight: 17 },
+  milestoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
+  pill: { borderRadius: 999, borderWidth: 1.5, borderColor: quest.gold, paddingHorizontal: 10, paddingVertical: 4 },
+  emptyText: { textAlign: 'center', marginBottom: 12 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontSize: 11, color: colors.textSecondary },
-  chartStyle: { borderRadius: radius.lg },
+  legendText: { marginTop: 0, fontSize: 11 },
+  chartStyle: { borderRadius: questRadius.row },
+  toggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
 });

@@ -11,8 +11,23 @@ interface NutritionState {
   toggleMeal: (dateKey: string, slot: MealSlot) => void;
   addWater: (dateKey: string, ml: number) => void;
   resetWater: (dateKey: string) => void;
-  addExtra: (dateKey: string, name: string, calories: number, proteinG: number, mealTime: ExtraMealTime | null) => void;
+  addExtra: (
+    dateKey: string,
+    name: string,
+    calories: number,
+    proteinG: number,
+    mealTime: ExtraMealTime | null,
+    /** Optional FitQuest fields; omitted ones are simply not stored on the item. */
+    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk'>
+  ) => void;
   removeExtraItem: (dateKey: string, itemId: string) => void;
+  /** Commits a whole diary-table edit session (meal toggles, deleted default meals, edited/removed
+   *  extra items) as a single write — the explicit "Save" action for DailyMealBreakdownTable's
+   *  draft, instead of pushing on every micro-edit. */
+  saveDayLog: (
+    dateKey: string,
+    patch: { mealsEaten: Partial<Record<MealSlot, boolean>>; extraItems: ExtraFoodItem[]; removedMealSlots: MealSlot[] }
+  ) => void;
 }
 
 // Cached per dateKey so `getLog` returns a stable reference when no log exists yet.
@@ -56,10 +71,14 @@ export const useNutritionStore = create<NutritionState>()(
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
-      addExtra: (dateKey, name, calories, proteinG, mealTime) =>
+      addExtra: (dateKey, name, calories, proteinG, mealTime, extras) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const item: ExtraFoodItem = { id: `${Date.now()}`, name, calories, proteinG, mealTime, loggedAtISO: new Date().toISOString() };
+          if (extras?.purineMg) item.purineMg = extras.purineMg;
+          if (extras?.saltG) item.saltG = extras.saltG;
+          if (extras?.sugarG) item.sugarG = extras.sugarG;
+          if (extras?.junk) item.junk = true;
           const updated = {
             ...current,
             extraItems: [...(current.extraItems ?? []), item],
@@ -79,6 +98,20 @@ export const useNutritionStore = create<NutritionState>()(
             extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId),
             extraCalories: Math.max(0, current.extraCalories - item.calories),
             extraProteinG: Math.max(0, current.extraProteinG - item.proteinG),
+          };
+          pushNutritionLog(updated);
+          return { logs: { ...state.logs, [dateKey]: updated } };
+        }),
+      saveDayLog: (dateKey, patch) =>
+        set((state) => {
+          const current = state.logs[dateKey] ?? emptyLog(dateKey);
+          const updated: DailyNutritionLog = {
+            ...current,
+            mealsEaten: patch.mealsEaten,
+            extraItems: patch.extraItems,
+            extraCalories: patch.extraItems.reduce((s, i) => s + i.calories, 0),
+            extraProteinG: patch.extraItems.reduce((s, i) => s + i.proteinG, 0),
+            removedMealSlots: patch.removedMealSlots,
           };
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };

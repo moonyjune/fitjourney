@@ -68,12 +68,20 @@ export function buildWeightChartData(
     gridDates.splice(todayIndex, 0, clampedNow);
   }
 
-  // Always keep the start date, "today", and the end date readable — the 3 dates a user actually
-  // orients by — even if they don't land on the regular thinning step.
+  // Label every ~7 calendar days (one grid index covers stepDays days) so ticks land on weekly
+  // boundaries from the plan's start date — e.g. 21 days in reads as a clean 3-week mark instead
+  // of an arbitrary 5-day step that skips right past it. But never go below the spacing a ~7-label
+  // budget implies: on a long range (2-3 months) a pure weekly step packs too many labels into the
+  // same chart width and they overlap into unreadable mush — widen the step there instead. Always
+  // keep the start date, "today", and the end date readable too, even off that cadence.
+  const weekAlignedStep = Math.max(1, Math.round(7 / stepDays));
+  const maxReadableStep = Math.ceil(gridDates.length / 7);
+  const labelStep = Math.max(weekAlignedStep, maxReadableStep);
   const labels = thinLabels(
     gridDates.map((d) => formatDateVi(toDateKey(d)).slice(0, 5)),
     7,
-    [0, todayIndex, gridDates.length - 1]
+    [0, todayIndex, gridDates.length - 1],
+    labelStep
   );
   const predictedData = gridDates.map((d) => predictedWeightKgAt(d, startDateISO, startWeightKg, goalWeightKg));
   const predictedDataset: WeightChartDataset = {

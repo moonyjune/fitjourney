@@ -15,6 +15,25 @@ interface PlanState {
   syncFromRemote: () => Promise<void>;
 }
 
+/** Backfills the step-by-step breakdown onto a plan saved before WorkoutTemplate.steps existed —
+ *  matched by template id against DEFAULT_PLAN, so an account created early in this app's life
+ *  (persisted plan predates the `steps` field entirely) gets the real multi-step breakdown
+ *  instead of just the generic single-step fallback the UI otherwise synthesizes on the fly.
+ *  Returns the same object reference when nothing needed backfilling. */
+function backfillWorkoutSteps(plan: PlanData): PlanData {
+  const defaultStepsById = new Map(DEFAULT_PLAN.workoutTemplates.map((wt) => [wt.id, wt.steps]));
+  let changed = false;
+  const workoutTemplates = plan.workoutTemplates.map((wt) => {
+    const defaultSteps = defaultStepsById.get(wt.id);
+    if ((!wt.steps || wt.steps.length === 0) && defaultSteps && defaultSteps.length > 0) {
+      changed = true;
+      return { ...wt, steps: defaultSteps };
+    }
+    return wt;
+  });
+  return changed ? { ...plan, workoutTemplates } : plan;
+}
+
 export const usePlanStore = create<PlanState>()(
   persist(
     (set, get) => ({
@@ -42,3 +61,17 @@ export const usePlanStore = create<PlanState>()(
     }
   )
 );
+
+usePlanStore.persist.onFinishHydration((state) => {
+  const migrated = backfillWorkoutSteps(state.plan);
+  if (migrated !== state.plan) {
+    usePlanStore.getState().applyPlan(migrated);
+  }
+});
+if (usePlanStore.persist.hasHydrated()) {
+  const state = usePlanStore.getState();
+  const migrated = backfillWorkoutSteps(state.plan);
+  if (migrated !== state.plan) {
+    state.applyPlan(migrated);
+  }
+}

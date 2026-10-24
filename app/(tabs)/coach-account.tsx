@@ -1,19 +1,26 @@
 import { router } from 'expo-router';
-import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
-import { Button } from '../../src/components/Button';
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestSegment } from '../../src/components/quest/QuestSegment';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useSyncQueueStore } from '../../src/sync/syncQueue';
 import { signOutAndReset } from '../../src/auth/signOut';
+import { useGameText } from '../../src/game/strings';
 import { useTranslation } from '../../src/i18n/useTranslation';
-import { useAccentColors } from '../../src/theme/useAccentColors';
+import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+
+type Lang = 'vi' | 'en';
 
 export default function CoachAccountScreen() {
   const { t } = useTranslation();
-  const colors = useAccentColors();
+  const g = useGameText();
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
   const session = useAuthStore((s) => s.session);
   const pendingSyncCount = useSyncQueueStore((s) => s.pending.length);
   const coachCode = useSettingsStore((s) => s.coachCode);
@@ -29,70 +36,101 @@ export default function CoachAccountScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-      <Text style={styles.sectionTitle}>{t('mode.title')}</Text>
-      <Card>
-        <Text style={styles.fieldLabel}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+      <View>
+        <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+          {g('coach.eyebrow').toUpperCase()}
+        </HudText>
+        <HudText size={28} accessibilityRole="header">
+          {g('coach.accountTitle')}
+        </HudText>
+      </View>
+
+      <View style={styles.codeCard} accessible accessibilityLabel={`${t('coachAccount.codeTitle')}: ${coachCode ?? ''}`}>
+        <HudText size={11} color={quest.manaText} style={styles.eyebrow}>
+          {t('coachAccount.codeTitle').toUpperCase()}
+        </HudText>
+        <HudText size={30} selectable style={styles.code}>
+          {coachCode ?? '...'}
+        </HudText>
+        <HudText size={12} weight="medium" color={quest.textSecondary}>
+          {t('coachAccount.codeHint')}
+        </HudText>
+      </View>
+
+      <View style={styles.card}>
+        <HudText size={15}>{t('mode.title')}</HudText>
+        <HudText size={12} weight="medium" color={quest.textSecondary}>
           {clientSetupDone ? t('mode.clientAlreadyTracking') : t('mode.clientNotSetUp')}
-        </Text>
-        <Button
+        </HudText>
+        <QuestButton
           title={clientSetupDone ? t('mode.switchToClient') : t('mode.startPersonalTracking')}
+          variant="mana"
           onPress={handleSwitchToClient}
         />
-      </Card>
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('mode.language')}</Text>
-      <Card>
-        <View style={styles.languageRow}>
-          <TouchableOpacity
-            style={[styles.languageButton, language === 'vi' && { backgroundColor: colors.primary }]}
-            onPress={() => updateSettings({ language: 'vi' })}
-          >
-            <Text style={[styles.languageButtonText, language === 'vi' && styles.languageButtonTextActive]}>Tiếng Việt</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.languageButton, language === 'en' && { backgroundColor: colors.primary }]}
-            onPress={() => updateSettings({ language: 'en' })}
-          >
-            <Text style={[styles.languageButtonText, language === 'en' && styles.languageButtonTextActive]}>English</Text>
-          </TouchableOpacity>
+      <View style={styles.card}>
+        <HudText size={15}>{t('mode.language')}</HudText>
+        <QuestSegment<Lang>
+          accessibilityLabel={t('mode.language')}
+          value={language}
+          onChange={(value) => updateSettings({ language: value })}
+          options={[
+            { value: 'vi', label: 'Tiếng Việt' },
+            { value: 'en', label: 'English' },
+          ]}
+        />
+      </View>
+
+      <View style={[styles.card, styles.switchRow]}>
+        <View style={styles.flex}>
+          <HudText size={15}>{t('coachAccount.remindersTitle')}</HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {t('coachAccount.deviceReminders')}
+          </HudText>
         </View>
-      </Card>
+        <Switch
+          accessibilityLabel={t('coachAccount.deviceReminders')}
+          value={remindersEnabled}
+          onValueChange={(v) => updateSettings({ remindersEnabled: v })}
+          trackColor={{ false: quest.raised2, true: quest.mana }}
+          thumbColor={quest.text}
+        />
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('coachAccount.codeTitle')}</Text>
-      <Card>
-        <Text style={styles.hint}>{t('coachAccount.codeHint')}</Text>
-        <Text style={[styles.code, { color: colors.primary }]}>{coachCode ?? '...'}</Text>
-      </Card>
+      <View style={styles.card}>
+        <HudText size={15}>{t('tab.account')}</HudText>
+        <HudText size={13} weight="medium" color={quest.textTertiary}>
+          {session?.user.email ?? t('common.notSignedIn')}
+        </HudText>
+        {pendingSyncCount > 0 && (
+          <HudText size={12} color={quest.gold}>
+            {t('sync.pendingCount', { n: pendingSyncCount })}
+          </HudText>
+        )}
+        <Pressable accessibilityRole="button" accessibilityLabel={t('common.signOut')} onPress={() => signOutAndReset()} style={styles.signOut}>
+          <HudText size={15} color={quest.hpText}>
+            {t('common.signOut')}
+          </HudText>
+        </Pressable>
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('coachAccount.remindersTitle')}</Text>
-      <Card>
-        <View style={styles.switchRow}>
-          <Text style={styles.fieldLabel}>{t('coachAccount.deviceReminders')}</Text>
-          <Switch value={remindersEnabled} onValueChange={(v) => updateSettings({ remindersEnabled: v })} />
-        </View>
-      </Card>
-
-      <Text style={styles.sectionTitle}>{t('tab.account')}</Text>
-      <Card>
-        <Text style={styles.fieldLabel}>{session?.user.email ?? t('common.notSignedIn')}</Text>
-        {pendingSyncCount > 0 && <Badge tone="warning" label={t('sync.pendingCount', { n: pendingSyncCount })} />}
-        <Button title={t('common.signOut')} onPress={() => signOutAndReset()} variant="danger" style={{ marginTop: 8 }} />
-      </Card>
+      <HudText size={12} weight="medium" color={quest.textSecondary}>
+        {g('coach.sharedOnly')}
+      </HudText>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  content: { padding: 16, paddingBottom: 32 },
-  sectionTitle: { fontSize: 15, fontWeight: '700', marginTop: 8, marginBottom: 8, color: '#222' },
-  hint: { fontSize: 12, color: '#666', marginBottom: 6 },
-  code: { fontSize: 28, fontWeight: '800', letterSpacing: 4 },
-  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 8 },
-  languageRow: { flexDirection: 'row', gap: 8 },
-  languageButton: { flex: 1, backgroundColor: '#F0F0F0', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
-  languageButtonText: { fontSize: 13, fontWeight: '700', color: '#666' },
-  languageButtonTextActive: { color: '#fff' },
+  screen: { flex: 1, backgroundColor: quest.bg },
+  content: { paddingHorizontal: 16, paddingBottom: 120, gap: 12 },
+  flex: { flex: 1, minWidth: 0 },
+  eyebrow: { letterSpacing: 1.6 },
+  codeCard: { gap: 4, padding: 16, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
+  code: { letterSpacing: 4, color: quest.manaText },
+  card: { gap: 10, padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  signOut: { minHeight: 48, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel, alignItems: 'center', justifyContent: 'center' },
 });

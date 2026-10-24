@@ -1,0 +1,438 @@
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { Circle } from 'react-native-svg';
+import { ExerciseFigure } from '../../src/components/quest/ExerciseFigure';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestIcon } from '../../src/components/quest/QuestIcon';
+import { MISSION_XP, WORKOUT_MIN_MINUTES } from '../../src/game/constants';
+import { useGameText, type GameKey } from '../../src/game/strings';
+import { estimateKcal, EXERCISE_BY_ID, type ExerciseId } from '../../src/game/training/exercises';
+import { exerciseName, formatAmount } from '../../src/game/training/format';
+import { applyRating, progressFor, type Rating } from '../../src/game/training/progress';
+import { buildSteps, sessionProgress, sessionReducer, startSession, totalSetsDone } from '../../src/game/training/session';
+import { useNow } from '../../src/game/useGameState';
+import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { useTrainingStore } from '../../src/store/useTrainingStore';
+import { useWeightStore } from '../../src/store/useWeightStore';
+import { useWorkoutStore } from '../../src/store/useWorkoutStore';
+import { quest, questRadius } from '../../src/theme/quest';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { toDateKey } from '../../src/utils/date';
+
+const RING = 220;
+const STROKE = 14;
+
+function leave() {
+  if (router.canGoBack()) router.back();
+  else router.replace('/(tabs)/workout');
+}
+
+function confirmQuit(title: string, keep: string, quit: string, onQuit: () => void) {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && window.confirm(title)) onQuit();
+    return;
+  }
+  Alert.alert(title, undefined, [
+    { text: keep, style: 'cancel' },
+    { text: quit, style: 'destructive', onPress: onQuit },
+  ]);
+}
+
+function formatClock(totalSeconds: number): string {
+  const s = Math.max(0, Math.round(totalSeconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function Ring({ fraction, children }: { fraction: number; children: React.ReactNode }) {
+  const r = (RING - STROKE) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <View style={styles.ring}>
+      <Svg width={RING} height={RING} style={StyleSheet.absoluteFill} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={quest.raised} strokeWidth={STROKE} fill="none" />
+        <Circle
+          cx={RING / 2}
+          cy={RING / 2}
+          r={r}
+          stroke={quest.gold}
+          strokeWidth={STROKE}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${c * Math.min(1, Math.max(0, fraction))} ${c}`}
+          rotation={-90}
+          origin={`${RING / 2}, ${RING / 2}`}
+        />
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
+export default function SessionScreen() {
+  const g = useGameText();
+  const language = useSettingsStore((s) => s.language);
+  const lang = language === 'en' ? 'en' : 'vi';
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
+  const { ids, group } = useLocalSearchParams<{ ids?: string; group?: string }>();
+  const progress = useTrainingStore((s) => s.progress);
+  const commitRatings = useTrainingStore((s) => s.commitRatings);
+  const addEntry = useWorkoutStore((s) => s.addEntry);
+  const entries = useWorkoutStore((s) => s.entries);
+  const latestWeight = useWeightStore((s) => s.latest());
+  const startWeightKg = useSettingsStore((s) => s.startWeightKg);
+
+  const steps = useMemo(() => {
+    const list = (ids ?? '').split(',').filter((id): id is ExerciseId => id in EXERCISE_BY_ID);
+    return buildSteps(list.map((id) => ({ id, level: progressFor(progress, id).level })));
+    // The levels are frozen when the session starts: ratings are only committed at the end.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ids]);
+  const [state, dispatch] = useReducer(sessionReducer, steps, startSession);
+
+  const startedAt = useRef(Date.now());
+  const minutesBefore = useRef(
+    entries.filter((e) => toDateKey(new Date(e.dateISO)) === toDateKey(new Date())).reduce((s, e) => s + e.durationMin, 0)
+  );
+  const clock = useNow(1000);
+  const [holdStartedAt, setHoldStartedAt] = useState<number | null>(null);
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const [result, setResult] = useState<{ durationMin: number; kcal: number } | null>(null);
+  const [ratings, setRatings] = useState<Partial<Record<ExerciseId, Rating>>>({});
+  const logged = useRef(false);
+
+  const step = state.steps[state.step];
+  const ex = step ? EXERCISE_BY_ID[step.id] : undefined;
+  const nowMs = clock.getTime();
+
+  // Entering the rest phase starts its countdown; leaving it clears it.
+  useEffect(() => {
+    if (state.phase === 'rest') setRestEndsAt(Date.now() + state.restSec * 1000);
+    else setRestEndsAt(null);
+    setHoldStartedAt(null);
+  }, [state.phase, state.step, state.set, state.restSec]);
+
+  const restLeft = restEndsAt === null ? 0 : Math.ceil((restEndsAt - nowMs) / 1000);
+  useEffect(() => {
+    if (state.phase === 'rest' && restEndsAt !== null && restLeft <= 0) dispatch({ type: 'skipRest' });
+  }, [state.phase, restEndsAt, restLeft]);
+
+  const holdLeft = step && step.unit === 'seconds' && holdStartedAt !== null ? Math.ceil(step.amount - (nowMs - holdStartedAt) / 1000) : null;
+  useEffect(() => {
+    if (state.phase === 'work' && holdLeft !== null && holdLeft <= 0) dispatch({ type: 'finishSet' });
+  }, [state.phase, holdLeft]);
+
+  // Log the workout exactly once, the moment the last set is finished.
+  useEffect(() => {
+    if (state.phase !== 'done' || logged.current) return;
+    logged.current = true;
+    const durationMin = Math.max(1, Math.ceil((Date.now() - startedAt.current) / 60_000));
+    const kcal = estimateKcal(latestWeight?.weightKg ?? startWeightKg, durationMin);
+    const solo = state.steps.length === 1;
+    const label = solo
+      ? exerciseName(EXERCISE_BY_ID[state.steps[0].id], lang)
+      : group === 'A' || group === 'B' || group === 'C'
+        ? g(`train.group.${group}` as GameKey)
+        : g('train.title');
+    addEntry({ templateId: `home-${group || 'x'}`, label, durationMin, caloriesBurned: kcal });
+    setResult({ durationMin, kcal });
+  }, [state.phase, state.steps, addEntry, latestWeight, startWeightKg, lang, g, group]);
+
+  const bg = { backgroundColor: quest.bg };
+
+  if (state.phase === 'done' && result) {
+    const gained = minutesBefore.current < WORKOUT_MIN_MINUTES && minutesBefore.current + result.durationMin >= WORKOUT_MIN_MINUTES;
+    const alreadyDone = minutesBefore.current >= WORKOUT_MIN_MINUTES;
+    const now = new Date();
+    const preview = state.steps.map((s) => {
+      const rating = ratings[s.id];
+      return { id: s.id, outcome: rating ? applyRating(progressFor(progress, s.id), rating, now) : null };
+    });
+    const ups = preview.filter((p) => p.outcome?.change === 'up');
+    const ready = preview.filter((p) => p.outcome?.change === 'ready');
+    const rateOptions: { key: Rating; label: GameKey }[] = [
+      { key: 'easy', label: 'train.d.easy' },
+      { key: 'medium', label: 'train.d.medium' },
+      { key: 'hard', label: 'train.d.hard' },
+    ];
+
+    function finish() {
+      if (Object.keys(ratings).length > 0) commitRatings(ratings, new Date());
+      router.replace('/(tabs)');
+    }
+
+    return (
+      <View style={[styles.screen, bg]}>
+        <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 24 }]}>
+          <View style={styles.center}>
+            <View style={styles.medal}>
+              <View style={styles.unrotate}>
+                <QuestIcon name="check" size={40} color={quest.onGold} strokeWidth={3.2} />
+              </View>
+            </View>
+            <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+              {g('train.d.eyebrow', { g: group || '—', date: now.toLocaleDateString(lang === 'en' ? 'en-US' : 'vi-VN', { weekday: 'short', day: 'numeric', month: 'numeric' }) }).toUpperCase()}
+            </HudText>
+            <HudText size={26} accessibilityRole="header" style={styles.textCenter}>
+              {g('train.d.title')}
+            </HudText>
+            {gained && (
+              <HudText size={34} color={quest.xp}>
+                {g('train.d.xp', { n: MISSION_XP.workout })}
+              </HudText>
+            )}
+          </View>
+          {!gained && (
+            <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.textCenter}>
+              {alreadyDone ? g('train.d.noXpAlready') : g('train.d.noXpShort', { m: result.durationMin, need: WORKOUT_MIN_MINUTES })}
+            </HudText>
+          )}
+
+          <View style={styles.stats}>
+            {[
+              { v: String(result.durationMin), l: g('train.d.minutes') },
+              { v: String(totalSetsDone(state)), l: g('train.d.sets'), h: g('train.d.setsHint', { n: state.steps.length }) },
+              { v: `≈ ${result.kcal}`, l: g('train.d.kcal') },
+            ].map((s) => (
+              <View key={s.l} style={styles.stat}>
+                <HudText size={22}>{s.v}</HudText>
+                <HudText size={12} weight="medium" color={quest.textSecondary}>
+                  {s.l}
+                </HudText>
+                {s.h ? (
+                  <HudText size={11} weight="medium" color={quest.textSecondary}>
+                    {s.h}
+                  </HudText>
+                ) : null}
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.panel}>
+            <HudText size={16}>{g('train.d.rate')}</HudText>
+            {state.steps.map((s) => {
+              const name = exerciseName(EXERCISE_BY_ID[s.id], lang);
+              return (
+                <View key={s.id} style={styles.rateRow}>
+                  <View style={styles.flex}>
+                    <HudText size={15} numberOfLines={1}>
+                      {name}
+                    </HudText>
+                    <HudText size={12} weight="medium" color={quest.textSecondary}>
+                      {formatAmount(buildPrescription(s), lang)} · {g('train.level', { n: s.level })}
+                    </HudText>
+                  </View>
+                  <View style={styles.rateButtons} accessibilityRole="radiogroup" accessibilityLabel={name}>
+                    {rateOptions.map((o) => {
+                      const on = ratings[s.id] === o.key;
+                      return (
+                        <Pressable
+                          key={o.key}
+                          accessibilityRole="radio"
+                          accessibilityLabel={`${name}: ${g(o.label)}`}
+                          accessibilityState={{ selected: on }}
+                          onPress={() => setRatings((prev) => ({ ...prev, [s.id]: o.key }))}
+                          style={[styles.rate, on && { backgroundColor: quest.gold }]}
+                        >
+                          <HudText size={13} color={on ? quest.onGold : quest.textSecondary}>
+                            {g(o.label)}
+                          </HudText>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {g('train.d.rateHint')}
+            </HudText>
+          </View>
+
+          <View style={[styles.panel, { borderColor: quest.gold }]}>
+            <HudText size={11} color={quest.gold} style={styles.eyebrow}>
+              {g('train.d.next').toUpperCase()}
+            </HudText>
+            {ups.map((p) => (
+              <HudText key={p.id} size={14} color={quest.xp}>
+                ↑ {g('train.d.nextUp', { name: exerciseName(EXERCISE_BY_ID[p.id], lang), n: p.outcome!.progress.level })}
+              </HudText>
+            ))}
+            {ready.map((p) => (
+              <HudText key={p.id} size={13} weight="medium" color={quest.textTertiary}>
+                {g('train.d.nextReady', { name: exerciseName(EXERCISE_BY_ID[p.id], lang) })}
+              </HudText>
+            ))}
+            {ups.length === 0 && ready.length === 0 && (
+              <HudText size={13} weight="medium" color={quest.textTertiary}>
+                {g('train.d.nextHold')}
+              </HudText>
+            )}
+          </View>
+        </ScrollView>
+        <View style={[styles.footer, screenMaxWidthStyle, { paddingBottom: insets.bottom + 12 }]}>
+          <QuestButton title={g('train.d.home')} icon="camp" onPress={finish} />
+        </View>
+      </View>
+    );
+  }
+
+  if (!step || !ex) {
+    return <View style={[styles.screen, bg]} />;
+  }
+
+  const name = exerciseName(ex, lang);
+  const isTimed = step.unit === 'seconds';
+  const resting = state.phase === 'rest';
+  const nextStep = state.steps[state.step];
+  const elapsed = (nowMs - startedAt.current) / 1000;
+  const bigNumber = resting ? restLeft : isTimed ? (holdLeft ?? step.amount) : state.count;
+  const fraction = resting
+    ? state.restSec > 0
+      ? restLeft / state.restSec
+      : 0
+    : isTimed
+      ? holdLeft === null
+        ? 1
+        : holdLeft / step.amount
+      : Math.min(1, state.count / step.amount);
+
+  return (
+    <View style={[styles.screen, bg]}>
+      <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+        <View style={styles.topRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={g('train.s.quit')}
+            onPress={() => confirmQuit(g('train.s.quitConfirm'), g('train.s.quitKeep'), g('train.s.quitLeave'), leave)}
+            style={styles.close}
+          >
+            <QuestIcon name="x" size={20} color={quest.text} strokeWidth={2.4} />
+          </Pressable>
+          <View style={styles.flex}>
+            <HudText size={11} color={quest.gold} style={styles.eyebrow} numberOfLines={1}>
+              {g('train.s.eyebrow', { i: state.step + 1, n: state.steps.length, xp: MISSION_XP.workout }).toUpperCase()}
+            </HudText>
+            <HudText size={22} accessibilityRole="header" numberOfLines={1}>
+              {name}
+            </HudText>
+          </View>
+          <HudText size={13} weight="medium" color={quest.textSecondary} accessibilityLabel={g('train.s.elapsed', { t: formatClock(elapsed) })}>
+            {formatClock(elapsed)}
+          </HudText>
+        </View>
+
+        <View style={styles.segments} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          {state.steps.map((s, i) => (
+            <View key={i} style={styles.segGroup}>
+              {Array.from({ length: s.sets }).map((_, k) => {
+                const done = k < state.setsDone[i];
+                return <View key={k} style={[styles.seg, done && { backgroundColor: quest.gold }]} />;
+              })}
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.center}>
+          <Ring fraction={fraction}>
+            <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+              {(resting ? g('train.s.restTitle') : isTimed ? g('train.s.seconds') : g('train.s.reps')).toUpperCase()}
+            </HudText>
+            <HudText size={72} accessibilityLiveRegion={resting ? 'none' : 'polite'}>
+              {bigNumber}
+            </HudText>
+            <HudText size={14} color={quest.textSecondary}>
+              {g('train.s.setOf', { s: state.set + 1, t: step.sets })}
+            </HudText>
+          </Ring>
+        </View>
+
+        {resting ? (
+          <View style={styles.panel}>
+            <HudText size={14} weight="medium" color={quest.textTertiary}>
+              {g('train.s.restNext', { name, rx: formatAmount(buildPrescription(nextStep), lang) })}
+            </HudText>
+          </View>
+        ) : (
+          <View style={styles.tip}>
+            <ExerciseFigure id={ex.id} pose={1} width={72} />
+            <View style={styles.flex}>
+              <HudText size={14} weight="medium" color={quest.textTertiary}>
+                {ex.steps[1][lang]}
+              </HudText>
+              {step.perSide && (
+                <HudText size={12} weight="medium" color={quest.manaText}>
+                  {g('train.s.perSideHint')}
+                </HudText>
+              )}
+            </View>
+          </View>
+        )}
+      </ScrollView>
+
+      <View style={[styles.footer, screenMaxWidthStyle, { paddingBottom: insets.bottom + 12 }]}>
+        {resting ? (
+          <QuestButton title={g('train.s.skipRest')} variant="ghost" onPress={() => dispatch({ type: 'skipRest' })} />
+        ) : isTimed ? (
+          holdStartedAt === null ? (
+            <QuestButton title={g('train.s.startTimer')} onPress={() => setHoldStartedAt(Date.now())} />
+          ) : (
+            <QuestButton title={g('train.s.finishSet')} icon="check" onPress={() => dispatch({ type: 'finishSet' })} />
+          )
+        ) : (
+          <View style={styles.footerRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={g('train.s.minusRep')}
+              onPress={() => dispatch({ type: 'removeRep' })}
+              style={styles.minus}
+            >
+              <QuestIcon name="minus" size={20} color={quest.text} strokeWidth={2.6} />
+            </Pressable>
+            <View style={styles.flex}>
+              <QuestButton title={g('train.s.plusRep')} variant="ghost" onPress={() => dispatch({ type: 'addRep' })} />
+            </View>
+            <View style={styles.flex}>
+              <QuestButton title={g('train.s.finishSet')} icon="check" onPress={() => dispatch({ type: 'finishSet' })} />
+            </View>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function buildPrescription(s: { sets: number; amount: number; unit: 'reps' | 'seconds'; perSide: boolean; id: ExerciseId; level: 1 | 2 | 3 | 4 }) {
+  return { ...EXERCISE_BY_ID[s.id].levels[s.level - 1] };
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  content: { paddingHorizontal: 16, paddingBottom: 24, gap: 16 },
+  flex: { flex: 1, minWidth: 0 },
+  center: { alignItems: 'center', gap: 8 },
+  textCenter: { textAlign: 'center' },
+  eyebrow: { letterSpacing: 1.6 },
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  close: { width: 44, height: 44, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, alignItems: 'center', justifyContent: 'center' },
+  segments: { flexDirection: 'row', gap: 8 },
+  segGroup: { flex: 1, flexDirection: 'row', gap: 3 },
+  seg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: quest.raised },
+  ring: { width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
+  tip: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  panel: { padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, gap: 10 },
+  footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: quest.bg },
+  footerRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  minus: { width: 56, height: 56, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, alignItems: 'center', justifyContent: 'center' },
+  medal: { width: 84, height: 84, borderRadius: 22, backgroundColor: quest.gold, alignItems: 'center', justifyContent: 'center', transform: [{ rotate: '45deg' }], marginBottom: 14 },
+  unrotate: { transform: [{ rotate: '-45deg' }] },
+  stats: { flexDirection: 'row', gap: 8 },
+  stat: { flex: 1, alignItems: 'center', padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  rateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rateButtons: { flexDirection: 'row', borderRadius: 10, backgroundColor: quest.bg, padding: 3, gap: 2 },
+  rate: { minWidth: 44, minHeight: 36, paddingHorizontal: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+});

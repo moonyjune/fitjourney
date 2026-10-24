@@ -1,5 +1,5 @@
 diff --git a/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js b/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js
-index 57119c2..de3410d 100644
+index 57119c2..373501c 100644
 --- a/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js
 +++ b/node_modules/react-native-chart-kit/dist/charts/line/LineChart.js
 @@ -34,7 +34,7 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
@@ -26,3 +26,82 @@ index 57119c2..de3410d 100644
                      output.push(<Circle key={"dot-".concat(datasetIndex, "-").concat(i)} cx={cx} cy={cy} fill={typeof getDotColor === "function"
                              ? getDotColor(x, i)
                              : _this.getColor(dataset, 0.9)} {...pressProps} {..._this.getPropsForDots(x, i)}/>, <Circle key={"dot-touch-".concat(datasetIndex, "-").concat(i)} cx={cx} cy={cy} r="14" fill="#fff" fillOpacity={0} {...pressProps}/>, <React.Fragment key={"dot-content-".concat(datasetIndex, "-").concat(i)}>
+@@ -346,15 +352,48 @@ var LineChart = /** @class */ (function (_super) {
+                 var yHeight = _this.calcHeight(dataset.data[i], datas, height);
+                 return Math.floor(((baseHeight - yHeight) / 4) * 3 + paddingTop);
+             };
+-            return ["M".concat(x(0), ",").concat(y(0))]
+-                .concat(dataset.data.slice(0, -1).map(function (_, i) {
+-                var x_mid = (x(i) + x(i + 1)) / 2;
+-                var y_mid = (y(i) + y(i + 1)) / 2;
+-                var cp_x1 = (x_mid + x(i)) / 2;
+-                var cp_x2 = (x_mid + x(i + 1)) / 2;
+-                return ("Q ".concat(cp_x1, ", ").concat(y(i), ", ").concat(x_mid, ", ").concat(y_mid) +
+-                    " Q ".concat(cp_x2, ", ").concat(y(i + 1), ", ").concat(x(i + 1), ", ").concat(y(i + 1)));
+-            }))
++            // Patched: null/undefined/non-finite values are a genuine gap (e.g. a day nobody logged
++            // anything for), not "0" — break the path into a fresh "M" subpath at each gap instead of
++            // drawing a fabricated curve through them (the upstream behavior for bezier lines, unlike
++            // the straight-line renderer, doesn't handle this at all: it silently treats them as 0).
++            var isValid = function (i) {
++                var v = dataset.data[i];
++                return typeof v === "number" && isFinite(v);
++            };
++            var segments = [];
++            var current = [];
++            for (var i = 0; i < dataset.data.length; i++) {
++                if (isValid(i)) {
++                    current.push(i);
++                }
++                else if (current.length > 0) {
++                    segments.push(current);
++                    current = [];
++                }
++            }
++            if (current.length > 0)
++                segments.push(current);
++            if (segments.length === 0) {
++                return "M0,0";
++            }
++            return segments
++                .map(function (seg) {
++                if (seg.length === 1) {
++                    var i0 = seg[0];
++                    return "M".concat(x(i0), ",").concat(y(i0));
++                }
++                var parts = ["M".concat(x(seg[0]), ",").concat(y(seg[0]))];
++                for (var k = 0; k < seg.length - 1; k++) {
++                    var i = seg[k], j = seg[k + 1];
++                    var x_mid = (x(i) + x(j)) / 2;
++                    var y_mid = (y(i) + y(j)) / 2;
++                    var cp_x1 = (x_mid + x(i)) / 2;
++                    var cp_x2 = (x_mid + x(j)) / 2;
++                    parts.push("Q ".concat(cp_x1, ", ").concat(y(i), ", ").concat(x_mid, ", ").concat(y_mid) +
++                        " Q ".concat(cp_x2, ", ").concat(y(j), ", ").concat(x(j), ", ").concat(y(j)));
++                }
++                return parts.join(" ");
++            })
+                 .join(" ");
+         };
+         _this.renderBezierLine = function (_a) {
+diff --git a/node_modules/react-native-chart-kit/dist/shared/AbstractChart.js b/node_modules/react-native-chart-kit/dist/shared/AbstractChart.js
+index 86a1c6b..de6e344 100644
+--- a/node_modules/react-native-chart-kit/dist/shared/AbstractChart.js
++++ b/node_modules/react-native-chart-kit/dist/shared/AbstractChart.js
+@@ -161,10 +161,13 @@ var AbstractChart = /** @class */ (function (_super) {
+             }
+             var labelIntervalCount = xAxisIntervalCount !== null && xAxisIntervalCount !== void 0 ? xAxisIntervalCount : labels.length;
+             var xAxisDivisor = Math.max(labelIntervalCount, 1);
++            // Patched: `hidePointsAtIndex` is documented (and used elsewhere in this file, see
++            // LineChart's renderDots) as hiding DOTS at indices that aren't real data points — it
++            // should have no bearing on whether the x-axis TEXT label at that index renders. Left
++            // unpatched, any chart that hides dots for carried-forward/interpolated values (e.g. a
++            // weight chart with sparse logging) loses almost all of its date labels too, since most
++            // grid indices aren't exact log entries.
+             return labels.map(function (label, i) {
+-                if (hidePointsAtIndex.includes(i)) {
+-                    return null;
+-                }
+                 var isLastLabel = i === labels.length - 1;
+                 var labelText = "".concat(formatXLabel(label)).concat(xAxisLabel);
+                 var x = (((width - paddingRight) / xAxisDivisor) * i +

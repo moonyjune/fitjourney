@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
-import { Button } from '../../src/components/Button';
-import { PlanPreview } from '../../src/components/PlanPreview';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestHeader } from '../../src/components/quest/QuestHeader';
+import { QuestPlanPreview } from '../../src/components/quest/QuestPlanPreview';
+import { QuestSegment } from '../../src/components/quest/QuestSegment';
+import { useGameText } from '../../src/game/strings';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { supabase } from '../../src/lib/supabase';
 import { fetchFeedback, pullPlan, pushCoachFeedback, pushPlan } from '../../src/sync/cloudSync';
@@ -15,7 +19,7 @@ import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { weekStartKey } from '../../src/utils/weekKey';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import type {
   ActivityLevel,
@@ -57,6 +61,9 @@ const STATUS_KEY: Record<ProofStatus, StringKey> = {
 
 export default function ClientDetailScreen() {
   const { t } = useTranslation();
+  const g = useGameText();
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clientId = Array.isArray(id) ? id[0] : id;
 
@@ -140,8 +147,9 @@ export default function ClientDetailScreen() {
 
       setPlan(remotePlan?.plan ?? DEFAULT_PLAN);
       setWeightSummary({
-        start: profileRes.data?.start_weight_kg ?? null,
-        latest: latestWeightRes.data?.weight_kg ?? null,
+        // `numeric` columns arrive as strings from PostgREST; .toFixed() below needs real numbers.
+        start: profileRes.data?.start_weight_kg != null ? Number(profileRes.data.start_weight_kg) : null,
+        latest: latestWeightRes.data?.weight_kg != null ? Number(latestWeightRes.data.weight_kg) : null,
       });
 
       const logsMap: Record<string, DailyNutritionLog> = {};
@@ -153,6 +161,7 @@ export default function ClientDetailScreen() {
           extraProteinG: row.extra_protein_g ?? 0,
           extraItems: row.extra_items ?? [],
           waterMl: row.water_ml ?? 0,
+          removedMealSlots: row.removed_meal_slots ?? [],
         };
       }
       setNutritionLogsByDate(logsMap);
@@ -180,7 +189,7 @@ export default function ClientDetailScreen() {
         calorieTargetKcal: Number(profileRes.data?.calorie_target_kcal ?? DEFAULT_CALORIE_TARGET),
         targetDailyDeficitKcal,
       });
-      setStreak(computeCurrentStreak(logsMap, plan.mealTemplates, streakWorkoutEntries, tdeeKcal, targetDailyDeficitKcal));
+      setStreak(computeCurrentStreak(logsMap, plan.mealTemplates, streakWorkoutEntries, tdeeKcal));
 
       const workoutById: Record<string, WorkoutEntryRow> = {};
       for (const row of workoutEntriesRes.data ?? []) {
@@ -283,6 +292,9 @@ export default function ClientDetailScreen() {
     return (
       <Pressable
         key={p.id}
+        accessibilityRole="button"
+        accessibilityLabel={`${proofLabel(p)}. ${formatDateVi(toDateKey(new Date(p.entryDate)))}`}
+        accessibilityState={{ selected: isActive }}
         onHoverIn={isWeb ? () => setActiveProofId(p.id) : undefined}
         onHoverOut={isWeb ? () => setActiveProofId((prev) => (prev === p.id ? null : prev)) : undefined}
         onPress={() => setActiveProofId((prev) => (prev === p.id ? null : p.id))}
@@ -295,22 +307,27 @@ export default function ClientDetailScreen() {
               <View style={[styles.proofThumb, styles.proofThumbFallback]} />
             )}
             <View style={styles.proofStatusBadge}>
-              <Text style={styles.proofStatusIcon}>{STATUS_ICON[status]}</Text>
+              <HudText size={12}>{STATUS_ICON[status]}</HudText>
             </View>
           </View>
-          <Text style={styles.proofLabel} numberOfLines={1}>
+          <HudText size={11} style={styles.proofLabel} numberOfLines={1}>
             {proofLabel(p)}
-          </Text>
-          <Text style={styles.proofDate}>{formatDateVi(toDateKey(new Date(p.entryDate)))}</Text>
+          </HudText>
+          <HudText size={10} weight="medium" color={quest.textSecondary} style={styles.proofDate}>
+            {formatDateVi(toDateKey(new Date(p.entryDate)))}
+          </HudText>
         </View>
       </Pressable>
     );
   }
 
+  const back = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/clients'));
+
   if (loading || !plan) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <Stack.Screen options={{ headerShown: false }} />
+        <ActivityIndicator size="large" color={quest.mana} />
       </View>
     );
   }
@@ -323,41 +340,57 @@ export default function ClientDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: t('clientDetail.headerTitle'), headerShown: true }} />
-      <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-        <Card>
-          <Text style={styles.cardTitle}>{t('clientDetail.weightProgressTitle')}</Text>
-          <Text style={styles.weightText}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+        <QuestHeader title={t('clientDetail.headerTitle')} eyebrow={g('coach.eyebrow')} onBack={back} backLabel={g('planScreen.back')} />
+
+        <View style={styles.panel}>
+          <HudText size={16}>{t('clientDetail.weightProgressTitle')}</HudText>
+          <HudText size={28} color={quest.manaText} style={{ marginTop: 6 }}>
             {weightSummary.latest != null ? `${weightSummary.latest.toFixed(1)} kg` : t('clientDetail.noData')}
-          </Text>
+          </HudText>
           {change != null && (
-            <Text style={[styles.changeText, { color: change <= 0 ? colors.success : colors.danger }]}>
+            <HudText size={13} color={change <= 0 ? quest.xp : quest.hpText} style={{ marginTop: 4 }}>
               {change > 0 ? '+' : ''}
               {change.toFixed(1)} {t('today.weightChangeSuffix')}
-            </Text>
+            </HudText>
           )}
-        </Card>
+        </View>
 
-        <Card style={styles.streakCard}>
-          <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>
+        <View style={styles.panel}>
+          <HudText size={20} color={quest.gold}>
+            {t('today.streakDays', { n: streak })}
+          </HudText>
           {badges.length > 0 && (
             <View style={styles.badgeRow}>
               {badges.map((b) => (
-                <Badge key={b} label={t('today.streakDays', { n: b })} tone="gold" />
+                <View key={b} style={styles.badge}>
+                  <HudText size={12} color={quest.gold}>
+                    {t('today.streakDays', { n: b })}
+                  </HudText>
+                </View>
               ))}
             </View>
           )}
-        </Card>
+        </View>
 
-        <Text style={styles.sectionTitle}>{t('clientDetail.proofsTitle')}</Text>
+        <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
+          {t('clientDetail.proofsTitle')}
+        </HudText>
         {recentProofs.length === 0 ? (
-          <Text style={styles.emptyText}>{t('clientDetail.emptyProofs')}</Text>
+          <HudText size={13} weight="medium" color={quest.textSecondary}>
+            {t('clientDetail.emptyProofs')}
+          </HudText>
         ) : (
           <>
-            <Text style={styles.proofsHint}>{t('clientDetail.proofsHint')}</Text>
+            <HudText size={12} weight="medium" color={quest.textSecondary} style={{ marginBottom: 10 }}>
+              {t('clientDetail.proofsHint')}
+            </HudText>
             {mealProofs.length > 0 && (
               <View style={styles.proofSection}>
-                <Text style={styles.proofSectionTitle}>{t('clientDetail.proofsMealSection')}</Text>
+                <HudText size={13} color={quest.textSecondary} style={{ marginBottom: 8 }}>
+                  {t('clientDetail.proofsMealSection')}
+                </HudText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.proofRow}>
                   {mealProofs.map((p) => renderProofItem(p))}
                 </ScrollView>
@@ -365,143 +398,125 @@ export default function ClientDetailScreen() {
             )}
             {workoutProofs.length > 0 && (
               <View style={styles.proofSection}>
-                <Text style={styles.proofSectionTitle}>{t('clientDetail.proofsWorkoutSection')}</Text>
+                <HudText size={13} color={quest.textSecondary} style={{ marginBottom: 8 }}>
+                  {t('clientDetail.proofsWorkoutSection')}
+                </HudText>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.proofRow}>
                   {workoutProofs.map((p) => renderProofItem(p))}
                 </ScrollView>
               </View>
             )}
             {activeProof && (
-              <Card style={styles.proofDetailCard}>
-                <Text style={styles.proofDetailText}>{proofTooltip(activeProof)}</Text>
-              </Card>
+              <View style={[styles.panel, styles.manaPanel]}>
+                <HudText size={13} weight="medium" color={quest.manaText} style={{ lineHeight: 19 }}>
+                  {proofTooltip(activeProof)}
+                </HudText>
+              </View>
             )}
           </>
         )}
 
-        <Text style={styles.sectionTitle}>{t('clientDetail.feedbackTitle')}</Text>
-        <Card>
-          <View style={styles.periodToggleRow}>
-            <TouchableOpacity
-              style={[styles.periodButton, feedbackPeriodType === 'weekly' && styles.periodButtonActive]}
-              onPress={() => handlePeriodTypeChange('weekly')}
-            >
-              <Text style={[styles.periodButtonText, feedbackPeriodType === 'weekly' && styles.periodButtonTextActive]}>
-                {t('clientDetail.periodWeekly')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.periodButton, feedbackPeriodType === 'monthly' && styles.periodButtonActive]}
-              onPress={() => handlePeriodTypeChange('monthly')}
-            >
-              <Text style={[styles.periodButtonText, feedbackPeriodType === 'monthly' && styles.periodButtonTextActive]}>
-                {t('clientDetail.periodMonthly')}
-              </Text>
-            </TouchableOpacity>
-          </View>
+        <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
+          {t('clientDetail.feedbackTitle')}
+        </HudText>
+        <View style={styles.panel}>
+          <QuestSegment
+            accessibilityLabel={t('clientDetail.feedbackTitle')}
+            value={feedbackPeriodType}
+            onChange={handlePeriodTypeChange}
+            options={[
+              { value: 'weekly', label: t('clientDetail.periodWeekly') },
+              { value: 'monthly', label: t('clientDetail.periodMonthly') },
+            ]}
+          />
           <TextInput
-            style={styles.input}
+            accessibilityLabel={t('clientDetail.periodLabelPlaceholder')}
+            style={[styles.input, { marginTop: 10 }]}
             value={feedbackLabel}
             onChangeText={setFeedbackLabel}
             placeholder={t('clientDetail.periodLabelPlaceholder')}
+            placeholderTextColor={quest.textSecondary}
           />
           <TextInput
-            style={styles.aiInput}
+            accessibilityLabel={t('clientDetail.feedbackPlaceholder')}
+            style={[styles.input, styles.multiline]}
             multiline
             placeholder={t('clientDetail.feedbackPlaceholder')}
+            placeholderTextColor={quest.textSecondary}
             value={feedbackText}
             onChangeText={setFeedbackText}
           />
-          <Button title={t('clientDetail.sendFeedbackButton')} onPress={handleSendFeedback} loading={feedbackBusy} />
-        </Card>
+          <QuestButton variant="mana" title={t('clientDetail.sendFeedbackButton')} onPress={handleSendFeedback} loading={feedbackBusy} />
+        </View>
 
         {feedbackList.map((f) => (
-          <Card key={f.id}>
-            <Text style={styles.feedbackPeriod}>
+          <View key={f.id} style={styles.panel}>
+            <HudText size={13} color={quest.manaText}>
               {f.periodLabel} · {f.periodType === 'weekly' ? t('history.periodWeek') : t('history.periodMonth')}
-            </Text>
-            <Text style={styles.feedbackText}>{f.feedbackText}</Text>
-            <Text style={styles.feedbackDate}>{formatDateVi(toDateKey(new Date(f.createdAtISO)))}</Text>
-          </Card>
+            </HudText>
+            <HudText size={14} weight="medium" style={{ marginTop: 6, lineHeight: 20 }}>
+              {f.feedbackText}
+            </HudText>
+            <HudText size={11} weight="medium" color={quest.textSecondary} style={{ marginTop: 8 }}>
+              {formatDateVi(toDateKey(new Date(f.createdAtISO)))}
+            </HudText>
+          </View>
         ))}
 
-        <Text style={styles.sectionTitle}>{t('clientDetail.aiTitle')}</Text>
-        {clientId && <PlanChatAssistant livePlan={plan} targetUserId={clientId} onApply={handleApplyPlan} />}
+        <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
+          {t('clientDetail.aiTitle')}
+        </HudText>
+        {clientId && <PlanChatAssistant dark livePlan={plan} targetUserId={clientId} onApply={handleApplyPlan} />}
 
-        <Text style={styles.sectionTitle}>{t('plan.currentPlanTitle')}</Text>
-        <PlanPreview plan={plan} />
+        <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
+          {t('plan.currentPlanTitle')}
+        </HudText>
+        <QuestPlanPreview plan={plan} />
       </ScrollView>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.surface },
-  cardTitle: { ...typography.title, marginBottom: spacing.sm, color: colors.textPrimary },
-  weightText: { ...typography.h2, color: colors.textPrimary },
-  changeText: { fontSize: 12, fontWeight: '600', marginTop: 4 },
-  sectionTitle: { ...typography.title, marginTop: spacing.md, marginBottom: spacing.sm, color: colors.textPrimary },
-  streakCard: { backgroundColor: colors.goldLight },
-  streakValue: { fontSize: 18, fontWeight: '800', color: colors.gold },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginTop: spacing.md },
-  emptyText: { color: colors.textMuted, fontSize: 12, marginBottom: spacing.sm },
-  proofsHint: { fontSize: 11, color: colors.textMuted, marginBottom: spacing.sm },
-  proofSection: { marginBottom: spacing.md },
-  proofSectionTitle: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.sm },
-  proofRow: { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.sm },
-  proofItem: { width: 88, borderRadius: radius.md, padding: 2 },
-  proofItemActive: { backgroundColor: colors.primaryLight },
-  proofThumb: { width: 88, height: 88, borderRadius: radius.md, backgroundColor: '#eee' },
+  container: { flex: 1, backgroundColor: quest.bg },
+  content: { paddingHorizontal: 16, paddingBottom: 48 },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bg },
+  panel: { backgroundColor: quest.panel, borderColor: quest.border, borderWidth: 1.5, borderRadius: questRadius.panel, padding: 14, marginTop: 12 },
+  manaPanel: { backgroundColor: quest.manaPanel, borderColor: quest.manaBorder },
+  sectionTitle: { marginTop: 22, marginBottom: 4 },
+  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  badge: { borderWidth: 1.5, borderColor: quest.gold, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  proofSection: { marginBottom: 12 },
+  proofRow: { flexDirection: 'row', gap: 10, paddingRight: 10, paddingTop: 8 },
+  proofItem: { width: 92, borderRadius: questRadius.row, padding: 2, borderWidth: 1.5, borderColor: 'transparent' },
+  proofItemActive: { backgroundColor: quest.manaPanel, borderColor: quest.manaBorder },
+  proofThumb: { width: 84, height: 84, borderRadius: questRadius.row, backgroundColor: quest.raised },
   proofThumbFallback: { alignItems: 'center', justifyContent: 'center' },
   proofStatusBadge: {
     position: 'absolute',
     top: -6,
-    right: -6,
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    width: 22,
-    height: 22,
+    right: -2,
+    backgroundColor: quest.bg,
+    borderRadius: 999,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  proofStatusIcon: { fontSize: 12 },
-  proofLabel: { fontSize: 11, fontWeight: '700', color: colors.textPrimary, marginTop: spacing.xs, textAlign: 'center' },
-  proofDate: { fontSize: 10, color: colors.textMuted, marginTop: 2, textAlign: 'center' },
-  proofDetailCard: { backgroundColor: colors.primaryLight },
-  proofDetailText: { fontSize: 12, color: colors.textPrimary, lineHeight: 18 },
-  aiInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    fontSize: 14,
-    minHeight: 70,
-    textAlignVertical: 'top',
-    marginBottom: spacing.sm,
-  },
-  periodToggleRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  periodButton: { flex: 1, backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingVertical: spacing.sm, alignItems: 'center' },
-  periodButtonActive: { backgroundColor: colors.primary },
-  periodButtonText: { fontSize: 12, fontWeight: '700', color: colors.textSecondary },
-  periodButtonTextActive: { color: colors.white },
+  proofLabel: { marginTop: 4, textAlign: 'center' },
+  proofDate: { marginTop: 2, textAlign: 'center' },
   input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    fontSize: 14,
-    marginBottom: spacing.sm,
+    minHeight: 48,
+    borderWidth: 1.5,
+    borderColor: quest.border,
+    backgroundColor: quest.bg,
+    borderRadius: questRadius.row,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 10,
+    color: quest.text,
+    fontSize: 15,
+    fontFamily: questFonts.semibold,
   },
-  feedbackPeriod: { fontSize: 12, fontWeight: '700', color: colors.primary },
-  feedbackText: { fontSize: 13, color: '#333', marginTop: spacing.sm - 2, lineHeight: 18 },
-  feedbackDate: { fontSize: 11, color: colors.textMuted, marginTop: spacing.sm },
+  multiline: { minHeight: 90, textAlignVertical: 'top' },
 });

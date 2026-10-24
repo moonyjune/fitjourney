@@ -6,6 +6,8 @@ import { usePlanStore } from '../../src/store/usePlanStore';
 import { requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { useAccentColors } from '../../src/theme/useAccentColors';
+import { useGameText } from '../../src/game/strings';
+import { QuestTabBar } from '../../src/components/quest/QuestTabBar';
 
 function TabIcon({ symbol }: { symbol: string }) {
   return <Text style={{ fontSize: 20 }}>{symbol}</Text>;
@@ -17,6 +19,7 @@ export default function TabsLayout() {
   const role = useSettingsStore((s) => s.role);
   const isCoach = role === 'coach';
   const { t } = useTranslation();
+  const g = useGameText();
   const colors = useAccentColors();
   const plan = usePlanStore((s) => s.plan);
   const syncPlanFromRemote = usePlanStore((s) => s.syncFromRemote);
@@ -52,12 +55,17 @@ export default function TabsLayout() {
   return (
     <Tabs
       initialRouteName={isCoach ? 'clients' : 'index'}
+      tabBar={(props) => <QuestTabBar {...props} coach={isCoach} />}
       screenOptions={{ headerShown: false, tabBarActiveTintColor: colors.primary }}
     >
       <Tabs.Screen
         name="index"
-        options={{ title: t('tab.today'), tabBarIcon: () => <TabIcon symbol="🏠" />, href: isCoach ? null : undefined }}
+        options={{ title: g('tab.camp'), tabBarIcon: () => <TabIcon symbol="🔥" />, href: isCoach ? null : undefined }}
       />
+      {/* The previous Today screen, kept (hidden from the tab bar) until the FitQuest migration is finished. */}
+      <Tabs.Screen name="today-classic" options={{ href: null }} />
+      <Tabs.Screen name="map" options={{ title: g('tab.map'), tabBarIcon: () => <TabIcon symbol="🗺️" />, href: isCoach ? null : undefined }} />
+      <Tabs.Screen name="profile" options={{ title: g('tab.profile'), tabBarIcon: () => <TabIcon symbol="👤" />, href: isCoach ? null : undefined }} />
       <Tabs.Screen
         name="weight"
         options={{ title: t('tab.weight'), tabBarIcon: () => <TabIcon symbol="⚖️" />, href: isCoach ? null : undefined }}
@@ -68,8 +76,10 @@ export default function TabsLayout() {
       />
       <Tabs.Screen
         name="workout"
-        options={{ title: t('tab.workout'), tabBarIcon: () => <TabIcon symbol="🏊" />, href: isCoach ? null : undefined }}
+        options={{ title: g('tab.train'), tabBarIcon: () => <TabIcon symbol="🏊" />, href: isCoach ? null : undefined }}
       />
+      {/* The previous workout screen, still reachable from the Train tab for logging free-form workouts. */}
+      <Tabs.Screen name="workout-classic" options={{ href: null }} />
       <Tabs.Screen
         name="history"
         options={{ title: t('tab.history'), tabBarIcon: () => <TabIcon symbol="📊" />, href: isCoach ? null : undefined }}

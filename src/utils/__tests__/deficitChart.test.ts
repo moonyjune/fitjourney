@@ -57,4 +57,16 @@ describe('buildDeficitChartData', () => {
     const result = buildDeficitChartData(startISO, () => 0, NOW, '#ff0000')!;
     expect(result.datasets[0].color()).toBe('#ff0000');
   });
+
+  it('passes through null verbatim (unrounded) for a day with no logged data at all', () => {
+    const startISO = new Date(NOW.getTime() - 4 * DAY_MS).toISOString();
+    const result = buildDeficitChartData(
+      startISO,
+      (dateKey) => (dateKey === '2026-09-28' ? null : 500),
+      NOW
+    )!;
+    // day 0..4: 26,27,28,29,30 Sep -> index 2 is the 28th, the one with no data.
+    expect(result.datasets[0].data[2]).toBeNull();
+    expect(result.datasets[0].data.filter((v) => v !== null)).toEqual([500, 500, 500, 500]);
+  });
 });

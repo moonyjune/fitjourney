@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
+import { quest, questFonts } from '../theme/quest';
 
 interface DateOffsetPickerProps {
   selectedDate: Date;
   onChange: (date: Date) => void;
+  /** FitQuest dark styling. */
+  dark?: boolean;
 }
 
 function startOfDay(d: Date): Date {
@@ -18,7 +21,7 @@ const QUICK_OFFSETS_DAYS = [0, 1, 2, 3];
 
 /** Lets a log entry be backdated — quick "today/yesterday/N days ago" chips plus a free-form
  *  DD/MM/YYYY field for anything further back. Preserves the current time-of-day on the chosen date. */
-export function DateOffsetPicker({ selectedDate, onChange }: DateOffsetPickerProps) {
+export function DateOffsetPicker({ selectedDate, onChange, dark }: DateOffsetPickerProps) {
   const { t } = useTranslation();
   const [customText, setCustomText] = useState('');
   const [customError, setCustomError] = useState(false);
@@ -59,8 +62,8 @@ export function DateOffsetPicker({ selectedDate, onChange }: DateOffsetPickerPro
         {QUICK_OFFSETS_DAYS.map((days) => {
           const active = diffDays === days && !customText;
           return (
-            <TouchableOpacity key={days} style={[styles.chip, active && styles.chipActive]} onPress={() => applyOffset(days)}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>
+            <TouchableOpacity key={days} style={[styles.chip, active && styles.chipActive, dark && styles.chipDark, dark && active && styles.chipActiveDark]} onPress={() => applyOffset(days)}>
+              <Text style={[styles.chipText, active && styles.chipTextActive, dark && styles.chipTextDark, dark && active && styles.chipTextActiveDark]}>
                 {days === 0 ? t('dateOffset.today') : days === 1 ? t('dateOffset.yesterday') : t('dateOffset.daysAgo', { n: days })}
               </Text>
             </TouchableOpacity>
@@ -68,7 +71,8 @@ export function DateOffsetPicker({ selectedDate, onChange }: DateOffsetPickerPro
         })}
       </View>
       <TextInput
-        style={[styles.customInput, customError && styles.customInputError]}
+        style={[styles.customInput, dark && styles.customInputDark, customError && styles.customInputError]}
+        placeholderTextColor={dark ? quest.textSecondary : undefined}
         placeholder={t('dateOffset.customPlaceholder')}
         value={customText}
         onChangeText={applyCustom}
@@ -92,5 +96,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: spacing.sm,
   },
+  chipDark: { backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, minHeight: 40, justifyContent: 'center', borderRadius: 999, paddingHorizontal: 14 },
+  chipActiveDark: { backgroundColor: quest.gold, borderColor: quest.gold },
+  chipTextDark: { color: quest.text, fontFamily: questFonts.bold, fontSize: 13 },
+  chipTextActiveDark: { color: quest.onGold },
+  customInputDark: { backgroundColor: quest.bg, borderColor: quest.border, borderWidth: 1.5, borderRadius: 12, color: quest.text, fontFamily: questFonts.semibold, fontSize: 14, minHeight: 44 },
   customInputError: { borderColor: colors.danger },
 });

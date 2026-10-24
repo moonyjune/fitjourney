@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Card } from '../../src/components/Card';
-import { Button } from '../../src/components/Button';
+import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestHeader } from '../../src/components/quest/QuestHeader';
+import { QuestIcon } from '../../src/components/quest/QuestIcon';
 import { ProgressBar } from '../../src/components/ProgressBar';
 import { ProofCapture } from '../../src/components/ProofCapture';
 import { MealRecipeSuggestion } from '../../src/components/MealRecipeSuggestion';
@@ -17,12 +21,13 @@ import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
 import { useTranslation } from '../../src/i18n/useTranslation';
+import { useGameText } from '../../src/game/strings';
 import type { StringKey } from '../../src/i18n/strings';
 import { toDateKey } from '../../src/utils/date';
 import type { ExtraMealTime } from '../../src/types';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.toDateString() === b.toDateString();
@@ -46,7 +51,9 @@ const EXTRA_MEAL_TIME_OPTIONS: { value: ExtraMealTime; labelKey: StringKey }[] =
 
 export default function NutritionScreen() {
   const { t } = useTranslation();
-  const ambientBg = useAmbientBackground();
+  const g = useGameText();
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
   const [viewDate, setViewDate] = useState(new Date());
   const dateKey = toDateKey(viewDate);
   const dayType = useMemo(() => getDayType(viewDate), [viewDate]);
@@ -60,7 +67,7 @@ export default function NutritionScreen() {
   const addWater = useNutritionStore((s) => s.addWater);
   const resetWater = useNutritionStore((s) => s.resetWater);
   const addExtra = useNutritionStore((s) => s.addExtra);
-  const removeExtraItem = useNutritionStore((s) => s.removeExtraItem);
+  const saveDayLog = useNutritionStore((s) => s.saveDayLog);
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
   const currentWeight = latestWeight?.weightKg ?? settings.startWeightKg;
@@ -102,20 +109,40 @@ export default function NutritionScreen() {
     setExtraMealTime(null);
   }
 
+  const sectionTitle = (text: string) => (
+    <HudText size={16} style={styles.sectionTitle} accessibilityRole="header">
+      {text}
+    </HudText>
+  );
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-      <Text style={styles.sectionTitle}>{t('common.logDateTitle')}</Text>
-      <DateOffsetPicker selectedDate={viewDate} onChange={setViewDate} />
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      keyboardShouldPersistTaps="handled"
+    >
+      <QuestHeader
+        title={g('nutritionScreen.title')}
+        eyebrow={g('nutritionScreen.eyebrow')}
+        backLabel={g('nutritionScreen.back')}
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+      />
 
-      <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('nutrition.dayTraining') : t('nutrition.dayRest')}</Text>
+      {sectionTitle(t('common.logDateTitle'))}
+      <DateOffsetPicker dark selectedDate={viewDate} onChange={setViewDate} />
 
-      <Card>
-        <Text style={styles.cardTitle}>{t('nutrition.totalTitle')}</Text>
-        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" />
-        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
-      </Card>
+      <HudText size={13} weight="medium" color={quest.textSecondary}>
+        {dayType === 'training' ? t('nutrition.dayTraining') : t('nutrition.dayRest')}
+      </HudText>
+
+      <View style={styles.card}>
+        <HudText size={15}>{t('nutrition.totalTitle')}</HudText>
+        <ProgressBar dark label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" />
+        <ProgressBar dark label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
+      </View>
 
       <TdeeCard
+        dark
         calorieTargetKcal={settings.calorieTargetKcal}
         targetDailyDeficitKcal={settings.targetDailyDeficitKcal}
         heightCm={settings.heightCm}
@@ -127,165 +154,189 @@ export default function NutritionScreen() {
         caloriesBurnedExerciseToday={caloriesBurnedOnViewDate}
       />
 
-      <Card>
-        <Text style={styles.cardTitle}>{t('nutrition.waterTitle')}</Text>
-        <ProgressBar label={t('common.water')} current={log.waterMl} target={settings.waterTargetMl} unit="ml" />
-        <View style={styles.waterButtons}>
+      <View style={styles.card}>
+        <HudText size={15}>{t('nutrition.waterTitle')}</HudText>
+        <ProgressBar dark label={t('common.water')} current={log.waterMl} target={settings.waterTargetMl} unit="ml" />
+        <View style={styles.chipRow}>
           {WATER_QUICK_ADD_ML.map((ml) => (
-            <TouchableOpacity key={ml} style={styles.waterButton} onPress={() => addWater(dateKey, ml)}>
-              <Text style={styles.waterButtonText}>+{ml}ml</Text>
-            </TouchableOpacity>
+            <Pressable
+              key={ml}
+              accessibilityRole="button"
+              accessibilityLabel={`+${ml}ml`}
+              style={({ pressed }) => [styles.waterChip, pressed && { opacity: 0.8 }]}
+              onPress={() => addWater(dateKey, ml)}
+            >
+              <HudText size={13} color={quest.manaText}>
+                +{ml}ml
+              </HudText>
+            </Pressable>
           ))}
-          <TouchableOpacity style={styles.waterResetButton} onPress={() => resetWater(dateKey)}>
-            <Text style={styles.waterResetText}>{t('common.reset')}</Text>
-          </TouchableOpacity>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t('common.reset')}
+            style={({ pressed }) => [styles.chip, pressed && { opacity: 0.8 }]}
+            onPress={() => resetWater(dateKey)}
+          >
+            <HudText size={13} weight="medium" color={quest.textSecondary}>
+              {t('common.reset')}
+            </HudText>
+          </Pressable>
         </View>
         <View style={styles.customWaterRow}>
           <TextInput
-            style={[styles.input, styles.customWaterInput]}
+            accessibilityLabel={t('nutrition.customWaterPlaceholder')}
+            placeholderTextColor={quest.textSecondary}
+            style={[styles.input, styles.flex]}
             keyboardType="decimal-pad"
             placeholder={t('nutrition.customWaterPlaceholder')}
             value={customWaterMl}
             onChangeText={setCustomWaterMl}
           />
-          <Button title={t('common.add')} size="sm" onPress={handleAddCustomWater} />
+          <Pressable accessibilityRole="button" accessibilityLabel={t('common.add')} style={styles.addButton} onPress={handleAddCustomWater}>
+            <HudText size={14} color={quest.onGold}>
+              {t('common.add')}
+            </HudText>
+          </Pressable>
         </View>
-      </Card>
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('nutrition.waterScheduleTitle')}</Text>
-      <Card>
+      {sectionTitle(t('nutrition.waterScheduleTitle'))}
+      <View style={styles.card}>
         {/* For a backdated day, treat every checkpoint's time as already past — "behind/complete"
             should be judged purely by ml logged, not by comparing to today's clock. */}
-        <WaterTimeline schedule={waterSchedule} currentMl={log.waterMl} now={isToday ? new Date() : endOfDay(viewDate)} />
-      </Card>
+        <WaterTimeline dark schedule={waterSchedule} currentMl={log.waterMl} now={isToday ? new Date() : endOfDay(viewDate)} />
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('nutrition.mealsTitle')}</Text>
+      {sectionTitle(t('nutrition.mealsTitle'))}
       {meals.map((meal) => {
         const eaten = !!log.mealsEaten[meal.slot];
         return (
-          <TouchableOpacity key={meal.slot} onPress={() => toggleMeal(dateKey, meal.slot)}>
-            <Card style={eaten ? styles.mealCardDone : undefined}>
+          <View key={meal.slot} style={[styles.card, eaten && styles.mealCardDone]}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: eaten }}
+              accessibilityLabel={`${meal.label}. ${eaten ? g('nutritionScreen.mealDone') : g('nutritionScreen.mealTodo')}`}
+              onPress={() => toggleMeal(dateKey, meal.slot)}
+              style={styles.mealToggle}
+            >
               <View style={styles.mealHeader}>
-                <Text style={styles.mealLabel}>{meal.label}</Text>
+                <HudText size={14} style={styles.flex}>
+                  {meal.label}
+                </HudText>
                 <View style={[styles.checkbox, eaten && styles.checkboxChecked]}>
-                  {eaten && <Text style={styles.checkboxTick}>✓</Text>}
+                  {eaten && <QuestIcon name="check" size={16} color={quest.onGold} strokeWidth={3} />}
                 </View>
               </View>
-              <Text style={styles.mealTime}>{meal.timeRange}</Text>
-              <MealItemRows items={meal.items} />
-              <Text style={styles.mealMacro}>{t('nutrition.mealTotal', { kcal: meal.calories, protein: meal.proteinG })}</Text>
-              <ProofCapture dateKey={dateKey} taskType="meal" taskRefId={meal.slot} contextLabel={meal.label} plannedCalories={meal.calories} />
-              <MealRecipeSuggestion
-                dayType={dayType}
-                mealSlot={meal.slot}
-                mealLabel={meal.label}
-                targetCalories={meal.calories}
-                targetProtein={meal.proteinG}
-              />
-            </Card>
-          </TouchableOpacity>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {meal.timeRange}
+              </HudText>
+              <MealItemRows dark items={meal.items} />
+              <HudText size={13} color={quest.gold} style={styles.mealMacro}>
+                {t('nutrition.mealTotal', { kcal: meal.calories, protein: meal.proteinG })}
+              </HudText>
+            </Pressable>
+            <ProofCapture variant="quest" dateKey={dateKey} taskType="meal" taskRefId={meal.slot} contextLabel={meal.label} plannedCalories={meal.calories} />
+            <MealRecipeSuggestion
+              dark
+              dayType={dayType}
+              mealSlot={meal.slot}
+              mealLabel={meal.label}
+              targetCalories={meal.calories}
+              targetProtein={meal.proteinG}
+            />
+          </View>
         );
       })}
 
-      <Text style={styles.sectionTitle}>{t('nutrition.extraTitle')}</Text>
-      <Card>
+      {sectionTitle(t('nutrition.extraTitle'))}
+      <View style={styles.card}>
         <TextInput
+          accessibilityLabel={t('nutrition.extraNamePlaceholder')}
+          placeholderTextColor={quest.textSecondary}
           style={styles.input}
           placeholder={t('nutrition.extraNamePlaceholder')}
           value={extraName}
           onChangeText={setExtraName}
         />
-        <Text style={styles.fieldLabel}>{t('nutrition.extraMealTimeLabel')}</Text>
-        <View style={styles.mealTimeChipRow}>
+        <HudText size={12} weight="medium" color={quest.textSecondary}>
+          {t('nutrition.extraMealTimeLabel')}
+        </HudText>
+        <View style={styles.chipRow}>
           {EXTRA_MEAL_TIME_OPTIONS.map((opt) => {
             const active = extraMealTime === opt.value;
             return (
-              <TouchableOpacity
+              <Pressable
                 key={opt.value}
-                style={[styles.mealTimeChip, active && styles.mealTimeChipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={t(opt.labelKey)}
+                style={[styles.chip, active && styles.chipActive]}
                 onPress={() => setExtraMealTime(active ? null : opt.value)}
               >
-                <Text style={[styles.mealTimeChipText, active && styles.mealTimeChipTextActive]}>{t(opt.labelKey)}</Text>
-              </TouchableOpacity>
+                <HudText size={12} weight={active ? 'bold' : 'medium'} color={active ? quest.onGold : quest.textSecondary}>
+                  {t(opt.labelKey)}
+                </HudText>
+              </Pressable>
             );
           })}
         </View>
-        <View style={styles.extraRow}>
+        <View style={styles.customWaterRow}>
           <TextInput
-            style={[styles.input, styles.extraInput]}
+            accessibilityLabel={t('common.calories')}
+            placeholderTextColor={quest.textSecondary}
+            style={[styles.input, styles.flex]}
             placeholder={t('common.calories')}
             keyboardType="decimal-pad"
             value={extraCalories}
             onChangeText={setExtraCalories}
           />
           <TextInput
-            style={[styles.input, styles.extraInput]}
+            accessibilityLabel={t('nutrition.extraProteinPlaceholder')}
+            placeholderTextColor={quest.textSecondary}
+            style={[styles.input, styles.flex]}
             placeholder={t('nutrition.extraProteinPlaceholder')}
             keyboardType="decimal-pad"
             value={extraProtein}
             onChangeText={setExtraProtein}
           />
         </View>
-        <Button title={t('nutrition.addExtraButton')} onPress={handleAddExtra} />
-      </Card>
+        <QuestButton title={t('nutrition.addExtraButton')} onPress={handleAddExtra} />
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('nutrition.diaryTitle')}</Text>
-      <Card>
+      {sectionTitle(t('nutrition.diaryTitle'))}
+      <View style={styles.card}>
         <DailyMealBreakdownTable
+          dark
+          key={dateKey}
           meals={meals}
           mealsEaten={log.mealsEaten}
           extraItems={log.extraItems}
-          onRemoveExtra={(itemId) => removeExtraItem(dateKey, itemId)}
+          removedMealSlots={log.removedMealSlots}
+          editable
+          onSave={(draft) => saveDayLog(dateKey, draft)}
         />
-      </Card>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  dayTypeLabel: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.md, fontWeight: '600' },
-  cardTitle: { ...typography.title, marginBottom: spacing.md, color: colors.textPrimary },
-  sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
-  waterButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.sm },
-  waterButton: { backgroundColor: colors.infoLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  waterButtonText: { color: '#0288D1', fontWeight: '700', fontSize: 13 },
-  waterResetButton: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  waterResetText: { color: colors.textSecondary, fontSize: 13 },
-  customWaterRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, alignItems: 'center' },
-  customWaterInput: { flex: 1, marginBottom: 0 },
-  mealCardDone: { backgroundColor: colors.successLight },
-  mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  mealLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, flex: 1 },
-  mealTime: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  mealMacro: { fontSize: 13, color: colors.primary, fontWeight: '700', marginTop: spacing.sm },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#CCC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: { backgroundColor: colors.success, borderColor: colors.success },
-  checkboxTick: { color: colors.white, fontWeight: '900', fontSize: 14 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    fontSize: 15,
-    marginBottom: spacing.sm,
-  },
-  extraRow: { flexDirection: 'row', gap: spacing.sm },
-  extraInput: { flex: 1 },
-  fieldLabel: { ...typography.label, color: '#444', marginBottom: spacing.xs },
-  mealTimeChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2, marginBottom: spacing.sm },
-  mealTimeChip: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.sm + 2, paddingVertical: spacing.xs + 2 },
-  mealTimeChipActive: { backgroundColor: colors.primary },
-  mealTimeChipText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
-  mealTimeChipTextActive: { color: colors.white },
+  container: { flex: 1, backgroundColor: quest.bg },
+  content: { paddingHorizontal: 16, paddingBottom: 48, gap: 12 },
+  flex: { flex: 1 },
+  sectionTitle: { marginTop: 8 },
+  card: { gap: 8, padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  mealCardDone: { borderColor: quest.xp },
+  mealToggle: { gap: 4, minHeight: 44 },
+  mealHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mealMacro: { marginTop: 4 },
+  checkbox: { width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: quest.border, alignItems: 'center', justifyContent: 'center' },
+  checkboxChecked: { backgroundColor: quest.xp, borderColor: quest.xp },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { minHeight: 36, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
+  chipActive: { backgroundColor: quest.gold, borderColor: quest.gold },
+  waterChip: { minHeight: 44, paddingHorizontal: 14, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel, alignItems: 'center', justifyContent: 'center' },
+  customWaterRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  input: { minHeight: 48, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, fontSize: 15, fontFamily: questFonts.semibold },
+  addButton: { minHeight: 48, paddingHorizontal: 16, borderRadius: questRadius.row, backgroundColor: quest.gold, alignItems: 'center', justifyContent: 'center' },
 });

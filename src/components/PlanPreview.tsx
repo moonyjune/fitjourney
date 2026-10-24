@@ -1,26 +1,40 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Card } from './Card';
-import type { MealFoodItem, PlanData, WorkoutStep } from '../types';
+import type { MealFoodItem, PlanData, WorkoutStep, WorkoutTemplate } from '../types';
 import { shoppingListTotalVnd } from '../constants/plan';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing, typography } from '../theme/tokens';
+import { quest, questFonts } from '../theme/quest';
+
+const darkItemName = { color: quest.textTertiary, fontFamily: questFonts.medium } as const;
+const darkItemCalories = { color: quest.textSecondary, fontFamily: questFonts.semibold, fontWeight: undefined } as const;
 
 function formatVnd(amount: number): string {
   return amount.toLocaleString('vi-VN') + ' đ';
 }
 
 /** One food line per row (name + kcal) — shared by the plan reference view and the daily meal cards. */
-export function MealItemRows({ items }: { items: MealFoodItem[] }) {
+export function MealItemRows({ items, dark }: { items: MealFoodItem[]; dark?: boolean }) {
   return (
     <View style={styles.itemsList}>
       {items.map((item, index) => (
         <View key={`${item.name}-${index}`} style={styles.itemRow}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemCalories}>{item.calories} kcal</Text>
+          <Text style={[styles.itemName, dark && darkItemName]}>{item.name}</Text>
+          <Text style={[styles.itemCalories, dark && darkItemCalories]}>{item.calories} kcal</Text>
         </View>
       ))}
     </View>
   );
+}
+
+/** `template.steps` when present, else a single implicit step built from the template's own
+ *  label/description/duration/calories — so a template saved before `steps` existed (or a custom
+ *  one from the AI assistant that only produced a description) still renders as a numbered
+ *  step list instead of a flat, unnumbered paragraph. Matches WorkoutTemplate.steps' own doc
+ *  comment ("plans saved before this field existed still render as a single implicit step"). */
+export function stepsOrImplicit(template: Pick<WorkoutTemplate, 'label' | 'description' | 'durationMin' | 'caloriesBurned' | 'steps'>): WorkoutStep[] {
+  if (template.steps && template.steps.length > 0) return template.steps;
+  return [{ label: template.label, instruction: template.description, durationMin: template.durationMin, caloriesBurned: template.caloriesBurned }];
 }
 
 /** Numbered step-by-step breakdown of a workout template — shared by the plan reference view and the daily workout tab. */
@@ -92,11 +106,7 @@ export function PlanPreview({ plan, hideShoppingList }: { plan: PlanData; hideSh
       {plan.workoutTemplates.map((wt) => (
         <Card key={wt.id}>
           <Text style={styles.mealLabel}>{wt.label}</Text>
-          {wt.steps && wt.steps.length > 0 ? (
-            <WorkoutStepsList steps={wt.steps} />
-          ) : (
-            <Text style={styles.mealDescription}>{wt.description}</Text>
-          )}
+          <WorkoutStepsList steps={stepsOrImplicit(wt)} />
           <Text style={styles.mealMacro}>{t('workout.templateMacro', { min: wt.durationMin, kcal: wt.caloriesBurned })}</Text>
         </Card>
       ))}
@@ -130,7 +140,6 @@ export { formatVnd };
 const styles = StyleSheet.create({
   sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
   mealLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  mealDescription: { fontSize: 13, color: '#444', marginTop: spacing.sm - 2, lineHeight: 18 },
   mealMacro: { fontSize: 13, color: colors.primary, fontWeight: '700', marginTop: spacing.sm },
   itemsList: { marginTop: spacing.sm },
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },

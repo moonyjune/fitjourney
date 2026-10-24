@@ -2,6 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import { Stack, router, useSegments } from 'expo-router';
+import { useFonts } from 'expo-font';
+// Per-weight subpath imports: the package's index re-exports all 10 files (incl. italics), which
+// would all end up in the bundle even though only these three are used.
+import { ChakraPetch_500Medium } from '@expo-google-fonts/chakra-petch/500Medium';
+import { ChakraPetch_600SemiBold } from '@expo-google-fonts/chakra-petch/600SemiBold';
+import { ChakraPetch_700Bold } from '@expo-google-fonts/chakra-petch/700Bold';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { supabase } from '../src/lib/supabase';
@@ -23,6 +29,8 @@ export default function RootLayout() {
   const role = useSettingsStore((s) => s.role);
   const hydrateFromRemote = useSettingsStore((s) => s.hydrateFromRemote);
   const segments = useSegments();
+  // FitQuest HUD font. On a load error we carry on with the system font rather than block the app.
+  const [fontsLoaded, fontError] = useFonts({ ChakraPetch_500Medium, ChakraPetch_600SemiBold, ChakraPetch_700Bold });
 
   const [profileChecked, setProfileChecked] = useState(false);
   const [minIntroElapsed, setMinIntroElapsed] = useState(false);
@@ -100,7 +108,8 @@ export default function RootLayout() {
     return unsubscribe;
   }, [session]);
 
-  const ready = initialized && expiryChecked && (!session || profileChecked) && minIntroElapsed;
+  const ready =
+    initialized && expiryChecked && (!session || profileChecked) && minIntroElapsed && (fontsLoaded || fontError != null);
 
   useEffect(() => {
     if (!ready) return;
@@ -129,6 +138,16 @@ export default function RootLayout() {
           <Stack.Screen name="onboarding" options={{ presentation: 'modal' }} />
           <Stack.Screen name="role-select" options={{ presentation: 'modal' }} />
           <Stack.Screen name="client/[id]" />
+          <Stack.Screen name="meal/[slot]" />
+          <Stack.Screen name="add-food" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="quick-add" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+          <Stack.Screen name="checkin" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+          <Stack.Screen name="journal" />
+          <Stack.Screen name="boss" />
+          <Stack.Screen name="level-up" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+          <Stack.Screen name="achievements" />
+          <Stack.Screen name="train/detail" />
+          <Stack.Screen name="train/session" options={{ gestureEnabled: false }} />
           <Stack.Screen name="auth" />
         </Stack>
       )}

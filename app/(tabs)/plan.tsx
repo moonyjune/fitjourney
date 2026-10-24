@@ -1,14 +1,20 @@
 import { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
-import { Button } from '../../src/components/Button';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestDemographics } from '../../src/components/quest/QuestDemographics';
+import { QuestField } from '../../src/components/quest/QuestField';
+import { QuestHeader } from '../../src/components/quest/QuestHeader';
+import { QuestPlanPreview } from '../../src/components/quest/QuestPlanPreview';
+import { QuestSegment } from '../../src/components/quest/QuestSegment';
+import { QuestShoppingList } from '../../src/components/quest/QuestShoppingList';
+import { useGameText } from '../../src/game/strings';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { quest, questRadius } from '../../src/theme/quest';
 import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
-import { PlanPreview } from '../../src/components/PlanPreview';
-import { ShoppingListEditor } from '../../src/components/ShoppingListEditor';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
-import { DemographicsFields } from '../../src/components/DemographicsFields';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
@@ -19,17 +25,15 @@ import { signOutAndReset } from '../../src/auth/signOut';
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { CARB_SWAP_OPTIONS, PROTEIN_SWAP_OPTIONS } from '../../src/constants/plan';
 import { useTranslation } from '../../src/i18n/useTranslation';
-import { useAccentColors } from '../../src/theme/useAccentColors';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
 import { ACTIVITY_MULTIPLIER, resolveTdeeKcal } from '../../src/utils/tdee';
 import type { ActivityLevel, Gender, PlanData } from '../../src/types';
 
 export default function PlanScreen() {
   const { t } = useTranslation();
-  const ambientBg = useAmbientBackground();
-  const accent = useAccentColors();
+  const g = useGameText();
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
   const settings = useSettingsStore();
   const session = useAuthStore((s) => s.session);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
@@ -170,89 +174,102 @@ export default function PlanScreen() {
     }
   }
 
+  const sectionTitle = (text: string) => (
+    <HudText size={16} style={styles.sectionTitle} accessibilityRole="header">
+      {text}
+    </HudText>
+  );
+  const hint = (text: string) => (
+    <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.hint}>
+      {text}
+    </HudText>
+  );
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-      <Text style={styles.sectionTitle}>{t('mode.title')}</Text>
-      <Card>
-        <Text style={styles.fieldLabel}>{settings.coachEnabled ? t('plan.coachFieldEnabled') : t('plan.coachFieldDisabled')}</Text>
-        <Button
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      keyboardShouldPersistTaps="handled"
+    >
+      <QuestHeader
+        title={g('planScreen.title')}
+        eyebrow={g('planScreen.eyebrow')}
+        backLabel={g('planScreen.back')}
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+      />
+
+      {sectionTitle(t('mode.title'))}
+      <View style={styles.card}>
+        <HudText size={13} weight="medium" color={quest.textSecondary}>
+          {settings.coachEnabled ? t('plan.coachFieldEnabled') : t('plan.coachFieldDisabled')}
+        </HudText>
+        <QuestButton
           title={settings.coachEnabled ? t('plan.switchToCoach') : t('plan.activateCoach')}
           onPress={handleSwitchToCoach}
           loading={switchingMode}
+          variant="mana"
         />
-      </Card>
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('mode.language')}</Text>
-      <Card>
-        <View style={styles.languageRow}>
-          <TouchableOpacity
-            style={[styles.languageButton, settings.language === 'vi' && { backgroundColor: accent.primary }]}
-            onPress={() => updateSettings({ language: 'vi' })}
-          >
-            <Text style={[styles.languageButtonText, settings.language === 'vi' && styles.languageButtonTextActive]}>Tiếng Việt</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.languageButton, settings.language === 'en' && { backgroundColor: accent.primary }]}
-            onPress={() => updateSettings({ language: 'en' })}
-          >
-            <Text style={[styles.languageButtonText, settings.language === 'en' && styles.languageButtonTextActive]}>English</Text>
-          </TouchableOpacity>
+      {sectionTitle(t('mode.language'))}
+      <QuestSegment
+        accessibilityLabel={t('mode.language')}
+        value={settings.language}
+        onChange={(language) => updateSettings({ language })}
+        options={[
+          { value: 'vi', label: 'Tiếng Việt' },
+          { value: 'en', label: 'English' },
+        ]}
+      />
+
+      {sectionTitle(t('plan.aiTitle'))}
+      {hint(t('plan.aiHint'))}
+      <PlanChatAssistant livePlan={plan} onApply={handleApplyPlan} initialDraft={editWorkoutDraft} dark />
+
+      {sectionTitle(t('plan.remindersTitle'))}
+      <View style={[styles.card, styles.switchRow]}>
+        <View style={styles.flex}>
+          <HudText size={14}>{t('plan.remindersLabel')}</HudText>
+          {hint(t('plan.remindersHint'))}
         </View>
-      </Card>
+        <Switch
+          accessibilityLabel={t('plan.remindersLabel')}
+          value={settings.remindersEnabled}
+          onValueChange={handleToggleReminders}
+          trackColor={{ true: quest.gold, false: quest.border }}
+          thumbColor={quest.text}
+        />
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('plan.aiTitle')}</Text>
-      <Text style={styles.aiHint}>{t('plan.aiHint')}</Text>
-      <PlanChatAssistant livePlan={plan} onApply={handleApplyPlan} initialDraft={editWorkoutDraft} />
-
-      <Text style={styles.sectionTitle}>{t('plan.remindersTitle')}</Text>
-      <Card>
-        <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.fieldLabel}>{t('plan.remindersLabel')}</Text>
-            <Text style={styles.switchHint}>{t('plan.remindersHint')}</Text>
-          </View>
-          <Switch value={settings.remindersEnabled} onValueChange={handleToggleReminders} />
-        </View>
-      </Card>
-
-      <Text style={styles.sectionTitle}>{t('plan.startDateTitle')}</Text>
-      <Card>
-        <Text style={styles.fieldLabel}>
+      {sectionTitle(t('plan.startDateTitle'))}
+      <View style={styles.card}>
+        <HudText size={14}>
           {t('plan.startDateCurrentLabel', { date: formatDateVi(toDateKey(new Date(settings.startDateISO))) })}
-        </Text>
-        <Text style={styles.switchHint}>{t('plan.startDateHint')}</Text>
-        <DateOffsetPicker selectedDate={startDateDraft} onChange={setStartDateDraft} />
-        <View style={styles.planStartActions}>
-          <Button title={t('common.save')} size="sm" onPress={handleSaveStartDate} flex />
-          <Button title={t('plan.startNewPlanButton')} size="sm" variant="outline" onPress={handleStartNewPlan} flex />
-        </View>
-      </Card>
+        </HudText>
+        {hint(t('plan.startDateHint'))}
+        <DateOffsetPicker selectedDate={startDateDraft} onChange={setStartDateDraft} dark />
+        <QuestButton title={t('common.save')} onPress={handleSaveStartDate} />
+        <QuestButton title={t('plan.startNewPlanButton')} variant="ghost" onPress={handleStartNewPlan} />
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('plan.goalsTitle')}</Text>
-      <Card>
-        <Text style={styles.fieldLabel}>{t('plan.goalWeightLabel')}</Text>
-        <TextInput style={styles.input} keyboardType="decimal-pad" value={goalWeight} onChangeText={setGoalWeight} />
-        <Text style={styles.fieldLabel}>{t('plan.calorieTargetLabel')}</Text>
-        <TextInput style={styles.input} keyboardType="decimal-pad" value={calorieTarget} onChangeText={setCalorieTarget} />
-        <Text style={styles.fieldLabel}>{t('plan.targetDeficitLabel')}</Text>
-        <TextInput style={styles.input} keyboardType="decimal-pad" value={targetDeficit} onChangeText={setTargetDeficit} />
-        <Text style={styles.demographicsHint}>{t('plan.targetDeficitHint')}</Text>
-        <Text style={styles.fieldLabel}>{t('plan.proteinTargetLabel')}</Text>
-        <TextInput style={styles.input} keyboardType="decimal-pad" value={proteinTarget} onChangeText={setProteinTarget} />
-        <Text style={styles.fieldLabel}>{t('plan.waterTargetLabel')}</Text>
-        <TextInput style={styles.input} keyboardType="decimal-pad" value={waterTarget} onChangeText={setWaterTarget} />
-        <Button title={t('plan.saveGoalsButton')} onPress={saveTargets} />
-      </Card>
+      {sectionTitle(t('plan.goalsTitle'))}
+      <View style={styles.card}>
+        <QuestField label={t('plan.goalWeightLabel')} keyboardType="decimal-pad" value={goalWeight} onChangeText={setGoalWeight} />
+        <QuestField label={t('plan.calorieTargetLabel')} keyboardType="decimal-pad" value={calorieTarget} onChangeText={setCalorieTarget} />
+        <QuestField label={t('plan.targetDeficitLabel')} keyboardType="decimal-pad" value={targetDeficit} onChangeText={setTargetDeficit} />
+        {hint(t('plan.targetDeficitHint'))}
+        <QuestField label={t('plan.proteinTargetLabel')} keyboardType="decimal-pad" value={proteinTarget} onChangeText={setProteinTarget} />
+        <QuestField label={t('plan.waterTargetLabel')} keyboardType="decimal-pad" value={waterTarget} onChangeText={setWaterTarget} />
+        <QuestButton title={t('plan.saveGoalsButton')} onPress={saveTargets} />
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('plan.demographicsTitle')}</Text>
-      <Card>
-        <Text style={styles.demographicsHint}>{t('plan.demographicsHint')}</Text>
-        <Text style={styles.fieldLabel}>{t('plan.startWeightLabel')}</Text>
-        <TextInput style={styles.input} keyboardType="decimal-pad" value={startWeightText} onChangeText={setStartWeightText} />
-        <Text style={styles.demographicsHint}>{t('plan.startWeightHint')}</Text>
-        <Text style={styles.fieldLabel}>{t('plan.heightLabel')}</Text>
-        <TextInput style={styles.input} keyboardType="decimal-pad" value={heightText} onChangeText={setHeightText} placeholder="170" />
-        <DemographicsFields
+      {sectionTitle(t('plan.demographicsTitle'))}
+      <View style={styles.card}>
+        {hint(t('plan.demographicsHint'))}
+        <QuestField label={t('plan.startWeightLabel')} keyboardType="decimal-pad" value={startWeightText} onChangeText={setStartWeightText} />
+        {hint(t('plan.startWeightHint'))}
+        <QuestField label={t('plan.heightLabel')} keyboardType="decimal-pad" value={heightText} onChangeText={setHeightText} placeholder="170" />
+        <QuestDemographics
           ageText={ageText}
           onAgeTextChange={setAgeText}
           ageLabelKey="plan.ageLabel"
@@ -263,103 +280,89 @@ export default function PlanScreen() {
           onActivityLevelChange={setActivityLevelDraft}
           activityLevelLabelKey="plan.activityLevelLabel"
         />
-        <View style={styles.tdeePreviewBox}>
-          <Text style={styles.tdeePreviewLabel}>{t('plan.tdeePreviewLabel')}</Text>
-          <Text style={styles.tdeePreviewValue}>{Math.round(tdeePreview.tdeeKcal)} kcal</Text>
+        <View style={styles.tdeeBox}>
+          <HudText size={11} color={quest.manaText}>
+            {t('plan.tdeePreviewLabel')}
+          </HudText>
+          <HudText size={22} color={quest.mana}>
+            {Math.round(tdeePreview.tdeeKcal)} kcal
+          </HudText>
           {tdeePreview.bmrKcal != null && activityLevelDraft && (
-            <Text style={styles.tdeePreviewBmr}>
+            <HudText size={12} weight="medium" color={quest.manaText}>
               {t('plan.bmrPreviewLabel', {
                 kcal: Math.round(tdeePreview.bmrKcal),
                 multiplier: ACTIVITY_MULTIPLIER[activityLevelDraft],
               })}
-            </Text>
+            </HudText>
           )}
-          <Text style={styles.tdeePreviewHint}>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
             {t(tdeePreview.source === 'profile' ? 'tdee.sourceProfile' : 'plan.tdeePreviewIncompleteHint')}
-          </Text>
+          </HudText>
         </View>
-        <Button title={t('plan.saveDemographicsButton')} onPress={saveDemographics} style={{ marginTop: spacing.md }} />
-      </Card>
+        <QuestButton title={t('plan.saveDemographicsButton')} onPress={saveDemographics} />
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('plan.currentPlanTitle')}</Text>
-      <PlanPreview plan={plan} hideShoppingList />
-      <ShoppingListEditor plan={plan} />
+      {sectionTitle(t('plan.currentPlanTitle'))}
+      <QuestPlanPreview plan={plan} hideShoppingList />
+      <QuestShoppingList plan={plan} />
 
-      <Text style={styles.sectionTitle}>{t('plan.swapTitle')}</Text>
-      <Card>
-        <Text style={styles.swapGroupTitle}>{t('plan.swapCarbGroup')}</Text>
+      {sectionTitle(t('plan.swapTitle'))}
+      <View style={styles.card}>
+        <HudText size={14}>{t('plan.swapCarbGroup')}</HudText>
         {CARB_SWAP_OPTIONS.map((item) => (
-          <Text key={item} style={styles.swapItem}>
+          <HudText key={item} size={13} weight="medium" color={quest.textTertiary}>
             • {item}
-          </Text>
+          </HudText>
         ))}
-        <Text style={[styles.swapGroupTitle, { marginTop: spacing.md }]}>{t('plan.swapProteinGroup')}</Text>
+        <HudText size={14} style={{ marginTop: 8 }}>
+          {t('plan.swapProteinGroup')}
+        </HudText>
         {PROTEIN_SWAP_OPTIONS.map((item) => (
-          <Text key={item} style={styles.swapItem}>
+          <HudText key={item} size={13} weight="medium" color={quest.textTertiary}>
             • {item}
-          </Text>
+          </HudText>
         ))}
-      </Card>
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('plan.coachSectionTitle')}</Text>
-      <Card>
+      {sectionTitle(t('plan.coachSectionTitle'))}
+      <View style={styles.card}>
         {settings.coachId ? (
-          <Text style={styles.fieldLabel}>{t('plan.linkedToCoach')}</Text>
+          <HudText size={14}>{t('plan.linkedToCoach')}</HudText>
         ) : (
           <>
-            <Text style={styles.fieldLabel}>{t('plan.enterCoachCode')}</Text>
-            <TextInput
-              style={styles.input}
+            <QuestField
+              label={t('plan.enterCoachCode')}
               autoCapitalize="characters"
               placeholder={t('plan.coachCodePlaceholder')}
               value={coachCodeInput}
               onChangeText={setCoachCodeInput}
             />
-            <Button title={t('plan.linkButton')} onPress={handleLinkCoach} loading={linkingCoach} />
+            <QuestButton title={t('plan.linkButton')} onPress={handleLinkCoach} loading={linkingCoach} />
           </>
         )}
-      </Card>
+      </View>
 
-      <Text style={styles.sectionTitle}>{t('tab.account')}</Text>
-      <Card>
-        <Text style={styles.fieldLabel}>{session?.user.email ?? t('common.notSignedIn')}</Text>
+      {sectionTitle(t('tab.account'))}
+      <View style={styles.card}>
+        <HudText size={14}>{session?.user.email ?? t('common.notSignedIn')}</HudText>
         {pendingSyncCount > 0 && (
-          <Badge tone="warning" label={t('sync.pendingCount', { n: pendingSyncCount })} />
+          <HudText size={12} color={quest.gold}>
+            {t('sync.pendingCount', { n: pendingSyncCount })}
+          </HudText>
         )}
-        <Button title={t('common.signOut')} onPress={() => signOutAndReset()} variant="danger" style={{ marginTop: spacing.sm }} />
-      </Card>
+        <QuestButton title={t('common.signOut')} onPress={() => signOutAndReset()} variant="ghost" />
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
-  fieldLabel: { ...typography.label, color: '#444', marginBottom: spacing.xs },
-  switchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  switchHint: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
-  aiHint: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 17 },
-  demographicsHint: { fontSize: 11, color: colors.textMuted, marginBottom: spacing.md, lineHeight: 15 },
-  tdeePreviewBox: { backgroundColor: colors.primaryLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm },
-  tdeePreviewLabel: { fontSize: 11, fontWeight: '700', color: colors.primary },
-  tdeePreviewValue: { fontSize: 20, fontWeight: '800', color: colors.primaryDark, marginTop: 2 },
-  tdeePreviewBmr: { fontSize: 11, color: colors.primaryDark, marginTop: 2, fontWeight: '600' },
-  tdeePreviewHint: { fontSize: 11, color: colors.textSecondary, marginTop: spacing.xs, lineHeight: 15 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    fontSize: 15,
-    marginBottom: spacing.sm,
-  },
-  swapGroupTitle: { fontSize: 13, fontWeight: '700', color: colors.textPrimary },
-  swapItem: { fontSize: 13, color: '#444', marginTop: 4, lineHeight: 18 },
-  languageRow: { flexDirection: 'row', gap: spacing.sm },
-  planStartActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
-  languageButton: { flex: 1, backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingVertical: spacing.md, alignItems: 'center' },
-  languageButtonText: { fontSize: 13, fontWeight: '700', color: colors.textSecondary },
-  languageButtonTextActive: { color: colors.white },
+  container: { flex: 1, backgroundColor: quest.bg },
+  content: { paddingHorizontal: 16, paddingBottom: 48, gap: 12 },
+  flex: { flex: 1 },
+  sectionTitle: { marginTop: 8 },
+  hint: { lineHeight: 17 },
+  card: { gap: 12, padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  switchRow: { flexDirection: 'row', alignItems: 'center' },
+  tdeeBox: { gap: 2, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
 });

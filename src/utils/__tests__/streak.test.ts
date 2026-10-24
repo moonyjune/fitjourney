@@ -1,10 +1,9 @@
 import { describe, expect, it } from '@jest/globals';
-import { computeCurrentStreak, STREAK_DEFICIT_RATIO, unlockedStreakBadges } from '../streak';
+import { computeCurrentStreak, STREAK_MIN_DEFICIT_KCAL, unlockedStreakBadges } from '../streak';
 import type { DailyNutritionLog, DayType, MealTemplate, WorkoutLogEntry } from '../../types';
 
 const NOW = new Date('2026-09-30T12:00:00.000Z'); // a Wednesday
 const TDEE_KCAL = 3000;
-const TARGET_DEFICIT_KCAL = 1000; // threshold = 800 (STREAK_DEFICIT_RATIO * 1000)
 
 const MEALS: MealTemplate[] = [
   { slot: 'meal1', label: 'Meal 1', timeRange: '', startHour: 12, startMinute: 0, items: [], calories: 700, proteinG: 50 },
@@ -49,10 +48,9 @@ function overeatingDayLog(): DailyNutritionLog {
   };
 }
 
-describe('STREAK_DEFICIT_RATIO', () => {
-  it('is 0.8, landing in the ~860-1000 range the app is calibrated against for a ~1100 default target', () => {
-    expect(STREAK_DEFICIT_RATIO).toBe(0.8);
-    expect(1100 * STREAK_DEFICIT_RATIO).toBeCloseTo(880, 5);
+describe('STREAK_MIN_DEFICIT_KCAL', () => {
+  it('is a flat 500 kcal, independent of the user editable target deficit', () => {
+    expect(STREAK_MIN_DEFICIT_KCAL).toBe(500);
   });
 });
 
@@ -61,24 +59,24 @@ describe('computeCurrentStreak (deficit-based)', () => {
 
   it('counts a day with no logged extras as complete when the plan-meal deficit alone clears the threshold', () => {
     const logs = { [dateKeyDaysAgo(0)]: fullDayLog() };
-    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, TARGET_DEFICIT_KCAL, NOW);
+    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW);
     expect(streak).toBe(1);
   });
 
   it('does not count a day with no log entry at all, even though "eating nothing" would trivially clear the deficit', () => {
-    const streak = computeCurrentStreak({}, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, TARGET_DEFICIT_KCAL, NOW);
+    const streak = computeCurrentStreak({}, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW);
     expect(streak).toBe(0);
   });
 
   it('does not require all 3 meals — a sparsely-logged day can still pass on deficit alone', () => {
     const logs = { [dateKeyDaysAgo(0)]: lightDayLog() };
-    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, TARGET_DEFICIT_KCAL, NOW);
+    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW);
     expect(streak).toBe(1);
   });
 
   it('breaks the streak on a day with a calorie surplus', () => {
     const logs = { [dateKeyDaysAgo(0)]: overeatingDayLog(), [dateKeyDaysAgo(1)]: fullDayLog() };
-    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, TARGET_DEFICIT_KCAL, NOW);
+    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW);
     // Today fails, so the streak is measured through yesterday only.
     expect(streak).toBe(1);
   });
@@ -89,13 +87,41 @@ describe('computeCurrentStreak (deficit-based)', () => {
       [dateKeyDaysAgo(1)]: fullDayLog(),
       [dateKeyDaysAgo(2)]: fullDayLog(),
     };
-    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, TARGET_DEFICIT_KCAL, NOW);
+    const streak = computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW);
     expect(streak).toBe(3);
+  });
+
+  it('fails a day whose deficit falls just short of the flat 500 kcal threshold', () => {
+    // All 3 meals (1900 kcal) + 650 extra kcal -> total 2550, deficit = 3000-2550 = 450 (< 500, fails).
+    const log: DailyNutritionLog = {
+      dateISO: new Date().toISOString(),
+      mealsEaten: { meal1: true, meal2: true, meal3: true },
+      extraCalories: 650,
+      extraProteinG: 0,
+      extraItems: [],
+      waterMl: 0,
+    };
+    const streak = computeCurrentStreak({ [dateKeyDaysAgo(0)]: log }, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW);
+    expect(streak).toBe(0);
+  });
+
+  it('passes a day whose deficit clears exactly the flat 500 kcal threshold', () => {
+    // All 3 meals (1900 kcal) + 600 extra kcal -> total 2500, deficit = 3000-2500 = 500 (passes).
+    const log: DailyNutritionLog = {
+      dateISO: new Date().toISOString(),
+      mealsEaten: { meal1: true, meal2: true, meal3: true },
+      extraCalories: 600,
+      extraProteinG: 0,
+      extraItems: [],
+      waterMl: 0,
+    };
+    const streak = computeCurrentStreak({ [dateKeyDaysAgo(0)]: log }, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW);
+    expect(streak).toBe(1);
   });
 
   it('adds logged exercise burn toward the deficit', () => {
     // Marginal day: eating exactly at TDEE (3000 kcal via 700+500+700+ extra 1100) fails on its own
-    // (deficit 0), but 900 kcal of exercise pushes it over the 800 threshold.
+    // (deficit 0), but 600 kcal of exercise pushes it over the flat 500 threshold.
     const marginalLog: DailyNutritionLog = {
       dateISO: new Date().toISOString(),
       mealsEaten: { meal1: true, meal2: true, meal3: true },
@@ -105,11 +131,11 @@ describe('computeCurrentStreak (deficit-based)', () => {
       waterMl: 0,
     };
     const workouts: WorkoutLogEntry[] = [
-      { id: 'w1', dateISO: NOW.toISOString(), templateId: null, label: 'Run', durationMin: 30, caloriesBurned: 900 },
+      { id: 'w1', dateISO: NOW.toISOString(), templateId: null, label: 'Run', durationMin: 30, caloriesBurned: 600 },
     ];
     const logs = { [dateKeyDaysAgo(0)]: marginalLog };
-    const withoutWorkout = computeCurrentStreak(logs, MEAL_TEMPLATES, [], TDEE_KCAL, TARGET_DEFICIT_KCAL, NOW);
-    const withWorkout = computeCurrentStreak(logs, MEAL_TEMPLATES, workouts, TDEE_KCAL, TARGET_DEFICIT_KCAL, NOW);
+    const withoutWorkout = computeCurrentStreak(logs, MEAL_TEMPLATES, [], TDEE_KCAL, NOW);
+    const withWorkout = computeCurrentStreak(logs, MEAL_TEMPLATES, workouts, TDEE_KCAL, NOW);
     expect(withoutWorkout).toBe(0);
     expect(withWorkout).toBe(1);
   });

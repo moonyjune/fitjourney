@@ -1,9 +1,11 @@
+import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card } from './Card';
 import { useTranslation } from '../i18n/useTranslation';
 import type { StringKey } from '../i18n/strings';
 import { ACTIVITY_MULTIPLIER, actualDailyDeficitKcal, resolveTdeeKcal, type TdeeSource } from '../utils/tdee';
 import { colors, spacing, typography } from '../theme/tokens';
+import { quest, questFonts, questRadius } from '../theme/quest';
 import type { ActivityLevel, Gender } from '../types';
 
 interface TdeeCardProps {
@@ -17,6 +19,8 @@ interface TdeeCardProps {
   caloriesConsumedToday: number;
   /** Calories burned through logged exercise today — on top of TDEE, not part of it. */
   caloriesBurnedExerciseToday: number;
+  /** Dark FitQuest look (default off = classic light). */
+  dark?: boolean;
 }
 
 const ACTIVITY_LABEL_KEY: Record<ActivityLevel, StringKey> = {
@@ -48,8 +52,10 @@ export function TdeeCard({
   weightKg,
   caloriesConsumedToday,
   caloriesBurnedExerciseToday,
+  dark,
 }: TdeeCardProps) {
   const { t } = useTranslation();
+  const styles = useMemo(() => makeStyles(!!dark), [dark]);
   const { tdeeKcal, bmrKcal, source } = resolveTdeeKcal({
     gender,
     age,
@@ -62,8 +68,9 @@ export function TdeeCard({
   const balance = actualDailyDeficitKcal(tdeeKcal, caloriesBurnedExerciseToday, caloriesConsumedToday);
   const isDeficit = balance >= 0;
 
+  const Wrapper = dark ? View : Card;
   return (
-    <Card>
+    <Wrapper style={dark ? styles.panel : undefined}>
       <Text style={styles.title}>{t('tdee.title')}</Text>
       <View style={styles.row}>
         <View style={styles.column}>
@@ -72,7 +79,7 @@ export function TdeeCard({
         </View>
         <View style={styles.column}>
           <Text style={styles.label}>{isDeficit ? t('tdee.deficitLabel') : t('tdee.surplusLabel')}</Text>
-          <Text style={[styles.value, { color: isDeficit ? colors.success : colors.warning }]}>{Math.round(Math.abs(balance))} kcal</Text>
+          <Text style={[styles.value, { color: isDeficit ? (dark ? quest.xp : colors.success) : dark ? quest.gold : colors.warning }]}>{Math.round(Math.abs(balance))} kcal</Text>
         </View>
       </View>
       <Text style={styles.hint}>{t('tdee.targetHint', { kcal: targetDailyDeficitKcal })}</Text>
@@ -83,16 +90,18 @@ export function TdeeCard({
         </Text>
       )}
       <Text style={styles.estimateHint}>{t(SOURCE_HINT_KEY[source])}</Text>
-    </Card>
+    </Wrapper>
   );
 }
 
-const styles = StyleSheet.create({
-  title: { ...typography.title, marginBottom: spacing.md, color: colors.textPrimary },
-  row: { flexDirection: 'row', gap: spacing.xl },
-  column: { flex: 1 },
-  label: { ...typography.label, color: colors.textSecondary, marginBottom: 2 },
-  value: { ...typography.h3, color: colors.textPrimary },
-  hint: { ...typography.caption, fontWeight: '400', color: colors.textMuted, marginTop: spacing.sm },
-  estimateHint: { ...typography.small, fontWeight: '400', color: colors.textMuted, marginTop: 2, lineHeight: 15 },
-});
+const makeStyles = (dark: boolean) =>
+  StyleSheet.create({
+    panel: { backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.panel, padding: spacing.base, marginBottom: spacing.md },
+    title: { ...typography.title, marginBottom: spacing.md, color: dark ? quest.text : colors.textPrimary, ...(dark ? { fontFamily: questFonts.bold, fontWeight: undefined } : {}) },
+    row: { flexDirection: 'row', gap: spacing.xl },
+    column: { flex: 1 },
+    label: { ...typography.label, color: dark ? quest.textSecondary : colors.textSecondary, marginBottom: 2, ...(dark ? { fontFamily: questFonts.medium, fontWeight: undefined } : {}) },
+    value: { ...typography.h3, color: dark ? quest.text : colors.textPrimary, ...(dark ? { fontFamily: questFonts.bold, fontWeight: undefined } : {}) },
+    hint: { ...typography.caption, fontWeight: '400', color: dark ? quest.textSecondary : colors.textMuted, marginTop: spacing.sm },
+    estimateHint: { ...typography.small, fontWeight: '400', color: dark ? quest.textSecondary : colors.textMuted, marginTop: 2, lineHeight: 15 },
+  });

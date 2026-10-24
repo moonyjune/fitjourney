@@ -259,6 +259,7 @@ export async function pushNutritionLog(log: DailyNutritionLog): Promise<void> {
           extra_protein_g: log.extraProteinG,
           extra_items: log.extraItems,
           water_ml: log.waterMl,
+          removed_meal_slots: log.removedMealSlots ?? [],
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_id,entry_date' }

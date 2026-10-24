@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/chakra-petch": "^0.4.1",
     "@expo/metro-runtime": "~57.0.16",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/netinfo": "12.0.1",
@@ -11,6 +12,7 @@
     "expo-constants": "~57.0.19",
     "expo-device": "~57.0.2",
     "expo-file-system": "~57.0.7",
+    "expo-font": "~57.0.4",
     "expo-image-picker": "~57.0.19",
     "expo-linking": "~57.0.10",
     "expo-notifications": "~57.0.20",

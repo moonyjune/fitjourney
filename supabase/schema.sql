@@ -55,10 +55,12 @@ create table if not exists public.nutrition_logs (
   extra_protein_g numeric not null default 0,
   extra_items jsonb not null default '[]'::jsonb,
   water_ml numeric not null default 0,
+  removed_meal_slots jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now(),
   unique (user_id, entry_date)
 );
 alter table public.nutrition_logs add column if not exists extra_items jsonb not null default '[]'::jsonb;
+alter table public.nutrition_logs add column if not exists removed_meal_slots jsonb not null default '[]'::jsonb;
 
 -- 4. Buổi tập đã ghi nhận.
 create table if not exists public.workout_entries (

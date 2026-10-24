@@ -11,3 +11,11 @@ export const screenMaxWidthStyle: ViewStyle = {
   maxWidth: CONTENT_MAX_WIDTH,
   alignSelf: 'center',
 };
+
+/** A chart's `width` prop must match its actual rendered container width or it overflows past
+ *  the Card (react-native-chart-kit draws a fixed-size SVG, it doesn't shrink to fit). The
+ *  container is `screenMaxWidthStyle`-capped at CONTENT_MAX_WIDTH and padded by spacing.base (16)
+ *  on each side, so the chart width must apply that same cap, not just the raw window width. */
+export function chartWidthFor(windowWidth: number): number {
+  return Math.min(windowWidth, CONTENT_MAX_WIDTH) - 32;
+}

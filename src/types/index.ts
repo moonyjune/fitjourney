@@ -78,6 +78,13 @@ export interface ExtraFoodItem {
   loggedAtISO: string;
   /** Null for older entries logged before this field existed. */
   mealTime: ExtraMealTime | null;
+  /** Optional hand-entered nutrients for the FitQuest "stay under the line" missions. Absent on
+   *  older entries (treated as 0). Stored inside the existing extra_items jsonb column. */
+  purineMg?: number;
+  saltG?: number;
+  sugarG?: number;
+  /** User-flagged junk food; any flagged item fails that day's "no junk food" mission. */
+  junk?: boolean;
 }
 
 export interface DailyNutritionLog {
@@ -89,6 +96,10 @@ export interface DailyNutritionLog {
    *  kept in lockstep for any existing consumer that only needs the totals. */
   extraItems: ExtraFoodItem[];
   waterMl: number;
+  /** Default (plan-template) meal slots explicitly deleted from this specific day's diary — e.g.
+   *  skipped entirely (distinct from merely "not eaten yet"). Doesn't touch the plan template
+   *  itself or any other day. */
+  removedMealSlots?: MealSlot[];
 }
 
 export type UserRole = 'coach' | 'client';

@@ -1,13 +1,61 @@
 import { useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { HudText } from '../src/components/quest/HudText';
+import { QuestIcon, type QuestIconName } from '../src/components/quest/QuestIcon';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useTranslation } from '../src/i18n/useTranslation';
-import { colors, radius, spacing, typography, ROLE_ACCENTS } from '../src/theme/tokens';
+import type { StringKey } from '../src/i18n/strings';
+import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
+import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+
+interface RoleCardProps {
+  icon: QuestIconName;
+  title: string;
+  description: string;
+  accent: string;
+  panel: string;
+  busy?: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}
+
+function RoleCard({ icon, title, description, accent, panel, busy, disabled, onPress }: RoleCardProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={description}
+      accessibilityState={{ disabled: !!disabled, busy: !!busy }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, { borderColor: accent, backgroundColor: panel }, disabled && { opacity: 0.6 }, pressed && { opacity: 0.85 }]}
+    >
+      <View style={[styles.iconBox, { borderColor: accent }]}>
+        <QuestIcon name={icon} size={26} color={accent} />
+      </View>
+      <View style={styles.flex}>
+        <HudText size={18} color={accent}>
+          {title}
+        </HudText>
+        <HudText size={13} weight="medium" color={quest.textTertiary}>
+          {description}
+        </HudText>
+      </View>
+      <QuestIcon name="chevron" size={20} color={accent} />
+    </Pressable>
+  );
+}
+
+const ROLE_KEYS: Record<'client' | 'coach', { title: StringKey; description: StringKey }> = {
+  client: { title: 'role.clientTitle', description: 'role.clientDescription' },
+  coach: { title: 'role.coachTitle', description: 'role.coachDescription' },
+};
 
 export default function RoleSelectScreen() {
   const { t } = useTranslation();
+  useLightStatusBar();
   const chooseClientRole = useSettingsStore((s) => s.chooseClientRole);
   const chooseCoachRole = useSettingsStore((s) => s.chooseCoachRole);
   const [busy, setBusy] = useState(false);
@@ -25,49 +73,40 @@ export default function RoleSelectScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={screenMaxWidthStyle}>
-        <Text style={styles.title}>{t('role.title')}</Text>
-        <Text style={styles.subtitle}>{t('role.subtitle')}</Text>
-
-        <TouchableOpacity
-          style={[styles.card, { borderColor: ROLE_ACCENTS.client.primary, backgroundColor: ROLE_ACCENTS.client.primaryLight }]}
-          onPress={handleClient}
-          disabled={busy}
-        >
-          <Text style={styles.cardEmoji}>🔥</Text>
-          <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.client.primaryDark }]}>{t('role.clientTitle')}</Text>
-          <Text style={styles.cardDescription}>{t('role.clientDescription')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.card, { borderColor: ROLE_ACCENTS.coach.primary, backgroundColor: ROLE_ACCENTS.coach.primaryLight }]}
-          onPress={handleCoach}
-          disabled={busy}
-        >
-          <Text style={styles.cardEmoji}>🧑‍🏫</Text>
-          <Text style={[styles.cardTitle, { color: ROLE_ACCENTS.coach.primaryDark }]}>{t('role.coachTitle')}</Text>
-          <Text style={styles.cardDescription}>{t('role.coachDescription')}</Text>
-          {busy && <ActivityIndicator style={{ marginTop: spacing.md }} color={ROLE_ACCENTS.coach.primary} />}
-        </TouchableOpacity>
-      </View>
-    </View>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
+      <HudText size={28} accessibilityRole="header">
+        {t('role.title')}
+      </HudText>
+      <HudText size={14} weight="medium" color={quest.textSecondary}>
+        {t('role.subtitle')}
+      </HudText>
+      <RoleCard
+        icon="dumbbell"
+        title={t(ROLE_KEYS.client.title)}
+        description={t(ROLE_KEYS.client.description)}
+        accent={quest.gold}
+        panel={quest.panel}
+        disabled={busy}
+        onPress={handleClient}
+      />
+      <RoleCard
+        icon="user"
+        title={t(ROLE_KEYS.coach.title)}
+        description={t(ROLE_KEYS.coach.description)}
+        accent={quest.mana}
+        panel={quest.manaPanel}
+        busy={busy}
+        disabled={busy}
+        onPress={handleCoach}
+      />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.surface, padding: spacing.xl, paddingTop: 80 },
-  title: { ...typography.h2, marginBottom: spacing.sm, color: colors.textPrimary },
-  subtitle: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.xxl },
-  card: {
-    borderWidth: 1,
-    borderColor: '#EEE',
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.base,
-    backgroundColor: '#F9FAFB',
-  },
-  cardEmoji: { fontSize: 32, marginBottom: spacing.md },
-  cardTitle: { ...typography.h3, color: colors.textPrimary, marginBottom: spacing.xs + 2 },
-  cardDescription: { ...typography.body, color: colors.textSecondary, lineHeight: 19 },
+  container: { flex: 1, backgroundColor: quest.bg },
+  content: { padding: 24, paddingTop: 72, gap: 14 },
+  flex: { flex: 1, minWidth: 0, gap: 4 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: questRadius.panel, borderWidth: 1.5 },
+  iconBox: { width: 52, height: 52, borderRadius: questRadius.row, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bg },
 });

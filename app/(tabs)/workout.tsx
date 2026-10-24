@@ -1,246 +1,303 @@
 import { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { Card } from '../../src/components/Card';
-import { Button } from '../../src/components/Button';
-import { Badge } from '../../src/components/Badge';
-import { ProofCapture } from '../../src/components/ProofCapture';
-import { WorkoutStepsList } from '../../src/components/PlanPreview';
-import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ExerciseFigure } from '../../src/components/quest/ExerciseFigure';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestIcon } from '../../src/components/quest/QuestIcon';
+import { QuestSegment } from '../../src/components/quest/QuestSegment';
+import { MISSION_XP } from '../../src/game/constants';
+import { useGameText, type GameKey } from '../../src/game/strings';
+import {
+  ALWAYS_EXERCISE,
+  estimateMinutes,
+  EXERCISE_BY_ID,
+  EXERCISES,
+  GROUP_EXERCISES,
+  GROUP_ORDER,
+  prescriptionFor,
+  suggestedGroup,
+  type ExerciseId,
+  type GroupId,
+} from '../../src/game/training/exercises';
+import { exerciseName, formatAmount } from '../../src/game/training/format';
+import { progressFor } from '../../src/game/training/progress';
+import { useTrainingStore } from '../../src/store/useTrainingStore';
+import { useWeightStore } from '../../src/store/useWeightStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
-import { todayKey } from '../../src/store/useNutritionStore';
-import { getDayType } from '../../src/constants/plan';
-import { usePlanStore } from '../../src/store/usePlanStore';
-import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { iconForWorkoutLabel, workoutIntensity, type WorkoutIntensity } from '../../src/utils/workoutIntensity';
-import { useTranslation } from '../../src/i18n/useTranslation';
-import type { StringKey } from '../../src/i18n/strings';
-import { useAccentColors } from '../../src/theme/useAccentColors';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
+import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { toDateKey } from '../../src/utils/date';
+import { useNow } from '../../src/game/useGameState';
 
-const INTENSITY_TONE: Record<WorkoutIntensity, 'success' | 'warning' | 'danger'> = {
-  light: 'success',
-  medium: 'warning',
-  high: 'danger',
-};
-const INTENSITY_LABEL_KEY: Record<WorkoutIntensity, StringKey> = {
-  light: 'workout.intensityLight',
-  medium: 'workout.intensityMedium',
-  high: 'workout.intensityHigh',
-};
+const MAX_PICKS = 3;
+const MIN_PICKS = 2;
 
-function IntensityBadge({ caloriesBurned, durationMin }: { caloriesBurned: number; durationMin: number }) {
-  const { t } = useTranslation();
-  const intensity = workoutIntensity(caloriesBurned, durationMin);
-  return <Badge label={t(INTENSITY_LABEL_KEY[intensity])} tone={INTENSITY_TONE[intensity]} />;
-}
-
-export default function WorkoutScreen() {
-  const { t } = useTranslation();
-  const accent = useAccentColors();
-  const ambientBg = useAmbientBackground();
-  const dateKey = todayKey();
-  const dayType = useMemo(() => getDayType(new Date()), []);
-  const workoutTemplates = usePlanStore((s) => s.plan.workoutTemplates);
+export default function TrainScreen() {
+  const g = useGameText();
+  const language = useSettingsStore((s) => s.language);
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
+  const now = useNow(60_000);
+  const progress = useTrainingStore((s) => s.progress);
   const entries = useWorkoutStore((s) => s.entries);
-  const addEntry = useWorkoutStore((s) => s.addEntry);
-  const removeEntry = useWorkoutStore((s) => s.removeEntry);
 
-  const todayEntries = useMemo(
-    () => entries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey).reverse(),
-    [entries, dateKey]
-  );
-  const recentEntries = useMemo(
-    () => entries.filter((e) => toDateKey(new Date(e.dateISO)) !== dateKey).slice(-10).reverse(),
-    [entries, dateKey]
-  );
+  const suggested = suggestedGroup(now);
+  const [group, setGroup] = useState<GroupId>(suggested ?? 'A');
+  const [picked, setPicked] = useState<ExerciseId[]>(GROUP_EXERCISES[suggested ?? 'A']);
+  const [limitHint, setLimitHint] = useState(false);
 
-  const [customLabel, setCustomLabel] = useState('');
-  const [customDuration, setCustomDuration] = useState('');
-  const [customCalories, setCustomCalories] = useState('');
-  const [logDate, setLogDate] = useState(new Date());
+  const todayKey = toDateKey(now);
+  const todayEntries = useMemo(() => entries.filter((e) => toDateKey(new Date(e.dateISO)) === todayKey), [entries, todayKey]);
 
-  function logTemplate(templateId: string, label: string, durationMin: number, caloriesBurned: number) {
-    addEntry({ templateId, label, durationMin, caloriesBurned }, logDate.toISOString());
+  function chooseGroup(next: GroupId) {
+    setGroup(next);
+    setPicked(GROUP_EXERCISES[next]);
+    setLimitHint(false);
   }
 
-  function logCustom() {
-    const duration = parseFloat(customDuration.replace(',', '.'));
-    const calories = parseFloat(customCalories.replace(',', '.'));
-    if (!customLabel || !duration || !calories) {
-      Alert.alert(t('common.error'), t('workout.errorMissingFields'));
-      return;
+  function toggle(id: ExerciseId) {
+    if (picked.includes(id)) {
+      setPicked(picked.filter((p) => p !== id));
+      setLimitHint(false);
+    } else if (picked.length >= MAX_PICKS) {
+      setLimitHint(true);
+    } else {
+      setPicked([...picked, id]);
     }
-    addEntry({ templateId: null, label: customLabel, durationMin: duration, caloriesBurned: calories }, logDate.toISOString());
-    setCustomLabel('');
-    setCustomDuration('');
-    setCustomCalories('');
   }
+
+  const levelOf = (id: ExerciseId) => progressFor(progress, id).level;
+  const sessionIds = [...picked, ALWAYS_EXERCISE];
+  const minutes = estimateMinutes(sessionIds.map((id) => ({ id, level: levelOf(id) })));
+  const canStart = picked.length >= MIN_PICKS;
+
+  const dayName = g(`weekday.${now.getDay()}` as GameKey);
+  const hint = suggested === null
+    ? g('train.suggestedRest', { g: group })
+    : suggested === group
+      ? g('train.suggested', { g: suggested })
+      : g('train.swapped', { s: suggested, g: group });
+
+  function start() {
+    router.push({ pathname: '/train/session', params: { ids: sessionIds.join(','), group } });
+  }
+
+  const tileIds = EXERCISES.filter((e) => e.id !== ALWAYS_EXERCISE).map((e) => e.id);
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-      <Text style={styles.dayTypeLabel}>{dayType === 'training' ? t('workout.dayTraining') : t('workout.dayRest')}</Text>
-
-      <Text style={styles.sectionTitle}>{t('common.logDateTitle')}</Text>
-      <DateOffsetPicker selectedDate={logDate} onChange={setLogDate} />
-
-      <Text style={styles.sectionTitle}>{t('workout.suggestedTitle')}</Text>
-      {workoutTemplates.map((template) => (
-        <Card key={template.id}>
-          <View style={styles.templateHeaderRow}>
-            <View style={[styles.templateIcon, { backgroundColor: accent.primaryLight }]}>
-              <Text style={styles.templateIconEmoji}>{iconForWorkoutLabel(template.label)}</Text>
-            </View>
-            <View style={styles.templateHeaderInfo}>
-              <Text style={styles.templateLabel}>{template.label}</Text>
-              <Text style={styles.templateTime}>{template.timeRange}</Text>
-            </View>
-            <IntensityBadge caloriesBurned={template.caloriesBurned} durationMin={template.durationMin} />
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+        <View style={styles.titleRow}>
+          <View style={styles.iconBox}>
+            <QuestIcon name="dumbbell" size={26} color={quest.gold} />
           </View>
-          {template.steps && template.steps.length > 0 ? (
-            <WorkoutStepsList steps={template.steps} />
-          ) : (
-            <Text style={styles.templateDescription}>{template.description}</Text>
-          )}
-          <View style={styles.templateFooter}>
-            <Text style={styles.templateMacro}>{t('workout.templateMacro', { min: template.durationMin, kcal: template.caloriesBurned })}</Text>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => router.push(`/(tabs)/plan?editWorkout=${encodeURIComponent(template.label)}`)}
-            >
-              <Text style={styles.editButtonText}>{t('workout.editWithAiButton')}</Text>
-            </TouchableOpacity>
+          <View style={styles.flex}>
+            <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+              {g('train.eyebrow', { day: dayName, group }).toUpperCase()}
+            </HudText>
+            <HudText size={22} accessibilityRole="header" numberOfLines={1}>
+              {g('train.title')}
+            </HudText>
           </View>
-          <TouchableOpacity
-            style={[styles.logButton, { backgroundColor: accent.primary }]}
-            onPress={() => logTemplate(template.id, template.label, template.durationMin, template.caloriesBurned)}
-          >
-            <Text style={styles.logButtonText}>{t('workout.logTemplateButton')}</Text>
-          </TouchableOpacity>
-        </Card>
-      ))}
-
-      <Text style={styles.sectionTitle}>{t('workout.customTitle')}</Text>
-      <Card>
-        <TextInput style={styles.input} placeholder={t('workout.namePlaceholder')} value={customLabel} onChangeText={setCustomLabel} />
-        <View style={styles.row}>
-          <TextInput
-            style={[styles.input, styles.rowInput]}
-            placeholder={t('workout.durationPlaceholder')}
-            keyboardType="decimal-pad"
-            value={customDuration}
-            onChangeText={setCustomDuration}
-          />
-          <TextInput
-            style={[styles.input, styles.rowInput]}
-            placeholder={t('workout.caloriesPlaceholder')}
-            keyboardType="decimal-pad"
-            value={customCalories}
-            onChangeText={setCustomCalories}
-          />
+          <View style={styles.xpPill}>
+            <HudText size={14} color={quest.xp}>
+              {g('train.d.xp', { n: MISSION_XP.workout })}
+            </HudText>
+          </View>
         </View>
-        <Button title={t('workout.logButton')} onPress={logCustom} />
-      </Card>
 
-      <Text style={styles.sectionTitle}>{t('workout.todayTitle', { n: todayEntries.length })}</Text>
-      {todayEntries.length === 0 && <Text style={styles.emptyText}>{t('workout.emptyToday')}</Text>}
-      {todayEntries.map((e) => {
-        // A logged entry from a suggested template should show the same numbered step breakdown
-        // as the template itself (and the Plan tab's own copy of it) — otherwise the log just
-        // collapses "Tập sáng ... 45 phút · 420 kcal" into one line with no idea what it involved.
-        const sourceTemplate = e.templateId ? workoutTemplates.find((wt) => wt.id === e.templateId) : undefined;
-        return (
-          <Card key={e.id}>
-            <View style={styles.historyTopRow}>
-              <View style={[styles.templateIcon, styles.historyIcon, { backgroundColor: accent.primaryLight }]}>
-                <Text style={styles.templateIconEmoji}>{iconForWorkoutLabel(e.label)}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.historyLabel}>{e.label}</Text>
-                <Text style={styles.historyMeta}>{t('workout.templateMacro', { min: e.durationMin, kcal: e.caloriesBurned })}</Text>
-              </View>
-              <IntensityBadge caloriesBurned={e.caloriesBurned} durationMin={e.durationMin} />
-              <TouchableOpacity onPress={() => removeEntry(e.id)}>
-                <Text style={styles.deleteText}>{t('common.delete')}</Text>
-              </TouchableOpacity>
-            </View>
-            {sourceTemplate?.steps && sourceTemplate.steps.length > 0 && <WorkoutStepsList steps={sourceTemplate.steps} />}
-            <ProofCapture dateKey={dateKey} taskType="workout" taskRefId={e.id} contextLabel={e.label} plannedCalories={e.caloriesBurned} />
-          </Card>
-        );
-      })}
+        <View style={styles.block}>
+          <QuestSegment<GroupId>
+            accessibilityLabel={g('train.groupsLabel')}
+            value={group}
+            onChange={chooseGroup}
+            options={GROUP_ORDER.map((id) => ({ value: id, label: g(`train.group.${id}` as GameKey) }))}
+          />
+          <View style={styles.hintRow}>
+            <QuestIcon name="swap" size={14} color={quest.manaText} />
+            <HudText size={13} weight="medium" color={quest.manaText} style={styles.flex}>
+              {hint}
+            </HudText>
+          </View>
+        </View>
 
-      {recentEntries.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>{t('workout.recentTitle')}</Text>
-          {recentEntries.map((e) => (
-            <View key={e.id} style={styles.historyRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.historyLabel}>
-                  {iconForWorkoutLabel(e.label)} {e.label}
-                </Text>
-                <Text style={styles.historyMeta}>
-                  {formatDateVi(toDateKey(new Date(e.dateISO)))} · {t('workout.templateMacro', { min: e.durationMin, kcal: e.caloriesBurned })}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => removeEntry(e.id)}>
-                <Text style={styles.deleteText}>{t('common.delete')}</Text>
-              </TouchableOpacity>
+        {todayEntries.length > 0 && (
+          <View style={styles.doneCard}>
+            <QuestIcon name="check" size={18} color={quest.xp} strokeWidth={2.6} />
+            <View style={styles.flex}>
+              <HudText size={14}>{g('train.todayDone')}</HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {g('train.todayDoneMeta', {
+                  min: todayEntries.reduce((s, e) => s + e.durationMin, 0),
+                  kcal: Math.round(todayEntries.reduce((s, e) => s + e.caloriesBurned, 0)),
+                })}
+              </HudText>
             </View>
-          ))}
-        </>
-      )}
-    </ScrollView>
+          </View>
+        )}
+
+        <View style={styles.pickHeader}>
+          <HudText size={18}>{g('train.pickTitle')}</HudText>
+          <HudText size={13} color={limitHint ? quest.hpText : quest.gold}>
+            {g('train.picked', { n: picked.length })}
+          </HudText>
+        </View>
+        {limitHint && (
+          <HudText size={12} weight="medium" color={quest.hpText} accessibilityLiveRegion="polite">
+            {g('train.pickMax')}
+          </HudText>
+        )}
+
+        <View style={styles.grid}>
+          {tileIds.map((id) => {
+            const ex = EXERCISE_BY_ID[id];
+            const level = levelOf(id);
+            const on = picked.includes(id);
+            const name = exerciseName(ex, language);
+            return (
+              <View key={id} style={styles.tileWrap}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={g('train.select', { name })}
+                  accessibilityState={{ selected: on }}
+                  onPress={() => toggle(id)}
+                  style={[styles.tile, on && styles.tileOn]}
+                >
+                  <View style={styles.figure}>
+                    <ExerciseFigure id={id} pose={0} width={84} />
+                  </View>
+                  <HudText size={14} numberOfLines={2} style={styles.tileName}>
+                    {name}
+                  </HudText>
+                  <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1} style={styles.rx}>
+                    {formatAmount(prescriptionFor(id, level), language, false)} · {g('train.level', { n: level })}
+                  </HudText>
+                  {on && (
+                    <View style={styles.check}>
+                      <QuestIcon name="check" size={14} color={quest.onGold} strokeWidth={3} />
+                    </View>
+                  )}
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={g('train.openDetail', { name })}
+                  hitSlop={6}
+                  onPress={() => router.push({ pathname: '/train/detail', params: { id, group } })}
+                  style={styles.info}
+                >
+                  <QuestIcon name="chevron" size={14} color={quest.textSecondary} strokeWidth={2.4} />
+                </Pressable>
+              </View>
+            );
+          })}
+          <View style={styles.tileWrap}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={g('train.openDetail', { name: exerciseName(EXERCISE_BY_ID[ALWAYS_EXERCISE], language) })}
+              onPress={() => router.push({ pathname: '/train/detail', params: { id: ALWAYS_EXERCISE, group } })}
+              style={[styles.tile, styles.tileAlways]}
+            >
+              <View style={styles.figure}>
+                <ExerciseFigure id={ALWAYS_EXERCISE} pose={1} width={84} />
+              </View>
+              <HudText size={14} numberOfLines={2} style={styles.tileName}>
+                {exerciseName(EXERCISE_BY_ID[ALWAYS_EXERCISE], language)}
+              </HudText>
+              <HudText size={12} weight="medium" color={quest.manaText} numberOfLines={1}>
+                {formatAmount(prescriptionFor(ALWAYS_EXERCISE, levelOf(ALWAYS_EXERCISE)), language, false)} · {g('train.always')}
+              </HudText>
+            </Pressable>
+          </View>
+        </View>
+
+        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/workout-classic')} style={styles.classicLink}>
+          <HudText size={13} weight="medium" color={quest.textSecondary}>
+            {g('train.classicLink')}
+          </HudText>
+          <QuestIcon name="chevron" size={14} color={quest.textSecondary} />
+        </Pressable>
+      </ScrollView>
+
+      <View style={[styles.bar, screenMaxWidthStyle]}>
+        <View style={styles.barText}>
+          <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+            {canStart ? g('train.summary', { n: picked.length }) : g('train.pickMin')}
+          </HudText>
+          <HudText size={20}>{g('train.estimate', { m: minutes })}</HudText>
+        </View>
+        <View style={styles.barButton}>
+          <QuestButton title={g('train.start')} icon="chevron" disabled={!canStart} onPress={start} />
+        </View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  dayTypeLabel: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.md, fontWeight: '600' },
-  sectionTitle: { ...typography.title, marginTop: spacing.sm, marginBottom: spacing.sm, color: colors.textPrimary },
-  templateLabel: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-  templateTime: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  templateDescription: { fontSize: 13, color: '#444', marginTop: spacing.sm, lineHeight: 18 },
-  templateHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  templateHeaderInfo: { flex: 1 },
-  templateIcon: { width: 44, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
-  templateIconEmoji: { fontSize: 22 },
-  historyIcon: { width: 36, height: 36, borderRadius: radius.sm, marginRight: spacing.sm },
-  templateFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md, flexWrap: 'wrap', gap: spacing.sm },
-  templateMacro: { fontSize: 13, color: colors.primary, fontWeight: '700' },
-  // "Sửa bằng AI" is the secondary action — a plain text link, not a filled button, so it doesn't
-  // compete with "Ghi nhận" (the primary action, full-width below) for attention.
-  editButton: { paddingVertical: spacing.xs, paddingHorizontal: spacing.xs },
-  editButtonText: { color: colors.primary, fontWeight: '700', fontSize: 12 },
-  logButton: { borderRadius: radius.md, paddingVertical: spacing.sm + 2, alignItems: 'center', marginTop: spacing.sm },
-  logButtonText: { color: colors.white, fontWeight: '800', fontSize: 14 },
-  input: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    fontSize: 15,
-    marginBottom: spacing.sm,
-  },
-  row: { flexDirection: 'row', gap: spacing.sm },
-  rowInput: { flex: 1 },
-  historyTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
-  historyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  screen: { flex: 1, backgroundColor: quest.bg },
+  content: { paddingHorizontal: 16, paddingBottom: 24, gap: 12 },
+  flex: { flex: 1, minWidth: 0 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: questRadius.row,
+    borderWidth: 1.5,
+    borderColor: quest.gold,
+    backgroundColor: quest.panel,
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
   },
-  historyLabel: { fontWeight: '700', fontSize: 14, color: colors.textPrimary },
-  historyMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  deleteText: { color: colors.danger, fontSize: 13 },
-  emptyText: { textAlign: 'center', color: colors.textMuted, marginBottom: spacing.md },
+  eyebrow: { letterSpacing: 1.6 },
+  xpPill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  block: { gap: 8 },
+  hintRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  doneCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: questRadius.panel,
+    borderWidth: 1.5,
+    borderColor: quest.border,
+    backgroundColor: quest.panel,
+  },
+  pickHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 4 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  tileWrap: { width: '48.5%', flexGrow: 1 },
+  tile: {
+    minHeight: 150,
+    padding: 10,
+    gap: 4,
+    borderRadius: questRadius.panel,
+    borderWidth: 1.5,
+    borderColor: quest.border,
+    backgroundColor: quest.panel,
+  },
+  tileOn: { borderColor: quest.gold, backgroundColor: quest.raised },
+  tileAlways: { borderStyle: 'dashed', borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
+  figure: { alignItems: 'center', justifyContent: 'center', height: 58, borderRadius: 10, backgroundColor: quest.bg },
+  tileName: { marginTop: 4 },
+  rx: { paddingRight: 28 },
+  check: { position: 'absolute', top: 8, right: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: quest.gold, alignItems: 'center', justifyContent: 'center' },
+  info: { position: 'absolute', bottom: 8, right: 8, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bg },
+  classicLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44 },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: questRadius.panel + 4,
+    borderWidth: 1.5,
+    borderColor: quest.border,
+    backgroundColor: quest.panel,
+  },
+  barText: { flex: 1, minWidth: 0 },
+  barButton: { width: 150 },
 });

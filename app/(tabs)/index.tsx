@@ -1,209 +1,219 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
-import { ProgressBar } from '../../src/components/ProgressBar';
-import { FeelingRecordCard } from '../../src/components/FeelingRecordCard';
-import { TdeeCard } from '../../src/components/TdeeCard';
-import { useSettingsStore } from '../../src/store/useSettingsStore';
-import { useWeightStore } from '../../src/store/useWeightStore';
-import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
-import { useWorkoutStore } from '../../src/store/useWorkoutStore';
-import { getDayType } from '../../src/constants/plan';
-import { usePlanStore } from '../../src/store/usePlanStore';
+import { useEffect, useRef } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BossCard } from '../../src/components/quest/BossCard';
+import { HudText } from '../../src/components/quest/HudText';
+import { MissionRow } from '../../src/components/quest/MissionRow';
+import { QuestIcon } from '../../src/components/quest/QuestIcon';
+import { PlayerHeader } from '../../src/components/quest/PlayerHeader';
+import { WindowCard } from '../../src/components/quest/WindowCard';
+import { MISSION_XP, PERFECT_DAY_BONUS_XP, WORKOUT_MIN_MINUTES, type MissionId } from '../../src/game/constants';
+import { titleKeyForLevel } from '../../src/game/level';
+import type { DayEvaluation, MissionResult } from '../../src/game/missions';
+import { useGameText, type GameKey } from '../../src/game/strings';
+import { useGameState, useNow } from '../../src/game/useGameState';
+import { useCelebrationStore } from '../../src/store/useCelebrationStore';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
-import { computeMilestones } from '../../src/utils/milestones';
-import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { computeCurrentStreak, unlockedStreakBadges } from '../../src/utils/streak';
-import { resolveTdeeKcal } from '../../src/utils/tdee';
-import { useTranslation } from '../../src/i18n/useTranslation';
-import type { StringKey } from '../../src/i18n/strings';
-import { colors, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import { quest } from '../../src/theme/quest';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 
-export default function TodayScreen() {
-  const { t, language } = useTranslation();
-  const [now, setNow] = useState(new Date());
-  useFocusEffect(
-    useCallback(() => {
-      setNow(new Date());
-    }, [])
+type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
+
+interface MissionCopy {
+  title: string;
+  subtitle: string;
+  statusLabel: string;
+  progress?: number;
+}
+
+function describeMission(m: MissionResult, day: DayEvaluation, g: Translate): MissionCopy {
+  const exceeded = m.status === 'missed' && m.value > m.target && m.id !== 'workout';
+  const statusKey: GameKey = exceeded ? 'status.exceeded' : (`status.${m.status}` as GameKey);
+  let title: string;
+  let sub: string;
+  let progress: number | undefined;
+
+  switch (m.id) {
+    case 'workout':
+      title = g('mission.workout');
+      sub =
+        m.value >= m.target
+          ? g('sub.workoutDone', { min: Math.round(m.value), kcal: Math.round(day.burnedKcal) })
+          : g('sub.workoutOpen', { n: WORKOUT_MIN_MINUTES });
+      progress = m.target > 0 ? m.value / m.target : 0;
+      break;
+    case 'deficit':
+      title = g('mission.deficit', { n: m.target });
+      sub = day.deficitKcal == null ? g('sub.deficitNone') : g('sub.deficit', { kcal: Math.round(day.deficitKcal).toLocaleString('en-US') });
+      progress = m.target > 0 ? Math.max(0, m.value) / m.target : 0;
+      break;
+    case 'protein':
+      title = g('mission.protein', { n: Math.round(m.target) });
+      sub = g('sub.protein', { cur: Math.round(m.value), target: Math.round(m.target) });
+      progress = m.target > 0 ? m.value / m.target : 0;
+      break;
+    case 'purine':
+      title = g('mission.purine', { n: m.target });
+      sub = g('sub.purine', { n: Math.round(m.value) });
+      break;
+    case 'salt':
+      title = g('mission.salt', { n: m.target });
+      sub = g('sub.salt', { n: m.value.toFixed(1) });
+      break;
+    case 'sugar':
+      title = g('mission.sugar', { n: m.target });
+      sub = g('sub.sugar', { n: Math.round(m.value) });
+      break;
+    case 'junk':
+      title = g('mission.junk');
+      sub = g('sub.junk', { n: m.value });
+      break;
+  }
+
+  const suffix = m.status === 'holding' ? g('status.holding') : m.status === 'missed' ? g(statusKey) : '';
+  return { title, subtitle: suffix ? `${sub} · ${suffix}` : sub, statusLabel: g(statusKey), progress };
+}
+
+/** Which tab logs the data behind each mission, so tapping a row jumps to where you can act on it. */
+const MISSION_TARGET: Partial<Record<MissionId, '/(tabs)/workout' | '/(tabs)/nutrition'>> = {
+  workout: '/(tabs)/workout',
+  protein: '/(tabs)/nutrition',
+  purine: '/(tabs)/nutrition',
+  salt: '/(tabs)/nutrition',
+  sugar: '/(tabs)/nutrition',
+  junk: '/(tabs)/nutrition',
+};
+
+function CampLink({ icon, label, onPress }: { icon: 'list' | 'smile'; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => [styles.link, pressed && { opacity: 0.85 }]}
+    >
+      <QuestIcon name={icon} size={18} color={quest.gold} />
+      <HudText size={13} numberOfLines={1} style={styles.linkText}>
+        {label}
+      </HudText>
+    </Pressable>
   );
+}
 
-  const settings = useSettingsStore();
-  const latestWeight = useWeightStore((s) => s.latest());
-  const nutritionLog = useNutritionStore((s) => s.getLog(todayKey()));
-  const allNutritionLogs = useNutritionStore((s) => s.logs);
-  const allWorkoutEntries = useWorkoutStore((s) => s.entries);
-  const workoutEntries = useMemo(
-    () => allWorkoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === todayKey()),
-    [allWorkoutEntries]
-  );
+export default function CampScreen() {
+  const g = useGameText();
+  const insets = useSafeAreaInsets();
+  const now = useNow();
+  const game = useGameState(now);
+  const ifStatus = getIfStatus(now);
 
-  const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
-  const dayType = useMemo(() => getDayType(now), [now]);
-  const ifStatus = useMemo(() => getIfStatus(now), [now]);
-  const meals = mealTemplates[dayType];
+  useLightStatusBar();
 
-  const eatenCalories = meals
-    .filter((m) => nutritionLog.mealsEaten[m.slot])
-    .reduce((sum, m) => sum + m.calories, 0);
-  const eatenProtein = meals
-    .filter((m) => nutritionLog.mealsEaten[m.slot])
-    .reduce((sum, m) => sum + m.proteinG, 0);
-  const totalCalories = eatenCalories + nutritionLog.extraCalories;
-  const totalProtein = eatenProtein + nutritionLog.extraProteinG;
+  const { today, boss, level } = game;
 
-  const caloriesBurnedToday = workoutEntries.reduce((sum, w) => sum + w.caloriesBurned, 0);
-
-  const currentWeight = latestWeight?.weightKg ?? settings.startWeightKg;
-  const weightChange = currentWeight - settings.startWeightKg;
-
-  const nextMilestone = useMemo(() => {
-    const milestones = computeMilestones(
-      settings.startDateISO,
-      settings.startWeightKg,
-      settings.goalWeightKg,
-      currentWeight,
-      now
-    );
-    return milestones.find((m) => m.status === 'upcoming') ?? milestones[milestones.length - 1];
-  }, [settings.startDateISO, settings.startWeightKg, settings.goalWeightKg, currentWeight, now]);
-
-  const tdeeKcal = useMemo(
-    () =>
-      resolveTdeeKcal({
-        gender: settings.gender,
-        age: settings.age,
-        heightCm: settings.heightCm,
-        activityLevel: settings.activityLevel,
-        weightKg: currentWeight,
-        calorieTargetKcal: settings.calorieTargetKcal,
-        targetDailyDeficitKcal: settings.targetDailyDeficitKcal,
-      }).tdeeKcal,
-    [
-      settings.gender,
-      settings.age,
-      settings.heightCm,
-      settings.activityLevel,
-      currentWeight,
-      settings.calorieTargetKcal,
-      settings.targetDailyDeficitKcal,
-    ]
-  );
-
-  const streak = useMemo(
-    () => computeCurrentStreak(allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, settings.targetDailyDeficitKcal, now),
-    [allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, settings.targetDailyDeficitKcal, now]
-  );
-  const badges = unlockedStreakBadges(streak);
-
-  const dateLocale = language === 'en' ? 'en-US' : 'vi-VN';
-  const ambientBg = useAmbientBackground();
+  // A level-up is celebrated once. The first time we ever see the player, their current level is simply
+  // recorded (no celebration for progress made before this existed); a lower level (a log was deleted)
+  // quietly lowers the mark so earning it again does celebrate.
+  const seenLevel = useCelebrationStore((s) => s.seenLevel);
+  const markSeen = useCelebrationStore((s) => s.markSeen);
+  const celebrating = useRef<number | null>(null);
+  useEffect(() => {
+    if (seenLevel === null || level.level < seenLevel) markSeen(level.level);
+    else if (level.level > seenLevel && celebrating.current !== level.level) {
+      celebrating.current = level.level;
+      router.push({ pathname: '/level-up', params: { from: seenLevel, to: level.level } });
+    }
+  }, [level.level, seenLevel, markSeen]);
+  const todayDamage = boss.days.length > 0 ? boss.days[boss.days.length - 1].damage : 0;
+  const counts = {
+    done: today.missions.filter((m) => m.status === 'done').length,
+    holding: today.missions.filter((m) => m.status === 'holding').length,
+    open: today.missions.filter((m) => m.status === 'open').length,
+  };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-      <Text style={styles.dateLabel}>
-        {now.toLocaleDateString(dateLocale, { weekday: 'long', day: '2-digit', month: '2-digit' })} ·{' '}
-        {dayType === 'training' ? t('today.dayTraining') : t('today.dayRest')}
-      </Text>
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      >
+        <PlayerHeader level={level} titleKey={titleKeyForLevel(level.level)} streak={game.streak} />
 
-      <Card style={ifStatus.isEatingWindow ? styles.eatingCard : styles.fastingCard}>
-        <Text style={styles.ifSubLabel}>
-          {t('today.ifRemaining', {
-            hours: ifStatus.hoursUntilTransition.toFixed(1),
-            target: ifStatus.isEatingWindow ? t('today.untilFasting') : t('today.untilEating'),
-          })}
-        </Text>
-      </Card>
-
-      <Card style={styles.streakCard}>
-        <Text style={styles.streakValue}>{t('today.streakDays', { n: streak })}</Text>
-        <Text style={styles.streakHint}>{t('today.streakHint')}</Text>
-        {badges.length > 0 && (
-          <View style={styles.badgeRow}>
-            {badges.map((b) => (
-              <Badge key={b} label={t('today.streakDays', { n: b })} tone="gold" />
-            ))}
-          </View>
-        )}
-      </Card>
-
-      <Card>
-        <Text style={styles.cardTitle}>{t('today.weightTitle')}</Text>
-        <View style={styles.weightRow}>
-          <Text style={styles.weightValue}>{currentWeight.toFixed(1)} kg</Text>
-          <Text style={[styles.weightChange, { color: weightChange <= 0 ? colors.success : colors.danger }]}>
-            {weightChange > 0 ? '+' : ''}
-            {weightChange.toFixed(1)} {t('today.weightChangeSuffix')}
-          </Text>
+        <View style={styles.gap}>
+          <WindowCard isEatingWindow={ifStatus.isEatingWindow} hoursUntilTransition={ifStatus.hoursUntilTransition} />
         </View>
-        <Text style={styles.goalLabel}>{t('common.goalLabel', { kg: settings.goalWeightKg })}</Text>
-      </Card>
+        <View style={styles.gap}>
+          <BossCard boss={boss} todayDamage={todayDamage} onPress={() => router.push('/boss')} />
+        </View>
 
-      <Card>
-        <Text style={styles.cardTitle}>{t(`milestone.${nextMilestone.key}` as StringKey)}</Text>
-        <Text style={styles.milestoneMeta}>
-          {t('today.milestoneMeta', {
-            date: formatDateVi(toDateKey(nextMilestone.targetDate)),
-            kg: nextMilestone.targetWeightKg.toFixed(1),
+        <View style={[styles.links, styles.gap]}>
+          <CampLink icon="list" label={g('journal.title')} onPress={() => router.push('/journal')} />
+          <CampLink icon="smile" label={g('checkin.title')} onPress={() => router.push('/checkin')} />
+        </View>
+
+        <View style={[styles.sectionHead, styles.gap]}>
+          <HudText size={17} accessibilityRole="header">
+            {g('missions.title')}
+          </HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('missions.summary', counts)}
+          </HudText>
+        </View>
+
+        <View style={styles.list}>
+          {today.missions.map((m) => {
+            const copy = describeMission(m, today, g);
+            const target = MISSION_TARGET[m.id];
+            return (
+              <MissionRow
+                key={m.id}
+                title={copy.title}
+                subtitle={copy.subtitle}
+                statusLabel={copy.statusLabel}
+                status={m.status}
+                xp={MISSION_XP[m.id]} // the reward on offer; the row styles itself as earned once done
+                progress={copy.progress}
+                onPress={target ? () => router.push(target) : undefined}
+              />
+            );
           })}
-          {nextMilestone.status === 'upcoming' ? t('today.milestoneDaysRemaining', { n: nextMilestone.daysRemaining }) : ''}
-        </Text>
-      </Card>
+        </View>
 
-      <Card>
-        <Text style={styles.cardTitle}>{t('today.nutritionTitle')}</Text>
-        <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" />
-        <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
-        <ProgressBar label={t('common.water')} current={nutritionLog.waterMl} target={settings.waterTargetMl} unit="ml" />
-      </Card>
-
-      <TdeeCard
-        calorieTargetKcal={settings.calorieTargetKcal}
-        targetDailyDeficitKcal={settings.targetDailyDeficitKcal}
-        heightCm={settings.heightCm}
-        age={settings.age}
-        gender={settings.gender}
-        activityLevel={settings.activityLevel}
-        weightKg={currentWeight}
-        caloriesConsumedToday={totalCalories}
-        caloriesBurnedExerciseToday={caloriesBurnedToday}
-      />
-
-      <Card>
-        <Text style={styles.cardTitle}>{t('today.workoutTitle')}</Text>
-        <Text style={styles.workoutSummary}>
-          {t('today.workoutSummary', { count: workoutEntries.length, kcal: caloriesBurnedToday })}
-        </Text>
-        {dayType === 'rest' && <Text style={styles.restNote}>{t('today.restNote')}</Text>}
-      </Card>
-
-      <FeelingRecordCard />
-    </ScrollView>
+        <HudText size={12} weight="medium" color={today.perfect ? quest.gold : quest.textSecondary} style={styles.centerNote}>
+          {today.perfect ? g('missions.perfectDone', { n: PERFECT_DAY_BONUS_XP }) : g('missions.perfect', { n: PERFECT_DAY_BONUS_XP })}
+        </HudText>
+        <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.centerNote}>
+          {g('missions.estimateNote')}
+        </HudText>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  dateLabel: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.md, textTransform: 'capitalize' },
-  eatingCard: { backgroundColor: colors.successLight },
-  fastingCard: { backgroundColor: colors.warningLight },
-  ifSubLabel: { ...typography.label, color: colors.textPrimary },
-  cardTitle: { ...typography.title, marginBottom: spacing.md, color: colors.textPrimary },
-  weightRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap' },
-  weightValue: { ...typography.h1, color: colors.textPrimary },
-  weightChange: { ...typography.caption },
-  goalLabel: { ...typography.caption, fontWeight: '400', color: colors.textMuted, marginTop: spacing.xs },
-  milestoneMeta: { ...typography.caption, fontWeight: '400', color: colors.textSecondary },
-  streakCard: { backgroundColor: colors.goldLight },
-  streakValue: { fontSize: 20, fontWeight: '800', color: colors.gold },
-  streakHint: { ...typography.small, color: colors.gold, marginTop: spacing.xs, opacity: 0.8 },
-  badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
-  workoutSummary: { ...typography.body, color: colors.textPrimary },
-  restNote: { ...typography.caption, fontWeight: '400', color: colors.textMuted, marginTop: spacing.sm },
+  screen: { flex: 1, backgroundColor: quest.bg },
+  scroll: { flex: 1 },
+  // Extra bottom padding keeps the last row clear of the floating tab bar.
+  content: { paddingHorizontal: 16, paddingBottom: 120 },
+  gap: { marginTop: 12 },
+  links: { flexDirection: 'row', gap: 10 },
+  link: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: quest.panel,
+    borderWidth: 1.5,
+    borderColor: quest.border,
+  },
+  linkText: { flexShrink: 1 },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 20 },
+  list: { gap: 8, marginTop: 8 },
+  centerNote: { textAlign: 'center', marginTop: 12 },
 });

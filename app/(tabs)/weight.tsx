@@ -1,8 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
-import { Card } from '../../src/components/Card';
-import { Button } from '../../src/components/Button';
+import { HudText } from '../../src/components/quest/HudText';
+import { QuestButton } from '../../src/components/quest/QuestButton';
+import { QuestField } from '../../src/components/quest/QuestField';
+import { QuestHeader } from '../../src/components/quest/QuestHeader';
+import { useGameText } from '../../src/game/strings';
 import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
@@ -10,9 +15,9 @@ import { formatDateVi, toDateKey } from '../../src/utils/date';
 import { buildWeightChartData, buildWeightLossMilestoneViews, computeTodayLineX } from '../../src/utils/weightChart';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
-import { colors, radius, spacing, typography } from '../../src/theme/tokens';
-import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import { quest, questRadius } from '../../src/theme/quest';
+import { chartWidthFor, screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 
 const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
   { key: 'weight.range1w', days: 7 },
@@ -24,7 +29,9 @@ const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
 
 export default function WeightScreen() {
   const { t } = useTranslation();
-  const ambientBg = useAmbientBackground();
+  const g = useGameText();
+  const insets = useSafeAreaInsets();
+  useLightStatusBar();
   const entries = useWeightStore((s) => s.entries);
   const addEntry = useWeightStore((s) => s.addEntry);
   const removeEntry = useWeightStore((s) => s.removeEntry);
@@ -34,7 +41,7 @@ export default function WeightScreen() {
   const [input, setInput] = useState('');
   const [logDate, setLogDate] = useState(new Date());
   const [rangeDays, setRangeDays] = useState(30);
-  const screenWidth = Dimensions.get('window').width - 32;
+  const screenWidth = chartWidthFor(useWindowDimensions().width) - 32; // minus the panel's own 16px side padding
 
   // Chart data, milestone prediction, and the today-marker pixel offset are pure functions in
   // src/utils/weightChart.ts (unit tested there) — kept out of this component so the
@@ -84,47 +91,70 @@ export default function WeightScreen() {
   const historyEntries = [...entries].reverse();
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: ambientBg }]} contentContainerStyle={[styles.content, screenMaxWidthStyle]}>
-      <Card>
-        <Text style={styles.cardTitle}>{t('weight.logTitle')}</Text>
-        <DateOffsetPicker selectedDate={logDate} onChange={setLogDate} />
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.input}
-            keyboardType="decimal-pad"
-            placeholder={t('weight.inputPlaceholder')}
-            value={input}
-            onChangeText={setInput}
-          />
-          <Button title={t('common.save')} onPress={handleAdd} />
-        </View>
-      </Card>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      keyboardShouldPersistTaps="handled"
+    >
+      <QuestHeader
+        title={t('tab.weight')}
+        backLabel={g('planScreen.back')}
+        onBack={() => (router.canGoBack() ? router.back() : router.replace('/(tabs)/profile'))}
+      />
 
-      <Card>
-        <Text style={styles.cardTitle}>{t('weight.chartTitle')}</Text>
+      <View style={styles.panel}>
+        <HudText size={16} accessibilityRole="header">
+          {t('weight.logTitle')}
+        </HudText>
+        <DateOffsetPicker selectedDate={logDate} onChange={setLogDate} dark />
+        <QuestField
+          label={t('weight.logTitle')}
+          unit="kg"
+          keyboardType="decimal-pad"
+          placeholder={t('weight.inputPlaceholder')}
+          value={input}
+          onChangeText={setInput}
+        />
+        <QuestButton title={t('common.save')} onPress={handleAdd} />
+      </View>
+
+      <View style={styles.panel}>
+        <HudText size={16} accessibilityRole="header">
+          {t('weight.chartTitle')}
+        </HudText>
         <View style={styles.rangeRow}>
-          {RANGE_OPTIONS.map((opt) => (
-            <TouchableOpacity
-              key={opt.key}
-              style={[styles.rangeButton, rangeDays === opt.days && styles.rangeButtonActive]}
-              onPress={() => setRangeDays(opt.days)}
-            >
-              <Text style={[styles.rangeButtonText, rangeDays === opt.days && styles.rangeButtonTextActive]}>
-                {t(opt.key)}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {RANGE_OPTIONS.map((opt) => {
+            const active = rangeDays === opt.days;
+            return (
+              <Pressable
+                key={opt.key}
+                accessibilityRole="button"
+                accessibilityLabel={t(opt.key)}
+                accessibilityState={{ selected: active }}
+                style={[styles.rangeButton, active && styles.rangeButtonActive]}
+                onPress={() => setRangeDays(opt.days)}
+              >
+                <HudText size={12} color={active ? quest.onGold : quest.textSecondary}>
+                  {t(opt.key)}
+                </HudText>
+              </Pressable>
+            );
+          })}
         </View>
         <View style={styles.legendRow}>
           {chartData.hasActual && (
             <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: colors.primary }]} />
-              <Text style={styles.legendText}>{t('weight.actualLegend')}</Text>
+              <View style={[styles.legendDot, { backgroundColor: quest.gold }]} />
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {t('weight.actualLegend')}
+              </HudText>
             </View>
           )}
           <View style={styles.legendItem}>
-            <View style={[styles.legendDot, styles.legendDotPredicted]} />
-            <Text style={styles.legendText}>{t('weight.predictedLegend')}</Text>
+            <View style={[styles.legendDot, { backgroundColor: quest.textSecondary }]} />
+            <HudText size={11} weight="medium" color={quest.textSecondary}>
+              {t('weight.predictedLegend')}
+            </HudText>
           </View>
         </View>
         <View style={{ position: 'relative' }}>
@@ -134,46 +164,74 @@ export default function WeightScreen() {
             height={chartHeight}
             yAxisSuffix="kg"
             chartConfig={{
-              backgroundColor: colors.surface,
-              backgroundGradientFrom: colors.surface,
-              backgroundGradientTo: colors.surface,
+              backgroundColor: quest.panel,
+              backgroundGradientFrom: quest.panel,
+              backgroundGradientTo: quest.panel,
               decimalPlaces: 1,
-              color: (opacity = 1) => `rgba(79, 142, 247, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(60, 60, 60, ${opacity})`,
+              color: (opacity = 1) => `rgba(255, 200, 61, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(179, 170, 207, ${opacity})`,
               propsForDots: { r: '3' },
             }}
             bezier
+            withShadow={false}
             hidePointsAtIndex={chartData.nonEntryIndices}
-            style={{ borderRadius: radius.lg }}
+            style={{ borderRadius: questRadius.row }}
           />
           <View pointerEvents="none" style={[styles.todayLine, { left: todayLineX, height: chartHeight - 34 }]} />
         </View>
-        <Text style={styles.todayLineCaption}>{t('weight.todayMarker')}</Text>
-        {entries.length === 0 && <Text style={styles.emptyChartText}>{t('weight.emptyChart')}</Text>}
-        <Text style={styles.milestonesTitle}>{t('weight.lossMilestonesTitle')}</Text>
+        <HudText size={10} weight="medium" color={quest.hpText} style={styles.todayLineCaption}>
+          {t('weight.todayMarker')}
+        </HudText>
+        {entries.length === 0 && (
+          <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.centered}>
+            {t('weight.emptyChart')}
+          </HudText>
+        )}
+        <HudText size={14} style={styles.milestonesTitle}>
+          {t('weight.lossMilestonesTitle')}
+        </HudText>
         {lossMilestones.map((m) => (
           <View key={m.targetWeightKg} style={styles.milestoneRow}>
-            <Text style={styles.milestoneWeight}>
+            <HudText size={13} color={quest.manaText}>
               {m.targetWeightKg.toFixed(1)} kg{m.isGoal ? ` (${t('weight.goalBadge')})` : ''}
-            </Text>
-            <Text style={[styles.milestoneDate, m.daysRemaining <= 0 && styles.milestoneDatePast]}>
+            </HudText>
+            <HudText size={11} weight="semibold" color={m.daysRemaining <= 0 ? quest.textSecondary : quest.manaText}>
               {formatDateVi(toDateKey(m.date))}
               {m.daysRemaining > 0 ? t('weight.milestoneDaysRemaining', { n: m.daysRemaining }) : t('weight.milestonePast')}
-            </Text>
+            </HudText>
           </View>
         ))}
-        <Text style={styles.goalNote}>{t('common.goalLabel', { kg: goalWeightKg })}</Text>
-      </Card>
+        <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.centered}>
+          {t('common.goalLabel', { kg: goalWeightKg })}
+        </HudText>
+      </View>
 
-      <Text style={styles.historyTitle}>{t('tab.history')}</Text>
-      {historyEntries.length === 0 && <Text style={styles.emptyText}>{t('weight.emptyHistory')}</Text>}
+      <HudText size={16} accessibilityRole="header">
+        {t('tab.history')}
+      </HudText>
+      {historyEntries.length === 0 && (
+        <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.centered}>
+          {t('weight.emptyHistory')}
+        </HudText>
+      )}
       {historyEntries.map((item) => (
         <View key={item.id} style={styles.historyRow}>
-          <Text style={styles.historyDate}>{formatDateVi(toDateKey(new Date(item.dateISO)))}</Text>
-          <Text style={styles.historyWeight}>{item.weightKg.toFixed(1)} kg</Text>
-          <TouchableOpacity onPress={() => removeEntry(item.id)}>
-            <Text style={styles.deleteText}>{t('common.delete')}</Text>
-          </TouchableOpacity>
+          <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.flex}>
+            {formatDateVi(toDateKey(new Date(item.dateISO)))}
+          </HudText>
+          <HudText size={16} color={quest.gold}>
+            {item.weightKg.toFixed(1)} kg
+          </HudText>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t('common.delete')} ${formatDateVi(toDateKey(new Date(item.dateISO)))}`}
+            onPress={() => removeEntry(item.id)}
+            style={styles.deleteButton}
+          >
+            <HudText size={13} color={quest.hpText}>
+              {t('common.delete')}
+            </HudText>
+          </Pressable>
         </View>
       ))}
     </ScrollView>
@@ -181,60 +239,21 @@ export default function WeightScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.base, paddingBottom: spacing.xxl },
-  cardTitle: { ...typography.title, marginBottom: spacing.md, color: colors.textPrimary },
-  inputRow: { flexDirection: 'row', gap: spacing.sm },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-  },
-  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm - 2, marginBottom: spacing.md },
-  rangeButton: { backgroundColor: colors.neutralLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm - 2 },
-  rangeButtonActive: { backgroundColor: colors.primary },
-  rangeButtonText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
-  rangeButtonTextActive: { color: colors.white },
-  emptyChartText: { textAlign: 'center', color: colors.textMuted, paddingVertical: 24 },
-  legendRow: { flexDirection: 'row', gap: spacing.base, marginBottom: spacing.sm },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  container: { flex: 1, backgroundColor: quest.bg },
+  content: { paddingHorizontal: 16, paddingBottom: 120, gap: 16 },
+  flex: { flex: 1 },
+  centered: { textAlign: 'center' },
+  panel: { backgroundColor: quest.panel, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, padding: 16, gap: 12 },
+  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  rangeButton: { minHeight: 44, paddingHorizontal: 14, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, alignItems: 'center', justifyContent: 'center' },
+  rangeButtonActive: { backgroundColor: quest.gold, borderColor: quest.gold },
+  legendRow: { flexDirection: 'row', gap: 16 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendDotPredicted: { backgroundColor: '#969696' },
-  legendText: { fontSize: 11, color: colors.textSecondary },
-  goalNote: { textAlign: 'center', color: colors.textMuted, fontSize: 12, marginTop: spacing.sm },
-  todayLine: { position: 'absolute', top: 16, width: 1.5, backgroundColor: colors.danger, opacity: 0.7 },
-  todayLineCaption: { textAlign: 'right', color: colors.danger, fontSize: 10, marginTop: -spacing.sm, opacity: 0.8 },
-  milestonesTitle: { ...typography.label, color: colors.textPrimary, marginTop: spacing.md, marginBottom: spacing.sm },
-  milestoneRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.xs + 2,
-  },
-  milestoneWeight: { fontSize: 13, fontWeight: '800', color: colors.primaryDark },
-  milestoneDate: { fontSize: 11, color: colors.primaryDark, fontWeight: '600' },
-  milestoneDatePast: { color: colors.textMuted },
-  historyTitle: { ...typography.title, marginBottom: spacing.sm, marginTop: spacing.xs, color: colors.textPrimary },
-  historyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  historyDate: { color: colors.textSecondary, fontSize: 13 },
-  historyWeight: { fontWeight: '700', fontSize: 15, color: colors.textPrimary },
-  deleteText: { color: colors.danger, fontSize: 13 },
-  emptyText: { textAlign: 'center', color: colors.textMuted, marginTop: 20 },
+  todayLine: { position: 'absolute', top: 16, width: 1.5, backgroundColor: quest.hp, opacity: 0.7 },
+  todayLineCaption: { textAlign: 'right', marginTop: -8 },
+  milestonesTitle: { marginTop: 4 },
+  milestoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, backgroundColor: quest.manaPanel, borderWidth: 1, borderColor: quest.manaBorder, borderRadius: questRadius.row, paddingHorizontal: 12, paddingVertical: 10 },
+  historyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: quest.panel, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, paddingLeft: 16, paddingRight: 4, minHeight: 52 },
+  deleteButton: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
 });

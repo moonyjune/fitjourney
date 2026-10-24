@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useProofStore } from '../store/useProofStore';
@@ -8,6 +8,7 @@ import { persistPickedPhoto, imageUriToBase64 } from '../utils/photoStorage';
 import { requestPhotoAnalysis } from '../sync/cloudSync';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
+import { quest } from '../theme/quest';
 import type { ProofTaskType } from '../types';
 
 interface ProofCaptureProps {
@@ -18,10 +19,14 @@ interface ProofCaptureProps {
   contextLabel?: string;
   /** The plan's target calories, given to the AI as a sanity-check reference point. */
   plannedCalories?: number;
+  /** `quest` restyles it for the dark FitQuest screens; behaviour is identical. Defaults to `light`. */
+  variant?: 'light' | 'quest';
 }
 
-export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plannedCalories }: ProofCaptureProps) {
+export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plannedCalories, variant = 'light' }: ProofCaptureProps) {
   const { t } = useTranslation();
+  const palette = variant === 'quest' ? questPalette : lightPalette;
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const proof = useProofStore((s) => s.proofFor(dateKey, taskType, taskRefId));
   const addProof = useProofStore((s) => s.addProof);
   const removeProof = useProofStore((s) => s.removeProof);
@@ -153,7 +158,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
           <Image source={{ uri: pendingUri }} style={styles.thumbnail} />
           <TouchableOpacity style={styles.analyzeButton} onPress={handleAnalyze} disabled={analyzing}>
             {analyzing ? (
-              <ActivityIndicator size="small" color={colors.primary} />
+              <ActivityIndicator size="small" color={palette.accent} />
             ) : (
               <Text style={styles.analyzeButtonText}>{t('proof.analyzeButton')}</Text>
             )}
@@ -164,6 +169,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
           {taskType === 'meal' ? (
             <View style={styles.estimateRow}>
               <TextInput
+                placeholderTextColor={palette.placeholder}
                 style={[styles.estimateInput, styles.input]}
                 placeholder={t('proof.caloriesPlaceholder')}
                 keyboardType="decimal-pad"
@@ -171,6 +177,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
                 onChangeText={setEstimatedCalories}
               />
               <TextInput
+                placeholderTextColor={palette.placeholder}
                 style={[styles.estimateInput, styles.input]}
                 placeholder={t('proof.waterPlaceholder')}
                 keyboardType="decimal-pad"
@@ -180,6 +187,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
             </View>
           ) : (
             <TextInput
+              placeholderTextColor={palette.placeholder}
               style={styles.input}
               placeholder={t('proof.caloriesBurnedPlaceholder')}
               keyboardType="decimal-pad"
@@ -201,6 +209,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
         </View>
       )}
       <TextInput
+        placeholderTextColor={palette.placeholder}
         style={styles.noteInput}
         placeholder={t('proof.notePlaceholder')}
         value={note}
@@ -218,62 +227,87 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   );
 }
 
-const styles = StyleSheet.create({
+interface Palette {
+  chipBg: string; accent: string; thumbBg: string; text: string; danger: string; analyzeBg: string; analyzeText: string;
+  muted: string; border: string; saveBg: string; saveText: string;
+  /** Left unset on the light variant so those inputs keep the platform defaults they always had. */
+  inputText?: string; inputBg?: string; placeholder?: string;
+}
+
+const lightPalette: Palette = {
+  chipBg: colors.primaryLight, accent: colors.primary, thumbBg: '#eee', text: '#444', danger: colors.danger,
+  analyzeBg: colors.goldLight, analyzeText: colors.gold, muted: colors.textMuted, border: colors.border,
+  saveBg: colors.primary, saveText: '#fff',
+};
+
+const questPalette: Palette = {
+  chipBg: quest.raised2, accent: quest.gold, thumbBg: quest.raised, text: quest.textTertiary, danger: quest.hpText,
+  analyzeBg: quest.raised2, analyzeText: quest.goldLight, muted: quest.textSecondary, border: quest.border,
+  inputText: quest.text, inputBg: quest.bg, placeholder: quest.textSecondary, saveBg: quest.gold, saveText: quest.onGold,
+};
+
+function makeStyles(p: Palette) {
+  return StyleSheet.create({
   addProofButton: {
     marginTop: spacing.sm,
     alignSelf: 'flex-start',
-    backgroundColor: colors.primaryLight,
+    backgroundColor: p.chipBg,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm - 2,
   },
-  addProofText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+  addProofText: { color: p.accent, fontSize: 12, fontWeight: '700' },
   proofRow: { flexDirection: 'row', marginTop: spacing.sm, gap: spacing.sm },
-  thumbnail: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: '#eee' },
+  thumbnail: { width: 64, height: 64, borderRadius: radius.sm, backgroundColor: p.thumbBg },
   proofTextWrap: { flex: 1, justifyContent: 'center' },
-  proofNote: { fontSize: 12, color: '#444', marginBottom: 4 },
-  removeText: { fontSize: 11, color: colors.danger },
+  proofNote: { fontSize: 12, color: p.text, marginBottom: 4 },
+  removeText: { fontSize: 11, color: p.danger },
   editWrap: { marginTop: spacing.sm },
   pickButtons: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
-  pickButton: { backgroundColor: colors.primaryLight, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  pickButtonText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+  pickButton: { backgroundColor: p.chipBg, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  pickButtonText: { color: p.accent, fontSize: 12, fontWeight: '700' },
   analyzeButton: {
     marginTop: spacing.sm,
     alignSelf: 'flex-start',
-    backgroundColor: colors.goldLight,
+    backgroundColor: p.analyzeBg,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm - 2,
     minWidth: 100,
     alignItems: 'center',
   },
-  analyzeButtonText: { color: colors.gold, fontSize: 12, fontWeight: '700' },
-  analysisError: { fontSize: 11, color: colors.danger, marginTop: spacing.xs },
-  analysisNote: { fontSize: 11, color: colors.textMuted, marginTop: spacing.xs, fontStyle: 'italic' },
+  analyzeButtonText: { color: p.analyzeText, fontSize: 12, fontWeight: '700' },
+  analysisError: { fontSize: 11, color: p.danger, marginTop: spacing.xs },
+  analysisNote: { fontSize: 11, color: p.muted, marginTop: spacing.xs, fontStyle: 'italic' },
   estimateRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
   estimateInput: { flex: 1, marginBottom: 0 },
   noteInput: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: p.border,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.sm,
     fontSize: 13,
+    color: p.inputText,
+    backgroundColor: p.inputBg,
     marginTop: spacing.sm,
     marginBottom: spacing.sm,
   },
   input: {
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: p.border,
     borderRadius: radius.sm,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.sm,
     fontSize: 13,
+    color: p.inputText,
+    backgroundColor: p.inputBg,
     marginTop: spacing.sm,
   },
   editActions: { flexDirection: 'row', gap: spacing.sm },
   cancelButton: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  cancelText: { color: colors.textMuted, fontSize: 12 },
-  saveButton: { backgroundColor: colors.primary, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  saveText: { color: '#fff', fontSize: 12, fontWeight: '700' },
-});
+  cancelText: { color: p.muted, fontSize: 12 },
+  saveButton: { backgroundColor: p.saveBg, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  saveText: { color: p.saveText, fontSize: 12, fontWeight: '700' },
+  });
+}
