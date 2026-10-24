@@ -9,7 +9,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('../../sync/cloudSync', () => ({ pushProfile: jest.fn(), ensureCoachCode: jest.fn(), linkToCoach: jest.fn(), pullProfile: jest.fn() }));
 
 import { AppIntro } from '../../components/AppIntro';
-import { QuestShield } from '../../components/quest/QuestShield';
+import { FitJourneyLogo } from '../../components/FitJourneyLogo';
 import { useSettingsStore } from '../../store/useSettingsStore';
 
 function allText(renderer: ReactTestRenderer): string {
@@ -46,7 +46,7 @@ describe('App intro (splash)', () => {
   it('shows the name, tagline and loading label in Vietnamese, and announces itself as a progress bar', async () => {
     const r = await render();
     const text = allText(r);
-    expect(text).toContain('FIT JOURNEY');
+    expect(text).toContain('FITJOURNEY');
     expect(text).toContain('Mỗi ngày một nhiệm vụ');
     expect(text).toContain('ĐANG VÀO TRẠI');
     const bar = r.root.findAll((n) => n.props.accessibilityRole === 'progressbar')[0];
@@ -60,9 +60,9 @@ describe('App intro (splash)', () => {
     expect(text).toContain('One mission a day');
   });
 
-  it('shows the level-1 shield', async () => {
+  it('shows the FitJourney logo', async () => {
     const r = await render();
-    expect(r.root.findByType(QuestShield).props.level).toBe(1);
+    expect(r.root.findAllByType(FitJourneyLogo)).toHaveLength(1);
   });
 
   it('settles without error when reduced motion is on and when it is off', async () => {
@@ -72,7 +72,7 @@ describe('App intro (splash)', () => {
       await act(async () => {
         jest.advanceTimersByTime(2000);
       });
-      expect(allText(r)).toContain('FIT JOURNEY');
+      expect(allText(r)).toContain('FITJOURNEY');
       act(() => r.unmount());
       renderer = undefined;
     }

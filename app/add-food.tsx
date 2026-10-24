@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { aiNumberText, useAiFields } from '../src/ai/useAiFields';
+import { useAiErrorText, useConfidenceText, usePhotoAnalysis } from '../src/ai/usePhotoAnalysis';
+import { FoodPhotoPicker } from '../src/components/quest/FoodPhoto';
 import { HudText } from '../src/components/quest/HudText';
 import { ImpactNote } from '../src/components/quest/ImpactNote';
 import { NutrientTiles } from '../src/components/quest/NutrientTiles';
@@ -18,6 +21,8 @@ import { useNutritionStore } from '../src/store/useNutritionStore';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import type { PhotoAnalysisResult } from '../src/sync/cloudSync';
+import { deletePersistedPhoto, persistPickedPhoto } from '../src/utils/photoStorage';
 import type { ExtraFoodItem, ExtraMealTime } from '../src/types';
 
 const MEAL_TIMES: ExtraMealTime[] = [
@@ -35,6 +40,8 @@ function num(text: string): number {
   const value = parseFloat(text.replace(',', '.'));
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
+
+type AiField = 'name' | 'calories' | 'protein';
 
 function goBack() {
   if (router.canGoBack()) router.back();
@@ -59,6 +66,45 @@ export default function AddFoodScreen() {
   const [sugar, setSugar] = useState('');
   const [junk, setJunk] = useState(false);
   const [error, setError] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
+
+  // AI suggestions fill the inputs but never replace what the user typed: `aiFilled` remembers which fields still hold
+  // an AI value (typing in a field forgets it), and only those, or empty ones, are overwritten by a later analysis.
+  const ai = usePhotoAnalysis('meal', { label: name.trim() || undefined });
+  const aiErrorText = useAiErrorText();
+  const confidenceText = useConfidenceText();
+  const aiFields = useAiFields<AiField>();
+  const latest = useRef({ name, calories, protein });
+  latest.current = { name, calories, protein };
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const [aiNote, setAiNote] = useState<{ confidence: string | null; reasoning: string; kept: boolean } | null>(null);
+
+  function applyAi(result: PhotoAnalysisResult) {
+    const cur = latest.current;
+    const outcomes = [
+      aiFields.fill('name', cur.name, result.foodName?.trim() || undefined, setName),
+      aiFields.fill('calories', cur.calories, aiNumberText(result.estimatedCaloriesKcal), setCalories),
+      aiFields.fill('protein', cur.protein, aiNumberText(result.estimatedProteinG, 1), setProtein),
+    ];
+    setError(false);
+    setAiNote({ confidence: confidenceText(result.confidence), reasoning: result.reasoning, kept: outcomes.includes('kept') });
+  }
+
+  async function analyzePhoto() {
+    if (!photoUri || ai.analyzing || saving) return;
+    const result = await ai.analyze(photoUri);
+    if (result && alive.current) applyAi(result);
+  }
+
+  const typed = aiFields.typed;
 
   const draft: ExtraFoodItem = useMemo(
     () => ({
@@ -83,18 +129,32 @@ export default function AddFoodScreen() {
   );
   const hasValue = draft.calories > 0 || draft.proteinG > 0;
 
-  function save() {
+  async function save() {
+    if (saving) return;
     if (!hasValue) {
       setError(true);
       return;
     }
-    addExtra(input.dateKey, draft.name, draft.calories, draft.proteinG, mealTime, {
-      purineMg: draft.purineMg,
-      saltG: draft.saltG,
-      sugarG: draft.sugarG,
-      junk: draft.junk,
-    });
-    goBack();
+    setSaving(true);
+    setSaveFailed(false);
+    let persisted: string | undefined;
+    try {
+      // The picker hands back a temporary file the OS may clear; keep our own copy with the item.
+      if (photoUri) persisted = await persistPickedPhoto(photoUri, `extra-${Date.now()}`);
+      addExtra(input.dateKey, draft.name, draft.calories, draft.proteinG, mealTime, {
+        purineMg: draft.purineMg,
+        saltG: draft.saltG,
+        sugarG: draft.sugarG,
+        junk: draft.junk,
+        photoUri: persisted,
+      });
+      goBack();
+    } catch {
+      // Nothing was added: the form stays exactly as typed so the user can retry, or drop the photo.
+      if (persisted) deletePersistedPhoto(persisted).catch(() => {});
+      setSaveFailed(true);
+      setSaving(false);
+    }
   }
 
   const exceeded = {
@@ -115,7 +175,7 @@ export default function AddFoodScreen() {
         </HudText>
 
         <View style={styles.form}>
-          <QuestField label={g('food.name')} value={name} onChangeText={setName} placeholder={g('food.namePlaceholder')} />
+          <QuestField label={g('food.name')} value={name} onChangeText={typed('name', setName)} placeholder={g('food.namePlaceholder')} />
 
           <View style={styles.group}>
             <HudText size={12} weight="medium" color={quest.textSecondary}>
@@ -135,10 +195,10 @@ export default function AddFoodScreen() {
 
           <View style={styles.pair}>
             <View style={styles.pairCell}>
-              <QuestField label={g('food.calories')} keyboardType="decimal-pad" value={calories} onChangeText={(v) => { setCalories(v); setError(false); }} />
+              <QuestField label={g('food.calories')} keyboardType="decimal-pad" value={calories} onChangeText={(v) => { typed('calories', setCalories)(v); setError(false); }} />
             </View>
             <View style={styles.pairCell}>
-              <QuestField label={g('food.protein')} keyboardType="decimal-pad" value={protein} onChangeText={(v) => { setProtein(v); setError(false); }} />
+              <QuestField label={g('food.protein')} keyboardType="decimal-pad" value={protein} onChangeText={(v) => { typed('protein', setProtein)(v); setError(false); }} />
             </View>
           </View>
           {error && (
@@ -178,6 +238,57 @@ export default function AddFoodScreen() {
             />
           </View>
 
+          <FoodPhotoPicker
+            uri={photoUri}
+            onChange={(uri) => {
+              setPhotoUri(uri);
+              setSaveFailed(false);
+              ai.reset();
+              setAiNote(null);
+            }}
+            disabled={saving}
+          />
+          {photoUri && (
+            <View style={styles.group}>
+              <QuestButton
+                variant="ghost"
+                icon="chart"
+                title={ai.analyzing ? g('ai.analyzing') : g('ai.analyze')}
+                onPress={() => { void analyzePhoto(); }}
+                loading={ai.analyzing}
+                disabled={saving}
+              />
+              {ai.error && (
+                <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                  {aiErrorText(ai.error.kind)}
+                </HudText>
+              )}
+              {aiNote && !ai.error && (
+                <View style={styles.aiNote} accessibilityLiveRegion="polite">
+                  <HudText size={12} color={quest.manaText}>
+                    {g('ai.suggested')}
+                    {aiNote.confidence ? ` · ${aiNote.confidence}` : ''}
+                  </HudText>
+                  {aiNote.reasoning ? (
+                    <HudText size={12} weight="medium" color={quest.textSecondary}>
+                      {aiNote.reasoning}
+                    </HudText>
+                  ) : null}
+                  {aiNote.kept ? (
+                    <HudText size={12} weight="medium" color={quest.textSecondary}>
+                      {g('ai.keptYours')}
+                    </HudText>
+                  ) : null}
+                </View>
+              )}
+            </View>
+          )}
+          {saveFailed && (
+            <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+              {g('food.photo.saveFailed')}
+            </HudText>
+          )}
+
           <View style={styles.group}>
             <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
               {g('food.impact').toUpperCase()}
@@ -193,7 +304,7 @@ export default function AddFoodScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         <View style={screenMaxWidthStyle}>
-          <QuestButton icon="plus" title={g('food.save')} onPress={save} />
+          <QuestButton icon="plus" title={g('food.save')} onPress={() => { void save(); }} loading={saving} />
         </View>
       </View>
     </View>
@@ -222,5 +333,6 @@ const styles = StyleSheet.create({
     borderColor: quest.border,
   },
   junkText: { flex: 1 },
+  aiNote: { gap: 4, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: quest.bg, borderTopWidth: 1.5, borderTopColor: quest.border, alignItems: 'center' },
 });

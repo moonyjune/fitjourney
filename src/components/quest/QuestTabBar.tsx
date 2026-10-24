@@ -1,4 +1,7 @@
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { PressScale } from './motion/PressScale';
+import { DURATION, EASE_OUT, NATIVE_DRIVER, useMotionEnabled } from './motion/tokens';
 import type { BottomTabBarProps } from 'expo-router/js-tabs';
 import { router } from 'expo-router';
 import { useGameText, type GameKey } from '../../game/strings';
@@ -61,7 +64,10 @@ export function QuestTabBar({ state, descriptors, navigation, insets, coach = fa
         }}
         style={styles.tab}
       >
-        <QuestIcon name={meta.icon} size={24} color={color} strokeWidth={focused ? 2.4 : 2} />
+        <TabMark focused={focused} color={accent} />
+        <FocusLift focused={focused}>
+          <QuestIcon name={meta.icon} size={24} color={color} strokeWidth={focused ? 2.4 : 2} />
+        </FocusLift>
         <HudText size={12} weight={focused ? 'bold' : 'semibold'} color={color}>
           {label}
         </HudText>
@@ -75,7 +81,8 @@ export function QuestTabBar({ state, descriptors, navigation, insets, coach = fa
         {visible.slice(0, mid).map(renderTab)}
         {!coach && (
           <View style={styles.centerSlot}>
-            <Pressable
+            <PressScale
+              scaleTo={0.9}
               accessibilityRole="button"
               accessibilityLabel={g('tab.quickAdd')}
               onPress={() => router.push('/quick-add')}
@@ -84,7 +91,7 @@ export function QuestTabBar({ state, descriptors, navigation, insets, coach = fa
               <View style={styles.fabIcon}>
                 <QuestIcon name="plus" size={26} color={quest.onGold} strokeWidth={2.8} />
               </View>
-            </Pressable>
+            </PressScale>
           </View>
         )}
         {visible.slice(mid).map(renderTab)}
@@ -93,7 +100,51 @@ export function QuestTabBar({ state, descriptors, navigation, insets, coach = fa
   );
 }
 
+/** The little bar above the active tab: grows in when the tab becomes active, shrinks away when it stops. */
+function TabMark({ focused, color }: { focused: boolean; color: string }) {
+  const enabled = useMotionEnabled();
+  const grow = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  useEffect(() => {
+    if (!enabled) {
+      grow.setValue(focused ? 1 : 0);
+      return;
+    }
+    const run = Animated.timing(grow, { toValue: focused ? 1 : 0, duration: DURATION.base, easing: EASE_OUT, useNativeDriver: NATIVE_DRIVER });
+    run.start();
+    return () => run.stop();
+  }, [focused, enabled, grow]);
+  return <Animated.View style={[styles.mark, { pointerEvents: 'none', backgroundColor: color, opacity: grow, transform: [{ scaleX: grow }] }]} />;
+}
+
+/** Lifts the active tab's icon a touch with a springy settle. */
+function FocusLift({ focused, children }: { focused: boolean; children: React.ReactNode }) {
+  const enabled = useMotionEnabled();
+  const lift = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  useEffect(() => {
+    if (!enabled) {
+      lift.setValue(focused ? 1 : 0);
+      return;
+    }
+    const run = Animated.spring(lift, { toValue: focused ? 1 : 0, friction: 6, tension: 180, useNativeDriver: NATIVE_DRIVER });
+    run.start();
+    return () => run.stop();
+  }, [focused, enabled, lift]);
+  return (
+    <Animated.View
+      style={{
+        transform: [
+          { translateY: lift.interpolate({ inputRange: [0, 1], outputRange: [0, -2] }) },
+          { scale: lift.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
+  mark: { position: 'absolute', top: 2, width: 22, height: 3, borderRadius: 2 },
   // The wrap fills the bottom edge with the screen colour; the bar floats inside it.
   wrap: {
     position: 'absolute',

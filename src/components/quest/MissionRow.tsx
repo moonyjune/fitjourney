@@ -1,4 +1,7 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { FloatUp } from './motion/FloatUp';
+import { PopIn } from './motion/PopIn';
+import { PressScale } from './motion/PressScale';
 import type { MissionStatus } from '../../game/missions';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
@@ -20,9 +23,9 @@ interface MissionRowProps {
 function StatusBox({ status }: { status: MissionStatus }) {
   if (status === 'done') {
     return (
-      <View style={[styles.box, { backgroundColor: quest.gold }]}>
+      <PopIn playOnMount={false} style={[styles.box, { backgroundColor: quest.gold }]}>
         <QuestIcon name="check" size={16} color={quest.onGold} strokeWidth={3} />
-      </View>
+      </PopIn>
     );
   }
   if (status === 'holding') {
@@ -69,9 +72,16 @@ export function MissionRow({ title, subtitle, status, xp, progress, statusLabel,
           </View>
         )}
       </View>
-      <HudText size={14} color={done ? quest.xp : quest.textSecondary}>
-        +{xp}
-      </HudText>
+      <View style={styles.xpWrap}>
+        <HudText size={14} color={done ? quest.xp : quest.textSecondary}>
+          +{xp}
+        </HudText>
+        <FloatUp play={done} style={styles.xpFloat}>
+          <HudText size={15} color={quest.xp}>
+            +{xp} XP
+          </HudText>
+        </FloatUp>
+      </View>
     </View>
   );
 
@@ -84,13 +94,15 @@ export function MissionRow({ title, subtitle, status, xp, progress, statusLabel,
     );
   }
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}>
+    <PressScale scaleTo={0.98} accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}>
       {content}
-    </Pressable>
+    </PressScale>
   );
 }
 
 const styles = StyleSheet.create({
+  xpWrap: { alignItems: 'flex-end', justifyContent: 'center' },
+  xpFloat: { position: 'absolute', right: 0, top: -4 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

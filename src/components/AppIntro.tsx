@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { HudText } from './quest/HudText';
 import { hiddenSvgProps } from './quest/hiddenSvg';
-import { QuestShield } from './quest/QuestShield';
+import { FitJourneyLogo } from './FitJourneyLogo';
 import { useGameText } from '../game/strings';
 import { quest } from '../theme/quest';
 import { useReducedMotion } from '../theme/useReducedMotion';
 
+// The native animation driver doesn't exist on web (it would only log a warning and fall back to JS anyway).
+const NATIVE = Platform.OS !== 'web';
 const SHIELD = 132;
 const GLOW = SHIELD * 2.4;
 
@@ -32,12 +34,12 @@ export function AppIntro({ durationMs = 1200 }: AppIntroProps) {
       glow.setValue(0.5);
       return;
     }
-    const entrance = Animated.spring(rise, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true });
-    const bar = Animated.timing(fill, { toValue: 1, duration: durationMs, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    const entrance = Animated.spring(rise, { toValue: 1, friction: 7, tension: 60, useNativeDriver: NATIVE });
+    const bar = Animated.timing(fill, { toValue: 1, duration: durationMs, easing: Easing.out(Easing.cubic), useNativeDriver: NATIVE });
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(glow, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 0.25, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE }),
+        Animated.timing(glow, { toValue: 0.25, duration: 1100, easing: Easing.inOut(Easing.quad), useNativeDriver: NATIVE }),
       ])
     );
     entrance.start();
@@ -63,7 +65,6 @@ export function AppIntro({ durationMs = 1200 }: AppIntroProps) {
         <View style={styles.shieldWrap}>
           <Animated.View
             style={[styles.glow, { opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] }), transform: [{ scale: glowScale }] }]}
-            pointerEvents="none"
           >
             <Svg width={GLOW} height={GLOW} {...hiddenSvgProps}>
               <Defs>
@@ -77,7 +78,7 @@ export function AppIntro({ durationMs = 1200 }: AppIntroProps) {
             </Svg>
           </Animated.View>
           <Animated.View style={{ opacity: rise, transform: [{ scale: shieldScale }] }}>
-            <QuestShield level={1} width={SHIELD} />
+            <FitJourneyLogo width={SHIELD} />
           </Animated.View>
         </View>
         <Animated.View style={[styles.textBlock, { opacity: rise, transform: [{ translateY: textShift }] }]}>
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: quest.bg, alignItems: 'center', justifyContent: 'space-between', paddingVertical: 56 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 28 },
   shieldWrap: { width: SHIELD * 1.9, height: SHIELD * 1.9, alignItems: 'center', justifyContent: 'center' },
-  glow: { position: 'absolute', width: GLOW, height: GLOW },
+  glow: { position: 'absolute', width: GLOW, height: GLOW, pointerEvents: 'none' },
   textBlock: { alignItems: 'center', gap: 8, paddingHorizontal: 32 },
   name: { letterSpacing: 4, textAlign: 'center' },
   tagline: { textAlign: 'center', lineHeight: 19 },

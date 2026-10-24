@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useProofStore } from '../store/useProofStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
-import { persistPickedPhoto, imageUriToBase64 } from '../utils/photoStorage';
-import { requestPhotoAnalysis } from '../sync/cloudSync';
+import { persistPickedPhoto } from '../utils/photoStorage';
+import { aiNumberText, useAiFields } from '../ai/useAiFields';
+import { useAiErrorText, useConfidenceText, usePhotoAnalysis } from '../ai/usePhotoAnalysis';
+import { useGameText } from '../game/strings';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
 import { quest } from '../theme/quest';
@@ -25,6 +27,7 @@ interface ProofCaptureProps {
 
 export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plannedCalories, variant = 'light' }: ProofCaptureProps) {
   const { t } = useTranslation();
+  const g = useGameText();
   const palette = variant === 'quest' ? questPalette : lightPalette;
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const proof = useProofStore((s) => s.proofFor(dateKey, taskType, taskRefId));
@@ -39,21 +42,41 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  // The photo goes straight to the vision API (with the user's body data); its answer fills the inputs below as a
+  // suggestion. The user can edit every value, and a re-run never overwrites what they typed themselves.
+  const ai = usePhotoAnalysis(taskType === 'meal' ? 'meal' : 'workout', { label: contextLabel, plannedCalories });
+  const aiErrorText = useAiErrorText();
+  const confidenceText = useConfidenceText();
+  const aiFields = useAiFields<'calories' | 'water' | 'protein' | 'burned'>();
   const [analysisNote, setAnalysisNote] = useState<string | null>(null);
+  const [analysisKept, setAnalysisKept] = useState(false);
+  const [aiFoodName, setAiFoodName] = useState<string | null>(null);
   const [estimatedCalories, setEstimatedCalories] = useState('');
   const [estimatedWaterMl, setEstimatedWaterMl] = useState('');
+  const [estimatedProteinG, setEstimatedProteinG] = useState('');
   const [estimatedCaloriesBurned, setEstimatedCaloriesBurned] = useState('');
+  const latest = useRef({ calories: '', water: '', protein: '', burned: '' });
+  latest.current = { calories: estimatedCalories, water: estimatedWaterMl, protein: estimatedProteinG, burned: estimatedCaloriesBurned };
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
 
   function resetForm() {
     setIsEditing(false);
     setPendingUri(null);
     setNote('');
-    setAnalysisError(null);
+    ai.reset();
+    aiFields.clear();
     setAnalysisNote(null);
+    setAnalysisKept(false);
+    setAiFoodName(null);
     setEstimatedCalories('');
     setEstimatedWaterMl('');
+    setEstimatedProteinG('');
     setEstimatedCaloriesBurned('');
   }
 
@@ -82,24 +105,29 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   }
 
   async function handleAnalyze() {
-    if (!pendingUri) return;
-    setAnalyzing(true);
-    setAnalysisError(null);
-    try {
-      const { base64, mediaType } = await imageUriToBase64(pendingUri);
-      const result = await requestPhotoAnalysis(taskType, base64, mediaType, { label: contextLabel, plannedCalories });
-      if (!result.ok) {
-        setAnalysisError(result.message);
-        return;
-      }
-      setAnalysisNote(result.result.reasoning);
-      if (result.result.estimatedCaloriesKcal != null) setEstimatedCalories(String(Math.round(result.result.estimatedCaloriesKcal)));
-      if (result.result.estimatedWaterMl != null) setEstimatedWaterMl(String(Math.round(result.result.estimatedWaterMl)));
-      if (result.result.estimatedCaloriesBurned != null)
-        setEstimatedCaloriesBurned(String(Math.round(result.result.estimatedCaloriesBurned)));
-    } finally {
-      setAnalyzing(false);
+    if (!pendingUri || ai.analyzing) return;
+    const result = await ai.analyze(pendingUri);
+    if (!result || !alive.current) return;
+    const cur = latest.current;
+    const outcomes =
+      taskType === 'meal'
+        ? [
+            aiFields.fill('calories', cur.calories, aiNumberText(result.estimatedCaloriesKcal), setEstimatedCalories),
+            aiFields.fill('water', cur.water, aiNumberText(result.estimatedWaterMl), setEstimatedWaterMl),
+            aiFields.fill('protein', cur.protein, aiNumberText(result.estimatedProteinG, 1), setEstimatedProteinG),
+          ]
+        : [aiFields.fill('burned', cur.burned, aiNumberText(result.estimatedCaloriesBurned), setEstimatedCaloriesBurned)];
+    setAnalysisKept(outcomes.includes('kept'));
+    setAiFoodName(taskType === 'meal' ? result.foodName?.trim() || null : null);
+    const parts: string[] = [];
+    if (taskType === 'workout' && result.activityName) {
+      parts.push(result.durationMin ? g('ai.workoutSummary', { activity: result.activityName, min: Math.round(result.durationMin) }) : result.activityName);
     }
+    if (taskType === 'meal' && result.foodName) parts.push(result.foodName);
+    const confidence = confidenceText(result.confidence);
+    if (confidence) parts.push(confidence);
+    if (result.reasoning) parts.push(result.reasoning);
+    setAnalysisNote(parts.join(' · '));
   }
 
   async function handleSave() {
@@ -115,9 +143,10 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
 
       const cal = parseFloat(estimatedCalories.replace(',', '.'));
       const water = parseFloat(estimatedWaterMl.replace(',', '.'));
+      const protein = parseFloat(estimatedProteinG.replace(',', '.'));
       const burned = parseFloat(estimatedCaloriesBurned.replace(',', '.'));
       if (taskType === 'meal') {
-        if (cal > 0) addExtra(dateKey, contextLabel ?? '', cal, 0, null);
+        if (cal > 0) addExtra(dateKey, aiFoodName || contextLabel || '', cal, protein > 0 ? protein : 0, null);
         if (water > 0) addWater(dateKey, water);
       } else if (taskType === 'workout' && burned > 0) {
         updateEntryCaloriesBurned(taskRefId, burned);
@@ -156,15 +185,31 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
       {pendingUri ? (
         <>
           <Image source={{ uri: pendingUri }} style={styles.thumbnail} />
-          <TouchableOpacity style={styles.analyzeButton} onPress={handleAnalyze} disabled={analyzing}>
-            {analyzing ? (
+          <TouchableOpacity
+            style={styles.analyzeButton}
+            onPress={handleAnalyze}
+            disabled={ai.analyzing}
+            accessibilityRole="button"
+            accessibilityLabel={g('ai.analyze')}
+            accessibilityState={{ busy: ai.analyzing, disabled: ai.analyzing }}
+          >
+            {ai.analyzing ? (
               <ActivityIndicator size="small" color={palette.accent} />
             ) : (
-              <Text style={styles.analyzeButtonText}>{t('proof.analyzeButton')}</Text>
+              <Text style={styles.analyzeButtonText}>{g('ai.analyze')}</Text>
             )}
           </TouchableOpacity>
-          {analysisError && <Text style={styles.analysisError}>{t('proof.analysisError')}</Text>}
-          {analysisNote && <Text style={styles.analysisNote}>{analysisNote}</Text>}
+          {ai.error && (
+            <Text style={styles.analysisError} accessibilityRole="alert">
+              {aiErrorText(ai.error.kind)}
+            </Text>
+          )}
+          {analysisNote && !ai.error && (
+            <Text style={styles.analysisNote} accessibilityLiveRegion="polite">
+              {g('ai.suggested')} {analysisNote}
+              {analysisKept ? ` ${g('ai.keptYours')}` : ''}
+            </Text>
+          )}
 
           {taskType === 'meal' ? (
             <View style={styles.estimateRow}>
@@ -174,7 +219,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
                 placeholder={t('proof.caloriesPlaceholder')}
                 keyboardType="decimal-pad"
                 value={estimatedCalories}
-                onChangeText={setEstimatedCalories}
+                onChangeText={aiFields.typed('calories', setEstimatedCalories)}
               />
               <TextInput
                 placeholderTextColor={palette.placeholder}
@@ -182,7 +227,16 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
                 placeholder={t('proof.waterPlaceholder')}
                 keyboardType="decimal-pad"
                 value={estimatedWaterMl}
-                onChangeText={setEstimatedWaterMl}
+                onChangeText={aiFields.typed('water', setEstimatedWaterMl)}
+              />
+              <TextInput
+                placeholderTextColor={palette.placeholder}
+                style={[styles.estimateInput, styles.input]}
+                placeholder={g('food.protein')}
+                accessibilityLabel={g('food.protein')}
+                keyboardType="decimal-pad"
+                value={estimatedProteinG}
+                onChangeText={aiFields.typed('protein', setEstimatedProteinG)}
               />
             </View>
           ) : (
@@ -192,7 +246,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
               placeholder={t('proof.caloriesBurnedPlaceholder')}
               keyboardType="decimal-pad"
               value={estimatedCaloriesBurned}
-              onChangeText={setEstimatedCaloriesBurned}
+              onChangeText={aiFields.typed('burned', setEstimatedCaloriesBurned)}
             />
           )}
         </>

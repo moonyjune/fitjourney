@@ -2,6 +2,9 @@ import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FadeInUp } from '../src/components/quest/motion/FadeInUp';
+import { PopIn } from '../src/components/quest/motion/PopIn';
+import { Shine } from '../src/components/quest/motion/Shine';
 import { BannerRibbon } from '../src/components/quest/BannerRibbon';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
@@ -44,7 +47,10 @@ function progressText(a: { kind: BannerKind; current: number; target: number }, 
   return g(kg ? 'ach.progressKg' : 'ach.progress', { cur: fmt(a.current, kg), tgt: fmt(a.target, kg) });
 }
 
-function StickerTile({ a, stats, g, lang }: { a: AchievementState; stats: AchievementStats; g: Translate; lang: 'vi' | 'en' }) {
+/** How many sticker tiles (counted from the top of the screen) get an entrance; the rest just appear. */
+const ANIMATED_TILES = 12;
+
+function StickerTile({ a, stats, g, lang, index }: { a: AchievementState; stats: AchievementStats; g: Translate; lang: 'vi' | 'en'; index: number }) {
   const p = params(a, stats, lang);
   const name = g(`ach.name.${a.kind}` as GameKey, p);
   const cond = g(`ach.cond.${a.kind}` as GameKey, p);
@@ -56,7 +62,12 @@ function StickerTile({ a, stats, g, lang }: { a: AchievementState; stats: Achiev
       accessibilityLabel={`${name}. ${cond}. ${g(`ach.rarity.${a.rarity}` as GameKey)}. ${a.earned ? g('ach.earned') : `${g('ach.locked')}, ${progressText(a, g)}`}`}
       style={[styles.tile, a.earned && styles.tileEarned]}
     >
-      <Sticker achievement={a} size={52} />
+      <View style={styles.stickerBox}>
+        <PopIn active={a.earned} playOnMount={a.earned && index < ANIMATED_TILES}>
+          <Sticker achievement={a} size={52} />
+        </PopIn>
+        {a.earned && index < ANIMATED_TILES && <Shine size={52} delay={350 + index * 40} />}
+      </View>
       <HudText size={13} numberOfLines={2} style={styles.tileName}>
         {name}
       </HudText>
@@ -117,10 +128,16 @@ export default function AchievementsScreen() {
   const equippedId = useAchievementStore((s) => s.equippedBannerId);
   const equipBanner = useAchievementStore((s) => s.equipBanner);
 
-  const byCategory = useMemo(
-    () => CATEGORY_ORDER.map((id) => ({ id, items: stickers.filter((s) => s.category === id) })).filter((c) => c.items.length > 0),
-    [stickers]
-  );
+  const byCategory = useMemo(() => {
+    let offset = 0;
+    return CATEGORY_ORDER.map((id) => ({ id, items: stickers.filter((s) => s.category === id) }))
+      .filter((c) => c.items.length > 0)
+      .map((c) => {
+        const withOffset = { ...c, offset };
+        offset += c.items.length;
+        return withOffset;
+      });
+  }, [stickers]);
   const earned = stickers.filter((s) => s.earned).length;
   const earnedBanners = banners.filter((b) => b.earned).length;
 
@@ -151,11 +168,15 @@ export default function AchievementsScreen() {
               </HudText>
             </View>
             <View style={styles.grid}>
-              {cat.items.map((a) => (
-                <View key={a.id} style={styles.cell}>
-                  <StickerTile a={a} stats={stats} g={g} lang={lang} />
-                </View>
-              ))}
+              {cat.items.map((a, i) => {
+                // Only the tiles near the top of each section animate; the long tail renders at rest (no cost off-screen).
+                const order = cat.offset + i;
+                return (
+                  <FadeInUp key={a.id} style={styles.cell} index={Math.floor(order / 2)} animate={order < ANIMATED_TILES}>
+                    <StickerTile a={a} stats={stats} g={g} lang={lang} index={order} />
+                  </FadeInUp>
+                );
+              })}
             </View>
           </View>
         );
@@ -195,6 +216,7 @@ export default function AchievementsScreen() {
 }
 
 const styles = StyleSheet.create({
+  stickerBox: { width: 52, height: 52 },
   screen: { flex: 1, backgroundColor: quest.bg },
   content: { paddingHorizontal: 16, paddingBottom: 48, gap: 20 },
   section: { gap: 10 },

@@ -6,6 +6,7 @@ import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestShield } from '../src/components/quest/QuestShield';
 import { QuestSheet } from '../src/components/quest/QuestSheet';
 import { XpBar } from '../src/components/quest/XpBar';
+import { SparkleBurst } from '../src/components/quest/motion/SparkleBurst';
 import { titleKeyForLevel } from '../src/game/level';
 import { useGameText, type GameKey } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
@@ -13,6 +14,7 @@ import { useCelebrationStore } from '../src/store/useCelebrationStore';
 import { quest } from '../src/theme/quest';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import { useReducedMotion } from '../src/theme/useReducedMotion';
+import { NATIVE_DRIVER } from '../src/components/quest/motion/tokens';
 
 function close() {
   if (router.canGoBack()) router.back();
@@ -44,15 +46,20 @@ export default function LevelUpScreen() {
       scale.setValue(1);
       return;
     }
-    Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: true }).start();
+    const run = Animated.spring(scale, { toValue: 1, friction: 5, useNativeDriver: NATIVE_DRIVER });
+    run.start();
+    return () => run.stop();
   }, [reduced, scale]);
 
   return (
     <QuestSheet onClose={close} closeLabel={g('common.close')}>
       <View style={styles.center}>
-        <Animated.View style={{ transform: [{ scale }] }}>
-          <QuestShield level={to} width={120} />
-        </Animated.View>
+        <View style={styles.shieldStage}>
+          <SparkleBurst radius={120} count={14} />
+          <Animated.View style={{ transform: [{ scale }] }}>
+            <QuestShield level={to} width={120} />
+          </Animated.View>
+        </View>
         <HudText size={11} color={quest.gold} style={styles.eyebrow}>
           {g('levelup.eyebrow').toUpperCase()}
         </HudText>
@@ -70,7 +77,7 @@ export default function LevelUpScreen() {
           </View>
         )}
         <View style={styles.bar}>
-          <XpBar ratio={game.level.ratio} accessibilityLabel={g('level.progress', { cur: game.level.xpIntoLevel, need: game.level.xpForNext, next: game.level.level + 1 })} />
+          <XpBar ratio={game.level.ratio} delay={450} accessibilityLabel={g('level.progress', { cur: game.level.xpIntoLevel, need: game.level.xpForNext, next: game.level.level + 1 })} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {g('levelup.next', { need: game.level.xpForNext - game.level.xpIntoLevel, next: game.level.level + 1 })}
@@ -84,6 +91,7 @@ export default function LevelUpScreen() {
 }
 
 const styles = StyleSheet.create({
+  shieldStage: { width: 240, height: 140, alignItems: 'center', justifyContent: 'center' },
   center: { alignItems: 'center', gap: 8, paddingVertical: 12 },
   eyebrow: { letterSpacing: 1.8, marginTop: 8 },
   text: { textAlign: 'center' },

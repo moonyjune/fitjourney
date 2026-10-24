@@ -177,7 +177,7 @@ export default function WeightScreen() {
             hidePointsAtIndex={chartData.nonEntryIndices}
             style={{ borderRadius: questRadius.row }}
           />
-          <View pointerEvents="none" style={[styles.todayLine, { left: todayLineX, height: chartHeight - 34 }]} />
+          <View style={[styles.todayLine, { left: todayLineX, height: chartHeight - 34 }]} />
         </View>
         <HudText size={10} weight="medium" color={quest.hpText} style={styles.todayLineCaption}>
           {t('weight.todayMarker')}
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   legendRow: { flexDirection: 'row', gap: 16 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  todayLine: { position: 'absolute', top: 16, width: 1.5, backgroundColor: quest.hp, opacity: 0.7 },
+  todayLine: { position: 'absolute', top: 16, width: 1.5, backgroundColor: quest.hp, opacity: 0.7, pointerEvents: 'none' },
   todayLineCaption: { textAlign: 'right', marginTop: -8 },
   milestonesTitle: { marginTop: 4 },
   milestoneRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8, backgroundColor: quest.manaPanel, borderWidth: 1, borderColor: quest.manaBorder, borderRadius: questRadius.row, paddingHorizontal: 12, paddingVertical: 10 },

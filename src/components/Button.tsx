@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, type ViewStyle } from 'react-native';
 import { useAccentColors } from '../theme/useAccentColors';
 import { radius, spacing, typography } from '../theme/tokens';
+import { NATIVE_DRIVER } from './quest/motion/tokens';
 
 type ButtonVariant = 'primary' | 'secondary' | 'success' | 'danger' | 'outline';
 type ButtonSize = 'md' | 'sm';
@@ -38,7 +39,7 @@ export function Button({ title, onPress, variant = 'primary', size = 'md', loadi
   };
 
   function animateTo(value: number) {
-    Animated.spring(scale, { toValue: value, friction: 6, tension: 140, useNativeDriver: true }).start();
+    Animated.spring(scale, { toValue: value, friction: 6, tension: 140, useNativeDriver: NATIVE_DRIVER }).start();
   }
 
   return (

@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../store/useAuthStore';
+import type { BodyProfile } from '../ai/bodyProfile';
+import { DEV_ANALYSIS_DELAY_MS, fakePhotoAnalysis } from '../ai/devPhotoAnalysis';
 import { generateCoachCode } from '../utils/coachCode';
 import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 import { isOnline, useSyncQueueStore, type SyncOp } from './syncQueue';
@@ -683,28 +685,70 @@ async function describeFunctionsError(error: unknown): Promise<string> {
 }
 
 export interface PhotoAnalysisResult {
+  // Meal photos
+  foodName?: string;
   estimatedCaloriesKcal?: number;
+  estimatedProteinG?: number;
   estimatedWaterMl?: number;
+  // Workout photos
+  activityName?: string;
+  durationMin?: number;
   estimatedCaloriesBurned?: number;
+  confidence?: 'low' | 'medium' | 'high';
   reasoning: string;
 }
 
-/** Calls the analyze-proof-photo edge function; requires ANTHROPIC_API_KEY to be configured server-side. */
+/** Why a photo analysis failed, so the UI can say something useful. Manual entry always keeps working. */
+export type AiErrorKind = 'notConfigured' | 'offline' | 'auth' | 'generic';
+
+export type PhotoAnalysisOutcome =
+  | { ok: true; result: PhotoAnalysisResult }
+  | { ok: false; message: string; kind: AiErrorKind };
+
+/** Maps an Edge Function failure to a kind. The server answers 500 with a message naming ANTHROPIC_API_KEY when the
+ *  AI key is not configured yet, 401 when the session is not valid; a network failure never reaches the server. */
+export function classifyAiError(message: string, status?: number): AiErrorKind {
+  const text = message.toLowerCase();
+  if (text.includes('anthropic_api_key') || text.includes('chưa cấu hình')) return 'notConfigured';
+  if (status === 401 || text.includes('authorization') || text.includes('xác thực')) return 'auth';
+  if (
+    status === 0 ||
+    text.includes('failed to send a request') ||
+    text.includes('failed to fetch') ||
+    text.includes('network') ||
+    text.includes('offline')
+  ) {
+    return 'offline';
+  }
+  return 'generic';
+}
+
+/** Calls the analyze-proof-photo edge function; requires ANTHROPIC_API_KEY to be configured server-side. The photo goes
+ *  straight to the vision model (no OCR step) together with the user's body data so the estimate fits the person.
+ *  The offline dev account never touches the network: it gets a clearly labelled simulated result. */
 export async function requestPhotoAnalysis(
   taskType: 'meal' | 'workout',
   imageBase64: string,
   mediaType: string,
-  context: { label?: string; plannedCalories?: number }
-): Promise<{ ok: true; result: PhotoAnalysisResult } | { ok: false; message: string }> {
+  context: { label?: string; plannedCalories?: number },
+  profile?: BodyProfile
+): Promise<PhotoAnalysisOutcome> {
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: fakePhotoAnalysis(taskType, profile) };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
     const { data, error } = await supabase.functions.invoke('analyze-proof-photo', {
-      body: { taskType, imageBase64, mediaType, context },
+      body: { taskType, imageBase64, mediaType, context, profile },
     });
     if (error) throw error;
-    if (data?.error) return { ok: false, message: data.error };
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
     return { ok: true, result: data.result as PhotoAnalysisResult };
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : 'Unknown error' };
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyAiError(message, status) };
   }
 }
 

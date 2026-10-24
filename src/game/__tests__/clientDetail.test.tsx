@@ -147,4 +147,55 @@ describe('Coach client detail', () => {
     const again = renderer.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.multiline)[0];
     expect(again.props.value).toBe('Cố lên');
   });
+
+  describe('photos of off-plan food', () => {
+    const day = '2026-10-22T10:00:00';
+    afterEach(() => {
+      mockTables.nutrition_logs = [];
+      mockTables.proof_photos = [];
+    });
+
+    it('labels them with the food name (or a generic label) and never shows the raw reference', async () => {
+      mockTables.nutrition_logs = [
+        { entry_date: day, meals_eaten: { meal1: true }, extra_items: [{ id: '111', name: 'Bánh bao', calories: 300, proteinG: 8, mealTime: null, loggedAtISO: day }] },
+      ];
+      mockTables.proof_photos = [
+        { id: 'p1', entry_date: day, note: 'Bánh bao', photo_path: 'a', task_type: 'meal', task_ref_id: 'extra:111' },
+        { id: 'p2', entry_date: day, note: null, photo_path: 'b', task_type: 'meal', task_ref_id: 'extra:999' }, // item since deleted from the diary
+        { id: 'p3', entry_date: day, note: null, photo_path: 'c', task_type: 'meal', task_ref_id: 'meal1' },
+      ];
+      renderer = await mount();
+      const text = allText(renderer);
+      expect(text).toContain('Bánh bao');
+      expect(text).toContain('Món ngoài kế hoạch');
+      expect(text).toContain('Bữa 1'); // plan meals are unaffected
+      expect(text).not.toContain('extra:');
+    });
+
+    it('marks a photo of food still in the diary as logged, and one whose item was removed as only partial', async () => {
+      mockTables.nutrition_logs = [
+        { entry_date: day, meals_eaten: {}, extra_items: [{ id: '111', name: 'Bánh bao', calories: 300, proteinG: 8, mealTime: null, loggedAtISO: day }] },
+      ];
+      mockTables.proof_photos = [
+        { id: 'p1', entry_date: day, note: null, photo_path: 'a', task_type: 'meal', task_ref_id: 'extra:111' },
+        { id: 'p2', entry_date: day, note: null, photo_path: 'b', task_type: 'meal', task_ref_id: 'extra:999' },
+      ];
+      renderer = await mount();
+      const statusOf = (labelStart: string) => {
+        const item = renderer!.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith(labelStart))[0];
+        const parts: string[] = [];
+        const walk = (n: string | import('react-test-renderer').ReactTestInstance) => (typeof n === 'string' ? parts.push(n) : n.children.forEach(walk));
+        walk(item);
+        return parts.join(' ');
+      };
+      expect(statusOf('Bánh bao')).toContain('✅');
+      expect(statusOf('Bánh bao')).not.toContain('❌');
+      expect(statusOf('Món ngoài kế hoạch')).toContain('⚠️');
+      // Opening the detail says the same thing in words.
+      const open = renderer.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('Bánh bao'))[0];
+      await act(async () => open.props.onPress());
+      expect(allText(renderer)).toContain('Bánh bao');
+      expect(allText(renderer)).not.toContain('Chưa đạt');
+    });
+  });
 });

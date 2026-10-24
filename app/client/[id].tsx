@@ -21,6 +21,7 @@ import { useTranslation } from '../../src/i18n/useTranslation';
 import type { StringKey } from '../../src/i18n/strings';
 import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { EXTRA_PROOF_PREFIX, extraProofRef } from '../../src/types';
 import type {
   ActivityLevel,
   CoachFeedback,
@@ -230,13 +231,21 @@ export default function ClientDetailScreen() {
     Alert.alert(t('clientDetail.updatedTitle'), t('clientDetail.updatedMessage'));
   }
 
+  /** The off-plan food a photo belongs to (its `taskRefId` is `extra:<itemId>`), if it is still in that day's diary. */
+  function extraItemFor(ref: string, dateKey: string) {
+    return nutritionLogsByDate[dateKey]?.extraItems.find((i) => extraProofRef(i.id) === ref);
+  }
+
   function proofMealLabel(slot: MealSlot, dateKey: string): string {
+    if (slot.startsWith(EXTRA_PROOF_PREFIX)) return extraItemFor(slot, dateKey)?.name || g('coach.extraFood');
     const dayType = getDayType(new Date(dateKey));
     const template = plan?.mealTemplates[dayType]?.find((m) => m.slot === slot);
     return template?.label ?? slot;
   }
 
   function proofMealStatus(slot: MealSlot, dateKey: string): ProofStatus {
+    // An off-plan item has no plan slot to tick: a photo of food that is still in the diary is simply "logged".
+    if (slot.startsWith(EXTRA_PROOF_PREFIX)) return extraItemFor(slot, dateKey) ? 'met' : 'partial';
     const log = nutritionLogsByDate[dateKey];
     if (!log) return 'missing';
     return log.mealsEaten[slot] ? 'met' : 'partial';

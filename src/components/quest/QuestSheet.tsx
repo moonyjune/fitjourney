@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { quest } from '../../theme/quest';
 import { screenMaxWidthStyle } from '../../theme/responsive';
+import { FadeInUp } from './motion/FadeInUp';
 
 interface QuestSheetProps {
   children: ReactNode;
@@ -17,10 +18,10 @@ export function QuestSheet({ children, onClose, closeLabel }: QuestSheetProps) {
   return (
     <View style={styles.root}>
       <Pressable accessibilityRole="button" accessibilityLabel={closeLabel} onPress={onClose} style={[StyleSheet.absoluteFill, styles.backdrop]} />
-      <View style={[styles.panel, screenMaxWidthStyle, { paddingBottom: insets.bottom + 16 }]}>
+      <FadeInUp distance={48} duration={340} style={[styles.panel, screenMaxWidthStyle, { paddingBottom: insets.bottom + 16 }]}>
         <View style={styles.handle} />
         {children}
-      </View>
+      </FadeInUp>
     </View>
   );
 }

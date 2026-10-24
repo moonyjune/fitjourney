@@ -85,7 +85,14 @@ export interface ExtraFoodItem {
   sugarG?: number;
   /** User-flagged junk food; any flagged item fails that day's "no junk food" mission. */
   junk?: boolean;
+  /** Photo of the food, as a file persisted on this device. The same photo is also saved as a meal proof
+   *  (`taskRefId` = `extraProofRef(item.id)`) so it syncs and the coach can see it. Absent on older items. */
+  photoUri?: string;
 }
+
+/** `ProofPhoto.taskRefId` of the photo attached to an off-plan food item. The prefix can never be a plan meal slot. */
+export const EXTRA_PROOF_PREFIX = 'extra:';
+export const extraProofRef = (itemId: string): string => `${EXTRA_PROOF_PREFIX}${itemId}`;
 
 export interface DailyNutritionLog {
   dateISO: string;

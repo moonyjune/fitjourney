@@ -1,4 +1,4 @@
-# Fit Journey
+# FitJourney
 
 Ứng dụng cá nhân theo dõi tiến trình giảm cân theo kế hoạch IF 16:8 (xem `Input/KeHoachGiamCan.docx`
 và `Input/BuyingList.docx`). Viết bằng **React Native + Expo Router**, chạy được trên **iOS, Android

@@ -1,3 +1,4 @@
+import { HitShake } from '../src/components/quest/motion/HitShake';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -47,7 +48,9 @@ export default function BossScreen() {
       />
 
       <View style={styles.face} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        <BossFace size={150} defeated={boss.defeated} />
+        <HitShake play={!!today && today.damage > 0}>
+          <BossFace size={150} defeated={boss.defeated} />
+        </HitShake>
         {today && today.damage > 0 && (
           <HudText size={34} color={quest.gold} style={styles.floating}>
             −{num(today.damage)}
@@ -63,7 +66,7 @@ export default function BossScreen() {
           {num(boss.hpLeft)} <HudText size={14} weight="medium" color={quest.textSecondary}>/ {num(boss.maxHp)}</HudText>
         </HudText>
       </View>
-      <XpBar ratio={boss.maxHp > 0 ? boss.hpLeft / boss.maxHp : 0} color={quest.hp} trackColor={quest.bossPanel} height={14} />
+      <XpBar ratio={boss.maxHp > 0 ? boss.hpLeft / boss.maxHp : 0} color={quest.hp} trackColor={quest.bossPanel} height={14} from={1} delay={300} />
       <HudText size={13} weight="medium" color={quest.textSecondary}>
         {boss.defeated
           ? g('boss.detail.beaten')

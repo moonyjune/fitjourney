@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BossCard } from '../../src/components/quest/BossCard';
 import { HudText } from '../../src/components/quest/HudText';
 import { MissionRow } from '../../src/components/quest/MissionRow';
 import { QuestIcon } from '../../src/components/quest/QuestIcon';
+import { FadeInUp } from '../../src/components/quest/motion/FadeInUp';
+import { PressScale } from '../../src/components/quest/motion/PressScale';
 import { PlayerHeader } from '../../src/components/quest/PlayerHeader';
 import { WindowCard } from '../../src/components/quest/WindowCard';
 import { MISSION_XP, PERFECT_DAY_BONUS_XP, WORKOUT_MIN_MINUTES, type MissionId } from '../../src/game/constants';
@@ -88,7 +90,8 @@ const MISSION_TARGET: Partial<Record<MissionId, '/(tabs)/workout' | '/(tabs)/nut
 
 function CampLink({ icon, label, onPress }: { icon: 'list' | 'smile'; label: string; onPress: () => void }) {
   return (
-    <Pressable
+    <PressScale
+      wrapperStyle={styles.linkWrap}
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
@@ -98,7 +101,7 @@ function CampLink({ icon, label, onPress }: { icon: 'list' | 'smile'; label: str
       <HudText size={13} numberOfLines={1} style={styles.linkText}>
         {label}
       </HudText>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -139,44 +142,47 @@ export default function CampScreen() {
         style={styles.scroll}
         contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
       >
-        <PlayerHeader level={level} titleKey={titleKeyForLevel(level.level)} streak={game.streak} />
+        <FadeInUp index={0}>
+          <PlayerHeader level={level} titleKey={titleKeyForLevel(level.level)} streak={game.streak} />
+        </FadeInUp>
 
-        <View style={styles.gap}>
+        <FadeInUp index={1} style={styles.gap}>
           <WindowCard isEatingWindow={ifStatus.isEatingWindow} hoursUntilTransition={ifStatus.hoursUntilTransition} />
-        </View>
-        <View style={styles.gap}>
+        </FadeInUp>
+        <FadeInUp index={2} style={styles.gap}>
           <BossCard boss={boss} todayDamage={todayDamage} onPress={() => router.push('/boss')} />
-        </View>
+        </FadeInUp>
 
-        <View style={[styles.links, styles.gap]}>
+        <FadeInUp index={3} style={[styles.links, styles.gap]}>
           <CampLink icon="list" label={g('journal.title')} onPress={() => router.push('/journal')} />
           <CampLink icon="smile" label={g('checkin.title')} onPress={() => router.push('/checkin')} />
-        </View>
+        </FadeInUp>
 
-        <View style={[styles.sectionHead, styles.gap]}>
+        <FadeInUp index={4} style={[styles.sectionHead, styles.gap]}>
           <HudText size={17} accessibilityRole="header">
             {g('missions.title')}
           </HudText>
           <HudText size={12} weight="medium" color={quest.textSecondary}>
             {g('missions.summary', counts)}
           </HudText>
-        </View>
+        </FadeInUp>
 
         <View style={styles.list}>
-          {today.missions.map((m) => {
+          {today.missions.map((m, i) => {
             const copy = describeMission(m, today, g);
             const target = MISSION_TARGET[m.id];
             return (
-              <MissionRow
-                key={m.id}
-                title={copy.title}
-                subtitle={copy.subtitle}
-                statusLabel={copy.statusLabel}
-                status={m.status}
-                xp={MISSION_XP[m.id]} // the reward on offer; the row styles itself as earned once done
-                progress={copy.progress}
-                onPress={target ? () => router.push(target) : undefined}
-              />
+              <FadeInUp key={m.id} index={5 + i}>
+                <MissionRow
+                  title={copy.title}
+                  subtitle={copy.subtitle}
+                  statusLabel={copy.statusLabel}
+                  status={m.status}
+                  xp={MISSION_XP[m.id]} // the reward on offer; the row styles itself as earned once done
+                  progress={copy.progress}
+                  onPress={target ? () => router.push(target) : undefined}
+                />
+              </FadeInUp>
             );
           })}
         </View>
@@ -199,6 +205,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 120 },
   gap: { marginTop: 12 },
   links: { flexDirection: 'row', gap: 10 },
+  linkWrap: { flex: 1 },
   link: {
     flex: 1,
     minHeight: 48,

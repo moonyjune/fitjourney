@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Fit Journey",
+    "name": "FitJourney",
     "slug": "losing-weight-tracker",
     "scheme": "weighttracker",
     "version": "1.0.0",
@@ -15,7 +15,7 @@
     "android": {
       "package": "com.harrytrinh.losingweighttracker",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#110D22",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"

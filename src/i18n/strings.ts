@@ -8,7 +8,7 @@ export type Language = 'vi' | 'en';
 
 export const STRINGS = {
   vi: {
-    'app.name': 'Fit Journey',
+    'app.name': 'FitJourney',
     'app.tagline': 'Giảm cân bền vững · Cân bằng cuộc sống · Sống khỏe mỗi ngày',
 
     'tab.today': 'Hôm nay',
@@ -43,7 +43,7 @@ export const STRINGS = {
     'common.notSignedIn': 'Chưa đăng nhập',
     'sync.pendingCount': '{n} thay đổi chưa đồng bộ',
 
-    'auth.title': 'Fit Journey',
+    'auth.title': 'FitJourney',
     'auth.subtitleSignIn': 'Đăng nhập để đồng bộ dữ liệu của bạn.',
     'auth.subtitleSignUp': 'Tạo tài khoản mới để bắt đầu.',
     'auth.email': 'Email',
@@ -415,7 +415,7 @@ export const STRINGS = {
     'chat.genericError': 'Có lỗi xảy ra khi gọi AI.',
   },
   en: {
-    'app.name': 'Fit Journey',
+    'app.name': 'FitJourney',
     'app.tagline': 'Lose weight sustainably · Balance your life · Live healthier every day',
 
     'tab.today': 'Today',
@@ -450,7 +450,7 @@ export const STRINGS = {
     'common.notSignedIn': 'Not signed in',
     'sync.pendingCount': '{n} changes not synced yet',
 
-    'auth.title': 'Fit Journey',
+    'auth.title': 'FitJourney',
     'auth.subtitleSignIn': 'Sign in to sync your data.',
     'auth.subtitleSignUp': 'Create a new account to get started.',
     'auth.email': 'Email',

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
@@ -34,6 +34,9 @@ import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { toDateKey } from '../../src/utils/date';
 import { hiddenSvgProps } from '../../src/components/quest/hiddenSvg';
+import { animatedSvg } from '../../src/components/quest/motion/animatedSvg';
+import { Bump } from '../../src/components/quest/motion/Bump';
+import { EASE_OUT, useMotionEnabled } from '../../src/components/quest/motion/tokens';
 
 const RING = 220;
 const STROKE = 14;
@@ -60,14 +63,35 @@ function formatClock(totalSeconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function Ring({ fraction, children }: { fraction: number; children: React.ReactNode }) {
+const AnimatedCircle = animatedSvg(Circle);
+
+/** The progress ring. `smooth` is for the per-second countdowns (holds, rests): the arc glides at a constant pace
+ *  instead of stepping once a second. Rep counts ease to each new value. Reduced motion jumps straight there. */
+function Ring({ fraction, smooth, children }: { fraction: number; smooth?: boolean; children: React.ReactNode }) {
   const r = (RING - STROKE) / 2;
   const c = 2 * Math.PI * r;
+  const enabled = useMotionEnabled();
+  const target = Math.min(1, Math.max(0, fraction));
+  const arc = useRef(new Animated.Value(target)).current;
+  useEffect(() => {
+    if (!enabled) {
+      arc.setValue(target);
+      return;
+    }
+    const run = Animated.timing(arc, {
+      toValue: target,
+      duration: smooth ? 950 : 280,
+      easing: smooth ? Easing.linear : EASE_OUT,
+      useNativeDriver: false,
+    });
+    run.start();
+    return () => run.stop();
+  }, [target, smooth, enabled, arc]);
   return (
     <View style={styles.ring}>
       <Svg width={RING} height={RING} style={StyleSheet.absoluteFill} {...hiddenSvgProps}>
         <Circle cx={RING / 2} cy={RING / 2} r={r} stroke={quest.raised} strokeWidth={STROKE} fill="none" />
-        <Circle
+        <AnimatedCircle
           cx={RING / 2}
           cy={RING / 2}
           r={r}
@@ -75,7 +99,7 @@ function Ring({ fraction, children }: { fraction: number; children: React.ReactN
           strokeWidth={STROKE}
           fill="none"
           strokeLinecap="round"
-          strokeDasharray={`${c * Math.min(1, Math.max(0, fraction))} ${c}`}
+          strokeDasharray={arc.interpolate({ inputRange: [0, 1], outputRange: [`0 ${c}`, `${c} ${c}`] })}
           rotation={-90}
           origin={`${RING / 2}, ${RING / 2}`}
         />
@@ -460,13 +484,15 @@ export default function SessionScreen() {
         </View>
 
         <View style={styles.center}>
-          <Ring fraction={fraction}>
+          <Ring fraction={fraction} smooth={resting || isTimed}>
             <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
               {(resting ? g('train.s.restTitle') : isTimed ? g('train.s.seconds') : g('train.s.reps')).toUpperCase()}
             </HudText>
-            <HudText size={72} accessibilityLiveRegion={resting ? 'none' : 'polite'}>
-              {bigNumber}
-            </HudText>
+            <Bump value={bigNumber} peak={resting ? 1 : 1.12}>
+              <HudText size={72} accessibilityLiveRegion={resting ? 'none' : 'polite'}>
+                {bigNumber}
+              </HudText>
+            </Bump>
             <HudText size={14} color={quest.textSecondary}>
               {g('train.s.setOf', { s: state.set + 1, t: step.sets })}
             </HudText>

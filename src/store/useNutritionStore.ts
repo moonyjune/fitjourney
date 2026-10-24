@@ -4,6 +4,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DailyNutritionLog, ExtraFoodItem, ExtraMealTime, MealSlot } from '../types';
 import { toDateKey } from '../utils/date';
 import { pushNutritionLog } from '../sync/cloudSync';
+import { useProofStore } from './useProofStore';
+import { deletePersistedPhoto } from '../utils/photoStorage';
+import { extraProofRef } from '../types';
 
 interface NutritionState {
   logs: Record<string, DailyNutritionLog>;
@@ -18,7 +21,7 @@ interface NutritionState {
     proteinG: number,
     mealTime: ExtraMealTime | null,
     /** Optional FitQuest fields; omitted ones are simply not stored on the item. */
-    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk'>
+    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri'>
   ) => void;
   removeExtraItem: (dateKey: string, itemId: string) => void;
   /** Commits a whole diary-table edit session (meal toggles, deleted default meals, edited/removed
@@ -41,6 +44,16 @@ function emptyLog(dateKey: string): DailyNutritionLog {
     emptyLogCache.set(dateKey, log);
   }
   return log;
+}
+
+/** Removes the photo attached to an off-plan food item: the proof entry and the persisted file. */
+function discardExtraPhoto(item: Pick<ExtraFoodItem, 'id' | 'photoUri'>): void {
+  const proofs = useProofStore.getState();
+  const ref = extraProofRef(item.id);
+  const linked = proofs.photos.filter((x) => x.taskType === 'meal' && x.taskRefId === ref);
+  for (const p of linked) proofs.removeProof(p.id); // also deletes the file
+  // No proof entry left for it (removed on its own earlier): still don't leave the file behind.
+  if (linked.length === 0 && item.photoUri) deletePersistedPhoto(item.photoUri).catch(() => {});
 }
 
 export const useNutritionStore = create<NutritionState>()(
@@ -71,14 +84,15 @@ export const useNutritionStore = create<NutritionState>()(
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
-      addExtra: (dateKey, name, calories, proteinG, mealTime, extras) =>
+      addExtra: (dateKey, name, calories, proteinG, mealTime, extras) => {
+        const item: ExtraFoodItem = { id: `${Date.now()}`, name, calories, proteinG, mealTime, loggedAtISO: new Date().toISOString() };
+        if (extras?.purineMg) item.purineMg = extras.purineMg;
+        if (extras?.saltG) item.saltG = extras.saltG;
+        if (extras?.sugarG) item.sugarG = extras.sugarG;
+        if (extras?.junk) item.junk = true;
+        if (extras?.photoUri) item.photoUri = extras.photoUri;
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
-          const item: ExtraFoodItem = { id: `${Date.now()}`, name, calories, proteinG, mealTime, loggedAtISO: new Date().toISOString() };
-          if (extras?.purineMg) item.purineMg = extras.purineMg;
-          if (extras?.saltG) item.saltG = extras.saltG;
-          if (extras?.sugarG) item.sugarG = extras.sugarG;
-          if (extras?.junk) item.junk = true;
           const updated = {
             ...current,
             extraItems: [...(current.extraItems ?? []), item],
@@ -87,12 +101,24 @@ export const useNutritionStore = create<NutritionState>()(
           };
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
-        }),
+        });
+        // The photo also goes through the proof pipeline so it syncs and the coach sees it next to the plan meals.
+        if (item.photoUri) {
+          useProofStore.getState().addProof({
+            taskType: 'meal',
+            taskRefId: extraProofRef(item.id),
+            photoUri: item.photoUri,
+            note: name,
+            dateISO: item.loggedAtISO,
+          });
+        }
+      },
       removeExtraItem: (dateKey, itemId) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const item = (current.extraItems ?? []).find((i) => i.id === itemId);
           if (!item) return state;
+          discardExtraPhoto(item);
           const updated = {
             ...current,
             extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId),
@@ -105,6 +131,9 @@ export const useNutritionStore = create<NutritionState>()(
       saveDayLog: (dateKey, patch) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
+          // Items dropped by this edit take their photo (file + proof) with them.
+          const kept = new Set(patch.extraItems.map((i) => i.id));
+          for (const old of current.extraItems ?? []) if (!kept.has(old.id)) discardExtraPhoto(old);
           const updated: DailyNutritionLog = {
             ...current,
             mealsEaten: patch.mealsEaten,

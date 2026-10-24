@@ -133,13 +133,13 @@ export default function RootLayout() {
       {!ready ? (
         <AppIntro durationMs={MIN_INTRO_MS} />
       ) : (
-        <Stack screenOptions={{ headerShown: false }}>
+        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', animationDuration: 280 }}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="onboarding" options={{ presentation: 'modal' }} />
-          <Stack.Screen name="role-select" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="onboarding" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="role-select" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="client/[id]" />
           <Stack.Screen name="meal/[slot]" />
-          <Stack.Screen name="add-food" options={{ presentation: 'modal' }} />
+          <Stack.Screen name="add-food" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="quick-add" options={{ presentation: 'transparentModal', animation: 'fade' }} />
           <Stack.Screen name="checkin" options={{ presentation: 'transparentModal', animation: 'fade' }} />
           <Stack.Screen name="journal" />
@@ -147,8 +147,8 @@ export default function RootLayout() {
           <Stack.Screen name="level-up" options={{ presentation: 'transparentModal', animation: 'fade' }} />
           <Stack.Screen name="achievements" />
           <Stack.Screen name="train/detail" />
-          <Stack.Screen name="train/session" options={{ gestureEnabled: false }} />
-          <Stack.Screen name="auth" />
+          <Stack.Screen name="train/session" options={{ gestureEnabled: false, animation: 'fade_from_bottom' }} />
+          <Stack.Screen name="auth" options={{ animation: 'fade' }} />
         </Stack>
       )}
     </SafeAreaProvider>

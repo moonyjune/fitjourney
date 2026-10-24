@@ -2,10 +2,12 @@
 // Deploy with: npx supabase functions deploy analyze-proof-photo
 // Requires secret: npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 //
-// Vision analysis of a meal or workout proof photo, called right after the user picks/takes it
-// and before they confirm saving it. For a meal photo: estimates calories eaten (and, if a drink
-// is visible, water/liquid ml). For a workout photo: estimates calories burned. The client always
-// shows these as editable fields — this is a starting estimate, never written to the DB directly.
+// Vision analysis of a meal or workout photo, called right after the user picks/takes it and before they
+// confirm saving it. The photo goes straight to the model (no separate OCR step). For a meal photo it names
+// the food and estimates calories, protein and, if a drink is visible, water ml. For a workout photo it reads
+// what is visible (machine/watch/app screen, equipment) and estimates the activity, duration and calories burned.
+// The client sends the user's body data (weight, height, age, gender, activity level) so the numbers fit the
+// person; the client always shows the result in editable fields — a starting estimate, never saved directly.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -25,18 +27,62 @@ function jsonResponse(body: unknown, status = 200) {
 
 const ANALYSIS_TOOL = {
   name: 'report_photo_analysis',
-  description: 'Reports the estimated nutrition/exercise values read from the photo.',
+  description: 'Reports the values read or estimated from the photo.',
   input_schema: {
     type: 'object',
     properties: {
+      foodName: { type: 'string', description: 'Meal photos only: short name of the food/dish shown (Vietnamese).' },
       estimatedCaloriesKcal: { type: 'number', description: 'Meal photos only: estimated calories of the food/drink shown.' },
+      estimatedProteinG: { type: 'number', description: 'Meal photos only: estimated grams of protein in the food shown.' },
       estimatedWaterMl: { type: 'number', description: 'Meal photos only, if a drink/water is visible: estimated ml of liquid.' },
-      estimatedCaloriesBurned: { type: 'number', description: 'Workout photos only: estimated calories burned this session.' },
+      activityName: { type: 'string', description: 'Workout photos only: the activity shown (Vietnamese), e.g. "Đi bộ dốc", "Bơi".' },
+      durationMin: { type: 'number', description: 'Workout photos only: duration in minutes if it can be read or reasonably inferred.' },
+      estimatedCaloriesBurned: { type: 'number', description: 'Workout photos only: calories burned this session for THIS person.' },
+      confidence: { type: 'string', enum: ['low', 'medium', 'high'], description: 'How sure the estimate is given what the photo shows.' },
       reasoning: { type: 'string', description: 'One short sentence (Vietnamese) explaining the estimate.' },
     },
     required: ['reasoning'],
   },
 };
+
+interface BodyProfile {
+  weightKg?: number;
+  heightCm?: number;
+  age?: number;
+  gender?: 'male' | 'female';
+  activityLevel?: string;
+}
+
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
+
+/** Only the fields we expect, with sane bounds, so a bad client can't inject text into the prompt. */
+function sanitizeProfile(raw: unknown): BodyProfile {
+  const p = (raw ?? {}) as Record<string, unknown>;
+  const within = (v: unknown, min: number, max: number) => {
+    const n = num(v);
+    return n !== undefined && n >= min && n <= max ? n : undefined;
+  };
+  return {
+    weightKg: within(p.weightKg, 20, 400),
+    heightCm: within(p.heightCm, 80, 250),
+    age: within(p.age, 5, 110),
+    gender: p.gender === 'male' || p.gender === 'female' ? p.gender : undefined,
+    activityLevel: ['sedentary', 'light', 'moderate', 'active', 'very_active'].includes(String(p.activityLevel))
+      ? String(p.activityLevel)
+      : undefined,
+  };
+}
+
+function describePerson(p: BodyProfile): string {
+  const parts = [
+    p.weightKg ? `cân nặng ${p.weightKg} kg` : null,
+    p.heightCm ? `cao ${p.heightCm} cm` : null,
+    p.age ? `${p.age} tuổi` : null,
+    p.gender ? (p.gender === 'male' ? 'nam' : 'nữ') : null,
+    p.activityLevel ? `mức vận động ${p.activityLevel}` : null,
+  ].filter(Boolean);
+  return parts.length ? `Người dùng: ${parts.join(', ')}.` : 'Không có thông tin thể trạng người dùng.';
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -64,24 +110,27 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Không xác thực được người dùng.' }, 401);
     }
 
-    const { taskType, imageBase64, mediaType, context } = (await req.json()) as {
+    const { taskType, imageBase64, mediaType, context, profile } = (await req.json()) as {
       taskType: 'meal' | 'workout';
       imageBase64: string;
       mediaType: string;
       context?: { label?: string; plannedCalories?: number };
+      profile?: unknown;
     };
     if (!imageBase64 || (taskType !== 'meal' && taskType !== 'workout')) {
       return jsonResponse({ error: 'Thiếu imageBase64 hoặc taskType không hợp lệ.' }, 400);
     }
 
+    const person = describePerson(sanitizeProfile(profile));
+    const label = String(context?.label ?? '').slice(0, 120);
     const prompt =
       taskType === 'meal'
-        ? `Đây là ảnh minh chứng bữa ăn "${context?.label ?? ''}"${
+        ? `Đây là ảnh món ăn/đồ uống${label ? ` "${label}"` : ''}${
             context?.plannedCalories ? ` (kế hoạch ~${context.plannedCalories} kcal)` : ''
-          }. Ước tính lượng calo thực tế trong ảnh, và nếu có nước/đồ uống thì ước tính thêm ml. Gọi tool report_photo_analysis.`
-        : `Đây là ảnh minh chứng buổi tập "${context?.label ?? ''}"${
+          }. ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về tên món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Gọi tool report_photo_analysis.`
+        : `Đây là ảnh buổi tập${label ? ` "${label}"` : ''}${
             context?.plannedCalories ? ` (kế hoạch đốt ~${context.plannedCalories} kcal)` : ''
-          }. Ước tính lượng calo đã đốt dựa trên những gì thấy được (máy tập, đồng hồ, cường độ...). Gọi tool report_photo_analysis.`;
+          }. ${person} Đọc những gì thấy được (màn hình máy tập/đồng hồ/ứng dụng: thời gian, quãng đường, nhịp tim, calo hiển thị; hoặc dụng cụ, tư thế). Trả về hoạt động, thời lượng (phút) và lượng calo đã đốt TÍNH CHO NGƯỜI NÀY (theo cân nặng và thể trạng, không chép nguyên số calo của máy nếu số đó rõ ràng không hợp lý). Nếu không chắc, nói rõ ở confidence và reasoning. Gọi tool report_photo_analysis.`;
 
     const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -92,7 +141,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 500,
+        max_tokens: 700,
         tools: [ANALYSIS_TOOL],
         tool_choice: { type: 'tool', name: 'report_photo_analysis' },
         messages: [

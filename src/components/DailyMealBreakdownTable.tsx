@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from './Button';
+import { FoodThumb } from './quest/FoodPhoto';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
 import { quest, questFonts } from '../theme/quest';
@@ -152,14 +153,17 @@ export function DailyMealBreakdownTable({
           // line to itself (a shared single row is too narrow for a long name to wrap in),
           // then meal-time/kcal/protein/delete on the line below.
           <View key={item.id} style={styles.extraRowEditable}>
-            <TextInput
-              placeholderTextColor={mutedColor}
-              style={styles.nameInputFullWidth}
-              value={item.name}
-              onChangeText={(text) => updateExtraItem(item.id, { name: text })}
-              placeholder={t('mealLog.extraSectionLabel')}
-              multiline
-            />
+            <View style={styles.extraNameRow}>
+              <FoodThumb uri={item.photoUri} name={item.name || t('mealLog.extraSectionLabel')} size={40} />
+              <TextInput
+                placeholderTextColor={mutedColor}
+                style={[styles.nameInputFullWidth, styles.extraNameInput]}
+                value={item.name}
+                onChangeText={(text) => updateExtraItem(item.id, { name: text })}
+                placeholder={t('mealLog.extraSectionLabel')}
+                multiline
+              />
+            </View>
             <View style={styles.extraEditableSubRow}>
               <Text style={[styles.cell, styles.statusCol, { color: accentColor }]}>
                 {item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : t('mealLog.extraSectionLabel')}
@@ -183,9 +187,12 @@ export function DailyMealBreakdownTable({
           </View>
         ) : (
           <View key={item.id} style={styles.row}>
-            <Text style={[styles.cell, styles.nameCol]}>
-              {item.name || t('mealLog.extraSectionLabel')} <Text style={styles.extraTime}>({formatTime(item.loggedAtISO)})</Text>
-            </Text>
+            <View style={[styles.nameCol, styles.extraNameRow]}>
+              <FoodThumb uri={item.photoUri} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
+              <Text style={[styles.cell, styles.extraNameInput]}>
+                {item.name || t('mealLog.extraSectionLabel')} <Text style={styles.extraTime}>({formatTime(item.loggedAtISO)})</Text>
+              </Text>
+            </View>
             <Text style={[styles.cell, styles.statusCol, { color: accentColor }]}>
               {item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : t('mealLog.extraSectionLabel')}
             </Text>
@@ -240,6 +247,8 @@ const makeStyles = (dark: boolean) => {
   },
   cell: { fontSize: 12, color: c.text, ...font },
   nameCol: { flex: 2.4, paddingRight: spacing.xs },
+  extraNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  extraNameInput: { flex: 1, minWidth: 0 },
   statusCol: { flex: 1.1 },
   numCol: { flex: 0.7, textAlign: 'right' },
   numInput: { borderWidth: 1, borderColor: c.input, borderRadius: radius.sm, paddingHorizontal: spacing.xs, paddingVertical: 2 },

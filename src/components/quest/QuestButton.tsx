@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { PressScale } from './motion/PressScale';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { QuestIcon, type QuestIconName } from './QuestIcon';
@@ -19,7 +20,8 @@ export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, 
   const background = variant === 'gold' ? quest.gold : variant === 'mana' ? quest.mana : quest.panel;
   const foreground = filled ? quest.onGold : quest.text;
   return (
-    <Pressable
+    <PressScale
+      scaleTo={0.97}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? title}
       accessibilityState={{ disabled: !!disabled || !!loading, busy: !!loading }}
@@ -42,7 +44,7 @@ export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, 
           </HudText>
         </View>
       )}
-    </Pressable>
+    </PressScale>
   );
 }
 

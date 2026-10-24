@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/LosingWeightTrackingProgress.iml" filepath="$PROJECT_DIR$/LosingWeightTrackingProgress.iml" />
+      <module fileurl="file://$PROJECT_DIR$/FitJourney.iml" filepath="$PROJECT_DIR$/FitJourney.iml" />
     </modules>
   </component>
 </project>

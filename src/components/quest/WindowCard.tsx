@@ -5,6 +5,7 @@ import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { QuestIcon } from './QuestIcon';
 import { XpBar } from './XpBar';
+import { PulseRing } from './motion/PulseRing';
 
 interface WindowCardProps {
   isEatingWindow: boolean;
@@ -51,6 +52,7 @@ export function WindowCard({ isEatingWindow, hoursUntilTransition }: WindowCardP
           : { backgroundColor: quest.manaPanel, borderColor: quest.manaBorder },
       ]}
     >
+      <PulseRing color={accent} borderRadius={questRadius.panel} borderWidth={2} />
       <View style={styles.headRow}>
         <QuestIcon name={isEatingWindow ? 'camp' : 'clock'} size={16} color={accent} />
         <HudText size={11} color={accentText} style={styles.eyebrow}>
@@ -65,7 +67,7 @@ export function WindowCard({ isEatingWindow, hoursUntilTransition }: WindowCardP
           {caption}
         </HudText>
       </View>
-      <XpBar ratio={total > 0 ? elapsed / total : 0} color={accent} trackColor={quest.bg} height={8} />
+      <XpBar ratio={total > 0 ? elapsed / total : 0} color={accent} trackColor={quest.bg} height={8} delay={200} />
       <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.progress}>
         {progress}
       </HudText>

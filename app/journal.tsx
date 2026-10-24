@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FoodThumb } from '../src/components/quest/FoodPhoto';
 import { HudText } from '../src/components/quest/HudText';
 import { MoodFace } from '../src/components/quest/MoodFace';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
@@ -155,6 +156,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday }: RowP
             {name}
           </HudText>
           {item.junk && <Chip tone="gold" label={g('journal.junk')} />}
+          <FoodThumb uri={item.photoUri} name={name} size={36} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {item.kcal} kcal · {Math.round(item.proteinG)} g

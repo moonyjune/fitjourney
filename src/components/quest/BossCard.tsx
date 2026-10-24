@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import type { BossState } from '../../game/boss';
 import { useGameText } from '../../game/strings';
@@ -6,6 +6,8 @@ import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { XpBar } from './XpBar';
 import { hiddenSvgProps } from './hiddenSvg';
+import { AnimatedNumber } from './motion/AnimatedNumber';
+import { PressScale } from './motion/PressScale';
 
 export function BossFace({ size = 44, defeated }: { size?: number; defeated: boolean }) {
   return (
@@ -36,39 +38,54 @@ interface BossCardProps {
 export function BossCard({ boss, todayDamage, onPress }: BossCardProps) {
   const g = useGameText();
   const name = g('boss.name');
-  const hp = g('boss.hp', { left: boss.hpLeft.toLocaleString('en-US'), max: boss.maxHp.toLocaleString('en-US') });
   const sub = boss.defeated
     ? g('boss.defeated')
     : todayDamage > 0
       ? g('boss.today', { n: todayDamage.toLocaleString('en-US'), d: boss.daysUntilReset })
       : g('boss.todayNone', { d: boss.daysUntilReset });
 
-  const Wrapper = onPress ? Pressable : View;
-  return (
-    <Wrapper
-      accessible
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityLabel={`${g('boss.eyebrow')}. ${g('boss.a11y', { name, left: boss.hpLeft, max: boss.maxHp })}. ${sub}`}
-      accessibilityHint={onPress ? g('boss.detail.open') : undefined}
-      onPress={onPress}
-      style={styles.card}
-    >
+  const label = `${g('boss.eyebrow')}. ${g('boss.a11y', { name, left: boss.hpLeft, max: boss.maxHp })}. ${sub}`;
+  const inner = (
+    <>
       <BossFace defeated={boss.defeated} />
       <View style={styles.body}>
         <View style={styles.titleRow}>
           <HudText size={15}>{name}</HudText>
           <HudText size={12} weight="medium" color={quest.hpText}>
-            {hp}
+            <AnimatedNumber value={boss.hpLeft}>
+              {(left) => g('boss.hp', { left: left.toLocaleString('en-US'), max: boss.maxHp.toLocaleString('en-US') })}
+            </AnimatedNumber>
           </HudText>
         </View>
         <View style={styles.bar}>
-          <XpBar ratio={boss.maxHp > 0 ? boss.hpLeft / boss.maxHp : 0} color={quest.hp} trackColor={quest.bg} height={8} />
+          <XpBar ratio={boss.maxHp > 0 ? boss.hpLeft / boss.maxHp : 0} color={quest.hp} trackColor={quest.bg} height={8} from={1} delay={350} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {sub}
         </HudText>
       </View>
-    </Wrapper>
+    </>
+  );
+
+  if (!onPress) {
+    return (
+      <View accessible accessibilityLabel={label} style={styles.card}>
+        {inner}
+      </View>
+    );
+  }
+  return (
+    <PressScale
+      scaleTo={0.98}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={g('boss.detail.open')}
+      onPress={onPress}
+      style={styles.card}
+    >
+      {inner}
+    </PressScale>
   );
 }
 

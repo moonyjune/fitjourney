@@ -23,7 +23,8 @@ function MealItems({ items }: { items: MealFoodItem[] }) {
   );
 }
 
-function Steps({ steps }: { steps: WorkoutStep[] }) {
+/** Numbered step-by-step breakdown of a workout, dark version of `WorkoutStepsList`. Also used by the workout screens. */
+export function QuestWorkoutSteps({ steps }: { steps: WorkoutStep[] }) {
   return (
     <View style={styles.list}>
       {steps.map((step, i) => (
@@ -98,7 +99,7 @@ export function QuestPlanPreview({ plan, hideShoppingList }: { plan: PlanData; h
       {plan.workoutTemplates.map((wt) => (
         <View key={wt.id} style={styles.panel}>
           <HudText size={14}>{wt.label}</HudText>
-          <Steps steps={stepsOrImplicit(wt)} />
+          <QuestWorkoutSteps steps={stepsOrImplicit(wt)} />
           <HudText size={13} color={quest.gold} style={styles.macro}>
             {t('workout.templateMacro', { min: wt.durationMin, kcal: wt.caloriesBurned })}
           </HudText>
