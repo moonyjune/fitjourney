@@ -90,8 +90,20 @@ export function usePhotoAnalysis(taskType: 'meal' | 'workout', context: Analysis
 /** The short, friendly sentence for a failure kind, in the app language. */
 export function useAiErrorText() {
   const g = useGameText();
-  return useCallback((kind: AiErrorKind) => g(`ai.err.${kind}` as GameKey), [g]);
+  // For an unclassified failure the server's own message is added in brackets (shortened), so a problem on the server side can be
+  // read and reported instead of guessed at. The other kinds already say what is wrong.
+  return useCallback(
+    (kind: AiErrorKind, detail?: string) => {
+      const text = g(`ai.err.${kind}` as GameKey);
+      const note = detail?.replace(/\s+/g, ' ').trim().slice(0, ERROR_DETAIL_CHARS);
+      return kind === 'generic' && note ? `${text} (${note})` : text;
+    },
+    [g]
+  );
 }
+
+/** How much of the server's message is shown with an unclassified failure. */
+export const ERROR_DETAIL_CHARS = 220;
 
 /** "Confidence: medium" in the app language, or null when the AI gave none. */
 export function useConfidenceText() {

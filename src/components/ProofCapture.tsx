@@ -206,7 +206,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
           </TouchableOpacity>
           {ai.error && (
             <Text style={styles.analysisError} accessibilityRole="alert">
-              {aiErrorText(ai.error.kind)}
+              {aiErrorText(ai.error.kind, ai.error.message)}
             </Text>
           )}
           {adviceText && !ai.error && (

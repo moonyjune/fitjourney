@@ -139,7 +139,7 @@ export default function TextMealScreen() {
           />
           {ai.error && (
             <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
-              {aiErrorText(ai.error.kind)}
+              {aiErrorText(ai.error.kind, ai.error.message)}
             </HudText>
           )}
           {hint && (

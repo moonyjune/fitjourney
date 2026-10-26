@@ -442,7 +442,7 @@ export default function AddFoodScreen() {
               />
               {ai.error && (
                 <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
-                  {aiErrorText(ai.error.kind)}
+                  {aiErrorText(ai.error.kind, ai.error.message)}
                 </HudText>
               )}
               {aiNote && !ai.error && (
@@ -479,7 +479,7 @@ export default function AddFoodScreen() {
               />
               {lab.error && (
                 <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
-                  {aiErrorText(lab.error.kind)}
+                  {aiErrorText(lab.error.kind, lab.error.message)}
                 </HudText>
               )}
               {lab.unreadable && !lab.error && (

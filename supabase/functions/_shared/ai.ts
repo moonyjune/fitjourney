@@ -3,11 +3,16 @@
 // only builds its prompt and tool. Deploy: every function that imports this is deployed with `npx supabase functions deploy <name>`.
 //
 // Secrets / env:  ANTHROPIC_API_KEY (required)   AI_MODEL (default claude-sonnet-5-5)   AI_DISABLED=1 (kill switch)
-//                 AI_PRICE_IN_PER_MTOK / AI_PRICE_OUT_PER_MTOK (cost estimate only)
+//                 AI_WORKSPACE_ID (only for an API key that is not tied to one workspace)   AI_PRICE_IN_PER_MTOK / AI_PRICE_OUT_PER_MTOK (cost estimate only)
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import {
+  ATTEMPT_TIMEOUT_MS,
+  anthropicHeaders,
   DEFAULT_PRICE_IN_PER_MTOK,
+  RETRY_WAITS_MS,
+  canRetry,
+  summarizeUpstreamError,
   DEFAULT_USER_DAILY_BUDGET_USD,
   GLOBAL_BUDGET_MESSAGE,
   USER_BUDGET_MESSAGE,
@@ -35,7 +40,6 @@ const PRICE_IN = priceFrom(Deno.env.get('AI_PRICE_IN_PER_MTOK'), DEFAULT_PRICE_I
 const PRICE_OUT = priceFrom(Deno.env.get('AI_PRICE_OUT_PER_MTOK'), DEFAULT_PRICE_OUT_PER_MTOK);
 const USER_BUDGET = budgetFrom(Deno.env.get('AI_USER_DAILY_BUDGET_USD'), DEFAULT_USER_DAILY_BUDGET_USD);
 const GLOBAL_BUDGET = budgetFrom(Deno.env.get('AI_DAILY_BUDGET_USD'), 0);
-const REQUEST_TIMEOUT_MS = 90_000;
 
 export const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -114,29 +118,43 @@ async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown
     tool_choice: { type: 'tool', name: call.tool.name },
     messages: call.messages,
   });
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
-      body,
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    });
-    if (response.ok) {
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    let response: Response | null = null;
+    let failure = 'Claude API không phản hồi.';
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: anthropicHeaders(ANTHROPIC_API_KEY!, Deno.env.get('AI_WORKSPACE_ID')),
+        body,
+        signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+      });
+    } catch (error) {
+      // No answer at all (network, or the attempt timed out): worth another try like a 5xx.
+      failure = `Claude API không phản hồi (${error instanceof Error ? error.message : 'lỗi mạng'}).`;
+    }
+    if (response?.ok) {
       const data = await response.json();
       const blocks: Array<Record<string, unknown>> = data.content ?? [];
       const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === call.tool.name);
-      if (!toolUse) return { error: 'AI không trả về kết quả phân tích.', status: 502 };
+      if (!toolUse) {
+        console.error('[ai] no tool_use in the answer', data.stop_reason);
+        return { error: `AI không trả về kết quả phân tích (${data.stop_reason ?? 'không rõ lý do'}).`, status: 502 };
+      }
       return { input: toolUse.input as Record<string, unknown>, usage: data.usage };
     }
-    if (attempt === 0 && shouldRetry(response.status)) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      continue;
+    const retryable = response === null || shouldRetry(response.status);
+    if (response) {
+      failure = summarizeUpstreamError(response.status, await response.text());
+      console.error('[ai]', failure, 'attempt', attempt + 1, 'request-id', response.headers.get('request-id'));
+    } else {
+      console.error('[ai]', failure, 'attempt', attempt + 1);
     }
-    const detail = await response.text();
-    return { error: `Claude API lỗi: ${detail}`, status: 502 };
+    if (!retryable || !canRetry(attempt, Date.now() - started)) return { error: failure, status: 502 };
+    await new Promise((resolve) => setTimeout(resolve, RETRY_WAITS_MS[attempt] ?? 1500));
   }
-  return { error: 'Claude API không phản hồi.', status: 502 };
 }
+
 
 /** Wraps a feature: `plan` receives the parsed JSON body and the context, and returns the Claude call (or a Response). */
 export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>, ctx: AiContext) => Promise<AiPlan>) {

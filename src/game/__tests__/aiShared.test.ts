@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals';
-import { DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, shouldRetry } from '../../../supabase/functions/_shared/usage';
+import { anthropicHeaders, ATTEMPT_TIMEOUT_MS, MAX_ATTEMPTS, TOTAL_BUDGET_MS, canRetry, summarizeUpstreamError, DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, shouldRetry } from '../../../supabase/functions/_shared/usage';
 import { describeCoach, describePerson, sanitizeProfile } from '../../../supabase/functions/_shared/coach';
 import { cleanWeek, describeWeek, isDate } from '../../../supabase/functions/_shared/week';
 import { cleanName, cleanSwapRequest } from '../../../supabase/functions/_shared/swap';
@@ -53,6 +53,48 @@ describe('usage helpers (server)', () => {
     expect(budgetFrom('-3', 0.6)).toBe(0);
     expect(budgetFrom(undefined, 0.6)).toBe(0.6);
     expect(budgetFrom('abc', 0.6)).toBe(0.6);
+  });
+});
+
+describe('Anthropic request headers (server)', () => {
+  it('always has the key and version, and no workspace header without a workspace id', () => {
+    expect(anthropicHeaders('sk-test')).toEqual({ 'content-type': 'application/json', 'x-api-key': 'sk-test', 'anthropic-version': '2023-06-01' });
+    expect(anthropicHeaders('sk-test', '')).not.toHaveProperty('anthropic-workspace-id');
+    expect(anthropicHeaders('sk-test', '   ')).not.toHaveProperty('anthropic-workspace-id');
+  });
+
+  it('sends the workspace id when it is a plain id (trimmed), and ignores anything else', () => {
+    expect(anthropicHeaders('k', ' wrkspc_01AbC-def ')['anthropic-workspace-id']).toBe('wrkspc_01AbC-def');
+    for (const bad of ['has space', 'a/b', 'x\ny', 'ü', 'a'.repeat(101)]) expect(anthropicHeaders('k', bad)).not.toHaveProperty('anthropic-workspace-id');
+  });
+});
+
+describe('retrying Claude and reporting its failures (server)', () => {
+  it('makes at most 3 attempts and only while the time budget allows another', () => {
+    expect(MAX_ATTEMPTS).toBe(3);
+    expect(canRetry(0, 5_000)).toBe(true);
+    expect(canRetry(1, 5_000)).toBe(true);
+    expect(canRetry(2, 5_000)).toBe(false); // the third attempt was the last
+    expect(canRetry(0, TOTAL_BUDGET_MS - 1_500)).toBe(true); // the wait still fits
+    expect(canRetry(0, TOTAL_BUDGET_MS - 1_499)).toBe(false);
+    expect(canRetry(1, TOTAL_BUDGET_MS - 3_000)).toBe(true);
+    expect(canRetry(1, TOTAL_BUDGET_MS - 2_999)).toBe(false);
+    expect(TOTAL_BUDGET_MS + ATTEMPT_TIMEOUT_MS).toBeLessThan(150_000); // an Edge Function is cut off at ~150 s
+  });
+
+  it('reads the API\'s own JSON error: its type and message, with the status', () => {
+    expect(summarizeUpstreamError(404, JSON.stringify({ type: 'error', error: { type: 'not_found_error', message: 'model: claude-x' } }))).toBe('Claude API lỗi (404): not_found_error: model: claude-x');
+    expect(summarizeUpstreamError(400, JSON.stringify({ error: { message: 'bad schema' } }))).toBe('Claude API lỗi (400): bad schema');
+  });
+
+  it('reduces a gateway page to its text, cut to 200 characters', () => {
+    expect(summarizeUpstreamError(502, '<html>\n<head><title>502 Bad Gateway</title></head>\n<body><center><h1>502 Bad Gateway</h1></center></body></html>')).toBe('Claude API lỗi (502): 502 Bad Gateway 502 Bad Gateway');
+    expect(summarizeUpstreamError(500, 'x'.repeat(500)).length).toBe('Claude API lỗi (500): '.length + 200);
+  });
+
+  it('still carries the status when the body is empty or JSON without an error message', () => {
+    expect(summarizeUpstreamError(529, '')).toBe('Claude API lỗi (529)');
+    expect(summarizeUpstreamError(503, '{"ok":false}')).toBe('Claude API lỗi (503): {"ok":false}');
   });
 });
 

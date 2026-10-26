@@ -393,6 +393,25 @@ describe('Photo → AI analysis in the screens', () => {
       });
     });
 
+    it('for an unclassified failure it adds the server\'s own message (shortened), but not for the other kinds', async () => {
+      const long = `Claude API lỗi: {"type":"error","error":{"type":"not_found_error","message":"model: x"}} ${'a'.repeat(400)}`;
+      mockAnalysis.mockResolvedValue({ ok: false, message: long, kind: 'generic' });
+      let r = await withPhoto();
+      await press(r, ANALYZE);
+      let text = allText(r);
+      expect(text).toContain('Chưa phân tích được ảnh này.');
+      expect(text).toContain('(Claude API lỗi: {"type":"error","error":{"type":"not_found_error","message":"model: x"}}');
+      expect(text).not.toContain('a'.repeat(300)); // cut at 220 characters
+      act(() => renderer?.unmount());
+
+      mockAnalysis.mockResolvedValue({ ok: false, message: 'Server chưa cấu hình ANTHROPIC_API_KEY.', kind: 'notConfigured' });
+      r = await withPhoto();
+      await press(r, ANALYZE);
+      text = allText(r);
+      expect(text).toContain('AI chưa được thiết lập');
+      expect(text).not.toContain('ANTHROPIC_API_KEY'); // no technical detail for a kind that already explains itself
+    });
+
     it('sends the coach snapshot (targets, today, recent days, boss) along with the photo', async () => {
       const r = await withPhoto();
       await press(r, ANALYZE);
