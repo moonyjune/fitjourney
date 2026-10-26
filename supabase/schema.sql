@@ -703,3 +703,7 @@ create policy "proofs_storage_select_by_coach" on storage.objects for select
 drop policy if exists "user_data_all_own" on public.user_data;
 create policy "user_data_all_own" on public.user_data for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- Huấn luyện viên chỉ đọc được giới hạn purine/muối/đường của học viên (để màn Nhật ký trận của học viên tính đúng); các khoá khác vẫn riêng tư.
+drop policy if exists "user_data_limits_select_by_coach" on public.user_data;
+create policy "user_data_limits_select_by_coach" on public.user_data for select
+  using (key = 'limits' and public.is_coach_of(user_id));

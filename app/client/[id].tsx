@@ -384,6 +384,11 @@ export default function ClientDetailScreen() {
           )}
         </View>
 
+        <View style={styles.viewButtons}>
+          <QuestButton variant="mana" icon="chart" title={g('coachView.openJournal')} onPress={() => router.push({ pathname: '/client-journal', params: { id: clientId } })} />
+          <QuestButton variant="mana" icon="chart" title={g('coachView.openHistory')} onPress={() => router.push({ pathname: '/client-history', params: { id: clientId } })} />
+        </View>
+
         <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
           {t('clientDetail.proofsTitle')}
         </HudText>
@@ -492,6 +497,7 @@ export default function ClientDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  viewButtons: { gap: 10, marginTop: 4 },
   container: { flex: 1, backgroundColor: quest.bg },
   content: { paddingHorizontal: 16, paddingBottom: 48 },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bg },

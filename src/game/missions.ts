@@ -3,6 +3,7 @@ import { getDayType } from '../constants/plan';
 import { eatingEndHour } from '../utils/mealMode';
 import { actualDailyDeficitKcal } from '../utils/tdee';
 import { toDateKey } from '../utils/date';
+import { dayHasFood, extraIntake } from '../utils/dayIntake';
 import {
   LIMITS,
   MISSION_ORDER,
@@ -64,12 +65,7 @@ export interface DayEvaluation {
   dayOver: boolean;
 }
 
-/** Does this day hold any logged food? Mirrors the streak rule so both systems agree. */
-function hasFoodLog(log: DailyNutritionLog | undefined): log is DailyNutritionLog {
-  if (!log) return false;
-  const anyMeal = Object.values(log.mealsEaten).some(Boolean);
-  return anyMeal || (log.extraItems?.length ?? 0) > 0 || log.extraCalories > 0;
-}
+const hasFoodLog = dayHasFood;
 
 export function evaluateDay(input: DayInput): DayEvaluation {
   const { dateKey, now, log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG } = input;
@@ -83,8 +79,9 @@ export function evaluateDay(input: DayInput): DayEvaluation {
   const eatenMeals = meals.filter((m) => log?.mealsEaten[m.slot]);
   const extras = log?.extraItems ?? [];
 
-  const eatenKcal = eatenMeals.reduce((s, m) => s + m.calories, 0) + (log?.extraCalories ?? 0);
-  const proteinG = eatenMeals.reduce((s, m) => s + m.proteinG, 0) + (log?.extraProteinG ?? 0);
+  const extra = extraIntake(log);
+  const eatenKcal = Math.round(eatenMeals.reduce((s, m) => s + m.calories, 0) + extra.kcal);
+  const proteinG = Math.round((eatenMeals.reduce((s, m) => s + m.proteinG, 0) + extra.proteinG) * 10) / 10;
   const burnedKcal = workouts.reduce((s, w) => s + w.caloriesBurned, 0);
   const workoutMinutes = workouts.reduce((s, w) => s + w.durationMin, 0);
 
@@ -99,7 +96,7 @@ export function evaluateDay(input: DayInput): DayEvaluation {
   const junkCount = extras.filter((e) => e.junk).length;
 
   const hasFood = hasFoodLog(log);
-  const deficitKcal = hasFood ? actualDailyDeficitKcal(tdeeKcal, burnedKcal, eatenKcal) : null;
+  const deficitKcal = hasFood ? Math.round(actualDailyDeficitKcal(tdeeKcal, burnedKcal, eatenKcal)) : null;
 
   /** "Reach the goal" mission. */
   function reach(id: MissionId, value: number, target: number, reached: boolean, closed: boolean): MissionResult {

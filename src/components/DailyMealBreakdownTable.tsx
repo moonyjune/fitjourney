@@ -88,12 +88,14 @@ export function DailyMealBreakdownTable({
   }, [mealsEatenKey, extraItemsKey, removedSlotsKey]);
 
   const visibleMeals = meals.filter((m) => !draftRemovedSlots.includes(m.slot));
-  const totalCalories =
+  const totalCalories = Math.round(
     visibleMeals.filter((m) => draftMealsEaten[m.slot]).reduce((s, m) => s + m.calories, 0) +
-    draftExtraItems.reduce((s, i) => s + i.calories, 0);
-  const totalProtein =
+    draftExtraItems.reduce((s, i) => s + i.calories, 0)
+  );
+  const totalProtein = Math.round(10 * (
     visibleMeals.filter((m) => draftMealsEaten[m.slot]).reduce((s, m) => s + m.proteinG, 0) +
-    draftExtraItems.reduce((s, i) => s + i.proteinG, 0);
+    draftExtraItems.reduce((s, i) => s + i.proteinG, 0)
+  )) / 10;
 
   function toggleMeal(slot: MealSlot) {
     if (!editable) return;
@@ -179,31 +181,42 @@ export function DailyMealBreakdownTable({
                 multiline
               />
             </View>
+            <Text style={[styles.mealTimeCaption, { color: accentColor }]}>
+              {item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : t('mealLog.extraSectionLabel')}
+            </Text>
             <View style={styles.extraEditableSubRow}>
-              <TextInput
-                accessibilityLabel={t('mealLog.timeEdit')}
-                style={[styles.cell, styles.numCol, styles.numInput, timeTextInvalid(timeTexts[item.id]) && styles.timeInvalid]}
-                value={timeTexts[item.id] ?? formatTime(item.loggedAtISO)}
-                keyboardType="numbers-and-punctuation"
-                maxLength={5}
-                onChangeText={(text) => changeTime(item, text)}
-              />
-              <Text style={[styles.cell, styles.statusCol, { color: accentColor }]}>
-                {item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : t('mealLog.extraSectionLabel')}
-              </Text>
-              <TextInput
-                style={[styles.cell, styles.numCol, styles.numInput]}
-                value={String(item.calories)}
-                keyboardType="decimal-pad"
-                onChangeText={(text) => updateExtraItem(item.id, { calories: parseFloat(text.replace(',', '.')) || 0 })}
-              />
-              <TextInput
-                style={[styles.cell, styles.numCol, styles.numInput]}
-                value={String(item.proteinG)}
-                keyboardType="decimal-pad"
-                onChangeText={(text) => updateExtraItem(item.id, { proteinG: parseFloat(text.replace(',', '.')) || 0 })}
-              />
-              <TouchableOpacity onPress={() => removeExtraItem(item.id)} style={styles.deleteCol}>
+              <View style={styles.fieldTime}>
+                <Text style={styles.fieldLabel} numberOfLines={1}>{t('mealLog.timeShort')}</Text>
+                <TextInput
+                  accessibilityLabel={t('mealLog.timeEdit')}
+                  style={[styles.fieldInput, timeTextInvalid(timeTexts[item.id]) && styles.timeInvalid]}
+                  value={timeTexts[item.id] ?? formatTime(item.loggedAtISO)}
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={5}
+                  onChangeText={(text) => changeTime(item, text)}
+                />
+              </View>
+              <View style={styles.fieldNum}>
+                <Text style={styles.fieldLabel} numberOfLines={1}>{t('mealLog.tableHeaderKcal')}</Text>
+                <TextInput
+                  accessibilityLabel={t('mealLog.tableHeaderKcal')}
+                  style={styles.fieldInput}
+                  value={String(item.calories)}
+                  keyboardType="decimal-pad"
+                  onChangeText={(text) => updateExtraItem(item.id, { calories: parseFloat(text.replace(',', '.')) || 0 })}
+                />
+              </View>
+              <View style={styles.fieldNum}>
+                <Text style={styles.fieldLabel} numberOfLines={1}>{t('mealLog.tableHeaderProtein')}</Text>
+                <TextInput
+                  accessibilityLabel={t('mealLog.tableHeaderProtein')}
+                  style={styles.fieldInput}
+                  value={String(item.proteinG)}
+                  keyboardType="decimal-pad"
+                  onChangeText={(text) => updateExtraItem(item.id, { proteinG: parseFloat(text.replace(',', '.')) || 0 })}
+                />
+              </View>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="✕" onPress={() => removeExtraItem(item.id)} style={styles.deleteBtn}>
                 <Text style={styles.deleteText}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -310,10 +323,16 @@ const makeStyles = (dark: boolean) => {
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
   },
-  extraEditableSubRow: { flexDirection: 'row', alignItems: 'center' },
+  extraEditableSubRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm },
+  mealTimeCaption: { fontSize: 11, fontWeight: '700' },
+  fieldLabel: { fontSize: 10, fontWeight: '800', color: c.muted, textTransform: 'uppercase', marginBottom: 2 },
+  fieldTime: { width: 68 },
+  fieldNum: { flex: 1, minWidth: 64 },
+  fieldInput: { fontSize: 13, color: c.text, borderWidth: 1, borderColor: c.input, borderRadius: radius.sm, paddingHorizontal: spacing.sm, paddingVertical: 6, minHeight: 36, ...font },
+  deleteBtn: { minWidth: 36, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
   extraTime: { fontSize: 10, color: c.muted },
   timeInvalid: { borderColor: c.danger },
-  parts: { paddingHorizontal: spacing.sm + 48, paddingBottom: spacing.xs + 2, gap: 2 },
+  parts: { paddingHorizontal: spacing.sm, paddingBottom: spacing.xs + 2, gap: 2 },
   partsTitle: { fontSize: 10, fontWeight: '800', color: c.muted, textTransform: 'uppercase' },
   partLine: { fontSize: 11, color: c.muted },
   deleteCol: { paddingLeft: spacing.xs },

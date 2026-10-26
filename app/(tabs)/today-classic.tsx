@@ -23,6 +23,7 @@ import type { StringKey } from '../../src/i18n/strings';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
+import { extraIntake } from '../../src/utils/dayIntake';
 
 export default function TodayScreen() {
   const { t, language } = useTranslation();
@@ -54,8 +55,9 @@ export default function TodayScreen() {
   const eatenProtein = meals
     .filter((m) => nutritionLog.mealsEaten[m.slot])
     .reduce((sum, m) => sum + m.proteinG, 0);
-  const totalCalories = eatenCalories + nutritionLog.extraCalories;
-  const totalProtein = eatenProtein + nutritionLog.extraProteinG;
+  const extraNow = extraIntake(nutritionLog);
+  const totalCalories = Math.round(eatenCalories + extraNow.kcal);
+  const totalProtein = Math.round((eatenProtein + extraNow.proteinG) * 10) / 10;
 
   const caloriesBurnedToday = workoutEntries.reduce((sum, w) => sum + w.caloriesBurned, 0);
 

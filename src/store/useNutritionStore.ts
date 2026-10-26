@@ -10,6 +10,7 @@ import { useFoodDbStore } from './useFoodDbStore';
 import { useProofStore } from './useProofStore';
 import { deletePersistedPhoto } from '../utils/photoStorage';
 import { extraProofRef } from '../types';
+import { withIntakeCounters } from '../utils/dayIntake';
 
 interface NutritionState {
   logs: Record<string, DailyNutritionLog>;
@@ -131,12 +132,7 @@ export const useNutritionStore = create<NutritionState>()(
         if (parts.length > 0) item.parts = parts;
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
-          const updated = {
-            ...current,
-            extraItems: [...(current.extraItems ?? []), item],
-            extraCalories: current.extraCalories + calories,
-            extraProteinG: current.extraProteinG + proteinG,
-          };
+          const updated = withIntakeCounters({ ...current, extraItems: [...(current.extraItems ?? []), item] });
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         });
@@ -159,12 +155,7 @@ export const useNutritionStore = create<NutritionState>()(
           const item = (current.extraItems ?? []).find((i) => i.id === itemId);
           if (!item) return state;
           discardExtraPhoto(item);
-          const updated = {
-            ...current,
-            extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId),
-            extraCalories: Math.max(0, current.extraCalories - item.calories),
-            extraProteinG: Math.max(0, current.extraProteinG - item.proteinG),
-          };
+          const updated = withIntakeCounters({ ...current, extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId) });
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
@@ -174,14 +165,12 @@ export const useNutritionStore = create<NutritionState>()(
           // Items dropped by this edit take their photo (file + proof) with them.
           const kept = new Set(patch.extraItems.map((i) => i.id));
           for (const old of current.extraItems ?? []) if (!kept.has(old.id)) discardExtraPhoto(old);
-          const updated: DailyNutritionLog = {
+          const updated: DailyNutritionLog = withIntakeCounters({
             ...current,
             mealsEaten: patch.mealsEaten,
             extraItems: patch.extraItems,
-            extraCalories: patch.extraItems.reduce((s, i) => s + i.calories, 0),
-            extraProteinG: patch.extraItems.reduce((s, i) => s + i.proteinG, 0),
             removedMealSlots: patch.removedMealSlots,
-          };
+          });
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),

@@ -101,7 +101,7 @@ describe('coveredMealIds', () => {
   it('fasting: a plan meal ticked eaten or removed is covered; off-plan food does not cover a plan meal', () => {
     const defs = mealDefs(true, planMeals);
     expect([...coveredMealIds(true, defs, planMeals, log({ mealsEaten: { meal1: true }, removedMealSlots: ['meal2'] }))].sort()).toEqual(['meal1', 'meal2']);
-    expect(coveredMealIds(true, defs, planMeals, log({ extraItems: [x('Cơm', 900, 'lunch')] })).size).toBe(0);
+    expect(coveredMealIds(true, defs, planMeals, log({ extraItems: [{ ...x('Cơm', 900, 'lunch'), proteinG: 60 }] })).size).toBe(0);
     expect(coveredMealIds(true, defs, planMeals, undefined).size).toBe(0);
   });
 
@@ -229,7 +229,7 @@ describe('buildMealPlan: the number of meals follows the day', () => {
   });
 
   it('what is eaten changes the split: lunch eaten, only dinner is left even at 11:00; and the budget shrinks', () => {
-    useNutritionStore.setState({ logs: { '2026-10-23': log({ extraCalories: 900, extraProteinG: 60, extraItems: [x('Cơm', 900, 'lunch')] }) } });
+    useNutritionStore.setState({ logs: { '2026-10-23': log({ extraCalories: 900, extraProteinG: 60, extraItems: [{ ...x('Cơm', 900, 'lunch'), proteinG: 60 }] }) } });
     const plan = buildMealPlan(at(11))!;
     expect(plan.totals.budgetKcal).toBe(1000);
     expect(plan.totals.proteinLeftG).toBe(140);
@@ -253,7 +253,7 @@ describe('buildMealPlan: the number of meals follows the day', () => {
   });
 
   it('a budget that is nearly gone gives one light meal whatever the mode', () => {
-    useNutritionStore.setState({ logs: { '2026-10-23': log({ extraCalories: 1800, extraProteinG: 100, extraItems: [x('Nhiều', 1800, 'breakfast', 8)] }) } });
+    useNutritionStore.setState({ logs: { '2026-10-23': log({ extraCalories: 1800, extraProteinG: 100, extraItems: [{ ...x('Nhiều', 1800, 'breakfast', 8), proteinG: 100 }] }) } });
     const plan = buildMealPlan(at(11))!; // 3000 − 1100 − 1800 = 100 left
     expect(plan.split.meals).toHaveLength(1);
     expect(plan.split.meals[0].light).toBe(true);

@@ -1,5 +1,5 @@
 {
-  "buildCommand": "expo export -p web",
+  "buildCommand": "EXPO_PUBLIC_BUILD=$(date -u +%Y%m%d-%H%M) expo export -p web",
   "outputDirectory": "dist",
   "devCommand": "expo",
   "cleanUrls": true,

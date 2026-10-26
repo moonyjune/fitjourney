@@ -21,6 +21,7 @@ import {
 import { resolveTdeeKcal } from '../utils/tdee';
 import { toDateKey } from '../utils/date';
 import type { Limits } from './constants';
+import { buildDayEvaluator } from './dayEvaluator';
 import { evaluateDay, type DayEvaluation, type DayInput } from './missions';
 import type { WorkoutLogEntry } from '../types';
 import { computeGameState, type GameState } from './state';
@@ -96,18 +97,10 @@ export function useDayEvaluator(now: Date): (dateKey: string) => DayEvaluation {
   const mealTemplatesByDayType = usePlanStore((s) => s.plan.mealTemplates);
   const limits = useLimits();
   const minuteStamp = Math.floor(now.getTime() / 60_000);
-  return useMemo(() => {
-    const at = new Date(minuteStamp * 60_000);
-    const byDay = new Map<string, WorkoutLogEntry[]>();
-    for (const e of workoutEntries) {
-      const key = toDateKey(new Date(e.dateISO));
-      const list = byDay.get(key);
-      if (list) list.push(e);
-      else byDay.set(key, [e]);
-    }
-    return (dateKey: string) =>
-      evaluateDay({ dateKey, now: at, log: logs[dateKey], mealTemplatesByDayType, workouts: byDay.get(dateKey) ?? [], tdeeKcal, proteinTargetG, limits });
-  }, [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits]);
+  return useMemo(
+    () => buildDayEvaluator({ now: new Date(minuteStamp * 60_000), logs, workouts: workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits }),
+    [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits]
+  );
 }
 
 /** All FitQuest progress for the signed-in user, derived from the existing log stores. */

@@ -12,7 +12,8 @@ import { useWeightStore } from '../store/useWeightStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { DEFAULT_TARGET_UMOL } from '../uric/types';
 import type { DailyNutritionLog, ExtraFoodItem, MealSlot, WeightEntry, WorkoutLogEntry } from '../types';
-import { currentUserId, pushUserData } from './cloudSync';
+import { dayHasFood, withIntakeCounters } from '../utils/dayIntake';
+import { currentUserId, pushNutritionLog, pushUserData } from './cloudSync';
 import { USER_DATA_KEYS } from './userDataKeys';
 
 /**
@@ -84,6 +85,31 @@ export function mergeNutrition(local: Record<string, DailyNutritionLog>, rows: R
     };
   }
   return added;
+}
+
+const rowHasFood = (r: Row): boolean =>
+  (Array.isArray(r.extra_items) && r.extra_items.length > 0) || num(r.extra_calories) > 0 || Object.values((r.meals_eaten ?? {}) as Record<string, unknown>).some((v) => v === true);
+
+/** Days this device holds with no food (e.g. only the default water) while the cloud has food for them (e.g. a diary seeded in SQL, or
+ *  eaten on another device). Food is taken from the cloud; the device's own water figure stays when it has one. */
+export function foodFills(local: Record<string, DailyNutritionLog>, rows: Row[]): Record<string, DailyNutritionLog> {
+  const fills: Record<string, DailyNutritionLog> = {};
+  for (const r of rows) {
+    const date = dayKey(r.entry_date);
+    if (!date || !local[date] || dayHasFood(local[date]) || !rowHasFood(r)) continue;
+    const cloud = mergeNutrition({}, [r])[date];
+    if (!cloud) continue;
+    fills[date] = withIntakeCounters({ ...cloud, waterMl: local[date].waterMl > 0 ? local[date].waterMl : cloud.waterMl });
+  }
+  return fills;
+}
+
+/** Days with food on this device that the cloud does not have food for (the push never arrived): they are sent up. */
+export function daysToPush(local: Record<string, DailyNutritionLog>, rows: Row[]): DailyNutritionLog[] {
+  const cloudFood = new Set(rows.filter(rowHasFood).map((r) => dayKey(r.entry_date)));
+  return Object.entries(local)
+    .filter(([date, log]) => DAY_KEY.test(date) && dayHasFood(log) && !cloudFood.has(date))
+    .map(([, log]) => log);
 }
 
 /** Days this device already has but with no water figure, while the cloud has one (e.g. seeded in SQL). */
@@ -293,6 +319,12 @@ async function run(): Promise<RestoreResult> {
     const newLogs = mergeNutrition(useNutritionStore.getState().logs, nutrition);
     result.days = Object.keys(newLogs).length;
     if (result.days > 0) useNutritionStore.setState((s) => ({ logs: { ...mergeNutrition(s.logs, nutrition), ...s.logs } }));
+    const food = foodFills(useNutritionStore.getState().logs, nutrition);
+    if (Object.keys(food).length > 0) {
+      useNutritionStore.setState((s) => ({ logs: { ...s.logs, ...foodFills(s.logs, nutrition) } }));
+      result.days += Object.keys(food).length;
+    }
+    for (const log of daysToPush(useNutritionStore.getState().logs, nutrition)) void pushNutritionLog(log);
     const fills = waterFills(useNutritionStore.getState().logs, nutrition);
     if (Object.keys(fills).length > 0) {
       useNutritionStore.setState((s) => {

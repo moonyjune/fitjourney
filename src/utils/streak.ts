@@ -1,6 +1,7 @@
 import type { DailyNutritionLog, DayType, MealTemplate, WorkoutLogEntry } from '../types';
 import { getDayType } from '../constants/plan';
 import { toDateKey } from './date';
+import { dayHasFood, extraIntake } from './dayIntake';
 import { actualDailyDeficitKcal } from './tdee';
 
 /** A day counts toward the streak once its actual calorie deficit reaches this fixed threshold —
@@ -16,7 +17,7 @@ function dayCaloriesInOut(
   workoutEntries: WorkoutLogEntry[]
 ): { eatenKcal: number; burnedKcal: number } {
   const meals = mealTemplatesByDayType[getDayType(new Date(dateKey))];
-  const eatenKcal = meals.filter((m) => log?.mealsEaten[m.slot]).reduce((s, m) => s + m.calories, 0) + (log?.extraCalories ?? 0);
+  const eatenKcal = meals.filter((m) => log?.mealsEaten[m.slot]).reduce((s, m) => s + m.calories, 0) + extraIntake(log).kcal;
   const burnedKcal = workoutEntries
     .filter((e) => toDateKey(new Date(e.dateISO)) === dateKey)
     .reduce((s, w) => s + w.caloriesBurned, 0);
@@ -39,7 +40,7 @@ export function computeCurrentStreak(
 ): number {
   function isDayComplete(dateKey: string): boolean {
     const log = logs[dateKey];
-    if (!log) return false;
+    if (!dayHasFood(log)) return false;
     const { eatenKcal, burnedKcal } = dayCaloriesInOut(dateKey, log, mealTemplatesByDayType, workoutEntries);
     return actualDailyDeficitKcal(tdeeKcal, burnedKcal, eatenKcal) >= STREAK_MIN_DEFICIT_KCAL;
   }
@@ -77,7 +78,7 @@ export function computeLongestStreak(
     const dateKey = toDateKey(cursor);
     const log = logs[dateKey];
     let complete = false;
-    if (log) {
+    if (dayHasFood(log)) {
       const { eatenKcal, burnedKcal } = dayCaloriesInOut(dateKey, log, mealTemplatesByDayType, workoutEntries);
       complete = actualDailyDeficitKcal(tdeeKcal, burnedKcal, eatenKcal) >= STREAK_MIN_DEFICIT_KCAL;
     }

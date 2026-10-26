@@ -28,6 +28,7 @@ import type { ExtraMealTime } from '../../src/types';
 import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { extraIntake } from '../../src/utils/dayIntake';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -94,8 +95,9 @@ export default function NutritionScreen() {
 
   const eatenCalories = meals.filter((m) => log.mealsEaten[m.slot]).reduce((s, m) => s + m.calories, 0);
   const eatenProtein = meals.filter((m) => log.mealsEaten[m.slot]).reduce((s, m) => s + m.proteinG, 0);
-  const totalCalories = eatenCalories + log.extraCalories;
-  const totalProtein = eatenProtein + log.extraProteinG;
+  const extraNow = extraIntake(log);
+  const totalCalories = Math.round(eatenCalories + extraNow.kcal);
+  const totalProtein = Math.round((eatenProtein + extraNow.proteinG) * 10) / 10;
 
   function handleAddExtra() {
     const cal = parseFloat(extraCalories.replace(',', '.')) || 0;

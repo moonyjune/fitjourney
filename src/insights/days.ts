@@ -3,6 +3,7 @@ import { sumItemNutrients } from '../game/nutrients';
 import type { DailyNutritionLog, ExtraMealTime, MealSlot, PlanData, WorkoutLogEntry } from '../types';
 import { toDateKey } from '../utils/date';
 import { SODIUM_MG_PER_SALT_G, type Thresholds } from './thresholds';
+import { extraIntake } from '../utils/dayIntake';
 
 export type MainMeal = 'breakfast' | 'lunch' | 'dinner';
 export const MAIN_MEALS: MainMeal[] = ['breakfast', 'lunch', 'dinner'];
@@ -51,8 +52,9 @@ export function buildDayRows(input: DayInput): DayRow[] {
     const meals = input.mealTemplates[getDayType(new Date(dateKey))].filter((m) => log.mealsEaten[m.slot]);
     if (extras.length === 0 && meals.length === 0) continue;
 
-    let kcal = log.extraCalories ?? 0;
-    let proteinG = log.extraProteinG ?? 0;
+    const extra = extraIntake(log);
+    let kcal = extra.kcal;
+    let proteinG = extra.proteinG;
     let purineMg = 0;
     let saltG = 0;
     let sugarG = 0;

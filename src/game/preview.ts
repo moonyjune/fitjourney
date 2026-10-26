@@ -1,6 +1,7 @@
 import type { DailyNutritionLog, ExtraFoodItem, MealSlot } from '../types';
 import type { MissionId } from './constants';
 import { evaluateDay, type DayEvaluation, type DayInput } from './missions';
+import { withIntakeCounters } from '../utils/dayIntake';
 
 export interface DayChangePreview {
   before: DayEvaluation;
@@ -26,12 +27,7 @@ export function logWithMealToggled(log: DailyNutritionLog | undefined, dateKey: 
 /** The day's log with an extra (off-plan) item added, keeping the running totals in lockstep. */
 export function logWithExtra(log: DailyNutritionLog | undefined, dateKey: string, item: ExtraFoodItem): DailyNutritionLog {
   const base = log ?? blankLog(dateKey);
-  return {
-    ...base,
-    extraItems: [...(base.extraItems ?? []), item],
-    extraCalories: base.extraCalories + item.calories,
-    extraProteinG: base.extraProteinG + item.proteinG,
-  };
+  return withIntakeCounters({ ...base, extraItems: [...(base.extraItems ?? []), item] });
 }
 
 /** What would change in today's missions if `input.log` were replaced by `nextLog`. */

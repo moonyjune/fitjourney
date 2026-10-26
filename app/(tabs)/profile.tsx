@@ -32,6 +32,7 @@ import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { useIsAiAdmin } from '../../src/ai/useIsAiAdmin';
 import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
+import { BUILD_ID } from '../../src/utils/buildInfo';
 
 type Lang = 'vi' | 'en';
 
@@ -460,6 +461,9 @@ export default function ProfileScreen() {
       <View style={styles.signOut}>
         <QuestButton variant="ghost" icon="out" title={g('profile.signOut')} onPress={confirmSignOut} />
       </View>
+      <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.build}>
+        {g('profile.build', { id: BUILD_ID })}
+      </HudText>
     </ScrollView>
   );
 }
@@ -487,4 +491,5 @@ const styles = StyleSheet.create({
   coachInput: { flex: 1, minWidth: 0, minHeight: 56, paddingHorizontal: 14, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, fontSize: 16, fontFamily: questFonts.semibold },
   coachBtn: { width: 130 },
   signOut: { marginTop: 20 },
+  build: { marginTop: 14, textAlign: 'center' },
 });

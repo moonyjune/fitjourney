@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { useGameText, type GameKey } from '../src/game/strings';
 import { applyDiaryImport, parseDiaryImport, type DiaryImportSummary } from '../src/import/diaryImport';
 import { readPickedText } from '../src/import/readPickedFile';
 import { flushSyncQueue, whenPushesSettled } from '../src/sync/cloudSync';
+import { purgeBefore, type PurgeResult } from '../src/sync/purgeBefore';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useSyncQueueStore } from '../src/sync/syncQueue';
 import { quest, questRadius } from '../src/theme/quest';
@@ -33,6 +34,30 @@ export default function ImportDiaryScreen() {
   const [summary, setSummary] = useState<DiaryImportSummary | null>(null);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
   const signedIn = useAuthStore((s) => !!s.session && !s.devMode);
+  const [cutoff, setCutoff] = useState('2026-09-21');
+  const [armed, setArmed] = useState(false);
+  const [purging, setPurging] = useState(false);
+  const [purge, setPurge] = useState<PurgeResult | 'bad' | 'failed' | null>(null);
+
+  async function clearOld() {
+    if (purging) return;
+    const key = cutoff.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(key) || Number.isNaN(Date.parse(key))) {
+      setPurge('bad');
+      setArmed(false);
+      return;
+    }
+    if (!armed) {
+      setPurge(null);
+      setArmed(true);
+      return;
+    }
+    setArmed(false);
+    setPurging(true);
+    const result = await purgeBefore(key);
+    setPurging(false);
+    setPurge(result.ok ? result : 'failed');
+  }
 
   async function pick() {
     if (busy) return;
@@ -120,6 +145,59 @@ export default function ImportDiaryScreen() {
             </HudText>
           </View>
         )}
+
+        <View style={styles.panel}>
+          <HudText size={15}>{g('purge.title')}</HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('purge.intro')}
+          </HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('purge.date')}
+          </HudText>
+          <TextInput
+            accessibilityLabel={g('purge.date')}
+            value={cutoff}
+            onChangeText={(text) => {
+              setCutoff(text);
+              setArmed(false);
+            }}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="numbers-and-punctuation"
+            maxLength={10}
+            placeholderTextColor={quest.textSecondary}
+            style={styles.input}
+          />
+          {armed && (
+            <HudText size={12} weight="medium" color={quest.goldLight} accessibilityRole="alert">
+              {g('purge.confirm', { date: cutoff.trim() })}
+            </HudText>
+          )}
+          <QuestButton
+            variant={armed ? 'gold' : 'ghost'}
+            title={purging ? g('purge.working') : armed ? g('purge.confirm', { date: cutoff.trim() }) : g('purge.button')}
+            accessibilityLabel={g('purge.button')}
+            onPress={() => {
+              void clearOld();
+            }}
+            loading={purging}
+          />
+          {purge === 'bad' && (
+            <HudText size={12} weight="medium" color={quest.goldLight} accessibilityRole="alert">
+              {g('purge.badDate')}
+            </HudText>
+          )}
+          {purge === 'failed' && (
+            <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert">
+              {g('purge.failed')}
+            </HudText>
+          )}
+          {purge && purge !== 'bad' && purge !== 'failed' && (
+            <HudText size={12} weight="medium" color={quest.textSecondary} accessibilityLiveRegion="polite">
+              {g('purge.done', { days: purge.days, w: purge.weights, t: purge.workouts, f: purge.feelings, p: purge.photos })}
+            </HudText>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -130,5 +208,6 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 24 },
   intro: { marginTop: 10 },
   button: { marginTop: 18 },
+  input: { color: quest.text, borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, paddingHorizontal: 12, paddingVertical: 10, minHeight: 44, fontSize: 15 },
   panel: { marginTop: 16, gap: 6, padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
 });
