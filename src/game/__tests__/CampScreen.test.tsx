@@ -106,6 +106,15 @@ describe('FitQuest Camp screen', () => {
     expect(text).toContain('GIỜ TIẾP TẾ ĐANG MỞ'); // 16:10 is inside the 12:00-20:00 window (title is set in capitals)
   });
 
+  it('shows the dinner card in the afternoon while the last meal is still to come, and not in the morning', () => {
+    const text = allText(render());
+    expect(text).toContain('Gợi ý bữa tối'); // 16:10, meal 3 not eaten
+    expect(text).toMatch(/Còn ~\d+ kcal và thiếu ~\d+ g đạm trong hôm nay\./);
+    act(() => renderer?.unmount());
+    jest.setSystemTime(new Date('2026-10-23T10:00:00'));
+    expect(allText(render())).not.toContain('Gợi ý bữa tối');
+  });
+
   it('marks the logged workout done and protein still open (117 / 200 g)', () => {
     const text = allText(render());
     expect(text).toContain('14 phút · đốt 420 kcal');

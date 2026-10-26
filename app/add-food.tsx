@@ -1,13 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { aiNumberText, useAiFields } from '../src/ai/useAiFields';
-import { useAiErrorText, useConfidenceText, usePhotoAnalysis } from '../src/ai/usePhotoAnalysis';
+import { cleanAdvice } from '../src/ai/adviceText';
+import { AiAdviceCard } from '../src/components/quest/AiAdviceCard';
+import { defaultEaten, labelToFigures, type Eaten, type NutritionLabel } from '../src/ai/nutritionLabel';
+import { useLabelReading } from '../src/ai/useLabelReading';
+import { useAccuracyText, useAiErrorText, useCalibrationText, usePhotoAnalysis } from '../src/ai/usePhotoAnalysis';
 import { FoodPhotoPicker } from '../src/components/quest/FoodPhoto';
+import { DraftFeedback } from '../src/feedback/components/DraftFeedback';
+import { FoodLookup, type LookupResult } from '../src/food/components/FoodLookup';
+import { parsePrefill } from '../src/food/prefill';
+import { findRememberedFood, portionOf } from '../src/food/remember';
+import { useFoodText } from '../src/food/strings';
+import type { FoodEntry } from '../src/food/types';
 import { HudText } from '../src/components/quest/HudText';
 import { ImpactNote } from '../src/components/quest/ImpactNote';
 import { NutrientTiles } from '../src/components/quest/NutrientTiles';
+import { SwapSuggestions } from '../src/components/quest/SwapSuggestions';
+import type { SwapContext, SwapItem, SwapOption } from '../src/food/swaps';
+import { LIMITS } from '../src/game/constants';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
@@ -17,6 +30,8 @@ import { useGameText } from '../src/game/strings';
 import { useNow, useTodayInput } from '../src/game/useGameState';
 import type { StringKey } from '../src/i18n/strings';
 import { useTranslation } from '../src/i18n/useTranslation';
+import { useAllFoods } from '../src/store/useFoodDbStore';
+import { useAiCalibrationStore } from '../src/store/useAiCalibrationStore';
 import { useNutritionStore } from '../src/store/useNutritionStore';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
@@ -41,7 +56,7 @@ function num(text: string): number {
   return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-type AiField = 'name' | 'calories' | 'protein';
+type AiField = 'name' | 'calories' | 'protein' | 'purine' | 'salt' | 'sugar';
 
 function goBack() {
   if (router.canGoBack()) router.back();
@@ -50,6 +65,7 @@ function goBack() {
 
 export default function AddFoodScreen() {
   const g = useGameText();
+  const f = useFoodText();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   useLightStatusBar();
@@ -57,13 +73,17 @@ export default function AddFoodScreen() {
   const input = useTodayInput(now);
   const addExtra = useNutritionStore((s) => s.addExtra);
 
-  const [name, setName] = useState('');
-  const [mealTime, setMealTime] = useState<ExtraMealTime | null>(null);
-  const [calories, setCalories] = useState('');
-  const [protein, setProtein] = useState('');
-  const [purine, setPurine] = useState('');
-  const [salt, setSalt] = useState('');
-  const [sugar, setSugar] = useState('');
+  // A food can arrive through the route (a dinner idea from Camp): it only fills the form, nothing is saved.
+  const params = useLocalSearchParams();
+  const pre = useRef(parsePrefill(params as Record<string, unknown>)).current;
+
+  const [name, setName] = useState(pre.name);
+  const [mealTime, setMealTime] = useState<ExtraMealTime | null>(pre.mealTime);
+  const [calories, setCalories] = useState(pre.calories);
+  const [protein, setProtein] = useState(pre.protein);
+  const [purine, setPurine] = useState(pre.purine);
+  const [salt, setSalt] = useState(pre.salt);
+  const [sugar, setSugar] = useState(pre.sugar);
   const [junk, setJunk] = useState(false);
   const [error, setError] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -74,10 +94,14 @@ export default function AddFoodScreen() {
   // an AI value (typing in a field forgets it), and only those, or empty ones, are overwritten by a later analysis.
   const ai = usePhotoAnalysis('meal', { label: name.trim() || undefined });
   const aiErrorText = useAiErrorText();
-  const confidenceText = useConfidenceText();
+  const accuracyText = useAccuracyText();
+  const calibrationText = useCalibrationText();
+  const recordEstimate = useAiCalibrationStore((s) => s.record);
+  /** Calories the AI put into the form, to compare with what the user finally saves. */
+  const aiCalories = useRef<number | null>(null);
   const aiFields = useAiFields<AiField>();
-  const latest = useRef({ name, calories, protein });
-  latest.current = { name, calories, protein };
+  const latest = useRef({ name, calories, protein, purine, salt, sugar });
+  latest.current = { name, calories, protein, purine, salt, sugar };
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -85,26 +109,129 @@ export default function AddFoodScreen() {
       alive.current = false;
     };
   }, []);
-  const [aiNote, setAiNote] = useState<{ confidence: string | null; reasoning: string; kept: boolean } | null>(null);
+  const [aiNote, setAiNote] = useState<{ confidence: string | null; reasoning: string; kept: boolean; saved?: boolean } | null>(null);
+
+  // A meal logged before is remembered in the food database: its figures come back without typing and without the AI.
+  const foods = useAllFoods();
+  const saved = useMemo(() => (name.trim() ? findRememberedFood(foods, name) : undefined), [foods, name]);
+  /** The name and calories the form held right after figures from the database were put in; unchanged means nothing new to remember. */
+  const fromDb = useRef<{ name: string; calories: string } | null>(pre.fromDb && pre.name ? { name: pre.name, calories: pre.calories } : null);
 
   function applyAi(result: PhotoAnalysisResult) {
     const cur = latest.current;
+    const known = result.foodName ? findRememberedFood(foods, result.foodName) : undefined;
+    if (known) {
+      // The AI recognised something already saved: the user's own earlier figures win over a fresh estimate.
+      applySaved(known, cur.name.trim() ? undefined : known.name);
+      return;
+    }
     const outcomes = [
       aiFields.fill('name', cur.name, result.foodName?.trim() || undefined, setName),
       aiFields.fill('calories', cur.calories, aiNumberText(result.estimatedCaloriesKcal), setCalories),
       aiFields.fill('protein', cur.protein, aiNumberText(result.estimatedProteinG, 1), setProtein),
+      aiFields.fill('purine', cur.purine, aiNumberText(result.estimatedPurineMg), setPurine),
+      aiFields.fill('salt', cur.salt, aiNumberText(result.estimatedSaltG, 1), setSalt),
+      aiFields.fill('sugar', cur.sugar, aiNumberText(result.estimatedSugarG, 1), setSugar),
     ];
+    aiCalories.current = result.estimatedCaloriesKcal && result.estimatedCaloriesKcal > 0 ? Math.round(result.estimatedCaloriesKcal) : null;
     setError(false);
-    setAiNote({ confidence: confidenceText(result.confidence), reasoning: result.reasoning, kept: outcomes.includes('kept') });
+    setAiNote({ confidence: accuracyText(result), reasoning: result.reasoning, kept: outcomes.includes('kept') });
+  }
+
+  /** Puts a remembered food's figures into the form. They count as typed, so a later AI analysis keeps them. */
+  function applySaved(food: FoodEntry, nameToSet?: string) {
+    const p = portionOf(food);
+    if (nameToSet) typed('name', setName)(nameToSet);
+    typed('calories', setCalories)(String(p.calories));
+    typed('protein', setProtein)(String(p.proteinG));
+    setPurine(p.purineMg > 0 ? String(p.purineMg) : '');
+    setSalt(p.saltG > 0 ? String(p.saltG) : '');
+    setSugar(p.sugarG > 0 ? String(p.sugarG) : '');
+    aiCalories.current = null;
+    aiCalories.current = null;
+    fromDb.current = { name: nameToSet ?? latest.current.name.trim(), calories: String(p.calories) };
+    setError(false);
+    setAiNote({ confidence: null, reasoning: f('food.savedUsed', { name: food.name }), kept: false, saved: true });
   }
 
   async function analyzePhoto() {
     if (!photoUri || ai.analyzing || saving) return;
+    if (saved) {
+      applySaved(saved);
+      return;
+    }
     const result = await ai.analyze(photoUri);
     if (result && alive.current) applyAi(result);
   }
 
   const typed = aiFields.typed;
+
+  // Reading the nutrition facts panel (OCR, not an estimate): the printed figures are scaled to what was eaten, here in code.
+  const lab = useLabelReading();
+  const [eatenMode, setEatenMode] = useState<'servings' | 'amount'>('servings');
+  const [eatenText, setEatenText] = useState('1');
+  const modes = useMemo(() => {
+    const l = lab.label;
+    if (!l) return { servings: false, amount: false };
+    return {
+      servings: !!(l.perServing || (l.per100 && l.servingSize)),
+      amount: !!(l.per100 || (l.perServing && l.servingSize)),
+    };
+  }, [lab.label]);
+
+  function applyLabel(label: NutritionLabel, eaten: Eaten) {
+    const figures = labelToFigures(label, eaten);
+    if (!figures) return;
+    const cur = latest.current;
+    aiFields.fill('calories', cur.calories, aiNumberText(figures.calories), setCalories);
+    aiFields.fill('protein', cur.protein, aiNumberText(figures.proteinG, 1), setProtein);
+    aiFields.fill('salt', cur.salt, aiNumberText(figures.saltG, 1), setSalt);
+    aiFields.fill('sugar', cur.sugar, aiNumberText(figures.sugarG, 1), setSugar);
+    aiCalories.current = null; // read from the label, not estimated: nothing to calibrate
+    fromDb.current = null;
+    setError(false);
+  }
+
+  async function readLabel() {
+    if (!photoUri || lab.reading || ai.analyzing || saving) return;
+    const label = await lab.read(photoUri);
+    if (!label || !alive.current) return;
+    const eaten = defaultEaten(label);
+    setEatenMode('servings' in eaten ? 'servings' : 'amount');
+    setEatenText(String('servings' in eaten ? eaten.servings : eaten.amount));
+    if (label.productName) aiFields.fill('name', latest.current.name, label.productName, setName);
+    setAiNote(null);
+    applyLabel(label, eaten);
+  }
+
+  function changeEaten(text: string) {
+    setEatenText(text);
+    const n = parseFloat(text.replace(',', '.'));
+    if (lab.label && n > 0) applyLabel(lab.label, eatenMode === 'servings' ? { servings: n } : { amount: n });
+  }
+
+  function switchEatenMode(mode: 'servings' | 'amount') {
+    if (!lab.label || mode === eatenMode) return;
+    const start = mode === 'servings' ? '1' : String(lab.label.servingSize?.amount ?? 100);
+    setEatenMode(mode);
+    setEatenText(start);
+    applyLabel(lab.label, mode === 'servings' ? { servings: 1 } : { amount: Number(start) });
+  }
+  const advice = useMemo(() => cleanAdvice(ai.result?.advice), [ai.result]);
+
+  /** Totals from the food lookup replace the nutrition fields; they count as typed, so a later AI analysis keeps them. */
+  function applyLookup(r: LookupResult) {
+    typed('name', setName)(r.name);
+    typed('calories', setCalories)(String(r.calories));
+    typed('protein', setProtein)(String(r.proteinG));
+    setPurine(r.purineMg > 0 ? String(r.purineMg) : '');
+    setSalt(r.saltG > 0 ? String(r.saltG) : '');
+    setSugar(r.sugarG > 0 ? String(r.sugarG) : '');
+    aiCalories.current = null;
+    aiCalories.current = null;
+    fromDb.current = { name: r.name.trim(), calories: String(r.calories) };
+    setError(false);
+  }
 
   const draft: ExtraFoodItem = useMemo(
     () => ({
@@ -141,12 +268,14 @@ export default function AddFoodScreen() {
     try {
       // The picker hands back a temporary file the OS may clear; keep our own copy with the item.
       if (photoUri) persisted = await persistPickedPhoto(photoUri, `extra-${Date.now()}`);
+      if (aiCalories.current !== null) recordEstimate(aiCalories.current, draft.calories);
       addExtra(input.dateKey, draft.name, draft.calories, draft.proteinG, mealTime, {
         purineMg: draft.purineMg,
         saltG: draft.saltG,
         sugarG: draft.sugarG,
         junk: draft.junk,
         photoUri: persisted,
+        fromFoodDb: fromDb.current?.name === draft.name && fromDb.current.calories === calories.trim(),
       });
       goBack();
     } catch {
@@ -163,6 +292,34 @@ export default function AddFoodScreen() {
     sugar: preview.newlyMissed.includes('sugar'),
   };
 
+  // When this item breaks a limit, offer swaps: how much room each limit has left before it, and the item as it stands.
+  const limits = { purine: input.limits?.purineMg ?? LIMITS.purineMg, salt: input.limits?.saltG ?? LIMITS.saltG, sugar: input.limits?.sugarG ?? LIMITS.sugarG };
+  const swapContext = useMemo<SwapContext>(() => {
+    const before = preview.before.nutrients;
+    return {
+      exceeded: (['purine', 'salt', 'sugar'] as const).filter((n) => preview.newlyMissed.includes(n)),
+      headroom: { purine: limits.purine - before.purineMg, salt: limits.salt - before.saltG, sugar: limits.sugar - before.sugarG },
+    };
+  }, [preview, limits.purine, limits.salt, limits.sugar]); // eslint-disable-line react-hooks/exhaustive-deps
+  const swapItem = useMemo<SwapItem>(
+    () => ({ name: draft.name, calories: draft.calories, proteinG: draft.proteinG, purineMg: draft.purineMg ?? 0, saltG: draft.saltG ?? 0, sugarG: draft.sugarG ?? 0 }),
+    [draft]
+  );
+
+  /** The user picked a swap: its name and figures go into the form as typed values (nothing is saved). */
+  function applySwap(option: SwapOption) {
+    typed('name', setName)(option.name);
+    typed('calories', setCalories)(String(option.calories));
+    typed('protein', setProtein)(String(option.proteinG));
+    typed('purine', setPurine)(option.purineMg > 0 ? String(option.purineMg) : '');
+    typed('salt', setSalt)(option.saltG > 0 ? String(option.saltG) : '');
+    typed('sugar', setSugar)(option.sugarG > 0 ? String(option.sugarG) : '');
+    aiCalories.current = null;
+    fromDb.current = option.source === 'db' ? { name: option.name, calories: String(option.calories) } : null;
+    setAiNote(null);
+    setError(false);
+  }
+
   return (
     <View style={styles.screen}>
       <ScrollView
@@ -175,7 +332,30 @@ export default function AddFoodScreen() {
         </HudText>
 
         <View style={styles.form}>
+          <QuestButton variant="ghost" icon="chart" title={g('text.link')} onPress={() => router.push('/text-meal')} />
+          <FoodLookup onApply={applyLookup} onOpenDb={() => router.push('/food-db')} />
           <QuestField label={g('food.name')} value={name} onChangeText={typed('name', setName)} placeholder={g('food.namePlaceholder')} />
+          {saved && String(portionOf(saved).calories) !== calories.trim() && (
+            <View style={styles.aiNote} accessibilityLiveRegion="polite">
+              <HudText size={12} color={quest.manaText}>
+                {f('food.savedTitle')}
+              </HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {f('food.savedHint', { kcal: portionOf(saved).calories, p: portionOf(saved).proteinG })}
+              </HudText>
+              <QuestButton title={f('food.savedUse')} variant="mana" onPress={() => applySaved(saved)} />
+            </View>
+          )}
+          <DraftFeedback
+            name={name}
+            calories={num(calories)}
+            proteinG={num(protein)}
+            purineMg={num(purine)}
+            saltG={num(salt)}
+            sugarG={num(sugar)}
+            mealTime={mealTime}
+            dateKey={input.dateKey}
+          />
 
           <View style={styles.group}>
             <HudText size={12} weight="medium" color={quest.textSecondary}>
@@ -212,13 +392,13 @@ export default function AddFoodScreen() {
           </HudText>
           <View style={styles.pair}>
             <View style={styles.pairCell}>
-              <QuestField label={g('food.purine')} keyboardType="decimal-pad" value={purine} onChangeText={setPurine} />
+              <QuestField label={g('food.purine')} keyboardType="decimal-pad" value={purine} onChangeText={typed('purine', setPurine)} />
             </View>
             <View style={styles.pairCell}>
-              <QuestField label={g('food.salt')} keyboardType="decimal-pad" value={salt} onChangeText={setSalt} />
+              <QuestField label={g('food.salt')} keyboardType="decimal-pad" value={salt} onChangeText={typed('salt', setSalt)} />
             </View>
             <View style={styles.pairCell}>
-              <QuestField label={g('food.sugar')} keyboardType="decimal-pad" value={sugar} onChangeText={setSugar} />
+              <QuestField label={g('food.sugar')} keyboardType="decimal-pad" value={sugar} onChangeText={typed('sugar', setSugar)} />
             </View>
           </View>
 
@@ -244,6 +424,8 @@ export default function AddFoodScreen() {
               setPhotoUri(uri);
               setSaveFailed(false);
               ai.reset();
+              lab.reset();
+              aiCalories.current = null;
               setAiNote(null);
             }}
             disabled={saving}
@@ -266,7 +448,7 @@ export default function AddFoodScreen() {
               {aiNote && !ai.error && (
                 <View style={styles.aiNote} accessibilityLiveRegion="polite">
                   <HudText size={12} color={quest.manaText}>
-                    {g('ai.suggested')}
+                    {aiNote.saved ? f('food.savedTitle') : g('ai.suggested')}
                     {aiNote.confidence ? ` · ${aiNote.confidence}` : ''}
                   </HudText>
                   {aiNote.reasoning ? (
@@ -274,11 +456,68 @@ export default function AddFoodScreen() {
                       {aiNote.reasoning}
                     </HudText>
                   ) : null}
+                  {!aiNote.saved && calibrationText ? (
+                    <HudText size={12} weight="medium" color={quest.textSecondary}>
+                      {calibrationText}
+                    </HudText>
+                  ) : null}
                   {aiNote.kept ? (
                     <HudText size={12} weight="medium" color={quest.textSecondary}>
                       {g('ai.keptYours')}
                     </HudText>
                   ) : null}
+                </View>
+              )}
+              {advice && !ai.error && <AiAdviceCard advice={advice} />}
+              <QuestButton
+                variant="ghost"
+                icon="list"
+                title={lab.reading ? g('label.reading') : g('label.read')}
+                onPress={() => { void readLabel(); }}
+                loading={lab.reading}
+                disabled={saving || ai.analyzing}
+              />
+              {lab.error && (
+                <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                  {aiErrorText(lab.error.kind)}
+                </HudText>
+              )}
+              {lab.unreadable && !lab.error && (
+                <HudText size={12} weight="medium" color={quest.goldLight} accessibilityRole="alert" accessibilityLiveRegion="polite">
+                  {g('label.unreadable')}
+                </HudText>
+              )}
+              {lab.label && !lab.error && (
+                <View style={styles.aiNote} accessibilityLiveRegion="polite">
+                  <HudText size={12} color={quest.manaText}>
+                    {g('label.title')}
+                    {lab.label.productName ? ` · ${lab.label.productName}` : ''}
+                    {accuracyText(lab.label) ? ` · ${accuracyText(lab.label)}` : ''}
+                  </HudText>
+                  <HudText size={12} weight="medium" color={quest.textSecondary}>
+                    {g('label.check')}
+                  </HudText>
+                  {modes.servings && modes.amount && (
+                    <View style={styles.chips}>
+                      <QuestChip label={g('label.modeServings')} selected={eatenMode === 'servings'} onPress={() => switchEatenMode('servings')} />
+                      <QuestChip label={g('label.modeAmount')} selected={eatenMode === 'amount'} onPress={() => switchEatenMode('amount')} />
+                    </View>
+                  )}
+                  <QuestField
+                    label={eatenMode === 'servings' ? g('label.servings') : g('label.amount')}
+                    keyboardType="decimal-pad"
+                    value={eatenText}
+                    onChangeText={changeEaten}
+                  />
+                  {lab.label.servingSize && (
+                    <HudText size={11} weight="medium" color={quest.textSecondary}>
+                      {g('label.serving', { amount: lab.label.servingSize.amount, unit: lab.label.servingSize.unit })}
+                      {lab.label.servingsPerPack ? ` · ${g('label.perPack', { n: lab.label.servingsPerPack })}` : ''}
+                    </HudText>
+                  )}
+                  <HudText size={11} weight="medium" color={quest.textSecondary}>
+                    {g('label.noPurine')}
+                  </HudText>
                 </View>
               )}
             </View>
@@ -298,6 +537,9 @@ export default function AddFoodScreen() {
               exceeded={exceeded}
             />
             <ImpactNote newlyDone={preview.newlyDone} newlyMissed={preview.newlyMissed} />
+            {swapContext.exceeded.length > 0 && draft.calories > 0 && (
+              <SwapSuggestions item={swapItem} context={swapContext} limits={limits} mealTime={mealTime} disabled={saving} onUse={applySwap} />
+            )}
           </View>
         </View>
       </ScrollView>

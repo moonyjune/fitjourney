@@ -31,6 +31,7 @@ import { chartWidthFor, screenMaxWidthStyle } from '../../src/theme/responsive';
 import { DailyMealBreakdownTable } from '../../src/components/DailyMealBreakdownTable';
 import { actualDailyDeficitKcal, resolveTdeeKcal } from '../../src/utils/tdee';
 import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood } from '../../src/types';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 interface DaySummary {
   dateKey: string;
@@ -134,6 +135,7 @@ export default function HistoryScreen() {
   const { t } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const chartWidth = chartWidthFor(useWindowDimensions().width);
   // Line charts draw their last x label centred on the right edge; leave room so it isn't cut off.
@@ -357,7 +359,7 @@ export default function HistoryScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
     >
       <QuestHeader
         title={g('historyScreen.title')}

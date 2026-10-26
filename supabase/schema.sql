@@ -142,6 +142,61 @@ create table if not exists public.plan_chat_messages (
   created_at timestamptz not null default now()
 );
 
+-- 8b. Thói quen theo dõi hằng ngày (danh sách thói quen + tích ✔/✘ mỗi ngày). client_id là id do app sinh ra,
+-- nên đẩy lên bằng upsert (chạy lại không nhân đôi). Xoá một thói quen = archived (giữ lịch sử đã tích).
+create table if not exists public.habits (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  client_id text not null,
+  name text not null,
+  status text not null default 'building' check (status in ('formed', 'building', 'todo')),
+  assessment text not null default '',
+  kaizen text not null default '',
+  measured_by text not null default '',
+  tracked boolean not null default true,
+  auto text check (auto in ('water', 'weigh', 'walk')),
+  sort integer not null default 0,
+  archived boolean not null default false,
+  updated_at timestamptz not null default now(),
+  unique (user_id, client_id)
+);
+
+create table if not exists public.habit_checks (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  habit_client_id text not null,
+  entry_date date not null,
+  value text not null check (value in ('done', 'missed')),
+  updated_at timestamptz not null default now(),
+  unique (user_id, habit_client_id, entry_date)
+);
+
+-- 8c. Kết quả xét nghiệm axit uric (µmol/L). client_id là id do app sinh ra nên đẩy lên bằng upsert (chạy lại không nhân đôi).
+create table if not exists public.uric_readings (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  client_id text not null,
+  entry_date date not null,
+  value_umol numeric not null check (value_umol > 0),
+  note text not null default '',
+  updated_at timestamptz not null default now(),
+  unique (user_id, client_id)
+);
+
+-- 8d. Mỗi lần cân có client_id (id do app sinh) + giờ cân thật, để đẩy bằng upsert (nhập lại không nhân đôi) và khôi phục đúng giờ khi đăng nhập lại.
+alter table public.weight_entries add column if not exists client_id text;
+alter table public.weight_entries add column if not exists logged_at timestamptz;
+create unique index if not exists weight_entries_user_client_id_key on public.weight_entries (user_id, client_id);
+
+-- 8e. Cài đặt riêng của user (ghi chú Kiến thức, mục tiêu axit uric, món ăn tự thêm, giới hạn purine/muối/đường): mỗi khóa một dòng JSON.
+create table if not exists public.user_data (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  key text not null,
+  value jsonb not null,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, key)
+);
+
 -- 7. Feeling record: điểm cảm giác thèm ăn/đói/tâm trạng/tình trạng tập luyện tại 1 thời điểm.
 -- Dùng làm input để AI gợi ý điều chỉnh thực đơn/lịch tập hàng tuần (xem weekly_suggestions).
 create table if not exists public.feeling_records (
@@ -186,6 +241,10 @@ create table if not exists public.meal_recipe_suggestions (
   updated_at timestamptz not null default now(),
   unique (user_id, day_type, meal_slot)
 );
+
+-- Món gợi ý: dụng cụ cần dùng và lý do hợp khẩu vị (thêm sau, an toàn nếu đã tồn tại).
+alter table public.meal_recipe_suggestions add column if not exists equipment jsonb not null default '[]'::jsonb;
+alter table public.meal_recipe_suggestions add column if not exists taste_note text;
 
 -- Tự động tạo profile khi có user đăng ký mới.
 create or replace function public.handle_new_user()
@@ -247,6 +306,7 @@ security definer set search_path = public
 as $$
 declare
   v_coach_id uuid;
+  v_current uuid;
 begin
   select id into v_coach_id from public.profiles where coach_code = p_code and role = 'coach';
   if v_coach_id is null then
@@ -255,11 +315,240 @@ begin
   if v_coach_id = auth.uid() then
     raise exception 'Không thể tự liên kết với chính mình.';
   end if;
+  select coach_id into v_current from public.profiles where id = auth.uid();
+  if v_current = v_coach_id then
+    return; -- đã liên kết đúng Coach này
+  end if;
+  if v_current is not null then
+    raise exception 'Bạn đã liên kết với một Coach. Hãy gỡ liên kết hiện tại trước khi liên kết Coach khác.';
+  end if;
   update public.profiles set coach_id = v_coach_id, updated_at = now() where id = auth.uid();
 end;
 $$;
 
 grant execute on function public.link_to_coach(text) to authenticated;
+
+-- Lịch sử liên kết Học viên - Coach. Mỗi lần liên kết là 1 dòng (kèm email và mã Coach tại thời điểm đó), dòng đang hiệu lực
+-- có unlinked_at rỗng. 1 Học viên chỉ có 1 dòng đang hiệu lực; các dòng cũ giữ lại làm lịch sử qua nhiều giai đoạn huấn luyện.
+-- Chỉ trigger bên dưới được ghi bảng này (không có policy insert/update/delete cho client).
+create table if not exists public.coach_links (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references public.profiles (id) on delete cascade,
+  coach_id uuid references public.profiles (id) on delete set null,
+  coach_email text,
+  coach_code text,
+  linked_at timestamptz not null default now(),
+  unlinked_at timestamptz
+);
+create unique index if not exists coach_links_one_active on public.coach_links (client_id) where unlinked_at is null;
+create index if not exists coach_links_coach_idx on public.coach_links (coach_id, linked_at desc);
+
+-- 1 Học viên chỉ liên kết 1 Coach: đã có Coach thì không được chuyển thẳng sang Coach khác (phải gỡ liên kết trước).
+create or replace function public.keep_one_coach()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.coach_id is not null and new.coach_id is not null and new.coach_id is distinct from old.coach_id then
+    raise exception 'Bạn đã liên kết với một Coach. Hãy gỡ liên kết hiện tại trước khi liên kết Coach khác.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_keep_one_coach on public.profiles;
+create trigger profiles_keep_one_coach
+  before update of coach_id on public.profiles
+  for each row execute procedure public.keep_one_coach();
+
+-- Ghi lịch sử mỗi khi coach_id đổi (kể cả khi bị xoá trực tiếp bằng SQL): đóng dòng cũ, mở dòng mới với email/mã Coach.
+create or replace function public.record_coach_link()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+begin
+  if new.coach_id is not distinct from old.coach_id then
+    return new;
+  end if;
+  update public.coach_links set unlinked_at = now() where client_id = new.id and unlinked_at is null;
+  if new.coach_id is not null then
+    insert into public.coach_links (client_id, coach_id, coach_email, coach_code)
+    select new.id, c.id, c.email, c.coach_code from public.profiles c where c.id = new.coach_id;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_record_coach_link on public.profiles;
+create trigger profiles_record_coach_link
+  after update of coach_id on public.profiles
+  for each row execute procedure public.record_coach_link();
+
+-- Học viên đã liên kết từ trước khi có bảng này: tạo dòng đang hiệu lực cho họ (chạy lại không tạo trùng).
+insert into public.coach_links (client_id, coach_id, coach_email, coach_code)
+select p.id, c.id, c.email, c.coach_code
+from public.profiles p
+join public.profiles c on c.id = p.coach_id
+where not exists (select 1 from public.coach_links l where l.client_id = p.id and l.unlinked_at is null);
+
+-- AI: số lượt, token và chi phí ước tính theo người dùng / ngày / tính năng (chỉ Edge Function ghi, bằng service role).
+create table if not exists public.ai_usage (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  day date not null,
+  feature text not null,
+  calls integer not null default 0,
+  tokens_in bigint not null default 0,
+  tokens_out bigint not null default 0,
+  cost_usd numeric not null default 0,
+  primary key (user_id, day, feature)
+);
+
+alter table public.ai_usage add column if not exists last_model text;
+
+-- Hàm cũ (không có model) được thay bằng bản có model.
+drop function if exists public.ai_usage_bump(uuid, date, text, bigint, bigint, numeric);
+create or replace function public.ai_usage_bump(p_user uuid, p_day date, p_feature text, p_in bigint, p_out bigint, p_cost numeric, p_model text)
+returns void
+language sql
+security definer set search_path = public
+as $$
+  insert into public.ai_usage (user_id, day, feature, calls, tokens_in, tokens_out, cost_usd, last_model)
+  values (p_user, p_day, p_feature, 1, p_in, p_out, p_cost, p_model)
+  on conflict (user_id, day, feature) do update
+    set calls = public.ai_usage.calls + 1,
+        tokens_in = public.ai_usage.tokens_in + excluded.tokens_in,
+        tokens_out = public.ai_usage.tokens_out + excluded.tokens_out,
+        cost_usd = public.ai_usage.cost_usd + excluded.cost_usd,
+        last_model = excluded.last_model;
+$$;
+revoke all on function public.ai_usage_bump(uuid, date, text, bigint, bigint, numeric, text) from public, anon, authenticated;
+grant execute on function public.ai_usage_bump(uuid, date, text, bigint, bigint, numeric, text) to service_role;
+
+-- Tổng chi phí ước tính của tất cả người dùng trong một ngày (dùng cho trần ngân sách toàn hệ thống).
+create or replace function public.ai_cost_on_day(p_day date)
+returns numeric
+language sql
+security definer set search_path = public
+stable
+as $$
+  select coalesce(sum(cost_usd), 0) from public.ai_usage where day = p_day;
+$$;
+revoke all on function public.ai_cost_on_day(date) from public, anon, authenticated;
+grant execute on function public.ai_cost_on_day(date) to service_role;
+
+-- Báo cáo cho chủ ứng dụng (xem trong Supabase SQL Editor, không mở cho người dùng): theo ngày và theo người/ngày.
+create or replace view public.ai_cost_by_day as
+  select day,
+         count(distinct user_id) as users,
+         sum(calls) as calls,
+         sum(tokens_in) as tokens_in,
+         sum(tokens_out) as tokens_out,
+         round(sum(cost_usd), 4) as cost_usd
+  from public.ai_usage
+  group by day
+  order by day desc;
+
+create or replace view public.ai_cost_by_user_day as
+  select u.day,
+         u.user_id,
+         p.email,
+         sum(u.calls) as calls,
+         sum(u.tokens_in) as tokens_in,
+         sum(u.tokens_out) as tokens_out,
+         round(sum(u.cost_usd), 4) as cost_usd
+  from public.ai_usage u
+  left join public.profiles p on p.id = u.user_id
+  group by u.day, u.user_id, p.email
+  order by u.day desc, cost_usd desc;
+
+create or replace view public.ai_cost_by_feature_day as
+  select day, feature, last_model,
+         sum(calls) as calls,
+         sum(tokens_in) as tokens_in,
+         sum(tokens_out) as tokens_out,
+         round(sum(cost_usd), 4) as cost_usd
+  from public.ai_usage
+  group by day, feature, last_model
+  order by day desc, cost_usd desc;
+
+revoke all on public.ai_cost_by_day, public.ai_cost_by_user_day, public.ai_cost_by_feature_day from public, anon, authenticated;
+grant select on public.ai_cost_by_day, public.ai_cost_by_user_day, public.ai_cost_by_feature_day to service_role;
+
+-- Danh sách tài khoản được xem màn "AI & chi phí" (toàn ứng dụng). Không có policy nào: chỉ các hàm bên dưới đọc bảng này.
+-- Thêm tài khoản bằng SQL riêng, KHÔNG ghi email vào file này:  insert into public.ai_admins (email) values ('ten@example.com');
+create table if not exists public.ai_admins (
+  email text primary key
+);
+alter table public.ai_admins enable row level security;
+revoke all on public.ai_admins from public, anon, authenticated;
+
+create or replace function public.is_ai_admin()
+returns boolean
+language sql
+security definer set search_path = public
+stable
+as $$
+  select exists (select 1 from public.ai_admins a where lower(a.email) = lower(coalesce(auth.jwt() ->> 'email', '')));
+$$;
+revoke all on function public.is_ai_admin() from public, anon;
+grant execute on function public.is_ai_admin() to authenticated;
+
+-- Tổng hợp toàn ứng dụng theo ngày (p_days ngày gần nhất tính đến p_today). Chỉ tài khoản trong ai_admins gọi được.
+create or replace function public.ai_admin_by_day(p_today date, p_days integer default 14)
+returns table (day date, users bigint, calls bigint, tokens_in bigint, tokens_out bigint, cost_usd numeric)
+language plpgsql
+security definer set search_path = public
+stable
+as $$
+begin
+  if not public.is_ai_admin() then
+    raise exception 'Không có quyền xem.';
+  end if;
+  return query
+    select u.day, count(distinct u.user_id), sum(u.calls)::bigint, sum(u.tokens_in)::bigint, sum(u.tokens_out)::bigint, round(sum(u.cost_usd), 4)
+    from public.ai_usage u
+    where u.day > p_today - greatest(1, least(p_days, 90)) and u.day <= p_today
+    group by u.day
+    order by u.day desc;
+end;
+$$;
+revoke all on function public.ai_admin_by_day(date, integer) from public, anon;
+grant execute on function public.ai_admin_by_day(date, integer) to authenticated;
+
+-- Chi tiết theo người dùng của một ngày.
+create or replace function public.ai_admin_by_user(p_day date)
+returns table (user_id uuid, email text, calls bigint, tokens_in bigint, tokens_out bigint, cost_usd numeric)
+language plpgsql
+security definer set search_path = public
+stable
+as $$
+begin
+  if not public.is_ai_admin() then
+    raise exception 'Không có quyền xem.';
+  end if;
+  return query
+    select u.user_id, p.email, sum(u.calls)::bigint, sum(u.tokens_in)::bigint, sum(u.tokens_out)::bigint, round(sum(u.cost_usd), 4)
+    from public.ai_usage u
+    left join public.profiles p on p.id = u.user_id
+    where u.day = p_day
+    group by u.user_id, p.email
+    order by sum(u.cost_usd) desc
+    limit 200;
+end;
+$$;
+revoke all on function public.ai_admin_by_user(date) from public, anon;
+grant execute on function public.ai_admin_by_user(date) to authenticated;
+
+-- AI: báo cáo đã tạo (tổng kết tuần...). Edge Function ghi; người dùng chỉ đọc báo cáo của mình.
+create table if not exists public.ai_reports (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  kind text not null,
+  period_key text not null,
+  payload jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, kind, period_key)
+);
 
 -- Row Level Security: mỗi user chỉ đọc/ghi được dữ liệu của chính mình.
 alter table public.profiles enable row level security;
@@ -275,6 +564,13 @@ alter table public.plan_chat_messages enable row level security;
 alter table public.feeling_records enable row level security;
 alter table public.weekly_suggestions enable row level security;
 alter table public.meal_recipe_suggestions enable row level security;
+alter table public.habits enable row level security;
+alter table public.habit_checks enable row level security;
+alter table public.uric_readings enable row level security;
+alter table public.user_data enable row level security;
+alter table public.coach_links enable row level security;
+alter table public.ai_usage enable row level security;
+alter table public.ai_reports enable row level security;
 
 drop policy if exists "profiles_select_own" on public.profiles;
 create policy "profiles_select_own" on public.profiles for select using (auth.uid() = id);
@@ -282,6 +578,16 @@ drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles for update using (auth.uid() = id);
 drop policy if exists "profiles_select_by_coach" on public.profiles;
 create policy "profiles_select_by_coach" on public.profiles for select using (coach_id = auth.uid());
+
+drop policy if exists "coach_links_select_own" on public.coach_links;
+create policy "coach_links_select_own" on public.coach_links for select using (auth.uid() = client_id);
+drop policy if exists "coach_links_select_by_coach" on public.coach_links;
+create policy "coach_links_select_by_coach" on public.coach_links for select using (auth.uid() = coach_id);
+
+drop policy if exists "ai_usage_select_own" on public.ai_usage;
+create policy "ai_usage_select_own" on public.ai_usage for select using (auth.uid() = user_id);
+drop policy if exists "ai_reports_select_own" on public.ai_reports;
+create policy "ai_reports_select_own" on public.ai_reports for select using (auth.uid() = user_id);
 
 drop policy if exists "weight_entries_all_own" on public.weight_entries;
 create policy "weight_entries_all_own" on public.weight_entries for all
@@ -316,6 +622,27 @@ create policy "feeling_records_all_own" on public.feeling_records for all
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 drop policy if exists "feeling_records_select_by_coach" on public.feeling_records;
 create policy "feeling_records_select_by_coach" on public.feeling_records for select
+  using (public.is_coach_of(user_id));
+
+drop policy if exists "habits_all_own" on public.habits;
+create policy "habits_all_own" on public.habits for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "habits_select_by_coach" on public.habits;
+create policy "habits_select_by_coach" on public.habits for select
+  using (public.is_coach_of(user_id));
+
+drop policy if exists "habit_checks_all_own" on public.habit_checks;
+create policy "habit_checks_all_own" on public.habit_checks for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "habit_checks_select_by_coach" on public.habit_checks;
+create policy "habit_checks_select_by_coach" on public.habit_checks for select
+  using (public.is_coach_of(user_id));
+
+drop policy if exists "uric_readings_all_own" on public.uric_readings;
+create policy "uric_readings_all_own" on public.uric_readings for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "uric_readings_select_by_coach" on public.uric_readings;
+create policy "uric_readings_select_by_coach" on public.uric_readings for select
   using (public.is_coach_of(user_id));
 
 drop policy if exists "weekly_suggestions_all_own" on public.weekly_suggestions;
@@ -372,3 +699,7 @@ create policy "proofs_storage_all_own" on storage.objects for all
 drop policy if exists "proofs_storage_select_by_coach" on storage.objects;
 create policy "proofs_storage_select_by_coach" on storage.objects for select
   using (bucket_id = 'proofs' and public.is_coach_of((storage.foldername(name))[1]::uuid));
+
+drop policy if exists "user_data_all_own" on public.user_data;
+create policy "user_data_all_own" on public.user_data for all
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);

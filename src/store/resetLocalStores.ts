@@ -8,15 +8,22 @@ import {
 import { useAchievementStore } from './useAchievementStore';
 import { useCelebrationStore } from './useCelebrationStore';
 import { useFeelingStore } from './useFeelingStore';
+import { useFoodDbStore } from './useFoodDbStore';
+import { useHabitStore } from './useHabitStore';
+import { useLearnStore } from './useLearnStore';
 import { useLimitsStore } from './useLimitsStore';
 import { useTrainingStore } from './useTrainingStore';
+import { useAiDigestStore } from './useAiDigestStore';
+import { useAiReportStore } from './useAiReportStore';
 import { useNutritionStore } from './useNutritionStore';
 import { usePlanStore } from './usePlanStore';
 import { useProofStore } from './useProofStore';
 import { useSettingsStore } from './useSettingsStore';
 import { useShoppingListStore } from './useShoppingListStore';
+import { useUricStore } from './useUricStore';
 import { useWeightStore } from './useWeightStore';
 import { useWorkoutStore } from './useWorkoutStore';
+import { DEFAULT_TARGET_UMOL } from '../uric/types';
 import { weekStartKey } from '../utils/weekKey';
 import { useSyncQueueStore } from '../sync/syncQueue';
 
@@ -44,12 +51,17 @@ export function resetAllLocalStores() {
     role: 'client',
     coachEnabled: false,
     coachId: null,
+    linkedCoachEmail: null,
+    linkedCoachCode: null,
+    linkedCoachSinceISO: null,
     coachCode: null,
     lastUserId: null,
     language,
   });
   useWeightStore.setState({ entries: [] });
-  useNutritionStore.setState({ logs: {} });
+  useNutritionStore.setState({ logs: {}, waterDefaultDone: false });
+  useAiReportStore.setState({ weekly: {} });
+  useAiDigestStore.setState({ weeks: {} });
   useWorkoutStore.setState({ entries: [] });
   // Epoch timestamp guarantees the next syncFromRemote() treats any remote plan as newer.
   usePlanStore.setState({ plan: DEFAULT_PLAN, updatedAtISO: new Date(0).toISOString() });
@@ -60,6 +72,11 @@ export function resetAllLocalStores() {
   useAchievementStore.setState({ equippedBannerId: null });
   useCelebrationStore.setState({ seenLevel: null });
   useLimitsStore.getState().reset();
+  // The user's own foods and label edits belong to the account too.
+  useFoodDbStore.setState({ custom: [], overrides: {}, recent: [] });
+  useHabitStore.setState({ habits: [], checks: {} });
+  useLearnStore.setState({ notes: {} });
+  useUricStore.setState({ readings: [], targetUmol: DEFAULT_TARGET_UMOL });
   useShoppingListStore.setState({ weekKey: weekStartKey(new Date()), checkedItems: {}, actualPrices: {}, actualQuantities: {}, customItems: [] });
   // Discard rather than misattribute: a queued offline write has no owner id of its own, so
   // replaying it after switching accounts would silently write to the wrong user.

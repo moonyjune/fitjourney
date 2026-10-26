@@ -20,6 +20,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 jest.mock('../../lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() } } }));
 jest.mock('../../sync/cloudSync', () => ({
+  pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),

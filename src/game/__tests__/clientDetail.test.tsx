@@ -51,6 +51,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import ClientDetail from '../../../app/client/[id]';
+import { aiFlags } from '../../ai/featureFlags';
 import { useSettingsStore } from '../../store/useSettingsStore';
 
 function allText(renderer: ReactTestRenderer): string {
@@ -98,6 +99,19 @@ describe('Coach client detail', () => {
     expect(text).toContain('106.2 kg');
     expect(text).toContain('-3.8');
     expect(text).toContain('Chưa có ảnh minh chứng nào.');
+  });
+
+  it('hides the AI plan assistant while AI for coaches is switched off, and shows it when on', async () => {
+    renderer = await mount();
+    expect(allText(renderer)).not.toContain('Trợ lý AI chỉnh kế hoạch cho học viên này');
+    act(() => renderer?.unmount());
+    aiFlags.aiForCoach = true;
+    try {
+      renderer = await mount();
+      expect(allText(renderer)).toContain('Trợ lý AI chỉnh kế hoạch cho học viên này');
+    } finally {
+      aiFlags.aiForCoach = false;
+    }
   });
 
   it('goes back, falling back to the client list when there is no history', async () => {

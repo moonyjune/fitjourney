@@ -178,6 +178,11 @@ Deno.serve(async (req) => {
     if (!lastMessage || typeof lastMessage.content !== 'string' || !lastMessage.content.trim()) {
       return jsonResponse({ error: 'Tin nhắn cuối cùng trống.' }, 400);
     }
+    // AI for coaches is switched off unless AI_COACH_ENABLED=1 is set for the functions: a request that edits somebody else's plan
+    // (a coach editing a client's) is refused. A user's own plan chat is not affected.
+    if (typeof targetUserId === 'string' && targetUserId && targetUserId !== user.id && Deno.env.get('AI_COACH_ENABLED') !== '1') {
+      return jsonResponse({ error: 'Tính năng AI cho Coach đang tạm tắt.' }, 503);
+    }
     // Coach editing a client's plan: targetUserId is the client. Authorization for the audit-log
     // insert and the actual `plans` write (done client-side after Confirm) is enforced by
     // Postgres RLS, not here — an unauthorized targetUserId simply fails to write, it never

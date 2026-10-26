@@ -8,7 +8,7 @@ import {
   DEFAULT_START_WEIGHT_KG,
   DEFAULT_WATER_TARGET_ML,
 } from '../constants/plan';
-import { ensureCoachCode, linkToCoach, pullProfile, pushProfile, type RemoteProfile } from '../sync/cloudSync';
+import { ensureCoachCode, fetchCoachLink, linkToCoach, pullProfile, pushProfile, type RemoteProfile } from '../sync/cloudSync';
 import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 
 interface SettingsState extends UserSettings {
@@ -34,6 +34,8 @@ interface SettingsState extends UserSettings {
   /** Makes sure this account has its (permanent, unique) coach code, fetching or creating it. Returns it, or null if the
    *  backend couldn't confirm one — call again to retry. */
   ensureOwnCoachCode: () => Promise<string | null>;
+  /** Reloads who the linked coach is (email, code, since): cleared when there is no coach, kept as is when it can't be read. */
+  refreshCoachLink: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -56,6 +58,9 @@ export const useSettingsStore = create<SettingsState>()(
       role: 'client',
       coachEnabled: false,
       coachId: null,
+      linkedCoachEmail: null,
+      linkedCoachCode: null,
+      linkedCoachSinceISO: null,
       coachCode: null,
       language: 'vi',
       lastUserId: null,
@@ -91,6 +96,7 @@ export const useSettingsStore = create<SettingsState>()(
         if (result.ok) {
           const refreshed = await pullProfile();
           if (refreshed) set((state) => ({ ...state, coachId: refreshed.coachId }));
+          await get().refreshCoachLink();
         }
         return result;
       },
@@ -104,6 +110,14 @@ export const useSettingsStore = create<SettingsState>()(
         if (!get().coachCode) await get().ensureOwnCoachCode();
         set((state) => ({ ...state, role: 'coach' }));
         pushProfile(get());
+      },
+      refreshCoachLink: async () => {
+        if (!get().coachId) {
+          set((state) => ({ ...state, linkedCoachEmail: null, linkedCoachCode: null, linkedCoachSinceISO: null }));
+          return;
+        }
+        const link = await fetchCoachLink();
+        if (link && get().coachId) set((state) => ({ ...state, linkedCoachEmail: link.email, linkedCoachCode: link.code, linkedCoachSinceISO: link.linkedAtISO }));
       },
       ensureOwnCoachCode: async () => {
         const existing = get().coachCode;

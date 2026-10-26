@@ -39,6 +39,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import ClientsScreen from '../../../app/(tabs)/clients';
+import { aiFlags } from '../../ai/featureFlags';
 import CoachAccountScreen from '../../../app/(tabs)/coach-account';
 import { QuestTabBar } from '../../components/quest/QuestTabBar';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -99,6 +100,21 @@ describe('Coach mode screens', () => {
     expect(mockRouter.push).toHaveBeenCalledWith('/client/u1');
     // A client without an email falls back to the id, never an empty row.
     expect(pressByLabel(r, (l) => l.startsWith('u2'))).toBeDefined();
+  });
+
+  it('has no AI digest while AI for coaches is switched off, even with clients', async () => {
+    aiFlags.aiForCoach = false;
+    mockFetchClients.mockResolvedValue([{ id: 'u1', email: 'an@x.io', latestWeightKg: 106.2, startWeightKg: 110, goalWeightKg: 95 }]);
+    expect(allText(await render(<ClientsScreen />))).not.toContain('Tóm tắt tuần của học viên (AI)');
+  });
+
+  it('offers the weekly AI digest only when the coach has clients (once AI for coaches is on)', async () => {
+    aiFlags.aiForCoach = true;
+    mockFetchClients.mockResolvedValue([{ id: 'u1', email: 'an@x.io', latestWeightKg: 106.2, startWeightKg: 110, goalWeightKg: 95 }]);
+    expect(allText(await render(<ClientsScreen />))).toContain('Tóm tắt tuần của học viên (AI)');
+    mockFetchClients.mockResolvedValue([]);
+    expect(allText(await render(<ClientsScreen />))).not.toContain('Tóm tắt tuần của học viên (AI)');
+    aiFlags.aiForCoach = false;
   });
 
   it('tells a new coach to share the code when there are no clients', async () => {

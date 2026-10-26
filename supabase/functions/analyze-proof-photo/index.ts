@@ -8,22 +8,12 @@
 // what is visible (machine/watch/app screen, equipment) and estimates the activity, duration and calories burned.
 // The client sends the user's body data (weight, height, age, gender, activity level) so the numbers fit the
 // person; the client always shows the result in editable fields — a starting estimate, never saved directly.
+// The client also sends a `coach` snapshot (targets, today so far, up to 7 recent days of intake/workouts/weights and
+// this week's boss state). From it the model returns `advice`: how the day stands against the deficit target and what to
+// do for the rest of the day so the daily target, then the weekly one (the boss), is reached. It never replaces a doctor.
 
-import { createClient } from 'jsr:@supabase/supabase-js@2';
-
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const CLAUDE_MODEL = 'claude-sonnet-5';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'content-type': 'application/json' } });
-}
+import { ACCURACY_PROPERTY, ADVICE_PROPERTY, describeCoach, describePerson, sanitizeProfile } from '../_shared/coach.ts';
+import { jsonResponse, serveAi } from '../_shared/ai.ts';
 
 const ANALYSIS_TOOL = {
   name: 'report_photo_analysis',
@@ -35,9 +25,14 @@ const ANALYSIS_TOOL = {
       estimatedCaloriesKcal: { type: 'number', description: 'Meal photos only: estimated calories of the food/drink shown.' },
       estimatedProteinG: { type: 'number', description: 'Meal photos only: estimated grams of protein in the food shown.' },
       estimatedWaterMl: { type: 'number', description: 'Meal photos only, if a drink/water is visible: estimated ml of liquid.' },
+      estimatedPurineMg: { type: 'number', description: 'Meal photos only: estimated purine (mg) of the food shown; 0 if it is low-purine.' },
+      estimatedSugarG: { type: 'number', description: 'Meal photos only: estimated FREE/added sugar in grams (sugar, syrup, juice, sweetened drinks); 0 if none.' },
+      estimatedSaltG: { type: 'number', description: 'Meal photos only: estimated table salt in grams (sodium x 2.5), including sauces/broth.' },
       activityName: { type: 'string', description: 'Workout photos only: the activity shown (Vietnamese), e.g. "Đi bộ dốc", "Bơi".' },
       durationMin: { type: 'number', description: 'Workout photos only: duration in minutes if it can be read or reasonably inferred.' },
       estimatedCaloriesBurned: { type: 'number', description: 'Workout photos only: calories burned this session for THIS person.' },
+      advice: ADVICE_PROPERTY,
+      accuracyPercent: ACCURACY_PROPERTY,
       confidence: { type: 'string', enum: ['low', 'medium', 'high'], description: 'How sure the estimate is given what the photo shows.' },
       reasoning: { type: 'string', description: 'One short sentence (Vietnamese) explaining the estimate.' },
     },
@@ -45,131 +40,48 @@ const ANALYSIS_TOOL = {
   },
 };
 
-interface BodyProfile {
-  weightKg?: number;
-  heightCm?: number;
-  age?: number;
-  gender?: 'male' | 'female';
-  activityLevel?: string;
-}
-
-const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined);
-
-/** Only the fields we expect, with sane bounds, so a bad client can't inject text into the prompt. */
-function sanitizeProfile(raw: unknown): BodyProfile {
-  const p = (raw ?? {}) as Record<string, unknown>;
-  const within = (v: unknown, min: number, max: number) => {
-    const n = num(v);
-    return n !== undefined && n >= min && n <= max ? n : undefined;
+serveAi('photo', async (body) => {
+  const { taskType, imageBase64, mediaType, context, profile, coach } = body as {
+    taskType: 'meal' | 'workout';
+    imageBase64: string;
+    mediaType: string;
+    context?: { label?: string; plannedCalories?: number };
+    profile?: unknown;
+    coach?: unknown;
   };
+  if (!imageBase64 || (taskType !== 'meal' && taskType !== 'workout')) {
+    return jsonResponse({ error: 'Thiếu imageBase64 hoặc taskType không hợp lệ.' }, 400);
+  }
+
+  const person = describePerson(sanitizeProfile(profile));
+  const coachText = describeCoach(coach);
+  const coachPrompt = coachText
+    ? ` Dữ liệu hiện trạng (JSON; mục tiêu, hôm nay đến giờ, tối đa 7 ngày gần đây, boss tuần — boss là tổng thâm hụt kcal cả tuần, mỗi ngày tối đa 1.500 kcal): ${coachText}. Sau khi đọc ảnh, hãy ĐÁNH GIÁ bữa/buổi tập này tác động thế nào tới mục tiêu thâm hụt hôm nay và các giới hạn purine/muối/đường, rồi GỢI Ý việc cần làm cho phần còn lại của ngày (còn được ăn bao nhiêu kcal, cần thêm bao nhiêu đạm, có cần đốt thêm không, uống nước) để đạt thâm hụt ngày, từ đó đạt mục tiêu tuần và hạ boss. Dựa vào xu hướng các ngày gần đây (ví dụ hay ăn quá muộn, thiếu đạm, thiếu nước). Chỉ dùng số trong dữ liệu, không bịa. Đây là gợi ý lối sống, không thay thế bác sĩ. Điền trường advice.`
+    : '';
+  const label = String(context?.label ?? '').slice(0, 120);
+  const prompt =
+    taskType === 'meal'
+      ? `Đây là ảnh món ăn/đồ uống${label ? ` "${label}"` : ''}${
+          context?.plannedCalories ? ` (kế hoạch ~${context.plannedCalories} kcal)` : ''
+        }. ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về tên món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Ước tính cả purine (mg), đường tự do (g) và muối (g). Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`
+      : `Đây là ảnh buổi tập${label ? ` "${label}"` : ''}${
+          context?.plannedCalories ? ` (kế hoạch đốt ~${context.plannedCalories} kcal)` : ''
+        }. ${person} Đọc những gì thấy được (màn hình máy tập/đồng hồ/ứng dụng: thời gian, quãng đường, nhịp tim, calo hiển thị; hoặc dụng cụ, tư thế). Trả về hoạt động, thời lượng (phút) và lượng calo đã đốt TÍNH CHO NGƯỜI NÀY (theo cân nặng và thể trạng, không chép nguyên số calo của máy nếu số đó rõ ràng không hợp lý). Nếu không chắc, nói rõ ở confidence và reasoning. Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`;
+
   return {
-    weightKg: within(p.weightKg, 20, 400),
-    heightCm: within(p.heightCm, 80, 250),
-    age: within(p.age, 5, 110),
-    gender: p.gender === 'male' || p.gender === 'female' ? p.gender : undefined,
-    activityLevel: ['sedentary', 'light', 'moderate', 'active', 'very_active'].includes(String(p.activityLevel))
-      ? String(p.activityLevel)
-      : undefined,
+    responseKey: 'result',
+    call: {
+      tool: ANALYSIS_TOOL,
+      maxTokens: 1400,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
+            { type: 'text', text: prompt },
+          ],
+        },
+      ],
+    },
   };
-}
-
-function describePerson(p: BodyProfile): string {
-  const parts = [
-    p.weightKg ? `cân nặng ${p.weightKg} kg` : null,
-    p.heightCm ? `cao ${p.heightCm} cm` : null,
-    p.age ? `${p.age} tuổi` : null,
-    p.gender ? (p.gender === 'male' ? 'nam' : 'nữ') : null,
-    p.activityLevel ? `mức vận động ${p.activityLevel}` : null,
-  ].filter(Boolean);
-  return parts.length ? `Người dùng: ${parts.join(', ')}.` : 'Không có thông tin thể trạng người dùng.';
-}
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-
-  try {
-    if (!ANTHROPIC_API_KEY) {
-      return jsonResponse({ error: 'Server chưa cấu hình ANTHROPIC_API_KEY.' }, 500);
-    }
-
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return jsonResponse({ error: 'Thiếu Authorization header.' }, 401);
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return jsonResponse({ error: 'Không xác thực được người dùng.' }, 401);
-    }
-
-    const { taskType, imageBase64, mediaType, context, profile } = (await req.json()) as {
-      taskType: 'meal' | 'workout';
-      imageBase64: string;
-      mediaType: string;
-      context?: { label?: string; plannedCalories?: number };
-      profile?: unknown;
-    };
-    if (!imageBase64 || (taskType !== 'meal' && taskType !== 'workout')) {
-      return jsonResponse({ error: 'Thiếu imageBase64 hoặc taskType không hợp lệ.' }, 400);
-    }
-
-    const person = describePerson(sanitizeProfile(profile));
-    const label = String(context?.label ?? '').slice(0, 120);
-    const prompt =
-      taskType === 'meal'
-        ? `Đây là ảnh món ăn/đồ uống${label ? ` "${label}"` : ''}${
-            context?.plannedCalories ? ` (kế hoạch ~${context.plannedCalories} kcal)` : ''
-          }. ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về tên món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Gọi tool report_photo_analysis.`
-        : `Đây là ảnh buổi tập${label ? ` "${label}"` : ''}${
-            context?.plannedCalories ? ` (kế hoạch đốt ~${context.plannedCalories} kcal)` : ''
-          }. ${person} Đọc những gì thấy được (màn hình máy tập/đồng hồ/ứng dụng: thời gian, quãng đường, nhịp tim, calo hiển thị; hoặc dụng cụ, tư thế). Trả về hoạt động, thời lượng (phút) và lượng calo đã đốt TÍNH CHO NGƯỜI NÀY (theo cân nặng và thể trạng, không chép nguyên số calo của máy nếu số đó rõ ràng không hợp lý). Nếu không chắc, nói rõ ở confidence và reasoning. Gọi tool report_photo_analysis.`;
-
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 700,
-        tools: [ANALYSIS_TOOL],
-        tool_choice: { type: 'tool', name: 'report_photo_analysis' },
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-              { type: 'text', text: prompt },
-            ],
-          },
-        ],
-      }),
-    });
-
-    if (!claudeResponse.ok) {
-      const detail = await claudeResponse.text();
-      return jsonResponse({ error: `Claude API lỗi: ${detail}` }, 502);
-    }
-
-    const claudeData = await claudeResponse.json();
-    const blocks: Array<Record<string, unknown>> = claudeData.content ?? [];
-    const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === 'report_photo_analysis');
-    if (!toolUse) {
-      return jsonResponse({ error: 'AI không trả về kết quả phân tích.' }, 502);
-    }
-
-    return jsonResponse({ result: toolUse.input });
-  } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : 'Lỗi không xác định.' }, 500);
-  }
 });

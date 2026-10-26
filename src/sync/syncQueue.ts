@@ -2,6 +2,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { CheckValue, Habit } from '../habits/types';
+import type { UricReading } from '../uric/types';
 import type { DailyNutritionLog, FeelingRecord, PlanData, ProofPhoto, UserSettings, WeightEntry, WorkoutLogEntry } from '../types';
 
 /**
@@ -18,7 +20,12 @@ export type SyncOp =
   | { id: string; type: 'proofPhoto'; payload: ProofPhoto }
   | { id: string; type: 'plan'; payload: { plan: PlanData; updatedAtISO: string; targetUserId?: string } }
   | { id: string; type: 'profile'; payload: UserSettings }
-  | { id: string; type: 'feelingRecord'; payload: FeelingRecord };
+  | { id: string; type: 'feelingRecord'; payload: FeelingRecord }
+  | { id: string; type: 'habit'; payload: Habit }
+  | { id: string; type: 'uricReading'; payload: UricReading }
+  | { id: string; type: 'uricDelete'; payload: { readingId: string } }
+  | { id: string; type: 'userData'; payload: { key: string; value: unknown } }
+  | { id: string; type: 'habitCheck'; payload: { habitId: string; dateKey: string; value: CheckValue | null } };
 
 interface SyncQueueState {
   pending: SyncOp[];

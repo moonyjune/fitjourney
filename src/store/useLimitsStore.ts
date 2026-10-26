@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LIMITS } from '../game/constants';
+import { pushUserData } from '../sync/cloudSync';
+import { USER_DATA_KEYS } from '../sync/userDataKeys';
 
 export type LimitKey = 'purineMg' | 'saltG' | 'sugarG';
 
@@ -21,19 +23,21 @@ interface LimitsState {
   reset: () => void;
 }
 
-const DEFAULTS = { purineMg: LIMITS.purineMg, saltG: LIMITS.saltG, sugarG: LIMITS.sugarG };
+export const LIMIT_DEFAULTS = { purineMg: LIMITS.purineMg, saltG: LIMITS.saltG, sugarG: LIMITS.sugarG };
 
-/** The user's own purine / salt / sugar ceilings. Local to this device (not synced to the cloud). */
+/** The user's own purine / salt / sugar ceilings. Saved to the cloud with the user's other settings. */
 export const useLimitsStore = create<LimitsState>()(
   persist(
     (set, get) => ({
-      ...DEFAULTS,
+      ...LIMIT_DEFAULTS,
       nudge: (key, direction) => {
         const { min, max, step } = LIMIT_RANGE[key];
         const next = Math.round((get()[key] + direction * step) * 100) / 100;
         set({ [key]: Math.min(max, Math.max(min, next)) } as Pick<LimitsState, LimitKey>);
+        const { purineMg, saltG, sugarG } = get();
+        pushUserData(USER_DATA_KEYS.limits, { purineMg, saltG, sugarG });
       },
-      reset: () => set(DEFAULTS),
+      reset: () => set(LIMIT_DEFAULTS),
     }),
     {
       name: 'limits-store',
@@ -43,8 +47,8 @@ export const useLimitsStore = create<LimitsState>()(
       // those old defaults never chose them, so move them to the new ones; anything else was a deliberate choice.
       migrate: (persisted, version) => {
         const old = persisted as Partial<Pick<LimitsState, LimitKey>>;
-        if (version === 0 && old.purineMg === 400) old.purineMg = DEFAULTS.purineMg;
-        if (version === 0 && old.saltG === 5) old.saltG = DEFAULTS.saltG;
+        if (version === 0 && old.purineMg === 400) old.purineMg = LIMIT_DEFAULTS.purineMg;
+        if (version === 0 && old.saltG === 5) old.saltG = LIMIT_DEFAULTS.saltG;
         return old as LimitsState;
       },
     }

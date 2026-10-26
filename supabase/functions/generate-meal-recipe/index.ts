@@ -7,22 +7,10 @@
 // suggestion, on refresh). The client caches the result in `meal_recipe_suggestions` so re-opening
 // Nutrition shows the same suggestion until the user taps refresh — this function never touches
 // the DB itself, same division of responsibility as analyze-weekly-feelings/analyze-proof-photo.
+// The client also sends `favorites` (foods the user actually eats often, from their log) and `dislikes` (foods they flagged
+// as junk), so the dish fits their taste; the dish must be simple: few tools, short, ingredients easy to buy.
 
-import { createClient } from 'jsr:@supabase/supabase-js@2';
-
-const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const CLAUDE_MODEL = 'claude-sonnet-5';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
-
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'content-type': 'application/json' } });
-}
+import { jsonResponse, serveAi } from '../_shared/ai.ts';
 
 const RECIPE_TOOL = {
   name: 'report_recipe',
@@ -48,92 +36,60 @@ const RECIPE_TOOL = {
           required: ['name', 'quantity'],
         },
       },
+      equipment: {
+        type: 'array',
+        maxItems: 3,
+        description: 'Dụng cụ cần dùng, tối đa 3, chỉ những thứ nhà nào cũng có (chảo, nồi, nồi cơm điện, lò vi sóng, dao, thớt...).',
+        items: { type: 'string' },
+      },
+      tasteNote: { type: 'string', description: 'Một câu ngắn: vì sao món này hợp khẩu vị người dùng (dựa trên món họ hay ăn), hoặc để trống nếu không có dữ liệu.' },
       steps: {
         type: 'array',
         description: 'Các bước nấu, mỗi bước một câu ngắn gọn, đủ chi tiết để làm theo (ít nhất 4 bước).',
         items: { type: 'string' },
       },
     },
-    required: ['dishName', 'emoji', 'durationMinutes', 'difficulty', 'caloriesKcal', 'proteinG', 'ingredients', 'steps'],
+    required: ['dishName', 'emoji', 'durationMinutes', 'difficulty', 'caloriesKcal', 'proteinG', 'ingredients', 'equipment', 'steps'],
   },
 };
 
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+serveAi('recipe', async (body) => {
+  const { mealLabel, dayType, targetCalories, targetProtein, avoidDishNames, favorites, dislikes } = body as {
+    mealLabel: string;
+    dayType: 'training' | 'rest';
+    targetCalories: number;
+    targetProtein: number;
+    avoidDishNames?: string[];
+    favorites?: unknown;
+    dislikes?: unknown;
+  };
+  if (!mealLabel || !targetCalories || !targetProtein) {
+    return jsonResponse({ error: 'Thiếu mealLabel/targetCalories/targetProtein.' }, 400);
   }
 
-  try {
-    if (!ANTHROPIC_API_KEY) {
-      return jsonResponse({ error: 'Server chưa cấu hình ANTHROPIC_API_KEY.' }, 500);
-    }
+  const avoidText =
+    avoidDishNames && avoidDishNames.length > 0
+      ? ` Không được trùng với các món đã gợi ý trước đó: ${avoidDishNames.join(', ')}.`
+      : '';
+  // Names only, short, at most 10 each: they are shown to the model as data, never as instructions.
+  const names = (v: unknown) =>
+    (Array.isArray(v) ? v : [])
+      .filter((x): x is string => typeof x === 'string')
+      .map((x) => x.replace(/[<>\n\r]/g, ' ').trim().slice(0, 60))
+      .filter(Boolean)
+      .slice(0, 10);
+  const likes = names(favorites);
+  const dislikeNames = names(dislikes);
+  const tasteText =
+    (likes.length ? ` Món người dùng hay ăn (để hiểu khẩu vị; gợi ý món cùng gu nhưng KHÁC các món này): ${likes.join('; ')}.` : '') +
+    (dislikeNames.length ? ` Món họ tự đánh dấu là đồ ăn vặt/không tốt, đừng gợi ý món tương tự: ${dislikeNames.join('; ')}.` : '');
+  const prompt =
+    `Gợi ý MỘT món ăn Việt Nam khác cho "${mealLabel}" (${dayType === 'training' ? 'ngày tập luyện' : 'ngày nghỉ'}), ` +
+    `sao cho tổng calo khoảng ${Math.round(targetCalories)}kcal và protein khoảng ${Math.round(targetProtein)}g ` +
+    `(sai số trong khoảng 10%).${avoidText} Món ăn phải thực tế, dễ chuẩn bị tại nhà: tối đa 3 dụng cụ thông dụng (chảo, nồi, nồi cơm điện, lò vi sóng), tối đa 30 phút, độ khó 1-2, nguyên liệu dễ mua ở chợ/siêu thị Việt Nam, ít dầu mỡ, ít muối và đường, ưu tiên nguyên liệu ít purine.${tasteText} Gọi tool report_recipe.`;
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return jsonResponse({ error: 'Thiếu Authorization header.' }, 401);
-    }
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-    if (userError || !user) {
-      return jsonResponse({ error: 'Không xác thực được người dùng.' }, 401);
-    }
-
-    const { mealLabel, dayType, targetCalories, targetProtein, avoidDishNames } = (await req.json()) as {
-      mealLabel: string;
-      dayType: 'training' | 'rest';
-      targetCalories: number;
-      targetProtein: number;
-      avoidDishNames?: string[];
-    };
-    if (!mealLabel || !targetCalories || !targetProtein) {
-      return jsonResponse({ error: 'Thiếu mealLabel/targetCalories/targetProtein.' }, 400);
-    }
-
-    const avoidText =
-      avoidDishNames && avoidDishNames.length > 0
-        ? ` Không được trùng với các món đã gợi ý trước đó: ${avoidDishNames.join(', ')}.`
-        : '';
-    const prompt =
-      `Gợi ý MỘT món ăn Việt Nam khác cho "${mealLabel}" (${dayType === 'training' ? 'ngày tập luyện' : 'ngày nghỉ'}), ` +
-      `sao cho tổng calo khoảng ${Math.round(targetCalories)}kcal và protein khoảng ${Math.round(targetProtein)}g ` +
-      `(sai số trong khoảng 10%).${avoidText} Món ăn phải thực tế, dễ chuẩn bị tại nhà. Gọi tool report_recipe.`;
-
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: CLAUDE_MODEL,
-        max_tokens: 1200,
-        tools: [RECIPE_TOOL],
-        tool_choice: { type: 'tool', name: 'report_recipe' },
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!claudeResponse.ok) {
-      const detail = await claudeResponse.text();
-      return jsonResponse({ error: `Claude API lỗi: ${detail}` }, 502);
-    }
-
-    const claudeData = await claudeResponse.json();
-    const blocks: Array<Record<string, unknown>> = claudeData.content ?? [];
-    const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === 'report_recipe');
-    if (!toolUse) {
-      return jsonResponse({ error: 'AI không trả về công thức món ăn.' }, 502);
-    }
-
-    return jsonResponse({ recipe: toolUse.input });
-  } catch (error) {
-    return jsonResponse({ error: error instanceof Error ? error.message : 'Lỗi không xác định.' }, 500);
-  }
+  return {
+    responseKey: 'recipe',
+    call: { tool: RECIPE_TOOL, maxTokens: 1200, messages: [{ role: 'user', content: prompt }] },
+  };
 });

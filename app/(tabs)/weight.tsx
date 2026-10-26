@@ -18,6 +18,7 @@ import type { StringKey } from '../../src/i18n/strings';
 import { quest, questRadius } from '../../src/theme/quest';
 import { chartWidthFor, screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
   { key: 'weight.range1w', days: 7 },
@@ -31,6 +32,7 @@ export default function WeightScreen() {
   const { t } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const entries = useWeightStore((s) => s.entries);
   const addEntry = useWeightStore((s) => s.addEntry);
@@ -93,7 +95,7 @@ export default function WeightScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
       keyboardShouldPersistTaps="handled"
     >
       <QuestHeader

@@ -28,11 +28,13 @@ import { useTranslation } from '../../src/i18n/useTranslation';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { ACTIVITY_MULTIPLIER, resolveTdeeKcal } from '../../src/utils/tdee';
 import type { ActivityLevel, Gender, PlanData } from '../../src/types';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 export default function PlanScreen() {
   const { t } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const settings = useSettingsStore();
   const session = useAuthStore((s) => s.session);
@@ -188,7 +190,7 @@ export default function PlanScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
       keyboardShouldPersistTaps="handled"
     >
       <QuestHeader
@@ -327,7 +329,34 @@ export default function PlanScreen() {
       {sectionTitle(t('plan.coachSectionTitle'))}
       <View style={styles.card}>
         {settings.coachId ? (
-          <HudText size={14}>{t('plan.linkedToCoach')}</HudText>
+          <>
+            <HudText size={14}>{t('plan.linkedToCoach')}</HudText>
+            <View style={styles.coachInfo}>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {t('plan.coachEmailLabel')}
+              </HudText>
+              <HudText size={14} selectable>
+                {settings.linkedCoachEmail ?? t('plan.coachUnknown')}
+              </HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {t('plan.coachCodeLabel')}
+              </HudText>
+              <HudText size={14} selectable>
+                {settings.linkedCoachCode ?? t('plan.coachUnknown')}
+              </HudText>
+              {settings.linkedCoachSinceISO && (
+                <>
+                  <HudText size={12} weight="medium" color={quest.textSecondary}>
+                    {t('plan.coachSinceLabel')}
+                  </HudText>
+                  <HudText size={14}>{formatDateVi(settings.linkedCoachSinceISO.slice(0, 10))}</HudText>
+                </>
+              )}
+            </View>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {t('plan.coachOneOnly')}
+            </HudText>
+          </>
         ) : (
           <>
             <QuestField
@@ -358,6 +387,7 @@ export default function PlanScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: quest.bg },
+  coachInfo: { gap: 2 },
   content: { paddingHorizontal: 16, paddingBottom: 48, gap: 12 },
   flex: { flex: 1 },
   sectionTitle: { marginTop: 8 },

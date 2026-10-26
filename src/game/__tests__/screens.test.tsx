@@ -40,6 +40,7 @@ jest.mock('../../utils/photoStorage', () => ({
   deletePersistedPhoto: jest.fn(),
 }));
 jest.mock('../../sync/cloudSync', () => ({
+  pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
@@ -321,6 +322,16 @@ describe('FitQuest logging screens', () => {
       expect(text).toContain('ĐANG Ở ĐÂY');
       expect(text).toContain('Xong'); // meals 1 and 2
       expect(text).toContain('Chờ ăn'); // meal 3 is still ahead of 16:10
+    });
+
+    it('shows the whole-day water and follows the nutrition screen', () => {
+      const r = render(<JournalScreen />);
+      expect(allText(r)).toContain('Nước cả ngày');
+      expect(allText(r)).toContain('3.2 /');
+      act(() => {
+        useNutritionStore.getState().addWater(DATE, 800);
+      });
+      expect(allText(r)).toContain('4.0 /');
     });
 
     it('includes a feeling check-in logged today', () => {

@@ -33,7 +33,10 @@ jest.mock('../../notifications/schedule', () => ({
   scheduleAllReminders: () => mockSchedule(),
   cancelAllReminders: () => mockCancel(),
 }));
+const mockIsAiAdmin = jest.fn<() => Promise<boolean>>();
 jest.mock('../../sync/cloudSync', () => ({
+  fetchIsAiAdmin: () => mockIsAiAdmin(),
+  pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
@@ -48,6 +51,7 @@ jest.mock('../../sync/cloudSync', () => ({
 import MapScreen from '../../../app/(tabs)/map';
 import ProfileScreen from '../../../app/(tabs)/profile';
 import { QuestTabBar } from '../../components/quest/QuestTabBar';
+import { resetIsAiAdminCache } from '../../ai/useIsAiAdmin';
 import { useAiPhotoStore } from '../../store/useAiPhotoStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useAchievementStore } from '../../store/useAchievementStore';
@@ -196,6 +200,29 @@ describe('FitQuest tabs', () => {
   });
 
   describe('Profile', () => {
+    beforeEach(() => {
+      resetIsAiAdminCache();
+      mockIsAiAdmin.mockReset();
+      mockIsAiAdmin.mockResolvedValue(false);
+    });
+
+    it('shows the "AI & chi phí" entry only to an account the server lists as an AI admin', async () => {
+      const find = (r: ReactTestRenderer) => r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('AI & chi phí'));
+      let r = render(<ProfileScreen />);
+      await act(async () => undefined);
+      expect(find(r)).toHaveLength(0);
+      act(() => r.unmount());
+
+      resetIsAiAdminCache();
+      mockIsAiAdmin.mockResolvedValue(true);
+      r = render(<ProfileScreen />);
+      await act(async () => undefined);
+      const row = find(r)[0];
+      expect(row).toBeDefined();
+      await act(async () => row.props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/ai-admin');
+    });
+
     it('shows the level card and real stats', () => {
       const text = allText(render(<ProfileScreen />));
       expect(text).toContain('Hồ sơ');
@@ -259,6 +286,23 @@ describe('FitQuest tabs', () => {
       useAiPhotoStore.getState().setFullHd(false);
     });
 
+    it('has a weekly AI review entry for everybody that opens the review', () => {
+      const r = render(<ProfileScreen />);
+      const row = pressable(r, (l) => l.startsWith('Tổng kết tuần (AI)'));
+      act(() => row.props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
+    });
+
+    it('has a master AI switch that is on by default and remembers the choice', async () => {
+      useAiPhotoStore.getState().setAiEnabled(true);
+      const r = render(<ProfileScreen />);
+      const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Dùng AI (Claude)' && typeof n.props.onValueChange === 'function')[0];
+      expect(toggle.props.value).toBe(true);
+      await act(async () => toggle.props.onValueChange(false));
+      expect(useAiPhotoStore.getState().aiEnabled).toBe(false);
+      useAiPhotoStore.getState().setAiEnabled(true);
+    });
+
     it('opens the plan, weight, nutrition and history screens', () => {
       const r = render(<ProfileScreen />);
       const routes: [string, string][] = [
@@ -266,6 +310,11 @@ describe('FitQuest tabs', () => {
         ['Cân nặng', '/(tabs)/weight'],
         ['Dinh dưỡng', '/(tabs)/nutrition'],
         ['Lịch sử', '/(tabs)/history'],
+        ['Phân tích', '/insights'],
+        ['Thói quen', '/habits'],
+        ['Kiến thức', '/learn'],
+        ['Axit uric', '/uric'],
+        ['Nhập nhật ký', '/import-diary'],
       ];
       for (const [label, path] of routes) {
         act(() => pressable(r, (l) => l.startsWith(label)).props.onPress());

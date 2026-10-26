@@ -52,6 +52,21 @@ const log = (dateKey: string) => ({ dateISO: dateKey, mealsEaten: { meal1: true 
 const bigBurn = (dateKey: string) => ({ id: `w${dateKey}`, dateISO: `${dateKey}T15:00:00`, templateId: null, label: 'Hard', durationMin: 60, caloriesBurned: 5000 });
 
 describe('Boss detail screen', () => {
+  it('opens the AI weekly review from a button under the boss', () => {
+    const r = (() => {
+      let x!: ReactTestRenderer;
+      act(() => {
+        x = create(<BossScreen />);
+      });
+      return x;
+    })();
+    const button = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Tổng kết tuần bằng AI')[0];
+    expect(button).toBeDefined();
+    act(() => button.props.onPress());
+    expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
+    act(() => r.unmount());
+  });
+
   let renderer: ReactTestRenderer | undefined;
   const render = () => {
     let r!: ReactTestRenderer;

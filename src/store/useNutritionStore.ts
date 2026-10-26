@@ -4,12 +4,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { DailyNutritionLog, ExtraFoodItem, ExtraMealTime, MealSlot } from '../types';
 import { toDateKey } from '../utils/date';
 import { pushNutritionLog } from '../sync/cloudSync';
+import { useFoodDbStore } from './useFoodDbStore';
 import { useProofStore } from './useProofStore';
 import { deletePersistedPhoto } from '../utils/photoStorage';
 import { extraProofRef } from '../types';
 
 interface NutritionState {
   logs: Record<string, DailyNutritionLog>;
+  /** The "3 L a day until 25/10" default has been written once on this device. */
+  waterDefaultDone: boolean;
+  /** Gives every day of the diary period that has no water figure the default 3 L, once. Returns the days changed. */
+  applyWaterDefault: () => number;
   getLog: (dateKey: string) => DailyNutritionLog;
   toggleMeal: (dateKey: string, slot: MealSlot) => void;
   addWater: (dateKey: string, ml: number) => void;
@@ -21,7 +26,10 @@ interface NutritionState {
     proteinG: number,
     mealTime: ExtraMealTime | null,
     /** Optional FitQuest fields; omitted ones are simply not stored on the item. */
-    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri'>
+    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri'> & {
+      /** The figures came straight from a food in the database, so there is nothing new to remember. */
+      fromFoodDb?: boolean;
+    }
   ) => void;
   removeExtraItem: (dateKey: string, itemId: string) => void;
   /** Commits a whole diary-table edit session (meal toggles, deleted default meals, edited/removed
@@ -31,6 +39,15 @@ interface NutritionState {
     dateKey: string,
     patch: { mealsEaten: Partial<Record<MealSlot, boolean>>; extraItems: ExtraFoodItem[]; removedMealSlots: MealSlot[] }
   ) => void;
+}
+
+/** Diary period with no water figures: each such day counts as 3 L drunk (the user's rule, until 25/10). */
+export const WATER_DEFAULT_FROM = '2026-09-21';
+export const WATER_DEFAULT_TO = '2026-10-25';
+export const WATER_DEFAULT_ML = 3000;
+
+function dayNumber(dateKey: string): number {
+  return Math.floor(Date.parse(`${dateKey}T00:00:00Z`) / 86400000);
 }
 
 // Cached per dateKey so `getLog` returns a stable reference when no log exists yet.
@@ -60,6 +77,19 @@ export const useNutritionStore = create<NutritionState>()(
   persist(
     (set, get) => ({
       logs: {},
+      waterDefaultDone: false,
+      applyWaterDefault: () => {
+        if (get().waterDefaultDone) return 0;
+        let days = 0;
+        for (let n = dayNumber(WATER_DEFAULT_FROM); n <= dayNumber(WATER_DEFAULT_TO); n += 1) {
+          const dateKey = new Date(n * 86400000).toISOString().slice(0, 10);
+          if (get().getLog(dateKey).waterMl > 0) continue;
+          get().addWater(dateKey, WATER_DEFAULT_ML);
+          days += 1;
+        }
+        set({ waterDefaultDone: true });
+        return days;
+      },
       getLog: (dateKey) => get().logs[dateKey] ?? emptyLog(dateKey),
       toggleMeal: (dateKey, slot) =>
         set((state) => {
@@ -102,6 +132,8 @@ export const useNutritionStore = create<NutritionState>()(
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         });
+        // A food the database does not know yet is remembered, so next time it needs neither typing nor an AI call.
+        if (!extras?.fromFoodDb) useFoodDbStore.getState().remember(item);
         // The photo also goes through the proof pipeline so it syncs and the coach sees it next to the plan meals.
         if (item.photoUri) {
           useProofStore.getState().addProof({

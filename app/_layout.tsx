@@ -14,12 +14,17 @@ import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useSessionActivityStore, SESSION_MAX_IDLE_MS } from '../src/store/useSessionActivityStore';
+import { useNutritionStore } from '../src/store/useNutritionStore';
 import { resetAllLocalStores } from '../src/store/resetLocalStores';
 import { pullProfile, flushSyncQueue } from '../src/sync/cloudSync';
+import { restoreOwnData } from '../src/sync/restore';
 import { AppIntro } from '../src/components/AppIntro';
 
 // Minimum time the branded intro stays on screen, so it isn't just a 1-frame flash on warm starts.
 const MIN_INTRO_MS = 1200;
+
+/** How long the app waits for the diary to come back from the cloud before opening anyway. */
+const RESTORE_WAIT_MS = 6000;
 
 export default function RootLayout() {
   const init = useAuthStore((s) => s.init);
@@ -89,10 +94,17 @@ export default function RootLayout() {
     }
     useSettingsStore.setState({ lastUserId: session.user.id });
 
-    pullProfile().then((remote) => {
+    // The diary comes back from the cloud before the app opens, so a day logged right after sign-in cannot hide the saved one.
+    // A slow connection must not hold the app hostage: after a few seconds it opens and the restore finishes in the background.
+    const restore = pullProfile().then(async (remote) => {
       if (remote) hydrateFromRemote(remote);
-      setProfileChecked(true);
+      await useSettingsStore.getState().refreshCoachLink();
+      await flushSyncQueue();
+      await restoreOwnData();
+      // After the cloud has filled in what it knows, the days still without water get the default 3 L.
+      useNutritionStore.getState().applyWaterDefault();
     });
+    Promise.race([restore, new Promise((resolve) => setTimeout(resolve, RESTORE_WAIT_MS))]).then(() => setProfileChecked(true));
   }, [session, hydrateFromRemote]);
 
   // Retries any writes that failed (or were skipped entirely) while offline: once now that we
@@ -139,6 +151,12 @@ export default function RootLayout() {
           <Stack.Screen name="role-select" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="client/[id]" />
           <Stack.Screen name="meal/[slot]" />
+          <Stack.Screen name="import-diary" />
+          <Stack.Screen name="insights" />
+          <Stack.Screen name="food-db" />
+          <Stack.Screen name="habits" />
+          <Stack.Screen name="learn" />
+          <Stack.Screen name="uric" />
           <Stack.Screen name="add-food" options={{ presentation: 'modal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="quick-add" options={{ presentation: 'transparentModal', animation: 'fade' }} />
           <Stack.Screen name="checkin" options={{ presentation: 'transparentModal', animation: 'fade' }} />

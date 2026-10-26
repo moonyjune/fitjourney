@@ -28,6 +28,7 @@ import type { ExtraMealTime } from '../../src/types';
 import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 function isSameDay(a: Date, b: Date): boolean {
   return a.toDateString() === b.toDateString();
@@ -53,6 +54,7 @@ export default function NutritionScreen() {
   const { t } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const [viewDate, setViewDate] = useState(new Date());
   const dateKey = toDateKey(viewDate);
@@ -118,7 +120,7 @@ export default function NutritionScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
       keyboardShouldPersistTaps="handled"
     >
       <QuestHeader

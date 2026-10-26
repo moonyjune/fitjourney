@@ -20,6 +20,8 @@ import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { quest } from '../../src/theme/quest';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { DinnerCard } from '../../src/components/quest/DinnerCard';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
 
@@ -108,6 +110,7 @@ function CampLink({ icon, label, onPress }: { icon: 'list' | 'smile'; label: str
 export default function CampScreen() {
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   const now = useNow();
   const game = useGameState(now);
   const ifStatus = getIfStatus(now);
@@ -140,7 +143,7 @@ export default function CampScreen() {
     <View style={styles.screen}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}
+        contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
       >
         <FadeInUp index={0}>
           <PlayerHeader level={level} titleKey={titleKeyForLevel(level.level)} streak={game.streak} />
@@ -151,6 +154,10 @@ export default function CampScreen() {
         </FadeInUp>
         <FadeInUp index={2} style={styles.gap}>
           <BossCard boss={boss} todayDamage={todayDamage} onPress={() => router.push('/boss')} />
+        </FadeInUp>
+
+        <FadeInUp index={3} style={styles.gap}>
+          <DinnerCard now={now} />
         </FadeInUp>
 
         <FadeInUp index={3} style={[styles.links, styles.gap]}>

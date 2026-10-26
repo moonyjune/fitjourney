@@ -32,6 +32,7 @@ import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { toDateKey } from '../../src/utils/date';
 import { useNow } from '../../src/game/useGameState';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 const MAX_PICKS = 3;
 const MIN_PICKS = 2;
@@ -40,6 +41,7 @@ export default function TrainScreen() {
   const g = useGameText();
   const language = useSettingsStore((s) => s.language);
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const now = useNow(60_000);
   const progress = useTrainingStore((s) => s.progress);
@@ -90,7 +92,7 @@ export default function TrainScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+      <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
         <View style={styles.titleRow}>
           <View style={styles.iconBox}>
             <QuestIcon name="dumbbell" size={26} color={quest.gold} />

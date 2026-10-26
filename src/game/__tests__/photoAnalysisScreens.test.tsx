@@ -43,7 +43,10 @@ type Outcome =
   | { ok: true; result: Record<string, unknown> }
   | { ok: false; message: string; kind: 'notConfigured' | 'offline' | 'auth' | 'generic' };
 const mockAnalysis = jest.fn<(...a: unknown[]) => Promise<Outcome>>();
+const mockLabel = jest.fn<(...a: unknown[]) => Promise<unknown>>();
+const mockPushUserData = jest.fn();
 jest.mock('../../sync/cloudSync', () => ({
+  pushUserData: (...a: unknown[]) => mockPushUserData(...a),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
@@ -56,13 +59,16 @@ jest.mock('../../sync/cloudSync', () => ({
   ensureCoachCode: jest.fn(),
   linkToCoach: jest.fn(),
   requestPhotoAnalysis: (...a: unknown[]) => mockAnalysis(...a),
+  requestNutritionLabel: (...a: unknown[]) => mockLabel(...a),
 }));
 
 import AddFoodScreen from '../../../app/add-food';
 import { usePhotoAnalysis } from '../../ai/usePhotoAnalysis';
 import { ProofCapture } from '../../components/ProofCapture';
+import { useFoodDbStore } from '../../store/useFoodDbStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
+import { useAiCalibrationStore } from '../../store/useAiCalibrationStore';
 import { useAiPhotoStore } from '../../store/useAiPhotoStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
@@ -109,6 +115,17 @@ const tapText = (r: ReactTestRenderer, text: string): ReactTestInstance => {
   return hit;
 };
 
+const LABEL_OK = {
+  readable: true,
+  productName: 'Bánh quy yến mạch',
+  per100: { energyKcal: 450, proteinG: 7, sugarG: 22, sodiumMg: 380 },
+  per100Unit: 'g',
+  perServing: { energyKcal: 135, proteinG: 2.1, sugarG: 6.6, sodiumMg: 114 },
+  servingSize: { amount: 30, unit: 'g' },
+  servingsPerPack: 6,
+  accuracyPercent: 93,
+  reasoning: 'Đủ hai cột.',
+};
 const MEAL_OK = { foodName: 'Cơm gà xối mỡ', estimatedCaloriesKcal: 612.4, estimatedProteinG: 38.46, estimatedWaterMl: 200, confidence: 'medium', reasoning: 'Một đĩa cơm gà vừa.' };
 
 describe('Photo → AI analysis in the screens', () => {
@@ -134,10 +151,13 @@ describe('Photo → AI analysis in the screens', () => {
     mockRouter.canGoBack.mockReturnValue(true);
     mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: PHOTO }] });
     mockAnalysis.mockResolvedValue({ ok: true, result: MEAL_OK });
+    mockLabel.mockResolvedValue({ ok: true, label: LABEL_OK });
     useSettingsStore.setState({ language: 'vi', startDateISO: '2026-10-19T08:00:00', startWeightKg: 110, goalWeightKg: 95, heightCm: 172, age: 34, gender: 'male', activityLevel: 'light' });
     useWeightStore.setState({ entries: [{ id: 'w', dateISO: '2026-10-23T06:00:00', weightKg: 106.2 }] });
     useWorkoutStore.setState({ entries: [] });
     useProofStore.setState({ photos: [] });
+    useFoodDbStore.setState({ custom: [], overrides: {}, recent: [] });
+    useAiCalibrationStore.getState().clear();
     useNutritionStore.setState({
       logs: { [DATE]: { dateISO: DATE, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 0 } },
     });
@@ -194,6 +214,232 @@ describe('Photo → AI analysis in the screens', () => {
       // Nothing is saved until the user presses save.
       expect(items()).toHaveLength(0);
       expect(mockRouter.back).not.toHaveBeenCalled();
+    });
+
+    it('shows the AI\'s accuracy as a percent (rounded, clamped to 0-100), and the old low/medium/high wording when it gave none', async () => {
+      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, accuracyPercent: 71.6 } });
+      let r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(allText(r)).toContain('Độ chính xác ước tính: 72%');
+      expect(allText(r)).not.toContain('Độ tin cậy');
+      expect(textInput(r, 'Calo (kcal)').props.value).toBe('612'); // still editable, nothing saved
+      expect(items()).toHaveLength(0);
+      act(() => renderer?.unmount());
+
+      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, accuracyPercent: 250 } });
+      r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(allText(r)).toContain('Độ chính xác ước tính: 100%');
+      act(() => renderer?.unmount());
+
+      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, accuracyPercent: 'high' } });
+      r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(allText(r)).toContain('Độ tin cậy: vừa');
+    });
+
+    it('remembers the AI calories next to what the user saved, only when the AI filled them, and shows how far off it has been', async () => {
+      let r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(allText(r)).not.toContain('lệch trung bình'); // not enough history yet
+      await type(r, 'Calo (kcal)', '500');
+      await press(r, 'Thêm vào hôm nay');
+      expect(useAiCalibrationStore.getState().estimates).toEqual([{ ai: 612, final: 500 }]);
+      act(() => renderer?.unmount());
+
+      // A form filled by hand records nothing.
+      useAiCalibrationStore.getState().clear();
+      r = await mount(<AddFoodScreen />);
+      await type(r, 'Tên món', 'Bánh mì');
+      await type(r, 'Calo (kcal)', '300');
+      await press(r, 'Thêm vào hôm nay');
+      expect(useAiCalibrationStore.getState().estimates).toEqual([]);
+      act(() => renderer?.unmount());
+
+      // With 5 past estimates the AI note says how far off it usually is (median of 0%, 0%, 0%, 20%, 50% = 0%).
+      useFoodDbStore.setState({ custom: [], overrides: {}, recent: [] }); // the first save remembered the dish
+      for (const [ai, final] of [[100, 100], [100, 100], [100, 100], [120, 100], [150, 100]]) useAiCalibrationStore.getState().record(ai, final);
+      r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(allText(r)).toContain('Trước đây AI lệch trung bình ~0% so với số bạn chốt (5 lần).');
+    });
+
+    describe('nutrition label', () => {
+      const READ = 'Đọc nhãn dinh dưỡng';
+
+      it('fills the name and the printed figures for one serving, and sends the photo at Full HD size whatever the switch says', async () => {
+        const r = await withPhoto();
+        await press(r, READ);
+        expect(mockToBase64).toHaveBeenCalledWith(PHOTO, { maxEdge: 1920 });
+        expect(mockLabel).toHaveBeenCalledWith('QUJD', 'image/png');
+        expect(textInput(r, 'Tên món').props.value).toBe('Bánh quy yến mạch');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('135');
+        expect(textInput(r, 'Đạm (g)').props.value).toBe('2.1');
+        expect(textInput(r, 'Muối (g)').props.value).toBe('0.3');
+        expect(textInput(r, 'Đường tự do (g)').props.value).toBe('6.6');
+        expect(textInput(r, 'Purine (mg)').props.value).toBe('');
+        expect(textInput(r, 'Số phần đã ăn').props.value).toBe('1');
+        const text = allText(r);
+        expect(text).toContain('Từ nhãn dinh dưỡng');
+        expect(text).toContain('Bánh quy yến mạch');
+        expect(text).toContain('Độ chính xác ước tính: 93%');
+        expect(text).toContain('1 phần = 30 g');
+        expect(text).toContain('gói có 6 phần');
+        expect(text).toContain('Nhãn không ghi purine');
+        expect(items()).toHaveLength(0);
+      });
+
+      it('recomputes when the number of servings changes, and again for an amount in grams', async () => {
+        const r = await withPhoto();
+        await press(r, READ);
+        await type(r, 'Số phần đã ăn', '2.5');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('338'); // 135 × 2.5 = 337.5
+        await press(r, 'Theo khối lượng');
+        expect(textInput(r, 'Khối lượng đã ăn (g/ml)').props.value).toBe('30');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('135');
+        await type(r, 'Khối lượng đã ăn (g/ml)', '50');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('225'); // per-100 column
+        await press(r, 'Theo phần');
+        expect(textInput(r, 'Số phần đã ăn').props.value).toBe('1');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('135');
+        await type(r, 'Số phần đã ăn', '0'); // nonsense leaves the figures alone
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('135');
+      });
+
+      it('never overwrites a figure the user typed, and saves what the form ends up with', async () => {
+        const r = await withPhoto();
+        await type(r, 'Tên món', 'Bánh nhà làm');
+        await type(r, 'Đạm (g)', '9');
+        await press(r, READ);
+        expect(textInput(r, 'Tên món').props.value).toBe('Bánh nhà làm');
+        expect(textInput(r, 'Đạm (g)').props.value).toBe('9');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('135');
+        await type(r, 'Số phần đã ăn', '2');
+        expect(textInput(r, 'Đạm (g)').props.value).toBe('9');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('270');
+        await press(r, 'Thêm vào hôm nay');
+        expect(items().map((i) => [i.name, i.calories, i.proteinG])).toEqual([['Bánh nhà làm', 270, 9]]);
+        expect(items()[0]).toMatchObject({ saltG: 0.6, sugarG: 13.2 });
+        expect(useAiCalibrationStore.getState().estimates).toEqual([]); // read from the label: nothing to calibrate
+      });
+
+      it('with only a per-100 column it asks for an amount, starting at 100 g', async () => {
+        mockLabel.mockResolvedValue({ ok: true, label: { readable: true, per100: { energyKcal: 52, proteinG: 0.3, sugarG: 10 }, reasoning: '' } });
+        const r = await withPhoto();
+        await press(r, READ);
+        expect(textInput(r, 'Khối lượng đã ăn (g/ml)').props.value).toBe('100');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('52');
+        expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Theo phần')).toHaveLength(0); // one way only: no mode chips
+        await type(r, 'Khối lượng đã ăn (g/ml)', '150');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('78');
+      });
+
+      it('says so when the photo has no readable panel, and leaves the form alone', async () => {
+        mockLabel.mockResolvedValue({ ok: true, label: { readable: false, reasoning: 'Không thấy bảng.' } });
+        const r = await withPhoto();
+        await type(r, 'Calo (kcal)', '400');
+        await press(r, READ);
+        expect(allText(r)).toContain('Không đọc được bảng dinh dưỡng');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('400');
+      });
+
+      it.each([
+        ['notConfigured', 'AI chưa được thiết lập'],
+        ['quota', 'hết lượt AI hôm nay'],
+        ['disabled', 'AI đang tắt'],
+        ['offline', 'Không có mạng'],
+      ] as Array<['notConfigured' | 'quota' | 'disabled' | 'offline', string]>)('shows a friendly message for a %s failure', async (kind, expected) => {
+        mockLabel.mockResolvedValue({ ok: false, message: 'x', kind });
+        const r = await withPhoto();
+        await press(r, READ);
+        expect(allText(r)).toContain(expected);
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('');
+      });
+
+      it('does not record the earlier AI estimate against the label figures the user then saves', async () => {
+        const r = await withPhoto();
+        await press(r, ANALYZE); // the AI fills 612 kcal
+        await press(r, READ); // the label replaces the empty/AI-filled fields: 135 kcal
+        await press(r, 'Thêm vào hôm nay');
+        expect(items()).toHaveLength(1);
+        expect(useAiCalibrationStore.getState().estimates).toEqual([]);
+      });
+
+      it('tapping the mode that is already selected keeps what was typed', async () => {
+        const r = await withPhoto();
+        await press(r, READ);
+        await type(r, 'Số phần đã ăn', '2.5');
+        await press(r, 'Theo phần');
+        expect(textInput(r, 'Số phần đã ăn').props.value).toBe('2.5');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('338');
+      });
+
+      it('drops the label card when the photo is replaced', async () => {
+        const r = await withPhoto();
+        await press(r, READ);
+        expect(allText(r)).toContain('Từ nhãn dinh dưỡng');
+        mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///tmp/other.png' }] });
+        await press(r, 'Chọn từ thư viện');
+        expect(allText(r)).not.toContain('Từ nhãn dinh dưỡng');
+        expect(textInput(r, 'Số phần đã ăn')).toBeUndefined();
+      });
+
+      it('drops the label card when the photo is removed', async () => {
+        const r = await withPhoto();
+        await press(r, READ);
+        expect(allText(r)).toContain('Từ nhãn dinh dưỡng');
+        await press(r, 'Xóa ảnh');
+        expect(allText(r)).not.toContain('Từ nhãn dinh dưỡng');
+      });
+    });
+
+    it('sends the coach snapshot (targets, today, recent days, boss) along with the photo', async () => {
+      const r = await withPhoto();
+      await press(r, ANALYZE);
+      const coach = mockAnalysis.mock.calls[0][5] as Record<string, any>;
+      expect(coach.now).toMatchObject({ date: DATE, time: '16:10' });
+      expect(coach.targets.dailyDeficitKcal).toBeGreaterThan(0);
+      expect(coach.today).toMatchObject({ date: DATE, eatenKcal: 0 });
+      expect(coach.week.bossMaxHp).toBe(7700);
+      expect(Array.isArray(coach.recentDays)).toBe(true);
+    });
+
+    it('fills purine, salt and sugar from the AI and shows its advice for the rest of the day, saving nothing', async () => {
+      mockAnalysis.mockResolvedValue({
+        ok: true,
+        result: {
+          ...MEAL_OK,
+          estimatedPurineMg: 180,
+          estimatedSaltG: 2.34,
+          estimatedSugarG: 12,
+          advice: { verdict: 'watch', summary: 'Bữa này đã dùng nhiều ngân sách.', nextSteps: ['Bữa tối ăn cá hấp.', 'Đi bộ nhanh 30 phút.'], remainingKcalToEat: 520, remainingProteinG: 90, extraBurnKcal: 150, bossNote: 'Cần 1100 sát thương mỗi ngày còn lại.' },
+        },
+      });
+      const r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(textInput(r, 'Purine (mg)').props.value).toBe('180');
+      expect(textInput(r, 'Muối (g)').props.value).toBe('2.3');
+      expect(textInput(r, 'Đường tự do (g)').props.value).toBe('12');
+      const text = allText(r);
+      expect(text).toContain('Gợi ý cho phần còn lại của ngày');
+      expect(text).toContain('Cần chú ý: Bữa này đã dùng nhiều ngân sách.');
+      expect(text).toContain('Còn ăn được ~520 kcal');
+      expect(text).toContain('Cần thêm ~90 g đạm');
+      expect(text).toContain('Đốt thêm ~150 kcal');
+      expect(text).toContain('• Bữa tối ăn cá hấp.');
+      expect(text).toContain('Cần 1100 sát thương mỗi ngày còn lại.');
+      expect(text).toContain('không thay thế bác sĩ');
+      expect(items()).toHaveLength(0);
+    });
+
+    it('keeps purine, salt and sugar the user typed, and shows no advice card for a malformed advice', async () => {
+      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, estimatedPurineMg: 180, estimatedSugarG: 12, advice: { verdict: 'great', summary: 'x', nextSteps: [] } } });
+      const r = await withPhoto();
+      await type(r, 'Purine (mg)', '55');
+      await press(r, ANALYZE);
+      expect(textInput(r, 'Purine (mg)').props.value).toBe('55');
+      expect(textInput(r, 'Đường tự do (g)').props.value).toBe('12');
+      expect(allText(r)).not.toContain('Gợi ý cho phần còn lại của ngày');
     });
 
     it('fills only what the AI returned when the answer is partial', async () => {
@@ -283,6 +529,82 @@ describe('Photo → AI analysis in the screens', () => {
       expect(items()[0]).toMatchObject({ name: 'Cơm gà (nửa phần)', calories: 500, proteinG: 38.5 });
       expect(items()[0].photoUri).toMatch(/^file:\/\/\/docs\/proofs\//);
       expect(mockRouter.back).toHaveBeenCalled();
+    });
+    describe('remembering foods (so the next time needs no typing and no AI)', () => {
+      const SAVE = 'Thêm vào hôm nay';
+      const saveFood = async (r: ReactTestRenderer, name: string, kcal: string, protein: string) => {
+        await type(r, 'Tên món', name);
+        await type(r, 'Calo (kcal)', kcal);
+        await type(r, 'Đạm (g)', protein);
+        await press(r, SAVE);
+      };
+      const remembered = () => useFoodDbStore.getState().custom;
+
+      it('saves a food the database does not know, as one portion, and files it in the cloud settings', async () => {
+        const r = await mount(<AddFoodScreen />);
+        await saveFood(r, 'Bánh bao nhà làm', '320', '9');
+        expect(remembered()).toHaveLength(1);
+        expect(remembered()[0]).toMatchObject({ name: 'Bánh bao nhà làm', unit: 'phần', unitG: 100, kcal: 320, proteinG: 9, auto: true, confidence: 'low' });
+        expect(mockPushUserData).toHaveBeenCalledWith('foodDb', expect.objectContaining({ custom: [expect.objectContaining({ name: 'Bánh bao nhà làm' })] }));
+      });
+
+      it('does not save a food whose name the database already has (accents and case ignored), nor a second copy of a saved one', async () => {
+        const r = await mount(<AddFoodScreen />);
+        await saveFood(r, 'Bánh bao nhà làm', '320', '9');
+        await act(async () => renderer?.unmount());
+        const r2 = await mount(<AddFoodScreen />);
+        await saveFood(r2, 'BANH BAO NHA LAM', '350', '10');
+        expect(remembered()).toHaveLength(1);
+        expect(remembered()[0].kcal).toBe(320);
+      });
+
+      it('offers the saved figures when the same name is typed again, and fills them on a tap without any AI call', async () => {
+        const r = await mount(<AddFoodScreen />);
+        await saveFood(r, 'Bánh bao nhà làm', '320', '9');
+        await act(async () => renderer?.unmount());
+        const r2 = await mount(<AddFoodScreen />);
+        expect(allText(r2)).not.toContain('Đã có trong cơ sở dữ liệu món ăn');
+        await type(r2, 'Tên món', 'bánh bao nhà làm');
+        expect(allText(r2)).toContain('Đã có trong cơ sở dữ liệu món ăn');
+        expect(allText(r2)).toContain('320 kcal');
+        await press(r2, 'Dùng số liệu đã lưu');
+        expect(textInput(r2, 'Calo (kcal)').props.value).toBe('320');
+        expect(textInput(r2, 'Đạm (g)').props.value).toBe('9');
+        expect(allText(r2)).not.toContain('Đã có trong cơ sở dữ liệu món ăn'); // nothing left to offer
+        expect(mockAnalysis).not.toHaveBeenCalled();
+      });
+
+      it('with a photo and a saved name, the AI button reuses the saved figures and does not call the AI', async () => {
+        useFoodDbStore.getState().remember({ name: 'Cơm gà xối mỡ', calories: 700, proteinG: 41, purineMg: 180, saltG: 2.5, sugarG: 3 });
+        const r = await mount(<AddFoodScreen />);
+        await press(r, 'Chọn từ thư viện');
+        await type(r, 'Tên món', 'Cơm gà xối mỡ');
+        await press(r, ANALYZE);
+        expect(mockAnalysis).not.toHaveBeenCalled();
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('700');
+        expect(textInput(r, 'Đạm (g)').props.value).toBe('41');
+        expect(allText(r)).toContain('không gọi AI');
+      });
+
+      it('when the AI recognises a saved food, the saved figures win over its fresh estimate', async () => {
+        useFoodDbStore.getState().remember({ name: 'Cơm gà xối mỡ', calories: 700, proteinG: 41 });
+        const r = await withPhoto();
+        await press(r, ANALYZE); // MEAL_OK: Cơm gà xối mỡ, 612 kcal
+        expect(mockAnalysis).toHaveBeenCalledTimes(1);
+        expect(textInput(r, 'Tên món').props.value).toBe('Cơm gà xối mỡ');
+        expect(textInput(r, 'Calo (kcal)').props.value).toBe('700');
+        expect(allText(r)).not.toContain('Gợi ý từ AI');
+      });
+
+      it('a new food found by the AI is saved only once the user saves the item, with the figures they ended up with', async () => {
+        const r = await withPhoto();
+        await press(r, ANALYZE);
+        expect(remembered()).toHaveLength(0);
+        await type(r, 'Calo (kcal)', '650');
+        await press(r, SAVE);
+        expect(remembered()).toHaveLength(1);
+        expect(remembered()[0]).toMatchObject({ name: 'Cơm gà xối mỡ', kcal: 650 });
+      });
     });
   });
 

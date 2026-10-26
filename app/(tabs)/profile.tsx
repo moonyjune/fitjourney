@@ -18,12 +18,19 @@ import { useAchievements, useGameState, useNow } from '../../src/game/useGameSta
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
+import { useUricText } from '../../src/uric/strings';
+import { useLearnText } from '../../src/learn/strings';
+import { useHabitText } from '../../src/habits/strings';
+import { useFoodText } from '../../src/food/strings';
+import { useInsightsText } from '../../src/insights/strings';
 import { useAiPhotoStore } from '../../src/store/useAiPhotoStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { useIsAiAdmin } from '../../src/ai/useIsAiAdmin';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type Lang = 'vi' | 'en';
 
@@ -102,7 +109,13 @@ function LimitRow({ limitKey, name, value, moreLabel, lessLabel }: LimitRowProps
 
 export default function ProfileScreen() {
   const g = useGameText();
+  const ti = useInsightsText();
+  const tf = useFoodText();
+  const tb = useHabitText();
+  const tl = useLearnText();
+  const tu = useUricText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const now = useNow();
   const game = useGameState(now);
@@ -117,7 +130,12 @@ export default function ProfileScreen() {
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
   const aiFullHd = useAiPhotoStore((s) => s.fullHd);
   const setAiFullHd = useAiPhotoStore((s) => s.setFullHd);
+  const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
+  const isAiAdmin = useIsAiAdmin();
+  const setAiEnabled = useAiPhotoStore((s) => s.setAiEnabled);
   const coachId = useSettingsStore((s) => s.coachId);
+  const linkedCoachEmail = useSettingsStore((s) => s.linkedCoachEmail);
+  const linkedCoachCode = useSettingsStore((s) => s.linkedCoachCode);
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const submitCoachCode = useSettingsStore((s) => s.submitCoachCode);
@@ -193,7 +211,7 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
       <HudText size={28} accessibilityRole="header">
         {g('profile.title')}
       </HudText>
@@ -258,6 +276,14 @@ export default function ProfileScreen() {
         <MenuRow icon="chart" label={g('profile.weight')} hint={g('profile.weightHint')} onPress={() => router.push('/(tabs)/weight')} />
         <MenuRow icon="bowl" label={g('profile.nutrition')} hint={g('profile.nutritionHint')} onPress={() => router.push('/(tabs)/nutrition')} />
         <MenuRow icon="list" label={g('profile.history')} hint={g('profile.historyHint')} onPress={() => router.push('/(tabs)/history')} />
+        <MenuRow icon="drop" label={tu('ur.profileRow')} hint={tu('ur.profileRowHint')} onPress={() => router.push('/uric')} />
+        <MenuRow icon="list" label={tl('learn.profileRow')} hint={tl('learn.profileRowHint')} onPress={() => router.push('/learn')} />
+        <MenuRow icon="check" label={tb('hb.profileRow')} hint={tb('hb.profileRowHint')} onPress={() => router.push('/habits')} />
+        <MenuRow icon="bowl" label={tf('fdb.profileRow')} hint={tf('fdb.profileRowHint')} onPress={() => router.push('/food-db')} />
+        <MenuRow icon="flame" label={ti('ins.profileRow')} hint={ti('ins.profileRowHint')} onPress={() => router.push('/insights')} />
+        <MenuRow icon="flame" label={g('week.profileRow')} hint={g('week.profileRowHint')} onPress={() => router.push('/weekly-report')} />
+        {isAiAdmin && <MenuRow icon="chart" label={g('aiAdmin.profileRow')} hint={g('aiAdmin.profileRowHint')} onPress={() => router.push('/ai-admin')} />}
+        <MenuRow icon="plus" label={g('profile.import')} hint={g('profile.importHint')} onPress={() => router.push('/import-diary')} />
       </View>
 
       <View style={styles.setting}>
@@ -288,6 +314,23 @@ export default function ProfileScreen() {
           accessibilityLabel={g('profile.reminders')}
           value={remindersEnabled}
           onValueChange={toggleReminders}
+          trackColor={{ false: quest.raised2, true: quest.gold }}
+          thumbColor={quest.text}
+        />
+      </View>
+
+      <View style={styles.settingRow}>
+        <QuestIcon name="chart" size={20} color={quest.mana} />
+        <View style={styles.flex}>
+          <HudText size={15}>{g('profile.aiEnabled')}</HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('profile.aiEnabledHint')}
+          </HudText>
+        </View>
+        <Switch
+          accessibilityLabel={g('profile.aiEnabled')}
+          value={aiEnabled}
+          onValueChange={setAiEnabled}
           trackColor={{ false: quest.raised2, true: quest.gold }}
           thumbColor={quest.text}
         />
@@ -347,9 +390,17 @@ export default function ProfileScreen() {
           <HudText size={15}>{g('profile.coach')}</HudText>
         </View>
         {coachId ? (
-          <HudText size={13} weight="medium" color={quest.manaText}>
-            {g('profile.coachLinked')}
-          </HudText>
+          <>
+            <HudText size={13} weight="medium" color={quest.manaText}>
+              {g('profile.coachLinked')}
+            </HudText>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {g('profile.coachEmail')}: {linkedCoachEmail ?? '—'}
+            </HudText>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {g('profile.coachCodeShown')}: {linkedCoachCode ?? '—'}
+            </HudText>
+          </>
         ) : (
           <>
             <HudText size={12} weight="medium" color={quest.textSecondary}>

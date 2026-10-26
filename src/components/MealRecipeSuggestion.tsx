@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { buildTasteProfile } from '../ai/tasteProfile';
 import { fetchMealRecipe, pushMealRecipe, requestMealRecipe } from '../sync/cloudSync';
 import { useTranslation } from '../i18n/useTranslation';
 import { useAccentColors } from '../theme/useAccentColors';
@@ -57,7 +58,7 @@ export function MealRecipeSuggestion({ dayType, mealSlot, mealLabel, targetCalor
     setGenerating(true);
     setError(null);
     const avoidDishNames = recipe ? [recipe.dishName] : undefined;
-    const result = await requestMealRecipe(mealLabel, dayType, targetCalories, targetProtein, avoidDishNames);
+    const result = await requestMealRecipe(mealLabel, dayType, targetCalories, targetProtein, avoidDishNames, buildTasteProfile());
     setGenerating(false);
     if (!result.ok) {
       setError(result.message || t('mealRecipe.errorGeneric'));
@@ -112,6 +113,7 @@ export function MealRecipeSuggestion({ dayType, mealSlot, mealLabel, targetCalor
             ⏱ {t('mealRecipe.durationMinutes', { n: recipe.durationMinutes })} · {difficultyStars(recipe.difficulty)}
           </Text>
           <Text style={styles.macro}>{t('mealRecipe.macroSummary', { kcal: Math.round(recipe.caloriesKcal), protein: Math.round(recipe.proteinG) })}</Text>
+          {recipe.tasteNote ? <Text style={styles.macro}>{recipe.tasteNote}</Text> : null}
         </View>
         <TouchableOpacity
           style={styles.refreshButton}
@@ -140,6 +142,15 @@ export function MealRecipeSuggestion({ dayType, mealSlot, mealLabel, targetCalor
               <Text style={styles.modalMacro}>
                 {t('mealRecipe.macroSummary', { kcal: Math.round(recipe.caloriesKcal), protein: Math.round(recipe.proteinG) })}
               </Text>
+
+              {recipe.tasteNote ? <Text style={styles.modalMacro}>{recipe.tasteNote}</Text> : null}
+
+              {recipe.equipment && recipe.equipment.length > 0 ? (
+                <>
+                  <Text style={styles.modalSectionTitle}>{t('mealRecipe.modalEquipmentTitle')}</Text>
+                  <Text style={styles.modalListItem}>{recipe.equipment.join(' · ')}</Text>
+                </>
+              ) : null}
 
               <Text style={styles.modalSectionTitle}>{t('mealRecipe.modalIngredientsTitle')}</Text>
               {recipe.ingredients.map((ing, i) => (

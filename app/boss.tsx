@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BossFace } from '../src/components/quest/BossCard';
 import { HudText } from '../src/components/quest/HudText';
+import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { XpBar } from '../src/components/quest/XpBar';
 import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../src/game/constants';
@@ -94,6 +95,8 @@ export default function BossScreen() {
           </HudText>
         ) : null}
       </View>
+
+      <QuestButton icon="chart" variant="ghost" title={g('week.bossButton')} onPress={() => router.push('/weekly-report')} />
 
       <View style={styles.log}>
         <HudText size={16} accessibilityRole="header">

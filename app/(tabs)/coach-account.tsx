@@ -14,6 +14,7 @@ import { useTranslation } from '../../src/i18n/useTranslation';
 import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type Lang = 'vi' | 'en';
 
@@ -21,6 +22,7 @@ export default function CoachAccountScreen() {
   const { t } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const session = useAuthStore((s) => s.session);
   const pendingSyncCount = useSyncQueueStore((s) => s.pending.length);
@@ -49,7 +51,7 @@ export default function CoachAccountScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
       <View>
         <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
           {g('coach.eyebrow').toUpperCase()}

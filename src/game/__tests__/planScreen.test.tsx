@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 const mockSignOut = jest.fn();
 const mockLink = jest.fn<(code: string) => Promise<unknown>>();
+const mockFetchLink = jest.fn<() => Promise<unknown>>();
 
 jest.mock('expo-router', () => ({
   router: {
@@ -20,7 +21,7 @@ jest.mock('expo-router', () => ({
   },
 }));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
-jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
+jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 34, left: 0, right: 0 }) }));
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
@@ -41,6 +42,7 @@ jest.mock('../../sync/cloudSync', () => ({
   pullProfile: jest.fn(async () => null),
   ensureCoachCode: jest.fn(),
   linkToCoach: (code: string) => mockLink(code),
+  fetchCoachLink: () => mockFetchLink(),
   listChatSessions: jest.fn(async () => []),
   fetchSessionMessages: jest.fn(async () => []),
   createChatSession: jest.fn(),
@@ -91,11 +93,16 @@ describe('Plan screen (FitQuest)', () => {
     Object.values(mockRouter).forEach((m) => m.mockClear());
     mockSignOut.mockClear();
     mockLink.mockReset();
+    mockFetchLink.mockReset();
+    mockFetchLink.mockResolvedValue(null);
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     useSettingsStore.setState({
       language: 'en',
       role: 'client',
       coachId: null,
+      linkedCoachEmail: null,
+      linkedCoachCode: null,
+      linkedCoachSinceISO: null,
       goalWeightKg: 80,
       calorieTargetKcal: 1800,
       targetDailyDeficitKcal: 500,
@@ -169,6 +176,61 @@ describe('Plan screen (FitQuest)', () => {
     await press(r, 'Link');
     expect(mockLink).toHaveBeenCalledWith('zz99');
     expect(alertSpy).toHaveBeenCalledWith("Couldn't link", 'Mã không đúng');
+  });
+
+  it('shows the linked coach: email, code and since when, and offers no second link', async () => {
+    useSettingsStore.setState({ coachId: 'c1', linkedCoachEmail: 'coach@fit.io', linkedCoachCode: 'AB12CD', linkedCoachSinceISO: '2026-10-05T03:00:00.000Z' });
+    const r = await render();
+    const text = allText(r);
+    expect(text).toContain('Coach email');
+    expect(text).toContain('coach@fit.io');
+    expect(text).toContain('AB12CD');
+    expect(text).toContain('05/10/2026');
+    expect(text).toContain('one Coach only');
+    expect(field(r, "Enter your coach's code to link accounts")).toBeUndefined();
+  });
+
+  it('says so when the linked coach details are not loaded yet', async () => {
+    useSettingsStore.setState({ coachId: 'c1' });
+    expect(allText(await render())).toContain('Not loaded yet');
+  });
+
+  it('shows no coach details and the code field when not linked', async () => {
+    const text = allText(await render());
+    expect(text).not.toContain('Coach email');
+    expect(text).not.toContain('one Coach only');
+  });
+
+  it('refreshCoachLink loads the coach, keeps it when unreadable and clears it once there is no coach', async () => {
+    useSettingsStore.setState({ coachId: 'c1' });
+    mockFetchLink.mockResolvedValueOnce({ email: 'a@b.io', code: 'ZZ99', linkedAtISO: '2026-10-01T00:00:00.000Z' });
+    await useSettingsStore.getState().refreshCoachLink();
+    expect(useSettingsStore.getState()).toMatchObject({ linkedCoachEmail: 'a@b.io', linkedCoachCode: 'ZZ99', linkedCoachSinceISO: '2026-10-01T00:00:00.000Z' });
+    mockFetchLink.mockResolvedValueOnce(null);
+    await useSettingsStore.getState().refreshCoachLink();
+    expect(useSettingsStore.getState().linkedCoachEmail).toBe('a@b.io');
+    useSettingsStore.setState({ coachId: null });
+    await useSettingsStore.getState().refreshCoachLink();
+    expect(useSettingsStore.getState()).toMatchObject({ linkedCoachEmail: null, linkedCoachCode: null, linkedCoachSinceISO: null });
+    expect(mockFetchLink).toHaveBeenCalledTimes(2); // nothing fetched without a coach
+  });
+
+  it('refreshCoachLink drops a result that arrives after the coach was unlinked', async () => {
+    useSettingsStore.setState({ coachId: 'c1' });
+    let resolve!: (v: unknown) => void;
+    mockFetchLink.mockReturnValueOnce(new Promise((res) => (resolve = res)));
+    const pending = useSettingsStore.getState().refreshCoachLink();
+    useSettingsStore.setState({ coachId: null });
+    resolve({ email: 'late@x.io', code: 'LATE', linkedAtISO: '2026-10-01T00:00:00.000Z' });
+    await pending;
+    expect(useSettingsStore.getState().linkedCoachEmail).toBeNull();
+  });
+
+  it('keeps the last row of the plan above the bottom bar (bar cover 34 + 68 + inset 34 = 136)', async () => {
+    const r = await render();
+    const scroll = r.root.findAll((n) => n.props.contentContainerStyle != null)[0];
+    const flat = Object.assign({}, ...[scroll.props.contentContainerStyle].flat(3).filter(Boolean));
+    expect(flat.paddingBottom).toBe(160); // 136 covered by the bar + a 24 px gap
   });
 
   it('signs out', async () => {

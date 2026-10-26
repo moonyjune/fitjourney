@@ -3,7 +3,10 @@ import { requestPhotoAnalysis, type AiErrorKind, type PhotoAnalysisResult } from
 import { useGameText, type GameKey } from '../game/strings';
 import { AI_FULL_HD_EDGE_PX, AI_MAX_EDGE_PX, imageUriToBase64 } from '../utils/photoStorage';
 import { useAiPhotoStore } from '../store/useAiPhotoStore';
+import { calibrationSummary, useAiCalibrationStore } from '../store/useAiCalibrationStore';
+import { accuracyOf } from './accuracy';
 import { buildBodyProfile } from './bodyProfile';
+import { buildCoachContext, type CoachContext } from './coachContext';
 
 export type AnalysisStatus = 'idle' | 'analyzing' | 'done' | 'error';
 
@@ -46,7 +49,13 @@ export function usePhotoAnalysis(taskType: 'meal' | 'workout', context: Analysis
         const { base64, mediaType } = await imageUriToBase64(uri, {
           maxEdge: useAiPhotoStore.getState().fullHd ? AI_FULL_HD_EDGE_PX : AI_MAX_EDGE_PX,
         });
-        const outcome = await requestPhotoAnalysis(taskType, base64, mediaType, contextRef.current, buildBodyProfile());
+        let coach: CoachContext | undefined;
+        try {
+          coach = buildCoachContext();
+        } catch {
+          coach = undefined; // advice is a bonus: never block the photo analysis on it
+        }
+        const outcome = await requestPhotoAnalysis(taskType, base64, mediaType, contextRef.current, buildBodyProfile(), coach);
         if (!mounted.current) return outcome.ok ? outcome.result : null;
         if (!outcome.ok) {
           setError({ kind: outcome.kind, message: outcome.message });
@@ -92,4 +101,25 @@ export function useConfidenceText() {
       confidence ? g('ai.confidence', { level: g(`ai.confidence.${confidence}` as GameKey) }) : null,
     [g]
   );
+}
+
+/** "Estimated accuracy: 72%" in the app language; falls back to the low/medium/high wording when the AI gave no percent. */
+export function useAccuracyText() {
+  const g = useGameText();
+  const confidenceText = useConfidenceText();
+  return useCallback(
+    (result: Pick<PhotoAnalysisResult, 'accuracyPercent' | 'confidence'>) => {
+      const pct = accuracyOf(result.accuracyPercent);
+      return pct !== null ? g('ai.accuracy', { pct }) : confidenceText(result.confidence);
+    },
+    [g, confidenceText]
+  );
+}
+
+/** "So far the AI was off by ~X% (n times)" once enough estimates are remembered, else null. */
+export function useCalibrationText(): string | null {
+  const g = useGameText();
+  const estimates = useAiCalibrationStore((s) => s.estimates);
+  const summary = calibrationSummary(estimates);
+  return summary ? g('ai.calibration', summary) : null;
 }

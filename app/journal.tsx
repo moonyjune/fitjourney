@@ -246,6 +246,7 @@ export default function JournalScreen() {
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
   const waterSchedule = usePlanStore((s) => s.plan.waterSchedule);
   const proteinTargetG = useSettingsStore((s) => s.proteinTargetG);
+  const waterTargetMl = useSettingsStore((s) => s.waterTargetMl);
 
   const monday = useMemo(() => dateOf(weekStartKey(addDays(now, weekOffset * 7))), [now, weekOffset]);
   const days = useMemo(
@@ -272,6 +273,7 @@ export default function JournalScreen() {
   const selectedDate = useMemo(() => dateOf(selectedKey), [selectedKey]);
   const isToday = selectedKey === todayKey;
   const day = evaluate(selectedKey);
+  const waterMl = logs[selectedKey]?.waterMl ?? 0;
 
   const timeline = useMemo(() => {
     const photoSlots = new Set(
@@ -386,6 +388,18 @@ export default function JournalScreen() {
           ))}
         </View>
 
+        <View
+          accessible
+          accessibilityLabel={`${g('journal.waterTotal')} ${g('journal.waterTotalValue', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })}`}
+          style={styles.waterBar}
+        >
+          <QuestIcon name="drop" size={16} color={quest.mana} />
+          <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.flex}>
+            {g('journal.waterTotal')}
+          </HudText>
+          <Chip tone={waterMl >= waterTargetMl ? 'mana' : 'muted'} label={g('journal.waterTotalValue', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })} />
+        </View>
+
         <View style={styles.sectionHead}>
           <HudText size={17} accessibilityRole="header">
             {g('journal.timeline')}
@@ -419,6 +433,7 @@ const styles = StyleSheet.create({
   dayCell: { flex: 1, minHeight: 68, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', gap: 1, paddingVertical: 4 },
   stats: { flexDirection: 'row', gap: 8, marginTop: 12 },
   stat: { flex: 1, minWidth: 0, padding: 10, gap: 2, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center' },
+  waterBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 10, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 20, marginBottom: 8 },
   timeline: { marginTop: 4 },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 5 },

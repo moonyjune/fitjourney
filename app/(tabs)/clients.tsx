@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CoachDigestCard } from '../../src/components/quest/CoachDigestCard';
 import { HudText } from '../../src/components/quest/HudText';
 import { QuestIcon } from '../../src/components/quest/QuestIcon';
 import { useGameText } from '../../src/game/strings';
@@ -12,11 +13,13 @@ import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import type { CoachClientSummary } from '../../src/types';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 export default function ClientsScreen() {
   const { t } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const coachCode = useSettingsStore((s) => s.coachCode);
   const [clients, setClients] = useState<CoachClientSummary[]>([]);
@@ -36,7 +39,7 @@ export default function ClientsScreen() {
   );
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
       <View>
         <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
           {g('coach.eyebrow').toUpperCase()}
@@ -57,6 +60,8 @@ export default function ClientsScreen() {
           {t('clients.shareCodeHint')}
         </HudText>
       </View>
+
+      {!loading && <CoachDigestCard clients={clients} />}
 
       <HudText size={16} accessibilityRole="header">
         {t('clients.listTitle', { n: clients.length })}

@@ -17,6 +17,7 @@ import { quest, questRadius } from '../../src/theme/quest';
 import { CONTENT_MAX_WIDTH, screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { isoWeekNumber } from '../../src/utils/isoWeek';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type View_ = 'map' | 'chart';
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
@@ -49,6 +50,7 @@ function LockedRegion({ region, g }: { region: Region; g: Translate }) {
 export default function MapScreen() {
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   const { width: windowWidth } = useWindowDimensions();
   useLightStatusBar();
   const now = useNow();
@@ -77,7 +79,7 @@ export default function MapScreen() {
     : `${currentKg.toFixed(1)} kg`;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
       <QuestSegment<View_>
         accessibilityLabel={g('map.view')}
         value={view}

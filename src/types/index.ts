@@ -148,6 +148,10 @@ export interface UserSettings {
   coachEnabled: boolean;
   /** Set once linked as a Client to a coach: that coach's user id. */
   coachId: string | null;
+  /** Email, code and start date of that coach (a snapshot kept in the cloud's link history), for display. */
+  linkedCoachEmail: string | null;
+  linkedCoachCode: string | null;
+  linkedCoachSinceISO: string | null;
   /** Set once Coach mode is activated: the short code clients enter to link to them. */
   coachCode: string | null;
   /** UI language. Defaults to Vietnamese; a bilingual toggle lives in Plan / Coach account. */
@@ -273,5 +277,9 @@ export interface MealRecipeSuggestion {
   caloriesKcal: number;
   proteinG: number;
   ingredients: RecipeIngredient[];
+  /** Tools needed (at most 3, everyday ones). */
+  equipment?: string[];
+  /** Why the dish suits this user's taste, from their log. */
+  tasteNote?: string;
   steps: string[];
 }

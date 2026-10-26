@@ -26,6 +26,7 @@ import type { StringKey } from '../../src/i18n/strings';
 import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 const INTENSITY_COLOR: Record<WorkoutIntensity, { fg: string; bg: string; border: string }> = {
   light: { fg: quest.xp, bg: '#17301F', border: '#2E6A3B' },
@@ -204,6 +205,7 @@ export default function WorkoutScreen() {
   const { t } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
+  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const dateKey = todayKey();
   const dayType = useMemo(() => getDayType(new Date()), []);
@@ -250,7 +252,7 @@ export default function WorkoutScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 48 }]}
+      contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
       keyboardShouldPersistTaps="handled"
     >
       <QuestHeader

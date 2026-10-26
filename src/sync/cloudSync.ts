@@ -1,7 +1,16 @@
 import { supabase } from '../lib/supabase';
+import type { CheckValue, Habit } from '../habits/types';
+import type { UricReading } from '../uric/types';
+import { useAiPhotoStore } from '../store/useAiPhotoStore';
 import { useAuthStore } from '../store/useAuthStore';
 import type { BodyProfile } from '../ai/bodyProfile';
-import { DEV_ANALYSIS_DELAY_MS, fakePhotoAnalysis } from '../ai/devPhotoAnalysis';
+import type { CoachContext } from '../ai/coachContext';
+import type { WeekInput } from '../ai/weeklyReport';
+import type { DinnerBrief } from '../ai/dinner';
+import type { ClientRows } from '../ai/coachDigest';
+import type { SwapContext, SwapItem } from '../food/swaps';
+import { DEV_ANALYSIS_DELAY_MS, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
+import { DEFAULT_PLAN } from '../constants/plan';
 import { generateCoachCode } from '../utils/coachCode';
 import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 import { isOnline, useSyncQueueStore, type SyncOp } from './syncQueue';
@@ -27,7 +36,8 @@ import type {
   WorkoutLogEntry,
 } from '../types';
 
-function currentUserId(): string | null {
+/** The signed-in Supabase user id, or null when signed out or on the offline dev login (no network access at all). */
+export function currentUserId(): string | null {
   const { session, devMode } = useAuthStore.getState();
   // The dev login is offline-only: pretending to be signed out makes every push/pull a no-op.
   return devMode ? null : (session?.user.id ?? null);
@@ -47,6 +57,16 @@ async function pushOrQueue(
   attempt: () => PromiseLike<{ error: unknown }>,
   context: string
 ): Promise<void> {
+  const task = tryPush(op, attempt, context);
+  inFlightPushes.add(task);
+  try {
+    await task;
+  } finally {
+    inFlightPushes.delete(task);
+  }
+}
+
+async function tryPush(op: Omit<SyncOp, 'id'>, attempt: () => PromiseLike<{ error: unknown }>, context: string): Promise<void> {
   if (!(await isOnline())) {
     useSyncQueueStore.getState().enqueue(op);
     return;
@@ -58,6 +78,13 @@ async function pushOrQueue(
     logSyncError(context, error);
     useSyncQueueStore.getState().enqueue(op);
   }
+}
+
+const inFlightPushes = new Set<Promise<void>>();
+
+/** Resolves once every write started so far has either reached the cloud or been put in the retry queue. */
+export async function whenPushesSettled(): Promise<void> {
+  while (inFlightPushes.size > 0) await Promise.all([...inFlightPushes]);
 }
 
 export interface RemoteProfile {
@@ -205,6 +232,32 @@ export async function linkToCoach(code: string): Promise<{ ok: true } | { ok: fa
   return { ok: true };
 }
 
+export interface CoachLinkInfo {
+  email: string | null;
+  code: string | null;
+  linkedAtISO: string;
+}
+
+/** The coach this account is linked to right now (snapshot of their email and code), or null. */
+export async function fetchCoachLink(): Promise<CoachLinkInfo | null> {
+  const userId = currentUserId();
+  if (!userId) return null;
+  try {
+    const { data, error } = await supabase
+      .from('coach_links')
+      .select('coach_email, coach_code, linked_at')
+      .eq('client_id', userId)
+      .is('unlinked_at', null)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return { email: data.coach_email ?? null, code: data.coach_code ?? null, linkedAtISO: new Date(data.linked_at).toISOString() };
+  } catch (error) {
+    logSyncError('fetchCoachLink', error);
+    return null;
+  }
+}
+
 export async function fetchCoachClients(): Promise<CoachClientSummary[]> {
   const userId = currentUserId();
   if (!userId) return [];
@@ -247,12 +300,17 @@ export async function pushWeightEntry(entry: WeightEntry): Promise<void> {
   await pushOrQueue(
     { type: 'weightEntry', payload: entry },
     () =>
-      supabase.from('weight_entries').insert({
-        user_id: userId,
-        entry_date: entry.dateISO.slice(0, 10),
-        weight_kg: entry.weightKg,
-        note: entry.note ?? null,
-      }),
+      supabase.from('weight_entries').upsert(
+        {
+          user_id: userId,
+          client_id: entry.id,
+          entry_date: entry.dateISO.slice(0, 10),
+          logged_at: entry.dateISO,
+          weight_kg: entry.weightKg,
+          note: entry.note ?? null,
+        },
+        { onConflict: 'user_id,client_id' }
+      ),
     'pushWeightEntry'
   );
 }
@@ -315,6 +373,92 @@ export async function pullPlan(targetUserId?: string): Promise<{ plan: PlanData;
     logSyncError('pullPlan', error);
     return null;
   }
+}
+
+export async function pushHabit(habit: Habit): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'habit', payload: habit },
+    () =>
+      supabase.from('habits').upsert(
+        {
+          user_id: userId,
+          client_id: habit.id,
+          name: habit.name,
+          status: habit.status,
+          assessment: habit.assessment,
+          kaizen: habit.kaizen,
+          measured_by: habit.measuredBy,
+          tracked: habit.tracked,
+          auto: habit.auto,
+          sort: habit.sort,
+          archived: habit.archived,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,client_id' }
+      ),
+    'pushHabit'
+  );
+}
+
+/** Saves a day's tick for a habit, or removes it when `value` is null (the user cleared it). */
+export async function pushHabitCheck(habitId: string, dateKey: string, value: CheckValue | null): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'habitCheck', payload: { habitId, dateKey, value } },
+    () =>
+      value === null
+        ? supabase.from('habit_checks').delete().eq('user_id', userId).eq('habit_client_id', habitId).eq('entry_date', dateKey)
+        : supabase.from('habit_checks').upsert(
+            { user_id: userId, habit_client_id: habitId, entry_date: dateKey, value, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id,habit_client_id,entry_date' }
+          ),
+    'pushHabitCheck'
+  );
+}
+
+export async function pushUricReading(reading: UricReading): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'uricReading', payload: reading },
+    () =>
+      supabase.from('uric_readings').upsert(
+        {
+          user_id: userId,
+          client_id: reading.id,
+          entry_date: reading.dateKey,
+          value_umol: reading.valueUmol,
+          note: reading.note,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'user_id,client_id' }
+      ),
+    'pushUricReading'
+  );
+}
+
+export async function deleteUricReading(readingId: string): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'uricDelete', payload: { readingId } },
+    () => supabase.from('uric_readings').delete().eq('user_id', userId).eq('client_id', readingId),
+    'deleteUricReading'
+  );
+}
+
+/** Saves one of the user's own settings blobs (see sync/restore.ts USER_DATA_KEYS) so it survives signing out. */
+export async function pushUserData(key: string, value: unknown): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'userData', payload: { key, value } },
+    () => supabase.from('user_data').upsert({ user_id: userId, key, value, updated_at: new Date().toISOString() }, { onConflict: 'user_id,key' }),
+    'pushUserData'
+  );
 }
 
 export async function pushPlan(plan: PlanData, updatedAtISO: string, targetUserId?: string): Promise<void> {
@@ -595,7 +739,7 @@ export async function fetchMealRecipe(dayType: 'training' | 'rest', mealSlot: st
   try {
     const { data, error } = await supabase
       .from('meal_recipe_suggestions')
-      .select('dish_name, emoji, duration_minutes, difficulty, calories_kcal, protein_g, ingredients, steps')
+      .select('dish_name, emoji, duration_minutes, difficulty, calories_kcal, protein_g, ingredients, steps, equipment, taste_note')
       .eq('user_id', userId)
       .eq('day_type', dayType)
       .eq('meal_slot', mealSlot)
@@ -610,6 +754,8 @@ export async function fetchMealRecipe(dayType: 'training' | 'rest', mealSlot: st
       caloriesKcal: data.calories_kcal,
       proteinG: data.protein_g,
       ingredients: data.ingredients ?? [],
+      equipment: data.equipment ?? [],
+      ...(data.taste_note ? { tasteNote: data.taste_note } : {}),
       steps: data.steps ?? [],
     };
   } catch (error) {
@@ -634,6 +780,8 @@ export async function pushMealRecipe(dayType: 'training' | 'rest', mealSlot: str
         calories_kcal: recipe.caloriesKcal,
         protein_g: recipe.proteinG,
         ingredients: recipe.ingredients,
+        equipment: recipe.equipment ?? [],
+        taste_note: recipe.tasteNote ?? null,
         steps: recipe.steps,
         updated_at: new Date().toISOString(),
       },
@@ -654,11 +802,14 @@ export async function requestMealRecipe(
   dayType: 'training' | 'rest',
   targetCalories: number,
   targetProtein: number,
-  avoidDishNames?: string[]
+  avoidDishNames?: string[],
+  taste?: { favorites: string[]; dislikes: string[] }
 ): Promise<{ ok: true; recipe: MealRecipeSuggestion } | { ok: false; message: string }> {
+  const off = aiTurnedOff();
+  if (off) return off;
   try {
     const { data, error } = await supabase.functions.invoke('generate-meal-recipe', {
-      body: { mealLabel, dayType, targetCalories, targetProtein, avoidDishNames },
+      body: { mealLabel, dayType, targetCalories, targetProtein, avoidDishNames, favorites: taste?.favorites, dislikes: taste?.dislikes },
     });
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error };
@@ -684,12 +835,29 @@ async function describeFunctionsError(error: unknown): Promise<string> {
   return error instanceof Error ? error.message : 'Unknown error';
 }
 
+/** The AI's read of the day and what to do next, from the coach snapshot sent with the photo. */
+export interface PhotoAdvice {
+  verdict: 'on_track' | 'watch' | 'over';
+  summary: string;
+  nextSteps: string[];
+  remainingKcalToEat?: number;
+  remainingProteinG?: number;
+  extraBurnKcal?: number;
+  bossNote?: string;
+}
+
 export interface PhotoAnalysisResult {
   // Meal photos
   foodName?: string;
   estimatedCaloriesKcal?: number;
   estimatedProteinG?: number;
   estimatedWaterMl?: number;
+  estimatedPurineMg?: number;
+  estimatedSugarG?: number;
+  estimatedSaltG?: number;
+  advice?: PhotoAdvice;
+  /** The AI's own estimate (0-100) of how accurate the numbers are. */
+  accuracyPercent?: number;
   // Workout photos
   activityName?: string;
   durationMin?: number;
@@ -699,7 +867,7 @@ export interface PhotoAnalysisResult {
 }
 
 /** Why a photo analysis failed, so the UI can say something useful. Manual entry always keeps working. */
-export type AiErrorKind = 'notConfigured' | 'offline' | 'auth' | 'generic';
+export type AiErrorKind = 'notConfigured' | 'offline' | 'auth' | 'quota' | 'disabled' | 'generic';
 
 export type PhotoAnalysisOutcome =
   | { ok: true; result: PhotoAnalysisResult }
@@ -709,6 +877,8 @@ export type PhotoAnalysisOutcome =
  *  AI key is not configured yet, 401 when the session is not valid; a network failure never reaches the server. */
 export function classifyAiError(message: string, status?: number): AiErrorKind {
   const text = message.toLowerCase();
+  if (status === 429 || text.includes('hết lượt')) return 'quota';
+  if (text.includes('tạm tắt') || text.includes('đã tắt')) return 'disabled';
   if (text.includes('anthropic_api_key') || text.includes('chưa cấu hình')) return 'notConfigured';
   if (status === 401 || text.includes('authorization') || text.includes('xác thực')) return 'auth';
   if (
@@ -731,20 +901,330 @@ export async function requestPhotoAnalysis(
   imageBase64: string,
   mediaType: string,
   context: { label?: string; plannedCalories?: number },
-  profile?: BodyProfile
+  profile?: BodyProfile,
+  coach?: CoachContext
 ): Promise<PhotoAnalysisOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
   if (useAuthStore.getState().devMode) {
     await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
-    return { ok: true, result: fakePhotoAnalysis(taskType, profile) };
+    return { ok: true, result: fakePhotoAnalysis(taskType, profile, coach) };
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
     const { data, error } = await supabase.functions.invoke('analyze-proof-photo', {
-      body: { taskType, imageBase64, mediaType, context, profile },
+      body: { taskType, imageBase64, mediaType, context, profile, coach },
     });
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
     return { ok: true, result: data.result as PhotoAnalysisResult };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyAiError(message, status) };
+  }
+}
+
+export interface AiUsageRow {
+  feature: string;
+  calls: number;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
+
+/** What this account used of the AI today (per feature): calls, tokens and estimated dollars, from the server's own count.
+ *  Null when it cannot be read (offline, dev account, not signed in). */
+export async function fetchAiUsageToday(day: string): Promise<AiUsageRow[] | null> {
+  const userId = currentUserId();
+  if (!userId) return null;
+  try {
+    const { data, error } = await supabase.from('ai_usage').select('feature, calls, tokens_in, tokens_out, cost_usd').eq('user_id', userId).eq('day', day);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({ feature: String(r.feature), calls: Number(r.calls ?? 0), tokensIn: Number(r.tokens_in ?? 0), tokensOut: Number(r.tokens_out ?? 0), costUsd: Number(r.cost_usd ?? 0) }));
+  } catch (error) {
+    logSyncError('fetchAiUsageToday', error);
+    return null;
+  }
+}
+
+/** Is this account on the server's list (`ai_admins`) allowed to see the app-wide "AI & cost" screen? Fails closed: any error
+ *  (offline, not signed in, function missing) means no. */
+export async function fetchIsAiAdmin(): Promise<boolean> {
+  if (!currentUserId()) return false;
+  try {
+    const { data, error } = await supabase.rpc('is_ai_admin');
+    if (error) throw error;
+    return data === true;
+  } catch (error) {
+    logSyncError('fetchIsAiAdmin', error);
+    return false;
+  }
+}
+
+export interface AiDayTotal {
+  day: string;
+  users: number;
+  calls: number;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
+
+export interface AiUserTotal {
+  userId: string;
+  email: string | null;
+  calls: number;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
+
+/** App-wide totals per day (admins only; the server refuses anybody else). Null when it cannot be read. */
+export async function fetchAiAdminByDay(today: string, days = 14): Promise<AiDayTotal[] | null> {
+  try {
+    const { data, error } = await supabase.rpc('ai_admin_by_day', { p_today: today, p_days: days });
+    if (error) throw error;
+    return (data ?? []).map((r: Record<string, unknown>) => ({ day: String(r.day), users: Number(r.users ?? 0), calls: Number(r.calls ?? 0), tokensIn: Number(r.tokens_in ?? 0), tokensOut: Number(r.tokens_out ?? 0), costUsd: Number(r.cost_usd ?? 0) }));
+  } catch (error) {
+    logSyncError('fetchAiAdminByDay', error);
+    return null;
+  }
+}
+
+/** One day split by user (admins only). Null when it cannot be read. */
+export async function fetchAiAdminByUser(day: string): Promise<AiUserTotal[] | null> {
+  try {
+    const { data, error } = await supabase.rpc('ai_admin_by_user', { p_day: day });
+    if (error) throw error;
+    return (data ?? []).map((r: Record<string, unknown>) => ({ userId: String(r.user_id), email: r.email ? String(r.email) : null, calls: Number(r.calls ?? 0), tokensIn: Number(r.tokens_in ?? 0), tokensOut: Number(r.tokens_out ?? 0), costUsd: Number(r.cost_usd ?? 0) }));
+  } catch (error) {
+    logSyncError('fetchAiAdminByUser', error);
+    return null;
+  }
+}
+
+/** The device switch (Profile) that turns every AI request off; nothing is sent while it is off. */
+function aiTurnedOff(): { ok: false; message: string; kind: 'disabled' } | null {
+  return useAiPhotoStore.getState().aiEnabled ? null : { ok: false, message: 'AI đã tắt trên thiết bị này.', kind: 'disabled' };
+}
+
+export type NutritionLabelOutcome = { ok: true; label: unknown } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the read-nutrition-label edge function: a photo of the facts panel in, the printed numbers out (raw; the caller
+ *  cleans them with `cleanLabel`). Same rules as the other AI requests: the device switch, the offline dev account (labelled
+ *  simulated answer), offline fails softly, nothing is saved here. */
+export async function requestNutritionLabel(imageBase64: string, mediaType: string): Promise<NutritionLabelOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, label: fakeNutritionLabel() };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('read-nutrition-label', { body: { imageBase64, mediaType } });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
+    return { ok: true, label: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyAiError(message, status) };
+  }
+}
+
+export type SwapsOutcome = { ok: true; result: unknown } | { ok: false; message: string; kind: AiErrorKind };
+
+export interface SwapRequestInput {
+  item: SwapItem;
+  context: SwapContext;
+  /** What the day's limits are, for the AI to know the scale. */
+  limits: { purine: number; salt: number; sugar: number };
+  mealTime: string | null;
+  /** Names of the foods the user eats most, so swaps fit their taste. */
+  favorites: string[];
+}
+
+/** Calls the suggest-swap edge function: ideas to replace a food that breaks a limit. The answer is raw; the caller checks each
+ *  swap with `cleanAiSwaps`. Same rules as the other AI requests (device switch, dev account simulated, offline fails softly). */
+export async function requestSwaps(input: SwapRequestInput): Promise<SwapsOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: fakeSwaps(input.item, input.context) };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const body = { item: input.item, exceeded: input.context.exceeded, headroom: input.context.headroom, limits: input.limits, mealTime: input.mealTime ?? undefined, favorites: input.favorites };
+    const { data, error } = await supabase.functions.invoke('suggest-swap', { body });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
+    return { ok: true, result: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyAiError(message, status) };
+  }
+}
+
+/** One client's rows, as a coach can read them (row-level security: only the coach of that client), from `sinceKey` (YYYY-MM-DD)
+ *  on. Null when anything cannot be read, so a half-loaded client is never summarised. */
+export async function fetchClientRows(clientId: string, sinceKey: string): Promise<ClientRows | null> {
+  if (!currentUserId()) return null;
+  try {
+    const [profile, plan, weights, nutrition, workouts] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('start_weight_kg, water_target_ml, protein_target_g, age, gender, height_cm, activity_level, calorie_target_kcal, target_daily_deficit_kcal')
+        .eq('id', clientId)
+        .maybeSingle(),
+      pullPlan(clientId),
+      supabase.from('weight_entries').select('entry_date, weight_kg').eq('user_id', clientId).gte('entry_date', sinceKey),
+      supabase.from('nutrition_logs').select('*').eq('user_id', clientId).gte('entry_date', sinceKey),
+      supabase.from('workout_entries').select('id, entry_date, template_id, label, duration_min, calories_burned').eq('user_id', clientId).gte('entry_date', sinceKey),
+    ]);
+    for (const res of [profile, weights, nutrition, workouts]) if (res.error) throw res.error;
+    return {
+      profile: (profile.data as Record<string, unknown> | null) ?? null,
+      plan: plan?.plan ?? DEFAULT_PLAN,
+      weights: (weights.data ?? []) as ClientRows['weights'],
+      nutrition: (nutrition.data ?? []) as ClientRows['nutrition'],
+      workouts: (workouts.data ?? []) as ClientRows['workouts'],
+    };
+  } catch (error) {
+    logSyncError('fetchClientRows', error);
+    return null;
+  }
+}
+
+export type DigestOutcome = { ok: true; result: unknown } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the coach-digest edge function for up to 12 clients at once. `items` carry opaque keys (c1, c2...) and each client's
+ *  week figures; the answer is raw, the caller reads it with `cleanDigest`. Same rules as the other AI requests. */
+export async function requestDigest(items: { key: string; week: WeekInput }[], periodKey: string): Promise<DigestOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: fakeDigest(items) };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('coach-digest', { body: { clients: items, periodKey } });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
+    return { ok: true, result: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyAiError(message, status) };
+  }
+}
+
+export type DinnerOutcome = { ok: true; result: unknown } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the suggest-dinner edge function: dinner ideas for what is left of today (the brief is worked out on the device). The
+ *  answer is raw; the caller checks each idea with `cleanAiDinner`. Same rules as the other AI requests. */
+export async function requestDinner(brief: DinnerBrief, favorites: string[]): Promise<DinnerOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: fakeDinner(brief) };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const body = { budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, favorites };
+    const { data, error } = await supabase.functions.invoke('suggest-dinner', { body });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
+    return { ok: true, result: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyAiError(message, status) };
+  }
+}
+
+export type WeeklyReportOutcome =
+  | { ok: true; report: unknown; cached: boolean; generatedAtISO?: string }
+  | { ok: false; message: string; kind: AiErrorKind };
+
+/** Asks the weekly-report function for the review of the week that starts on `periodKey`. The server returns the stored one
+ *  (no AI call, no quota) unless `refresh` is true. The report is raw: the caller cleans it with `cleanReport`. */
+export async function requestWeeklyReport(week: WeekInput, periodKey: string, refresh: boolean): Promise<WeeklyReportOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, report: fakeWeeklyReport(week), cached: false };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('weekly-report', { body: { week, periodKey, refresh } });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
+    return { ok: true, report: data.report, cached: data.cached === true, generatedAtISO: typeof data.generatedAt === 'string' ? data.generatedAt : undefined };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyAiError(message, status) };
+  }
+}
+
+/** The stored weekly review of this account for a week, read straight from `ai_reports` (row-level security: own rows only).
+ *  Null when there is none or it cannot be read. */
+export async function fetchWeeklyReport(periodKey: string): Promise<{ report: unknown; generatedAtISO: string } | null> {
+  const userId = currentUserId();
+  if (!userId) return null;
+  try {
+    const { data, error } = await supabase.from('ai_reports').select('payload, created_at').eq('user_id', userId).eq('kind', 'weekly').eq('period_key', periodKey).maybeSingle();
+    if (error) throw error;
+    return data?.payload ? { report: data.payload, generatedAtISO: new Date(data.created_at).toISOString() } : null;
+  } catch (error) {
+    logSyncError('fetchWeeklyReport', error);
+    return null;
+  }
+}
+
+/** One food found in a typed/dictated sentence. */
+export interface MealTextItem {
+  name: string;
+  caloriesKcal: number;
+  proteinG: number;
+  purineMg?: number;
+  sugarG?: number;
+  saltG?: number;
+  accuracyPercent?: number;
+}
+
+export interface MealTextResult {
+  items: MealTextItem[];
+  mealTime?: string;
+  advice?: PhotoAdvice;
+  accuracyPercent?: number;
+  reasoning: string;
+}
+
+export type MealTextOutcome = { ok: true; result: MealTextResult } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the parse-meal-text edge function: a sentence in, one editable line per food out. Same rules as the photo analysis:
+ *  the offline dev account gets a labelled simulated answer, offline fails softly, nothing is saved here. */
+export async function requestMealText(text: string, profile?: BodyProfile, coach?: CoachContext): Promise<MealTextOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: fakeMealText(text, coach) };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('parse-meal-text', { body: { text, profile, coach } });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
+    return { ok: true, result: data.result as MealTextResult };
   } catch (error) {
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
@@ -785,6 +1265,21 @@ export async function flushSyncQueue(): Promise<void> {
         break;
       case 'feelingRecord':
         await pushFeelingRecord(op.payload);
+        break;
+      case 'habit':
+        await pushHabit(op.payload);
+        break;
+      case 'habitCheck':
+        await pushHabitCheck(op.payload.habitId, op.payload.dateKey, op.payload.value);
+        break;
+      case 'uricReading':
+        await pushUricReading(op.payload);
+        break;
+      case 'uricDelete':
+        await deleteUricReading(op.payload.readingId);
+        break;
+      case 'userData':
+        await pushUserData(op.payload.key, op.payload.value);
         break;
     }
   }

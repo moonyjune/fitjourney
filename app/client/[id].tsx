@@ -9,6 +9,7 @@ import { QuestPlanPreview } from '../../src/components/quest/QuestPlanPreview';
 import { QuestSegment } from '../../src/components/quest/QuestSegment';
 import { useGameText } from '../../src/game/strings';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { aiFlags } from '../../src/ai/featureFlags';
 import { PlanChatAssistant } from '../../src/components/PlanChatAssistant';
 import { supabase } from '../../src/lib/supabase';
 import { fetchFeedback, pullPlan, pushCoachFeedback, pushPlan } from '../../src/sync/cloudSync';
@@ -472,10 +473,14 @@ export default function ClientDetailScreen() {
           </View>
         ))}
 
-        <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
-          {t('clientDetail.aiTitle')}
-        </HudText>
-        {clientId && <PlanChatAssistant dark livePlan={plan} targetUserId={clientId} onApply={handleApplyPlan} />}
+        {aiFlags.aiForCoach && (
+          <>
+            <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
+              {t('clientDetail.aiTitle')}
+            </HudText>
+            {clientId && <PlanChatAssistant dark livePlan={plan} targetUserId={clientId} onApply={handleApplyPlan} />}
+          </>
+        )}
 
         <HudText size={18} accessibilityRole="header" style={styles.sectionTitle}>
           {t('plan.currentPlanTitle')}

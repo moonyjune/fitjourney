@@ -6,7 +6,8 @@ import { useNutritionStore } from '../store/useNutritionStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { persistPickedPhoto } from '../utils/photoStorage';
 import { aiNumberText, useAiFields } from '../ai/useAiFields';
-import { useAiErrorText, useConfidenceText, usePhotoAnalysis } from '../ai/usePhotoAnalysis';
+import { adviceLines, cleanAdvice } from '../ai/adviceText';
+import { useAccuracyText, useAiErrorText, usePhotoAnalysis } from '../ai/usePhotoAnalysis';
 import { useGameText } from '../game/strings';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
@@ -46,10 +47,11 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   // suggestion. The user can edit every value, and a re-run never overwrites what they typed themselves.
   const ai = usePhotoAnalysis(taskType === 'meal' ? 'meal' : 'workout', { label: contextLabel, plannedCalories });
   const aiErrorText = useAiErrorText();
-  const confidenceText = useConfidenceText();
+  const accuracyText = useAccuracyText();
   const aiFields = useAiFields<'calories' | 'water' | 'protein' | 'burned'>();
   const [analysisNote, setAnalysisNote] = useState<string | null>(null);
   const [analysisKept, setAnalysisKept] = useState(false);
+  const [adviceText, setAdviceText] = useState<string | null>(null);
   const [aiFoodName, setAiFoodName] = useState<string | null>(null);
   const [estimatedCalories, setEstimatedCalories] = useState('');
   const [estimatedWaterMl, setEstimatedWaterMl] = useState('');
@@ -72,6 +74,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
     ai.reset();
     aiFields.clear();
     setAnalysisNote(null);
+    setAdviceText(null);
     setAnalysisKept(false);
     setAiFoodName(null);
     setEstimatedCalories('');
@@ -124,10 +127,12 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
       parts.push(result.durationMin ? g('ai.workoutSummary', { activity: result.activityName, min: Math.round(result.durationMin) }) : result.activityName);
     }
     if (taskType === 'meal' && result.foodName) parts.push(result.foodName);
-    const confidence = confidenceText(result.confidence);
+    const confidence = accuracyText(result);
     if (confidence) parts.push(confidence);
     if (result.reasoning) parts.push(result.reasoning);
     setAnalysisNote(parts.join(' · '));
+    const advice = cleanAdvice(result.advice);
+    setAdviceText(advice ? [g('ai.adviceTitle'), ...adviceLines(advice, g), g('ai.advice.disclaimer')].join('\n') : null);
   }
 
   async function handleSave() {
@@ -202,6 +207,11 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
           {ai.error && (
             <Text style={styles.analysisError} accessibilityRole="alert">
               {aiErrorText(ai.error.kind)}
+            </Text>
+          )}
+          {adviceText && !ai.error && (
+            <Text style={styles.analysisNote} accessibilityLiveRegion="polite">
+              {adviceText}
             </Text>
           )}
           {analysisNote && !ai.error && (

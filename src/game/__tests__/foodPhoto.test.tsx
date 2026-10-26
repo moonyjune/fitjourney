@@ -38,6 +38,7 @@ jest.mock('../../utils/photoStorage', () => ({
 }));
 const mockPushProof = jest.fn();
 jest.mock('../../sync/cloudSync', () => ({
+  pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),

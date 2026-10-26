@@ -8,6 +8,23 @@ import { useGameText, type GameKey } from '../../game/strings';
 import { quest } from '../../theme/quest';
 import { HudText } from './HudText';
 import { QuestIcon, type QuestIconName } from './QuestIcon';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+// The bar is drawn on top of the screens (position: absolute), so it takes no room in the layout:
+// the wrap's top padding + the bar itself + the bottom inset. Screens in the tab group reserve this much.
+const BAR_WRAP_TOP = 34;
+const BAR_HEIGHT = 68;
+const CLEARANCE_GAP = 24;
+
+/** Space the bottom bar covers at the bottom of the screen, for a given bottom safe-area inset. */
+export function tabBarCover(bottomInset: number): number {
+  return BAR_WRAP_TOP + BAR_HEIGHT + Math.max(bottomInset, 12);
+}
+
+/** `paddingBottom` for a tab screen's scroll content so its last element ends above the bar. */
+export function useTabBarClearance(): number {
+  return tabBarCover(useSafeAreaInsets().bottom) + CLEARANCE_GAP;
+}
 
 // Route name -> label key and icon. Routes not listed here are never shown in this bar.
 const TABS: Record<string, { label: GameKey; icon: QuestIconName }> = {
@@ -151,7 +168,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    paddingTop: 34,
+    paddingTop: BAR_WRAP_TOP,
     paddingHorizontal: 12,
     alignItems: 'center',
     backgroundColor: quest.bg,
@@ -159,7 +176,7 @@ const styles = StyleSheet.create({
   bar: {
     width: '100%',
     maxWidth: 640,
-    height: 68,
+    height: BAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
