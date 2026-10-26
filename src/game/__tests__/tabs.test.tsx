@@ -294,12 +294,19 @@ describe('FitQuest tabs', () => {
       expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
     });
 
+    it('the Profile shows a title from the level table (never the old "Chiến binh IF" name)', () => {
+      const text = allText(render(<ProfileScreen />));
+      expect(text).toMatch(/Tân binh|Fit Warrior|Thợ săn Boss|Hiệp sĩ Kỷ luật|Huyền thoại/);
+      expect(text).not.toContain('Chiến binh IF');
+    });
+
     it('has an intermittent-fasting switch that is on by default; turning it off is remembered (and saved to the cloud settings)', async () => {
       useMealModeStore.setState({ fasting: true });
       const r = render(<ProfileScreen />);
       const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Nhịn ăn gián đoạn (16:8)' && typeof n.props.onValueChange === 'function')[0];
       expect(toggle.props.value).toBe(true);
       expect(allText(r)).toContain('Tắt: ngày ăn 3 bữa bình thường');
+      expect(allText(r)).toContain('IF là viết tắt của Intermittent Fasting, tức nhịn ăn gián đoạn');
       await act(async () => toggle.props.onValueChange(false));
       expect(useMealModeStore.getState().fasting).toBe(false);
       useMealModeStore.setState({ fasting: true });

@@ -7,6 +7,8 @@ import { colors, radius, spacing } from '../theme/tokens';
 import { quest, questFonts } from '../theme/quest';
 import type { StringKey } from '../i18n/strings';
 import type { ExtraFoodItem, ExtraMealTime, MealSlot, MealTemplate } from '../types';
+import { partsMatchTotals } from '../food/mealParts';
+import { parseClock, timeTextInvalid } from '../utils/mealClock';
 
 const EXTRA_MEAL_TIME_LABEL_KEY: Record<ExtraMealTime, StringKey> = {
   breakfast: 'extraMealTime.breakfast',
@@ -66,6 +68,8 @@ export function DailyMealBreakdownTable({
   const [draftExtraItems, setDraftExtraItems] = useState(extraItems);
   const [draftRemovedSlots, setDraftRemovedSlots] = useState<MealSlot[]>(removedMealSlots ?? []);
   const [dirty, setDirty] = useState(false);
+  /** What is typed in a meal's time box, by item id (shown as typed until it is a valid time; a valid one is applied at once). */
+  const [timeTexts, setTimeTexts] = useState<Record<string, string>>({});
 
   // Something outside this table (e.g. Nutrition's separate "add extra food" form, or its own
   // meal cards) can change the underlying log while this table is mounted. Resync the draft to
@@ -103,9 +107,20 @@ export function DailyMealBreakdownTable({
     setDirty(true);
   }
 
-  function updateExtraItem(itemId: string, patch: Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG'>>) {
+  function updateExtraItem(itemId: string, patch: Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'loggedAtISO'>>) {
     setDraftExtraItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, ...patch } : i)));
     setDirty(true);
+  }
+
+  /** The time of a meal changed: the meal keeps its day and takes the new time of day. Its parts have no time of their own, so they
+   *  move with it. A text that is not (yet) a time is only shown, nothing is applied. */
+  function changeTime(item: ExtraFoodItem, text: string) {
+    setTimeTexts((prev) => ({ ...prev, [item.id]: text }));
+    const clock = parseClock(text);
+    if (!clock) return;
+    const at = new Date(item.loggedAtISO);
+    at.setHours(clock[0], clock[1], 0, 0);
+    updateExtraItem(item.id, { loggedAtISO: at.toISOString() });
   }
 
   function removeExtraItem(itemId: string) {
@@ -165,6 +180,14 @@ export function DailyMealBreakdownTable({
               />
             </View>
             <View style={styles.extraEditableSubRow}>
+              <TextInput
+                accessibilityLabel={t('mealLog.timeEdit')}
+                style={[styles.cell, styles.numCol, styles.numInput, timeTextInvalid(timeTexts[item.id]) && styles.timeInvalid]}
+                value={timeTexts[item.id] ?? formatTime(item.loggedAtISO)}
+                keyboardType="numbers-and-punctuation"
+                maxLength={5}
+                onChangeText={(text) => changeTime(item, text)}
+              />
               <Text style={[styles.cell, styles.statusCol, { color: accentColor }]}>
                 {item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : t('mealLog.extraSectionLabel')}
               </Text>
@@ -184,9 +207,11 @@ export function DailyMealBreakdownTable({
                 <Text style={styles.deleteText}>✕</Text>
               </TouchableOpacity>
             </View>
+            <PartsDetail item={item} styles={styles} title={t('mealLog.partsTitle')} line={(p) => t('mealLog.partLine', { name: p.name, kcal: p.calories, protein: p.proteinG })} />
           </View>
         ) : (
-          <View key={item.id} style={styles.row}>
+          <View key={item.id}>
+          <View style={styles.row}>
             <View style={[styles.nameCol, styles.extraNameRow]}>
               <FoodThumb uri={item.photoUri} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
               <Text style={[styles.cell, styles.extraNameInput]}>
@@ -198,6 +223,8 @@ export function DailyMealBreakdownTable({
             </Text>
             <Text style={[styles.cell, styles.numCol]}>{item.calories}</Text>
             <Text style={[styles.cell, styles.numCol]}>{item.proteinG}</Text>
+          </View>
+          <PartsDetail item={item} styles={styles} title={t('mealLog.partsTitle')} line={(p) => t('mealLog.partLine', { name: p.name, kcal: p.calories, protein: p.proteinG })} />
           </View>
         )
       )}
@@ -221,6 +248,21 @@ export function DailyMealBreakdownTable({
           )}
         </View>
       )}
+    </View>
+  );
+}
+
+/** The breakdown of a meal (its parts), shown under it, only while the parts still add up to the meal's calories. */
+function PartsDetail({ item, styles, title, line }: { item: ExtraFoodItem; styles: ReturnType<typeof makeStyles>; title: string; line: (p: NonNullable<ExtraFoodItem['parts']>[number]) => string }) {
+  if (!partsMatchTotals(item)) return null;
+  return (
+    <View style={styles.parts}>
+      <Text style={styles.partsTitle}>{title}</Text>
+      {item.parts!.map((p, i) => (
+        <Text key={i} style={styles.partLine}>
+          {`• ${line(p)}`}
+        </Text>
+      ))}
     </View>
   );
 }
@@ -270,6 +312,10 @@ const makeStyles = (dark: boolean) => {
   },
   extraEditableSubRow: { flexDirection: 'row', alignItems: 'center' },
   extraTime: { fontSize: 10, color: c.muted },
+  timeInvalid: { borderColor: c.danger },
+  parts: { paddingHorizontal: spacing.sm + 48, paddingBottom: spacing.xs + 2, gap: 2 },
+  partsTitle: { fontSize: 10, fontWeight: '800', color: c.muted, textTransform: 'uppercase' },
+  partLine: { fontSize: 11, color: c.muted },
   deleteCol: { paddingLeft: spacing.xs },
   deleteText: { color: c.danger, fontSize: 12, fontWeight: '700' },
   totalRow: { backgroundColor: c.total, borderTopWidth: 1, borderTopColor: c.saveBorder },

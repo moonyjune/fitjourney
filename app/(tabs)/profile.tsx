@@ -327,6 +327,9 @@ export default function ProfileScreen() {
         <View style={styles.flex}>
           <HudText size={15}>{g('fasting.title')}</HudText>
           <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('fasting.what')}
+          </HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
             {g('fasting.hint')}
           </HudText>
         </View>

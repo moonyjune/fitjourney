@@ -33,6 +33,9 @@ import { useTranslation } from '../src/i18n/useTranslation';
 import { useAllFoods } from '../src/store/useFoodDbStore';
 import { useAiCalibrationStore } from '../src/store/useAiCalibrationStore';
 import { useNutritionStore } from '../src/store/useNutritionStore';
+import { clockText, loggedAtFor, MEAL_CLOCK, parseClock, timeTextInvalid } from '../src/utils/mealClock';
+import { partsFromComponents, partsMatchTotals } from '../src/food/mealParts';
+import type { MealPart } from '../src/types';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
@@ -79,6 +82,11 @@ export default function AddFoodScreen() {
 
   const [name, setName] = useState(pre.name);
   const [mealTime, setMealTime] = useState<ExtraMealTime | null>(pre.mealTime);
+  const [timeText, setTimeText] = useState('');
+  /** The meal's breakdown when the AI found 2 or more foods in the photo (kept only while it still adds up to the calories). */
+  const [parts, setParts] = useState<MealPart[]>([]);
+  const clock = parseClock(timeText);
+  const timeInvalid = timeTextInvalid(timeText);
   const [calories, setCalories] = useState(pre.calories);
   const [protein, setProtein] = useState(pre.protein);
   const [purine, setPurine] = useState(pre.purine);
@@ -125,6 +133,7 @@ export default function AddFoodScreen() {
       applySaved(known, cur.name.trim() ? undefined : known.name);
       return;
     }
+    setParts(partsFromComponents(result.components));
     const outcomes = [
       aiFields.fill('name', cur.name, result.foodName?.trim() || undefined, setName),
       aiFields.fill('calories', cur.calories, aiNumberText(result.estimatedCaloriesKcal), setCalories),
@@ -140,6 +149,7 @@ export default function AddFoodScreen() {
 
   /** Puts a remembered food's figures into the form. They count as typed, so a later AI analysis keeps them. */
   function applySaved(food: FoodEntry, nameToSet?: string) {
+    setParts([]);
     const p = portionOf(food);
     if (nameToSet) typed('name', setName)(nameToSet);
     typed('calories', setCalories)(String(p.calories));
@@ -221,6 +231,7 @@ export default function AddFoodScreen() {
 
   /** Totals from the food lookup replace the nutrition fields; they count as typed, so a later AI analysis keeps them. */
   function applyLookup(r: LookupResult) {
+    setParts([]);
     typed('name', setName)(r.name);
     typed('calories', setCalories)(String(r.calories));
     typed('protein', setProtein)(String(r.proteinG));
@@ -240,13 +251,13 @@ export default function AddFoodScreen() {
       calories: num(calories),
       proteinG: num(protein),
       mealTime,
-      loggedAtISO: now.toISOString(),
+      loggedAtISO: loggedAtFor(input.dateKey, mealTime, now, clock),
       purineMg: num(purine) || undefined,
       saltG: num(salt) || undefined,
       sugarG: num(sugar) || undefined,
       junk: junk || undefined,
     }),
-    [name, mealTime, calories, protein, purine, salt, sugar, junk, now]
+    [name, mealTime, calories, protein, purine, salt, sugar, junk, now, input.dateKey, clock]
   );
 
   // How the day's missions would change if this exact item were saved right now.
@@ -262,6 +273,7 @@ export default function AddFoodScreen() {
       setError(true);
       return;
     }
+    if (timeInvalid) return;
     setSaving(true);
     setSaveFailed(false);
     let persisted: string | undefined;
@@ -276,6 +288,8 @@ export default function AddFoodScreen() {
         junk: draft.junk,
         photoUri: persisted,
         fromFoodDb: fromDb.current?.name === draft.name && fromDb.current.calories === calories.trim(),
+        clock,
+        parts: partsMatchTotals({ calories: draft.calories, parts }) ? parts : undefined,
       });
       goBack();
     } catch {
@@ -308,6 +322,7 @@ export default function AddFoodScreen() {
 
   /** The user picked a swap: its name and figures go into the form as typed values (nothing is saved). */
   function applySwap(option: SwapOption) {
+    setParts([]);
     typed('name', setName)(option.name);
     typed('calories', setCalories)(String(option.calories));
     typed('protein', setProtein)(String(option.proteinG));
@@ -371,6 +386,17 @@ export default function AddFoodScreen() {
                 />
               ))}
             </View>
+            <QuestField
+              label={g('food.time')}
+              keyboardType="numbers-and-punctuation"
+              placeholder={mealTime ? clockText(MEAL_CLOCK[mealTime]) : clockText([now.getHours(), now.getMinutes()])}
+              value={timeText}
+              onChangeText={setTimeText}
+              maxLength={5}
+            />
+            <HudText size={11} weight="medium" color={timeInvalid ? quest.hpText : quest.textSecondary} accessibilityRole={timeInvalid ? 'alert' : undefined}>
+              {timeInvalid ? g('food.timeError') : g('food.timeHint')}
+            </HudText>
           </View>
 
           <View style={styles.pair}>
@@ -425,6 +451,7 @@ export default function AddFoodScreen() {
               setSaveFailed(false);
               ai.reset();
               lab.reset();
+              setParts([]);
               aiCalories.current = null;
               setAiNote(null);
             }}
@@ -466,6 +493,21 @@ export default function AddFoodScreen() {
                       {g('ai.keptYours')}
                     </HudText>
                   ) : null}
+                </View>
+              )}
+              {partsMatchTotals({ calories: draft.calories, parts }) && (
+                <View style={styles.aiNote}>
+                  <HudText size={12} color={quest.manaText}>
+                    {g('food.partsTitle')}
+                  </HudText>
+                  {parts.map((p, i) => (
+                    <HudText key={i} size={12} weight="medium" color={quest.textSecondary}>
+                      {`• ${p.name}: ${p.calories} kcal · ${p.proteinG} g`}
+                    </HudText>
+                  ))}
+                  <HudText size={11} weight="medium" color={quest.textSecondary}>
+                    {g('food.partsNote')}
+                  </HudText>
                 </View>
               )}
               {advice && !ai.error && <AiAdviceCard advice={advice} />}

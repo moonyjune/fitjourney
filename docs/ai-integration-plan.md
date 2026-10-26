@@ -64,6 +64,12 @@ Cài đặt "Nhịn ăn gián đoạn (16:8)" ở Hồ sơ, mặc định **bậ
 - **Tắt:** ngày ăn 3 bữa bình thường (sáng, trưa, tối) đến 22:00; ẩn thẻ khung ăn ở Camp; ăn muộn tính từ 21:00; nhiệm vụ "giữ dưới ngưỡng" chốt lúc 22:00.
 - **Gợi ý bữa ăn chia theo ngân sách còn lại** (thẻ "Gợi ý các bữa còn lại" ở Camp, thay cho thẻ bữa tối): code tìm các bữa chưa ăn và chưa quá giờ, rồi chia kcal, đạm và phần còn lại của purine/muối/đường theo tỉ trọng (tắt nhịn ăn: 25/35/40; bật: theo calo từng bữa của kế hoạch). Phần chia dưới 250 kcal thì gộp bữa nhỏ nhất vào các bữa còn lại, còn dưới 150 kcal tổng thì chỉ một bữa nhẹ. Nên số bữa gợi ý thay đổi theo giờ, theo món đã ăn và theo ngân sách (1, 2 hoặc 3 bữa). Mỗi bữa có ý tưởng từ Food database theo đúng phần của bữa đó; AI được hỏi riêng từng bữa khi bấm, và mọi gợi ý của AI đều được kiểm tra lại theo phần của bữa.
 
+## Một bữa ăn = một mô tả chung + chi tiết
+- Món nhập bằng chữ hoặc AI nhận ra từ ảnh được lưu thành **một mục**: mô tả chung (tên từng món kèm khối lượng/thể tích, nối bằng dấu phẩy, sửa được) và tổng kcal, đạm, purine, đường, muối. Các món tách nhỏ nằm trong `parts` của mục đó (không có lượng calo riêng ở sổ ăn).
+- **Nhật ký trận:** chỉ một dòng cho cả bữa (mô tả + tổng 5 chỉ số), không liệt kê chi tiết.
+- **Hồ sơ > Dinh dưỡng:** hiện mô tả chung và danh sách chi tiết bên dưới; đổi giờ của bữa thì cả bữa (và các chi tiết) đi theo. Chi tiết tự ẩn khi tổng calo bị sửa lệch quá 5% so với tổng các phần.
+- Ảnh đính kèm được cho cả màn nhập chữ. Giờ mặc định của bữa: sáng 08:00, phụ sáng 10:00, trưa 12:00, phụ trưa 14:00, xế 16:00, tối 19:00, đêm 23:00; có ô chỉnh giờ.
+
 ## AI cho Coach đang tắt
 Tạm thời tắt hai phần AI dành cho coach: thẻ tóm tắt tuần của học viên (tab Học viên) và trợ lý AI chỉnh kế hoạch cho học viên (trang học viên). Hai lớp công tắc:
 - **App:** `aiFlags.aiForCoach` trong `src/ai/featureFlags.ts` (đang `false`).

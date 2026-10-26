@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { DailyNutritionLog, ExtraFoodItem, ExtraMealTime, MealSlot } from '../types';
+import type { DailyNutritionLog, ExtraFoodItem, ExtraMealTime, MealPart, MealSlot } from '../types';
 import { toDateKey } from '../utils/date';
+import { loggedAtFor, type Clock } from '../utils/mealClock';
+import { cleanParts } from '../food/mealParts';
 import { pushNutritionLog } from '../sync/cloudSync';
 import { useFoodDbStore } from './useFoodDbStore';
 import { useProofStore } from './useProofStore';
@@ -29,6 +31,10 @@ interface NutritionState {
     extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri'> & {
       /** The figures came straight from a food in the database, so there is nothing new to remember. */
       fromFoodDb?: boolean;
+      /** The time of day the user said they ate it; without it the meal's usual time (or now) is used. */
+      clock?: Clock | null;
+      /** The meal's breakdown, when it has one (2 or more parts); kept only when it is well-formed. */
+      parts?: MealPart[];
     }
   ) => void;
   removeExtraItem: (dateKey: string, itemId: string) => void;
@@ -115,12 +121,14 @@ export const useNutritionStore = create<NutritionState>()(
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
       addExtra: (dateKey, name, calories, proteinG, mealTime, extras) => {
-        const item: ExtraFoodItem = { id: `${Date.now()}`, name, calories, proteinG, mealTime, loggedAtISO: new Date().toISOString() };
+        const item: ExtraFoodItem = { id: `${Date.now()}`, name, calories, proteinG, mealTime, loggedAtISO: loggedAtFor(dateKey, mealTime, new Date(), extras?.clock) };
         if (extras?.purineMg) item.purineMg = extras.purineMg;
         if (extras?.saltG) item.saltG = extras.saltG;
         if (extras?.sugarG) item.sugarG = extras.sugarG;
         if (extras?.junk) item.junk = true;
         if (extras?.photoUri) item.photoUri = extras.photoUri;
+        const parts = cleanParts(extras?.parts);
+        if (parts.length > 0) item.parts = parts;
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const updated = {

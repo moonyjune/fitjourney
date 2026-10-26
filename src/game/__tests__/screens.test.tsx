@@ -334,6 +334,19 @@ describe('FitQuest logging screens', () => {
       expect(allText(r)).toContain('4.0 /');
     });
 
+    it('lists a meal with several foods as ONE entry: the description and the totals, never its parts', () => {
+      useNutritionStore.getState().addExtra(DATE, 'Yến mạch 30g, Sữa chua 100g', 170, 8, 'afternoon_snack', {
+        purineMg: 25, saltG: 0.2, sugarG: 5.5,
+        parts: [{ name: 'CHI-TIẾT-MỘT 30g', calories: 110, proteinG: 4 }, { name: 'CHI-TIẾT-HAI 100g', calories: 60, proteinG: 4 }],
+      });
+      const text = allText(render(<JournalScreen />));
+      expect(text).toContain('Yến mạch 30g, Sữa chua 100g');
+      expect(text.replace(/\s+/g, ' ')).toContain('170 kcal · 8 g');
+      expect(text).toContain('14:00 Yến mạch 30g'); // filed at the usual time of the picked meal
+      expect(text).toContain('purine 25 mg · đường 5.5 g · muối 0.2 g');
+      expect(text).not.toContain('CHI-TIẾT');
+    });
+
     it('includes a feeling check-in logged today', () => {
       useFeelingStore.setState({
         records: [{ id: 'f', loggedAtISO: `${DATE}T14:20:00`, cravingLevel: 2, hungerLevel: 3, mood: 'good', workoutCondition: null, note: '' }],

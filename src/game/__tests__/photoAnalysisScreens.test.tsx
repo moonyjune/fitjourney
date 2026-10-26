@@ -412,6 +412,66 @@ describe('Photo → AI analysis in the screens', () => {
       expect(text).not.toContain('ANTHROPIC_API_KEY'); // no technical detail for a kind that already explains itself
     });
 
+    describe('a photo with several foods: one description, the foods as its parts', () => {
+      const MULTI = {
+        ...MEAL_OK,
+        foodName: 'Yến mạch 30g, sữa chua không đường 100g, sữa tươi không đường 50ml',
+        estimatedCaloriesKcal: 200,
+        estimatedProteinG: 9.7,
+        components: [
+          { name: 'Yến mạch 30g', caloriesKcal: 110, proteinG: 4 },
+          { name: 'Sữa chua không đường 100g', caloriesKcal: 60, proteinG: 4 },
+          { name: 'Sữa tươi không đường 50ml', caloriesKcal: 30, proteinG: 1.7 },
+        ],
+      };
+
+      it('the name carries every food with its amount, the details are listed, and the saved meal keeps them as its parts', async () => {
+        mockAnalysis.mockResolvedValue({ ok: true, result: MULTI });
+        const r = await withPhoto();
+        await press(r, ANALYZE);
+        expect(textInput(r, 'Tên món').props.value).toBe(MULTI.foodName);
+        const text = allText(r);
+        expect(text).toContain('Chi tiết các món AI nhận ra');
+        expect(text).toContain('• Yến mạch 30g: 110 kcal · 4 g');
+        await press(r, 'Thêm vào hôm nay');
+        expect(items()).toHaveLength(1);
+        expect(items()[0].name).toBe(MULTI.foodName);
+        expect(items()[0].parts?.map((p) => p.name)).toEqual(['Yến mạch 30g', 'Sữa chua không đường 100g', 'Sữa tươi không đường 50ml']);
+      });
+
+      it('changing the total calories by hand drops the parts (they no longer describe the meal) and they are not saved', async () => {
+        mockAnalysis.mockResolvedValue({ ok: true, result: MULTI });
+        const r = await withPhoto();
+        await press(r, ANALYZE);
+        await type(r, 'Calo (kcal)', '500');
+        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
+        await press(r, 'Thêm vào hôm nay');
+        expect(items()[0].calories).toBe(500);
+        expect(items()[0].parts).toBeUndefined();
+      });
+
+      it('a photo with one food has no parts, and a new photo clears the old parts', async () => {
+        mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, components: [{ name: 'Một món 100g', caloriesKcal: 612, proteinG: 38 }] } });
+        let r = await withPhoto();
+        await press(r, ANALYZE);
+        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
+        act(() => renderer?.unmount());
+
+        mockAnalysis.mockResolvedValue({ ok: true, result: MULTI });
+        r = await withPhoto();
+        await press(r, ANALYZE);
+        expect(allText(r)).toContain('Chi tiết các món AI nhận ra');
+        await press(r, 'Xóa ảnh');
+        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
+        // A new photo starts clean: the earlier photo's foods are not carried onto the next meal.
+        await press(r, 'Chọn từ thư viện');
+        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
+        await type(r, 'Calo (kcal)', '200');
+        await press(r, 'Thêm vào hôm nay');
+        expect(items()[0].parts).toBeUndefined();
+      });
+    });
+
     it('sends the coach snapshot (targets, today, recent days, boss) along with the photo', async () => {
       const r = await withPhoto();
       await press(r, ANALYZE);

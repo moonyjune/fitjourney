@@ -148,7 +148,8 @@ async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown
       const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === call.tool.name);
       if (!toolUse) {
         console.error('[ai] no tool_use in the answer', data.stop_reason);
-        return { error: `AI không trả về kết quả phân tích (${data.stop_reason ?? 'không rõ lý do'}).`, status: 502 };
+        const why = data.stop_reason === 'max_tokens' ? 'câu trả lời bị cắt do quá dài, hãy thử lại' : (data.stop_reason ?? 'không rõ lý do');
+        return { error: `AI không trả về kết quả phân tích (${why}).`, status: 502 };
       }
       return { input: toolUse.input as Record<string, unknown>, usage: data.usage };
     }

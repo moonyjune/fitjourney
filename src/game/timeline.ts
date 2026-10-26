@@ -26,7 +26,7 @@ export type TimelineItem =
       proteinSoFarG: number | null;
       past: boolean;
     }
-  | { kind: 'extra'; id: string; minutes: number; name: string; kcal: number; proteinG: number; junk: boolean; photoUri?: string }
+  | { kind: 'extra'; id: string; minutes: number; name: string; kcal: number; proteinG: number; purineMg: number; saltG: number; sugarG: number; junk: boolean; photoUri?: string }
   | { kind: 'workout'; id: string; minutes: number; label: string; durationMin: number; kcal: number }
   | { kind: 'feeling'; id: string; minutes: number; mood: Mood; cravingLevel: number; hungerLevel: number }
   | { kind: 'now'; id: string; minutes: number };
@@ -123,6 +123,10 @@ export function buildTimeline(input: TimelineInput): TimelineItem[] {
       name: e.name,
       kcal: e.calories,
       proteinG: e.proteinG,
+      // Totals of the whole meal. Its parts are never listed here: the journal shows one entry per meal.
+      purineMg: e.purineMg ?? 0,
+      saltG: e.saltG ?? 0,
+      sugarG: e.sugarG ?? 0,
       junk: !!e.junk,
       photoUri: e.photoUri,
     });

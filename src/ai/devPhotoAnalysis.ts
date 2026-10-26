@@ -14,6 +14,7 @@ export interface FakePhotoResult {
   estimatedCaloriesKcal?: number;
   estimatedProteinG?: number;
   estimatedWaterMl?: number;
+  components?: unknown[];
   estimatedPurineMg?: number;
   estimatedSugarG?: number;
   estimatedSaltG?: number;
@@ -66,7 +67,11 @@ export function fakePhotoAnalysis(taskType: 'meal' | 'workout', profile?: BodyPr
       estimatedSaltG: FAKE_MEAL.saltG,
       estimatedSugarG: FAKE_MEAL.sugarG,
       ...(coach ? { advice: fakeAdvice(coach, FAKE_MEAL.kcal, FAKE_MEAL.proteinG, 0) } : {}),
-      foodName: 'Ức gà áp chảo với khoai lang',
+      foodName: 'Ức gà áp chảo 150g, khoai lang 120g',
+      components: [
+        { name: 'Ức gà áp chảo 150g', caloriesKcal: 330, proteinG: 36, purineMg: 150, saltG: 0.9, sugarG: 0 },
+        { name: 'Khoai lang 120g', caloriesKcal: 150, proteinG: 6, purineMg: 10, saltG: 0.5, sugarG: 6 },
+      ],
       estimatedCaloriesKcal: 480,
       estimatedProteinG: 42,
       estimatedWaterMl: 250,

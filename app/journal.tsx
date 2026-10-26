@@ -161,6 +161,9 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday }: RowP
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {item.kcal} kcal · {Math.round(item.proteinG)} g
         </HudText>
+        <HudText size={11} weight="medium" color={quest.textSecondary}>
+          {g('journal.extraNutrients', { purine: Math.round(item.purineMg), sugar: Math.round(item.sugarG * 10) / 10, salt: Math.round(item.saltG * 10) / 10 })}
+        </HudText>
       </View>
     );
   } else if (item.kind === 'workout') {

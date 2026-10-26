@@ -61,7 +61,7 @@ serveAi('label', async (body) => {
     responseKey: 'result',
     call: {
       tool: LABEL_TOOL,
-      maxTokens: 700,
+      maxTokens: 1600,
       messages: [
         {
           role: 'user',

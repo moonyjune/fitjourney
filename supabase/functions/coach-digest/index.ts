@@ -75,7 +75,7 @@ serveAi('digest', async (body, ctx) => {
     call: {
       tool: DIGEST_TOOL,
       system: SYSTEM,
-      maxTokens: 400 * entries.length + 200,
+      maxTokens: 700 * entries.length + 500,
       messages: [
         {
           role: 'user',

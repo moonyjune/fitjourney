@@ -61,6 +61,6 @@ serveAi('swap', async (body) => {
     ` Ghi accuracyPercent cho từng món. Gọi tool report_swaps.`;
   return {
     responseKey: 'result',
-    call: { tool: SWAP_TOOL, system: SYSTEM, maxTokens: 1000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },
+    call: { tool: SWAP_TOOL, system: SYSTEM, maxTokens: 3000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },
   };
 });

@@ -87,7 +87,7 @@ describe('Level-up sheet', () => {
     mockParams = { from: '3', to: '5' };
     const text = allText(render());
     expect(text).toContain('Lên 2 cấp một lúc: cấp 3 → cấp 5');
-    expect(text).toContain('Danh hiệu mới: Chiến binh IF');
+    expect(text).toContain('Danh hiệu mới: Fit Warrior');
     expect(useCelebrationStore.getState().seenLevel).toBe(5);
   });
 
@@ -103,6 +103,6 @@ describe('Level-up sheet', () => {
     mockParams = { from: '4', to: '5' };
     const text = allText(render());
     expect(text).toContain('Level 5!');
-    expect(text).toContain('New title: IF Warrior');
+    expect(text).toContain('New title: Fit Warrior');
   });
 });

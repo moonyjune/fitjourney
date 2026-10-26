@@ -22,6 +22,10 @@ import { useAiCalibrationStore } from '../src/store/useAiCalibrationStore';
 import { useNutritionStore } from '../src/store/useNutritionStore';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
+import { clockText, MEAL_CLOCK, parseClock, timeTextInvalid } from '../src/utils/mealClock';
+import { joinTitle, sumParts } from '../src/food/mealParts';
+import { FoodPhotoPicker } from '../src/components/quest/FoodPhoto';
+import { deletePersistedPhoto, persistPickedPhoto } from '../src/utils/photoStorage';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import type { PhotoAdvice } from '../src/sync/cloudSync';
 import type { ExtraMealTime } from '../src/types';
@@ -56,9 +60,17 @@ export default function TextMealScreen() {
   const [text, setText] = useState('');
   const [rows, setRows] = useState<TextMealRow[]>([]);
   const [mealTime, setMealTime] = useState<ExtraMealTime | null>(null);
+  const [timeText, setTimeText] = useState('');
+  const timeInvalid = timeTextInvalid(timeText);
   const [note, setNote] = useState<{ kind: 'saved' | 'ai'; reasoning: string; accuracy: number | null } | null>(null);
   const [advice, setAdvice] = useState<PhotoAdvice | null>(null);
   const [emptyHint, setEmptyHint] = useState<'text' | 'foods' | 'save' | null>(null);
+  // The meal is saved as ONE entry: a single description (by default the foods' names, each with its amount, joined) with the totals;
+  // the lines below become its parts, shown as detail in Profile > Nutrition only.
+  const [title, setTitle] = useState('');
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   async function analyze() {
     if (ai.analyzing) return;
@@ -89,21 +101,43 @@ export default function TextMealScreen() {
   const patch = (key: string, change: Partial<TextMealRow>) => setRows((all) => all.map((r) => (r.key === key ? { ...r, ...change } : r)));
   const savable = useMemo(() => rows.filter((r) => r.name.trim() && (num(r.calories) > 0 || num(r.protein) > 0)), [rows]);
 
-  function save() {
+  const partsOf = useMemo(
+    () => savable.map((r) => ({ name: r.name.trim(), calories: num(r.calories), proteinG: num(r.protein), purineMg: num(r.purine), saltG: num(r.salt), sugarG: num(r.sugar) })),
+    [savable]
+  );
+  const totals = useMemo(() => sumParts(partsOf), [partsOf]);
+  const derivedTitle = useMemo(() => joinTitle(partsOf.map((p) => p.name)), [partsOf]);
+  const mealTitle = (titleTouched && title.trim() ? title.trim() : derivedTitle).slice(0, 300);
+
+  async function save() {
+    if (saving) return;
     if (savable.length === 0) {
       setEmptyHint('save');
       return;
     }
-    for (const r of savable) {
-      if (!r.fromDb) recordEstimate(r.aiCalories, num(r.calories));
-      addExtra(input.dateKey, r.name.trim(), num(r.calories), num(r.protein), mealTime, {
-        purineMg: num(r.purine) || undefined,
-        saltG: num(r.salt) || undefined,
-        sugarG: num(r.sugar) || undefined,
-        fromFoodDb: r.fromDb && r.baseline === `${r.name}|${r.calories}`,
+    if (timeInvalid) return;
+    setSaving(true);
+    const clock = parseClock(timeText);
+    let persisted: string | undefined;
+    try {
+      if (photoUri) persisted = await persistPickedPhoto(photoUri, `extra-${Date.now()}`);
+      for (const r of savable) if (!r.fromDb) recordEstimate(r.aiCalories, num(r.calories));
+      const single = savable.length === 1 ? savable[0] : null;
+      addExtra(input.dateKey, mealTitle, totals.calories, totals.proteinG, mealTime, {
+        purineMg: totals.purineMg || undefined,
+        saltG: totals.saltG || undefined,
+        sugarG: totals.sugarG || undefined,
+        // Nothing new to remember only when the entry is exactly one food taken unchanged from the user's own database.
+        fromFoodDb: !!single && single.fromDb && single.baseline === `${single.name}|${single.calories}` && mealTitle === single.name.trim(),
+        clock,
+        photoUri: persisted,
+        parts: savable.length >= 2 ? partsOf : undefined,
       });
+      goBack();
+    } catch {
+      if (persisted) deletePersistedPhoto(persisted).catch(() => {});
+      setSaving(false);
     }
-    goBack();
   }
 
   const hint = emptyHint === 'text' ? g('text.empty') : emptyHint === 'foods' ? g('text.noFoods') : emptyHint === 'save' ? g('text.nothingToSave') : null;
@@ -212,6 +246,40 @@ export default function TextMealScreen() {
               ))}
             </View>
           )}
+          {rows.length > 0 && (
+            <View style={styles.timeBox}>
+              <QuestField
+                label={g('food.time')}
+                keyboardType="numbers-and-punctuation"
+                placeholder={mealTime ? clockText(MEAL_CLOCK[mealTime]) : clockText([now.getHours(), now.getMinutes()])}
+                value={timeText}
+                onChangeText={setTimeText}
+                maxLength={5}
+              />
+              <HudText size={11} weight="medium" color={timeInvalid ? quest.hpText : quest.textSecondary} accessibilityRole={timeInvalid ? 'alert' : undefined}>
+                {timeInvalid ? g('food.timeError') : g('food.timeHint')}
+              </HudText>
+            </View>
+          )}
+
+          {rows.length > 0 && (
+            <View style={styles.timeBox}>
+              <QuestField
+                label={g('text.mealTitle')}
+                value={titleTouched ? title : derivedTitle}
+                onChangeText={(v) => {
+                  setTitle(v);
+                  setTitleTouched(true);
+                }}
+                multiline
+                maxLength={300}
+              />
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {g('text.totals', { kcal: totals.calories, protein: totals.proteinG, purine: totals.purineMg, salt: totals.saltG, sugar: totals.sugarG })}
+              </HudText>
+              <FoodPhotoPicker uri={photoUri} onChange={setPhotoUri} disabled={saving} />
+            </View>
+          )}
 
           {advice && !ai.error && <AiAdviceCard advice={advice} />}
         </View>
@@ -219,7 +287,7 @@ export default function TextMealScreen() {
 
       {rows.length > 0 && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <QuestButton icon="plus" title={g('text.saveN', { n: savable.length })} onPress={save} />
+          <QuestButton icon="plus" title={g('text.saveMeal')} onPress={() => { void save(); }} loading={saving} />
         </View>
       )}
     </View>
@@ -237,5 +305,6 @@ const styles = StyleSheet.create({
   pair: { flexDirection: 'row', gap: 10 },
   pairCell: { flex: 1, minWidth: 0 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  timeBox: { gap: 6 },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: quest.border, backgroundColor: quest.bg },
 });

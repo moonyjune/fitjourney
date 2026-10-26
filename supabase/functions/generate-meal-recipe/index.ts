@@ -90,6 +90,6 @@ serveAi('recipe', async (body) => {
 
   return {
     responseKey: 'recipe',
-    call: { tool: RECIPE_TOOL, maxTokens: 1200, messages: [{ role: 'user', content: prompt }] },
+    call: { tool: RECIPE_TOOL, maxTokens: 3000, messages: [{ role: 'user', content: prompt }] },
   };
 });

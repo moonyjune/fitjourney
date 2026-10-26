@@ -80,7 +80,7 @@ serveAi('report', async (body, ctx) => {
     call: {
       tool: REPORT_TOOL,
       system: SYSTEM,
-      maxTokens: 1500,
+      maxTokens: 3500,
       messages: [
         {
           role: 'user',

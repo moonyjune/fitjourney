@@ -65,6 +65,6 @@ serveAi('dinner', async (body) => {
     ` Ghi accuracyPercent cho từng món. Gọi tool report_dinner_ideas.`;
   return {
     responseKey: 'result',
-    call: { tool: DINNER_TOOL, system: SYSTEM, maxTokens: 1000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },
+    call: { tool: DINNER_TOOL, system: SYSTEM, maxTokens: 3000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },
   };
 });

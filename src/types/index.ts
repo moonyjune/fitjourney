@@ -88,6 +88,19 @@ export interface ExtraFoodItem {
   /** Photo of the food, as a file persisted on this device. The same photo is also saved as a meal proof
    *  (`taskRefId` = `extraProofRef(item.id)`) so it syncs and the coach can see it. Absent on older items. */
   photoUri?: string;
+  /** The food broken down into its parts ("Yến mạch 30g", "Sữa chua 100g"...), when it was entered or detected as several. The item
+   *  itself is the one description of the meal and holds the totals; the parts are detail, shown only in Profile > Nutrition. */
+  parts?: MealPart[];
+}
+
+/** One part of a meal: a name that carries its amount (g / ml / pieces) and its own figures. */
+export interface MealPart {
+  name: string;
+  calories: number;
+  proteinG: number;
+  purineMg?: number;
+  saltG?: number;
+  sugarG?: number;
 }
 
 /** `ProofPhoto.taskRefId` of the photo attached to an off-plan food item. The prefix can never be a plan meal slot. */

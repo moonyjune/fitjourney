@@ -852,6 +852,8 @@ export interface PhotoAnalysisResult {
   estimatedCaloriesKcal?: number;
   estimatedProteinG?: number;
   estimatedWaterMl?: number;
+  /** Meal photos with 2 or more foods: each food with its amount and figures (raw from the AI; cleaned with `partsFromComponents`). */
+  components?: unknown[];
   estimatedPurineMg?: number;
   estimatedSugarG?: number;
   estimatedSaltG?: number;

@@ -21,7 +21,24 @@ const ANALYSIS_TOOL = {
   input_schema: {
     type: 'object',
     properties: {
-      foodName: { type: 'string', description: 'Meal photos only: short name of the food/dish shown (Vietnamese).' },
+      foodName: { type: 'string', description: 'Meal photos only: ONE description of the whole meal in Vietnamese that lists each food with its amount as a weight or volume (g or ml), separated by commas, e.g. "Yến mạch 30g, sữa chua không đường 100g, sữa tươi không đường 50ml" or "Cơm gà xối mỡ ~350g, canh 200ml". Estimate the weight/volume of each food from the photo.' },
+      components: {
+        type: 'array',
+        maxItems: 12,
+        description: 'Meal photos only, when the meal has 2 or more foods: the same foods as in foodName, one entry each, with their own figures. They must add up to the meal totals above. Omit for a single food.',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'The food with its amount, e.g. "Yến mạch 30g".' },
+            caloriesKcal: { type: 'number' },
+            proteinG: { type: 'number' },
+            purineMg: { type: 'number' },
+            sugarG: { type: 'number' },
+            saltG: { type: 'number' },
+          },
+          required: ['name', 'caloriesKcal', 'proteinG'],
+        },
+      },
       estimatedCaloriesKcal: { type: 'number', description: 'Meal photos only: estimated calories of the food/drink shown.' },
       estimatedProteinG: { type: 'number', description: 'Meal photos only: estimated grams of protein in the food shown.' },
       estimatedWaterMl: { type: 'number', description: 'Meal photos only, if a drink/water is visible: estimated ml of liquid.' },
@@ -63,7 +80,7 @@ serveAi('photo', async (body) => {
     taskType === 'meal'
       ? `Đây là ảnh món ăn/đồ uống${label ? ` "${label}"` : ''}${
           context?.plannedCalories ? ` (kế hoạch ~${context.plannedCalories} kcal)` : ''
-        }. ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về tên món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Ước tính cả purine (mg), đường tự do (g) và muối (g). Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`
+        }. ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về MỘT mô tả chung của cả bữa ghi rõ khối lượng (g) hoặc thể tích (ml) từng món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Ước tính cả purine (mg), đường tự do (g) và muối (g). Nếu bữa có từ 2 món trở lên thì liệt kê từng món trong components (cộng lại bằng tổng của cả bữa). Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`
       : `Đây là ảnh buổi tập${label ? ` "${label}"` : ''}${
           context?.plannedCalories ? ` (kế hoạch đốt ~${context.plannedCalories} kcal)` : ''
         }. ${person} Đọc những gì thấy được (màn hình máy tập/đồng hồ/ứng dụng: thời gian, quãng đường, nhịp tim, calo hiển thị; hoặc dụng cụ, tư thế). Trả về hoạt động, thời lượng (phút) và lượng calo đã đốt TÍNH CHO NGƯỜI NÀY (theo cân nặng và thể trạng, không chép nguyên số calo của máy nếu số đó rõ ràng không hợp lý). Nếu không chắc, nói rõ ở confidence và reasoning. Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`;
@@ -72,7 +89,7 @@ serveAi('photo', async (body) => {
     responseKey: 'result',
     call: {
       tool: ANALYSIS_TOOL,
-      maxTokens: 1400,
+      maxTokens: 3000,
       messages: [
         {
           role: 'user',

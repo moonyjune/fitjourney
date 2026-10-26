@@ -17,7 +17,8 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
-jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: jest.fn(), deletePersistedPhoto: jest.fn(async () => undefined) }));
+const mockPersist = jest.fn<(...a: unknown[]) => Promise<string | undefined>>();
+jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: (...a: unknown[]) => mockPersist(...a), deletePersistedPhoto: jest.fn(async () => undefined) }));
 
 type Outcome = { ok: true; result: Record<string, unknown> } | { ok: false; message: string; kind: 'notConfigured' | 'offline' | 'unreachable' | 'auth' | 'generic' };
 const mockText = jest.fn<(...a: unknown[]) => Promise<Outcome>>();
@@ -97,6 +98,7 @@ describe('Log food by text', () => {
     jest.clearAllMocks();
     mockRouter.canGoBack.mockReturnValue(true);
     mockText.mockResolvedValue({ ok: true, result: OK });
+    mockPersist.mockResolvedValue('file:///docs/proofs/extra-1.jpg');
     useSettingsStore.setState({ language: 'vi', startDateISO: '2026-10-19T08:00:00', startWeightKg: 110, goalWeightKg: 95, heightCm: 172, age: 34, gender: 'male', activityLevel: 'light' });
     useWeightStore.setState({ entries: [{ id: 'w', dateISO: '2026-10-23T06:00:00', weightKg: 106.2 }] });
     useWorkoutStore.setState({ entries: [] });
@@ -138,26 +140,74 @@ describe('Log food by text', () => {
     expect(text).toContain('Chính xác ~80%');
     expect(text).toContain('Giả định bát phở vừa.');
     expect(text).toContain('Kiểm tra và sửa từng món trước khi lưu.');
-    expect(text).toContain('Thêm 2 món vào hôm nay');
+    expect(text).toContain('Thêm bữa ăn vào hôm nay');
+    // The lines are the parts of ONE meal: a single description (the names joined) and the totals.
+    expect(input(r, 'Mô tả bữa ăn (một mô tả chung)').props.value).toBe('Phở bò (2 bát), Trà đá ít đường');
+    expect(text).toContain('Tổng: 845 kcal · 48 g đạm · purine 210 mg · muối 4.6 g · đường 10 g');
     expect(items()).toHaveLength(0);
     expect(mockRouter.back).not.toHaveBeenCalled();
   });
 
-  it('saves the lines as edited (not the raw AI figures) with purine, salt and sugar and the AI\'s meal time, and remembers new foods', async () => {
+  it('saves ONE meal: the joined description, the totals of the lines as edited, the AI\'s meal time, the lines as its parts, and remembers it as a food', async () => {
     const r = await mount();
     await type(r, 'Bạn đã ăn gì?', 'phở và trà');
     await press(r, ANALYZE);
     await type(r, 'Calo (kcal) món 1', '700');
     await type(r, 'Tên món 2', 'Trà đá không đường');
-    await press(r, 'Thêm 2 món vào hôm nay');
-    expect(items().map((i) => [i.name, i.calories, i.proteinG, i.mealTime])).toEqual([
-      ['Phở bò (2 bát)', 700, 48, 'lunch'],
-      ['Trà đá không đường', 25, 0, 'lunch'],
-    ]);
-    expect(items()[0]).toMatchObject({ purineMg: 210, saltG: 4.6, sugarG: 4 });
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(items()).toHaveLength(1);
+    expect(items()[0]).toMatchObject({ name: 'Phở bò (2 bát), Trà đá không đường', calories: 725, proteinG: 48, mealTime: 'lunch', purineMg: 210, saltG: 4.6, sugarG: 10 });
+    expect(items()[0].parts?.map((p) => [p.name, p.calories, p.proteinG])).toEqual([['Phở bò (2 bát)', 700, 48], ['Trà đá không đường', 25, 0]]);
     expect(mockRouter.back).toHaveBeenCalled();
-    // A name the built-in database already has is not saved again; a new one is.
-    expect(useFoodDbStore.getState().custom.map((f) => f.name)).toEqual(['Trà đá không đường']);
+    expect(useFoodDbStore.getState().custom.map((f) => f.name)).toEqual(['Phở bò (2 bát), Trà đá không đường']);
+  });
+
+  it('the description can be rewritten; an emptied one falls back to the joined names; one food has no parts', async () => {
+    const r = await mount();
+    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await press(r, ANALYZE);
+    await type(r, 'Mô tả bữa ăn (một mô tả chung)', 'Bữa trưa ở quán quen');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(items()[0].name).toBe('Bữa trưa ở quán quen');
+    expect(items()[0].parts).toHaveLength(2);
+    useNutritionStore.setState({ logs: {} });
+    const again = await mount();
+    await type(again, 'Bạn đã ăn gì?', 'phở và trà');
+    await press(again, ANALYZE);
+    await type(again, 'Mô tả bữa ăn (một mô tả chung)', '   ');
+    await press(again, 'Thêm bữa ăn vào hôm nay');
+    expect(items()[0].name).toBe('Phở bò (2 bát), Trà đá ít đường');
+  });
+
+  it('one food taken unchanged from the user\'s database adds nothing new; the same food under a rewritten description is a new meal that is remembered', async () => {
+    useFoodDbStore.setState({
+      custom: [{ id: 'c1', name: 'Bún riêu nhà nấu', group: 'soup', unit: 'phần', unitG: 100, kcal: 450, proteinG: 25, purineMg: 90, sugarG: 2, sodiumMg: 800, note: '', confidence: 'low', auto: true }],
+    });
+    let r = await mount();
+    await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
+    await press(r, ANALYZE);
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(useFoodDbStore.getState().custom).toHaveLength(1);
+    act(() => r.unmount());
+    useNutritionStore.setState({ logs: {} });
+    r = await mount();
+    await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
+    await press(r, ANALYZE);
+    await type(r, 'Mô tả bữa ăn (một mô tả chung)', 'Bún riêu quán góc phố');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(useFoodDbStore.getState().custom.map((f) => f.name)).toEqual(['Bún riêu nhà nấu', 'Bún riêu quán góc phố']);
+  });
+
+  it('attaches the photo to the meal (one photo for the whole entry)', async () => {
+    const r = await mount();
+    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await press(r, ANALYZE);
+    const picker = r.root.findAll((n) => typeof n.props.onChange === 'function' && 'uri' in n.props && 'disabled' in n.props)[0];
+    await act(async () => picker.props.onChange('file:///tmp/pick.jpg'));
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(mockPersist).toHaveBeenCalledWith('file:///tmp/pick.jpg', expect.stringContaining('extra-'));
+    expect(items()).toHaveLength(1);
+    expect(items()[0].photoUri).toBe('file:///docs/proofs/extra-1.jpg');
   });
 
   it('lets a line be removed, and leaves out lines with neither calories nor protein', async () => {
@@ -165,11 +215,13 @@ describe('Log food by text', () => {
     const r = await mount();
     await type(r, 'Bạn đã ăn gì?', 'x');
     await press(r, ANALYZE);
-    expect(allText(r)).toContain('Thêm 2 món vào hôm nay'); // the water line has no figures
+    expect(input(r, 'Mô tả bữa ăn (một mô tả chung)').props.value).toBe('Phở bò (2 bát), Trà đá ít đường'); // the water line has no figures
     await press(r, 'Bỏ món 2');
-    expect(allText(r)).toContain('Thêm 1 món vào hôm nay');
-    await press(r, 'Thêm 1 món vào hôm nay');
+    expect(input(r, 'Mô tả bữa ăn (một mô tả chung)').props.value).toBe('Phở bò (2 bát)');
+    expect(allText(r)).toContain('Tổng: 820 kcal');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
     expect(items().map((i) => i.name)).toEqual(['Phở bò (2 bát)']);
+    expect(items()[0].parts).toBeUndefined(); // one food: no breakdown
   });
 
   it('says so, and offers no save, when the AI finds no food', async () => {
@@ -195,9 +247,10 @@ describe('Log food by text', () => {
     expect(allText(r)).toContain('không cần hỏi AI');
     expect(allText(r)).toContain('Từ cơ sở dữ liệu của bạn');
     expect(input(r, 'Calo (kcal) món 1').props.value).toBe('450');
-    await press(r, 'Thêm 2 món vào hôm nay');
-    expect(items().map((i) => [i.name, i.calories])).toEqual([['Bún riêu nhà nấu', 450], ['Chè đậu xanh nhà nấu', 5]]);
-    expect(useFoodDbStore.getState().custom).toHaveLength(2); // nothing duplicated
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(items().map((i) => [i.name, i.calories])).toEqual([['Bún riêu nhà nấu, Chè đậu xanh nhà nấu', 455]]);
+    expect(items()[0].parts?.map((p) => p.name)).toEqual(['Bún riêu nhà nấu', 'Chè đậu xanh nhà nấu']);
+    expect(useFoodDbStore.getState().custom).toHaveLength(3); // the two foods stay, and the whole meal is remembered once
   });
 
   it('a line taken from the database and then renamed counts as a new food and is remembered under its new name', async () => {
@@ -208,7 +261,7 @@ describe('Log food by text', () => {
     await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
     await press(r, ANALYZE);
     await type(r, 'Tên món 1', 'Bún riêu ít muối');
-    await press(r, 'Thêm 1 món vào hôm nay');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
     expect(useFoodDbStore.getState().custom.map((f) => f.name)).toEqual(['Bún riêu nhà nấu', 'Bún riêu ít muối']);
   });
 
@@ -217,7 +270,7 @@ describe('Log food by text', () => {
     await type(r, 'Bạn đã ăn gì?', 'phở và trà');
     await press(r, ANALYZE);
     await type(r, 'Calo (kcal) món 1', '700');
-    await press(r, 'Thêm 2 món vào hôm nay');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
     expect(useAiCalibrationStore.getState().estimates).toEqual([{ ai: 820, final: 700 }, { ai: 25, final: 25 }]);
   });
 
@@ -227,6 +280,32 @@ describe('Log food by text', () => {
     await type(r, 'Bạn đã ăn gì?', 'x');
     await press(r, ANALYZE);
     expect(allText(r)).toContain('Trước đây AI lệch trung bình ~0% so với số bạn chốt (5 lần).');
+  });
+
+  it('files every line at the meal\'s usual time (a lunch typed at 16:10 is 12:00), or at the exact time typed, and refuses a bad time', async () => {
+    const hhmm = (iso: string) => `${String(new Date(iso).getHours()).padStart(2, '0')}:${String(new Date(iso).getMinutes()).padStart(2, '0')}`;
+    const r = await mount();
+    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await press(r, ANALYZE);
+    expect(input(r, 'Giờ ăn (tuỳ chọn)').props.placeholder).toBe('12:00'); // the AI said lunch
+    await type(r, 'Giờ ăn (tuỳ chọn)', '9:61');
+    expect(allText(r)).toContain('Giờ chưa đúng');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(items()).toHaveLength(0); // nothing is saved with a bad time
+    await type(r, 'Giờ ăn (tuỳ chọn)', '');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(items().map((i) => hhmm(i.loggedAtISO))).toEqual(['12:00']);
+  });
+
+  it('an exact time typed applies to the whole meal (and so to all its parts)', async () => {
+    const hhmm = (iso: string) => `${String(new Date(iso).getHours()).padStart(2, '0')}:${String(new Date(iso).getMinutes()).padStart(2, '0')}`;
+    const r = await mount();
+    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await press(r, ANALYZE);
+    await type(r, 'Giờ ăn (tuỳ chọn)', '13:15');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(items().map((i) => hhmm(i.loggedAtISO))).toEqual(['13:15']);
+    expect(items()[0].parts).toHaveLength(2);
   });
 
   it('shows the advice for the rest of the day', async () => {
@@ -278,7 +357,7 @@ describe('Log food by text', () => {
     await press(r, ANALYZE);
     await type(r, 'Calo (kcal) món 1', '');
     await type(r, 'Đạm (g) món 1', '');
-    await press(r, 'Thêm 0 món vào hôm nay');
+    await press(r, 'Thêm bữa ăn vào hôm nay');
     expect(allText(r)).toContain('Chưa có món nào có calo hoặc đạm để lưu.');
     expect(items()).toHaveLength(0);
   });
