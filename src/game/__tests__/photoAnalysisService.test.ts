@@ -176,9 +176,9 @@ describe('requestPhotoAnalysis', () => {
       expect(await requestPhotoAnalysis('meal', 'QUJD', 'image/jpeg', context)).toMatchObject({ ok: false, kind: 'generic' });
     });
 
-    it('reports a request that never reached the server as offline', async () => {
+    it('reports a request that never reached the server, on a device that is online, as unreachable (not as no network)', async () => {
       mockInvoke.mockResolvedValue({ error: new Error('Failed to send a request to the Edge Function') });
-      expect(await requestPhotoAnalysis('meal', 'QUJD', 'image/jpeg', context)).toMatchObject({ ok: false, kind: 'offline' });
+      expect(await requestPhotoAnalysis('meal', 'QUJD', 'image/jpeg', context)).toMatchObject({ ok: false, kind: 'unreachable' });
     });
 
     it('does not even try when the device is offline', async () => {
@@ -212,7 +212,7 @@ describe('requestMealText', () => {
     mockInvoke.mockResolvedValueOnce({ data: { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.' } });
     expect(await requestMealText('phở')).toMatchObject({ ok: false, kind: 'notConfigured' });
     mockInvoke.mockResolvedValueOnce({ error: new Error('Failed to send a request to the Edge Function') });
-    expect(await requestMealText('phở')).toMatchObject({ ok: false, kind: 'offline' });
+    expect(await requestMealText('phở')).toMatchObject({ ok: false, kind: 'unreachable' }); // online, but the function did not answer (not deployed)
     mockNet.mockResolvedValue({ isConnected: false, isInternetReachable: false });
     mockInvoke.mockClear();
     expect(await requestMealText('phở')).toMatchObject({ ok: false, kind: 'offline' });
@@ -516,11 +516,11 @@ describe('requestDinner', () => {
     useAiPhotoStore.getState().setAiEnabled(true);
   });
 
-  it('sends only what is left, the limits, the hour and the usual foods (not the plan meal)', async () => {
+  it('sends only what is left for the meal, the limits, the hour, which meal and by when, and the usual foods (not the plan meal)', async () => {
     mockInvoke.mockResolvedValue({ data: { result: { options: [] } } });
-    expect(await requestDinner(brief, ['Phở bò'])).toEqual({ ok: true, result: { options: [] } });
+    expect(await requestDinner({ ...brief, meal: 'lunch', eatByHour: 15 }, ['Phở bò'])).toEqual({ ok: true, result: { options: [] } });
     expect(mockInvoke).toHaveBeenCalledWith('suggest-dinner', {
-      body: { budgetKcal: 600, proteinLeftG: 100, headroom: brief.headroom, limits: brief.limits, hour: 17, favorites: ['Phở bò'] },
+      body: { budgetKcal: 600, proteinLeftG: 100, headroom: brief.headroom, limits: brief.limits, hour: 17, meal: 'lunch', eatByHour: 15, favorites: ['Phở bò'] },
     });
     expect(JSON.stringify(mockInvoke.mock.calls[0])).not.toContain('secret');
   });

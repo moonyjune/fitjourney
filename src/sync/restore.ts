@@ -5,6 +5,7 @@ import { useFoodDbStore } from '../store/useFoodDbStore';
 import { useHabitStore } from '../store/useHabitStore';
 import { useLearnStore } from '../store/useLearnStore';
 import { LIMIT_DEFAULTS, LIMIT_RANGE, useLimitsStore, type LimitKey } from '../store/useLimitsStore';
+import { useMealModeStore } from '../store/useMealModeStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { TARGET_RANGE, useUricStore } from '../store/useUricStore';
 import { useWeightStore } from '../store/useWeightStore';
@@ -207,6 +208,15 @@ function restoreUserData(remote: Map<string, unknown>): void {
       useLimitsStore.setState(next);
     }
   } else if (!sameJson(limits, localLimits)) void pushUserData(USER_DATA_KEYS.limits, localLimits);
+
+  // Meal mode: fasting is on by default, so an off setting is the only thing worth keeping. This device still on the default takes the
+  // cloud's choice; a device that chose off pushes it.
+  const mealMode = remote.get(USER_DATA_KEYS.mealMode);
+  const remoteFasting = isObj(mealMode) && typeof mealMode.fasting === 'boolean' ? mealMode.fasting : null;
+  const localFasting = useMealModeStore.getState().fasting;
+  if (localFasting) {
+    if (remoteFasting === false) useMealModeStore.setState({ fasting: false });
+  } else if (remoteFasting !== false) void pushUserData(USER_DATA_KEYS.mealMode, { fasting: false });
 
   const foods = remote.get(USER_DATA_KEYS.foodDb);
   const localFoods = useFoodDbStore.getState();

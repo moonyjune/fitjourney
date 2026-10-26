@@ -30,6 +30,7 @@ import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { useIsAiAdmin } from '../../src/ai/useIsAiAdmin';
+import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type Lang = 'vi' | 'en';
@@ -132,6 +133,8 @@ export default function ProfileScreen() {
   const setAiFullHd = useAiPhotoStore((s) => s.setFullHd);
   const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
   const isAiAdmin = useIsAiAdmin();
+  const fasting = useMealModeStore((s) => s.fasting);
+  const setFasting = useMealModeStore((s) => s.setFasting);
   const setAiEnabled = useAiPhotoStore((s) => s.setAiEnabled);
   const coachId = useSettingsStore((s) => s.coachId);
   const linkedCoachEmail = useSettingsStore((s) => s.linkedCoachEmail);
@@ -314,6 +317,23 @@ export default function ProfileScreen() {
           accessibilityLabel={g('profile.reminders')}
           value={remindersEnabled}
           onValueChange={toggleReminders}
+          trackColor={{ false: quest.raised2, true: quest.gold }}
+          thumbColor={quest.text}
+        />
+      </View>
+
+      <View style={styles.settingRow}>
+        <QuestIcon name="clock" size={20} color={quest.gold} />
+        <View style={styles.flex}>
+          <HudText size={15}>{g('fasting.title')}</HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('fasting.hint')}
+          </HudText>
+        </View>
+        <Switch
+          accessibilityLabel={g('fasting.title')}
+          value={fasting}
+          onValueChange={setFasting}
           trackColor={{ false: quest.raised2, true: quest.gold }}
           thumbColor={quest.text}
         />

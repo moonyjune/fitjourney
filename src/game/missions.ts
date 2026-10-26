@@ -1,5 +1,6 @@
 import type { DailyNutritionLog, DayType, MealTemplate, WorkoutLogEntry } from '../types';
-import { IF_EATING_END_HOUR, getDayType } from '../constants/plan';
+import { getDayType } from '../constants/plan';
+import { eatingEndHour } from '../utils/mealMode';
 import { actualDailyDeficitKcal } from '../utils/tdee';
 import { toDateKey } from '../utils/date';
 import {
@@ -76,7 +77,7 @@ export function evaluateDay(input: DayInput): DayEvaluation {
 
   const todayKey = toDateKey(now);
   const dayOver = dateKey < todayKey;
-  const eatingClosed = dayOver || (dateKey === todayKey && now.getHours() >= IF_EATING_END_HOUR);
+  const eatingClosed = dayOver || (dateKey === todayKey && now.getHours() >= eatingEndHour());
 
   const meals = mealTemplatesByDayType[getDayType(new Date(`${dateKey}T12:00:00`))];
   const eatenMeals = meals.filter((m) => log?.mealsEaten[m.slot]);

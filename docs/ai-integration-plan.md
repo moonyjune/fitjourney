@@ -58,6 +58,12 @@ Người dùng hoạt động (3 ảnh, 2 nhập chữ, 1 gợi ý món mỗi ng
 - **Truy vấn cho chủ ứng dụng:** `supabase/queries/ai-cost.sql` (theo ngày, theo người, theo tính năng, theo tháng, người chạm hạn mức).
 - **Phân quyền sau:** thay `ai_admins` bằng vai trò thật khi có hệ thống phân quyền; app chỉ gọi `is_ai_admin()`.
 
+## Chế độ nhịn ăn gián đoạn (bật/tắt)
+Cài đặt "Nhịn ăn gián đoạn (16:8)" ở Hồ sơ, mặc định **bật**, lưu lên cloud cùng cài đặt khác (`user_data`, khóa `mealMode`).
+- **Bật:** khung ăn 12:00-20:00, các bữa theo kế hoạch (như trước).
+- **Tắt:** ngày ăn 3 bữa bình thường (sáng, trưa, tối) đến 22:00; ẩn thẻ khung ăn ở Camp; ăn muộn tính từ 21:00; nhiệm vụ "giữ dưới ngưỡng" chốt lúc 22:00.
+- **Gợi ý bữa ăn chia theo ngân sách còn lại** (thẻ "Gợi ý các bữa còn lại" ở Camp, thay cho thẻ bữa tối): code tìm các bữa chưa ăn và chưa quá giờ, rồi chia kcal, đạm và phần còn lại của purine/muối/đường theo tỉ trọng (tắt nhịn ăn: 25/35/40; bật: theo calo từng bữa của kế hoạch). Phần chia dưới 250 kcal thì gộp bữa nhỏ nhất vào các bữa còn lại, còn dưới 150 kcal tổng thì chỉ một bữa nhẹ. Nên số bữa gợi ý thay đổi theo giờ, theo món đã ăn và theo ngân sách (1, 2 hoặc 3 bữa). Mỗi bữa có ý tưởng từ Food database theo đúng phần của bữa đó; AI được hỏi riêng từng bữa khi bấm, và mọi gợi ý của AI đều được kiểm tra lại theo phần của bữa.
+
 ## AI cho Coach đang tắt
 Tạm thời tắt hai phần AI dành cho coach: thẻ tóm tắt tuần của học viên (tab Học viên) và trợ lý AI chỉnh kế hoạch cho học viên (trang học viên). Hai lớp công tắc:
 - **App:** `aiFlags.aiForCoach` trong `src/ai/featureFlags.ts` (đang `false`).

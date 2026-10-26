@@ -15,6 +15,7 @@ import { useLimitsStore } from './useLimitsStore';
 import { useTrainingStore } from './useTrainingStore';
 import { useAiDigestStore } from './useAiDigestStore';
 import { useAiReportStore } from './useAiReportStore';
+import { useMealModeStore } from './useMealModeStore';
 import { useNutritionStore } from './useNutritionStore';
 import { usePlanStore } from './usePlanStore';
 import { useProofStore } from './useProofStore';
@@ -61,6 +62,7 @@ export function resetAllLocalStores() {
   useWeightStore.setState({ entries: [] });
   useNutritionStore.setState({ logs: {}, waterDefaultDone: false });
   useAiReportStore.setState({ weekly: {} });
+  useMealModeStore.setState({ fasting: true });
   useAiDigestStore.setState({ weeks: {} });
   useWorkoutStore.setState({ entries: [] });
   // Epoch timestamp guarantees the next syncFromRemote() treats any remote plan as newer.

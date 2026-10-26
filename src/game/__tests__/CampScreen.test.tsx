@@ -27,6 +27,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import CampScreen from '../../../app/(tabs)/index';
+import { useMealModeStore } from '../../store/useMealModeStore';
 import { formatHoursMinutes } from '../../components/quest/WindowCard';
 import { useCelebrationStore } from '../../store/useCelebrationStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
@@ -106,13 +107,27 @@ describe('FitQuest Camp screen', () => {
     expect(text).toContain('GIỜ TIẾP TẾ ĐANG MỞ'); // 16:10 is inside the 12:00-20:00 window (title is set in capitals)
   });
 
-  it('shows the dinner card in the afternoon while the last meal is still to come, and not in the morning', () => {
+  it('shows the meal suggestions from an hour before the fasting window, while meals are left, and not before', () => {
     const text = allText(render());
-    expect(text).toContain('Gợi ý bữa tối'); // 16:10, meal 3 not eaten
+    expect(text).toContain('Gợi ý các bữa còn lại'); // 16:10, meals still to come
     expect(text).toMatch(/Còn ~\d+ kcal và thiếu ~\d+ g đạm trong hôm nay\./);
     act(() => renderer?.unmount());
     jest.setSystemTime(new Date('2026-10-23T10:00:00'));
-    expect(allText(render())).not.toContain('Gợi ý bữa tối');
+    expect(allText(render())).not.toContain('Gợi ý các bữa còn lại'); // the window opens at 12:00, the card at 11:00
+  });
+
+  it('with fasting off: no fasting-window card, and the meal suggestions are there all day (a normal 3-meal day)', () => {
+    useMealModeStore.setState({ fasting: false });
+    try {
+      jest.setSystemTime(new Date('2026-10-23T08:00:00'));
+      const text = allText(render());
+      expect(text).not.toContain('GIỜ TIẾP TẾ');
+      expect(text).not.toContain('NHỊN ĂN');
+      expect(text).toContain('Gợi ý các bữa còn lại');
+      expect(text).toContain('Bữa sáng');
+    } finally {
+      useMealModeStore.setState({ fasting: true });
+    }
   });
 
   it('marks the logged workout done and protein still open (117 / 200 g)', () => {

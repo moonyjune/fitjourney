@@ -11,12 +11,17 @@ function cleanName(v: unknown, max = 80): string {
   return typeof v === 'string' ? v.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '';
 }
 
+const MEALS = ['breakfast', 'lunch', 'dinner', 'meal'];
+
 export interface DinnerRequest {
   budgetKcal: number;
   proteinLeftG: number;
   headroom: { purine: number; salt: number; sugar: number };
   limits: { purine: number; salt: number; sugar: number };
   hour: number;
+  /** Which meal it is for (absent counts as dinner), and the hour it should be eaten by. */
+  meal: 'breakfast' | 'lunch' | 'dinner' | 'meal';
+  eatByHour: number;
   favorites: string[];
 }
 
@@ -35,6 +40,8 @@ export function cleanDinnerRequest(raw: unknown): DinnerRequest | null {
     headroom: { purine: head(r.headroom?.purine), salt: head(r.headroom?.salt), sugar: head(r.headroom?.sugar) },
     limits: { purine: num(r.limits?.purine, 20000), salt: num(r.limits?.salt, 200), sugar: num(r.limits?.sugar, 1000) },
     hour,
+    meal: MEALS.includes(r.meal) ? r.meal : 'dinner',
+    eatByHour: bounded(r.eatByHour, 0, 24) ?? Math.min(24, hour + 3),
     favorites: (Array.isArray(r.favorites) ? r.favorites : []).map((f: unknown) => cleanName(f, 60)).filter(Boolean).slice(0, 8),
   };
 }

@@ -1,4 +1,5 @@
-import { IF_EATING_END_HOUR, getDayType } from '../constants/plan';
+import { getDayType } from '../constants/plan';
+import { lateMealHour } from '../utils/mealMode';
 import { bossForWeek, type BossState } from '../game/boss';
 import { DAILY_DAMAGE_CAP_KCAL, type MissionId } from '../game/constants';
 import { useWorkoutStore } from '../store/useWorkoutStore';
@@ -153,7 +154,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     sugarOverDays: count((d) => d.sugarG > limits.sugarG),
     junkDays: count((d) => d.junkCount > 0),
     waterShortDays: loggedDays.filter((d) => d.waterMl < settings.waterTargetMl * WATER_SHORT_RATIO).length,
-    lateMealDays: count((d) => d.lastMealHour !== undefined && d.lastMealHour >= IF_EATING_END_HOUR),
+    lateMealDays: count((d) => d.lastMealHour !== undefined && d.lastMealHour >= lateMealHour()),
   };
 
   const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal);

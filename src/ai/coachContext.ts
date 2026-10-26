@@ -1,4 +1,5 @@
-import { IF_EATING_END_HOUR, getDayType } from '../constants/plan';
+import { getDayType } from '../constants/plan';
+import { eatingEndHour } from '../utils/mealMode';
 import { bossForWeek } from '../game/boss';
 import { evaluateDay, type DayEvaluation } from '../game/missions';
 import { useLimitsStore } from '../store/useLimitsStore';
@@ -167,7 +168,7 @@ export function buildCoachContext(now: Date = new Date()): CoachContext {
   const since = toDateKey(addDays(now, -COACH_HISTORY_DAYS));
 
   return {
-    now: { date: todayKey, time: `${pad(now.getHours())}:${pad(now.getMinutes())}`, eatingWindowEndsAtHour: IF_EATING_END_HOUR, eatingClosed: todayEval.eatingClosed },
+    now: { date: todayKey, time: `${pad(now.getHours())}:${pad(now.getMinutes())}`, eatingWindowEndsAtHour: eatingEndHour(), eatingClosed: todayEval.eatingClosed },
     targets: {
       tdeeKcal: Math.round(tdeeKcal),
       dailyDeficitKcal: Math.round(settings.targetDailyDeficitKcal),

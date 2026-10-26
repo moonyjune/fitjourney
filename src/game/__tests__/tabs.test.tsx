@@ -52,6 +52,7 @@ import MapScreen from '../../../app/(tabs)/map';
 import ProfileScreen from '../../../app/(tabs)/profile';
 import { QuestTabBar } from '../../components/quest/QuestTabBar';
 import { resetIsAiAdminCache } from '../../ai/useIsAiAdmin';
+import { useMealModeStore } from '../../store/useMealModeStore';
 import { useAiPhotoStore } from '../../store/useAiPhotoStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useAchievementStore } from '../../store/useAchievementStore';
@@ -291,6 +292,17 @@ describe('FitQuest tabs', () => {
       const row = pressable(r, (l) => l.startsWith('Tổng kết tuần (AI)'));
       act(() => row.props.onPress());
       expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
+    });
+
+    it('has an intermittent-fasting switch that is on by default; turning it off is remembered (and saved to the cloud settings)', async () => {
+      useMealModeStore.setState({ fasting: true });
+      const r = render(<ProfileScreen />);
+      const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Nhịn ăn gián đoạn (16:8)' && typeof n.props.onValueChange === 'function')[0];
+      expect(toggle.props.value).toBe(true);
+      expect(allText(r)).toContain('Tắt: ngày ăn 3 bữa bình thường');
+      await act(async () => toggle.props.onValueChange(false));
+      expect(useMealModeStore.getState().fasting).toBe(false);
+      useMealModeStore.setState({ fasting: true });
     });
 
     it('has a master AI switch that is on by default and remembers the choice', async () => {

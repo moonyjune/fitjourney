@@ -80,6 +80,7 @@ import { useFoodDbStore } from '../../store/useFoodDbStore';
 import { useHabitStore } from '../../store/useHabitStore';
 import { useLearnStore } from '../../store/useLearnStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
+import { useMealModeStore } from '../../store/useMealModeStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { resetAllLocalStores } from '../../store/resetLocalStores';
 import { useUricStore } from '../../store/useUricStore';
@@ -265,6 +266,52 @@ describe('restore from the cloud', () => {
     expect(useLearnStore.getState().notes).toEqual({ '1': 'bản trên máy', '2': 'chỉ có trên cloud' });
     expect(useFoodDbStore.getState().overrides).toEqual({ 'b-1': { name: 'Nhãn trên máy' }, 'b-2': { name: 'Nhãn khác' } });
     expect(useFoodDbStore.getState().custom.map((f) => f.id)).toEqual(['c-9']);
+  });
+
+  describe('meal mode (fasting on or off)', () => {
+    const cloud = (value: unknown) => {
+      mockDb.user_data = [{ user_id: 'user-1', key: 'mealMode', value }];
+    };
+
+    it('a device still on the default (fasting on) takes the cloud\'s "off"', async () => {
+      cloud({ fasting: false });
+      await restoreOwnData();
+      expect(useMealModeStore.getState().fasting).toBe(false);
+    });
+
+    it('a device that chose off keeps it and saves it to the cloud when the cloud does not have it', async () => {
+      useMealModeStore.setState({ fasting: false });
+      await restoreOwnData();
+      expect(useMealModeStore.getState().fasting).toBe(false);
+      await whenPushesSettled();
+      expect(mockDb.user_data.find((r) => r.key === 'mealMode')?.value).toEqual({ fasting: false });
+    });
+
+    it('a device that chose off and a cloud that says on: the device wins and the cloud is updated', async () => {
+      useMealModeStore.setState({ fasting: false });
+      cloud({ fasting: true });
+      await restoreOwnData();
+      expect(useMealModeStore.getState().fasting).toBe(false);
+      await whenPushesSettled();
+      expect(mockDb.user_data.find((r) => r.key === 'mealMode')?.value).toEqual({ fasting: false });
+    });
+
+    it('fasting on everywhere changes nothing and writes nothing; a nonsense cloud value is ignored', async () => {
+      await restoreOwnData();
+      expect(useMealModeStore.getState().fasting).toBe(true);
+      cloud({ fasting: 'no' });
+      await restoreOwnData();
+      expect(useMealModeStore.getState().fasting).toBe(true);
+      await whenPushesSettled();
+      expect(mockDb.user_data.filter((r) => r.key === 'mealMode')).toHaveLength(1); // only the nonsense row seeded above
+      expect(mockDb.user_data.find((r) => r.key === 'mealMode')?.value).toEqual({ fasting: 'no' });
+    });
+
+    it('signing out puts the mode back to fasting on', () => {
+      useMealModeStore.setState({ fasting: false });
+      resetAllLocalStores();
+      expect(useMealModeStore.getState().fasting).toBe(true);
+    });
   });
 
   it('puts nothing on the device when the account changed while the requests were running', async () => {

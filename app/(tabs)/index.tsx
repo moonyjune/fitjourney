@@ -20,7 +20,8 @@ import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { quest } from '../../src/theme/quest';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
-import { DinnerCard } from '../../src/components/quest/DinnerCard';
+import { MealSuggestionsCard } from '../../src/components/quest/MealSuggestionsCard';
+import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
@@ -114,6 +115,7 @@ export default function CampScreen() {
   const now = useNow();
   const game = useGameState(now);
   const ifStatus = getIfStatus(now);
+  const fasting = useMealModeStore((s) => s.fasting);
 
   useLightStatusBar();
 
@@ -149,15 +151,17 @@ export default function CampScreen() {
           <PlayerHeader level={level} titleKey={titleKeyForLevel(level.level)} streak={game.streak} />
         </FadeInUp>
 
-        <FadeInUp index={1} style={styles.gap}>
-          <WindowCard isEatingWindow={ifStatus.isEatingWindow} hoursUntilTransition={ifStatus.hoursUntilTransition} />
-        </FadeInUp>
+        {fasting && (
+          <FadeInUp index={1} style={styles.gap}>
+            <WindowCard isEatingWindow={ifStatus.isEatingWindow} hoursUntilTransition={ifStatus.hoursUntilTransition} />
+          </FadeInUp>
+        )}
         <FadeInUp index={2} style={styles.gap}>
           <BossCard boss={boss} todayDamage={todayDamage} onPress={() => router.push('/boss')} />
         </FadeInUp>
 
         <FadeInUp index={3} style={styles.gap}>
-          <DinnerCard now={now} />
+          <MealSuggestionsCard now={now} />
         </FadeInUp>
 
         <FadeInUp index={3} style={[styles.links, styles.gap]}>

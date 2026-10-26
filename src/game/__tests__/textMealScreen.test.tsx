@@ -19,7 +19,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 );
 jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: jest.fn(), deletePersistedPhoto: jest.fn(async () => undefined) }));
 
-type Outcome = { ok: true; result: Record<string, unknown> } | { ok: false; message: string; kind: 'notConfigured' | 'offline' | 'auth' | 'generic' };
+type Outcome = { ok: true; result: Record<string, unknown> } | { ok: false; message: string; kind: 'notConfigured' | 'offline' | 'unreachable' | 'auth' | 'generic' };
 const mockText = jest.fn<(...a: unknown[]) => Promise<Outcome>>();
 jest.mock('../../sync/cloudSync', () => ({
   pushUserData: jest.fn(),
@@ -243,9 +243,10 @@ describe('Log food by text', () => {
   it.each([
     ['notConfigured', 'AI chưa được thiết lập'],
     ['offline', 'Không có mạng'],
+    ['unreachable', 'Chưa kết nối được dịch vụ AI'],
     ['auth', 'Phiên đăng nhập không hợp lệ'],
     ['generic', 'Chưa phân tích được'],
-  ] as Array<['notConfigured' | 'offline' | 'auth' | 'generic', string]>)('shows a friendly message for a %s failure and keeps the text', async (kind, expected) => {
+  ] as Array<['notConfigured' | 'offline' | 'unreachable' | 'auth' | 'generic', string]>)('shows a friendly message for a %s failure and keeps the text', async (kind, expected) => {
     mockText.mockResolvedValue({ ok: false, message: 'x', kind });
     const r = await mount();
     await type(r, 'Bạn đã ăn gì?', 'phở');

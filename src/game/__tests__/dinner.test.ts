@@ -12,16 +12,10 @@ jest.mock('../../sync/cloudSync', () => ({
   pushProofPhoto: jest.fn(),
 }));
 
-import { acceptDinner, buildDinnerBrief, cleanAiDinner, dinnerCardVisible, dinnerIdeasFromFoods, dinnerVerdict, MAX_DINNER_IDEAS, type DinnerBrief } from '../../ai/dinner';
+import { acceptDinner, cleanAiDinner, dinnerIdeasFromFoods, dinnerVerdict, MAX_DINNER_IDEAS, type DinnerBrief } from '../../ai/dinner';
 import { fakeDinner } from '../../ai/devPhotoAnalysis';
 import { parsePrefill } from '../../food/prefill';
 import type { FoodEntry } from '../../food/types';
-import { useLimitsStore } from '../../store/useLimitsStore';
-import { useNutritionStore } from '../../store/useNutritionStore';
-import { useSettingsStore } from '../../store/useSettingsStore';
-import { useWorkoutStore } from '../../store/useWorkoutStore';
-
-const NOW = new Date('2026-10-23T16:10:00'); // Friday afternoon
 
 const BRIEF: DinnerBrief = {
   hour: 16,
@@ -32,53 +26,6 @@ const BRIEF: DinnerBrief = {
   planMeal: { label: 'Bữa 3', kcal: 713, proteinG: 86 },
 };
 const idea = (over: Partial<Record<'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG', number>> = {}) => ({ calories: 550, proteinG: 45, purineMg: 300, saltG: 2, sugarG: 3, ...over });
-
-describe('buildDinnerBrief', () => {
-  beforeEach(() => {
-    // No profile: TDEE = 1900 + 1100 = 3000.
-    useSettingsStore.setState({ gender: null, age: null, heightCm: null, activityLevel: null, calorieTargetKcal: 1900, targetDailyDeficitKcal: 1100, proteinTargetG: 200 });
-    useLimitsStore.setState({ purineMg: 1200, saltG: 7, sugarG: 25 });
-    useWorkoutStore.setState({ entries: [{ id: 'w', dateISO: '2026-10-23T08:00:00', templateId: null, label: 'Bơi', durationMin: 40, caloriesBurned: 300 }] });
-    useNutritionStore.setState({ logs: { '2026-10-23': {
-      dateISO: '2026-10-23', mealsEaten: {}, extraCalories: 1000, extraProteinG: 100, waterMl: 0,
-      extraItems: [{ id: 'a', name: 'Cơm', calories: 1000, proteinG: 100, loggedAtISO: '2026-10-23T12:00:00', mealTime: 'lunch', purineMg: 400, saltG: 2, sugarG: 5 }],
-    } } });
-  });
-
-  it('works out what is left: calories (TDEE + burned − deficit target − eaten), missing protein and the room in each limit', () => {
-    const b = buildDinnerBrief(NOW)!;
-    expect(b).toMatchObject({ hour: 16, budgetKcal: 1200, proteinLeftG: 100, headroom: { purine: 800, salt: 5, sugar: 20 }, limits: { purine: 1200, salt: 7, sugar: 25 } });
-    expect(b.planMeal).toMatchObject({ kcal: 713, proteinG: 86 });
-    expect(b.planMeal?.label).toContain('Bữa 3');
-  });
-
-  it('never reports a negative budget or missing protein, and lets a room go negative once a limit is broken', () => {
-    useNutritionStore.setState({ logs: { '2026-10-23': { dateISO: '2026-10-23', mealsEaten: {}, extraCalories: 4000, extraProteinG: 300, waterMl: 0, extraItems: [{ id: 'a', name: 'Nhiều', calories: 4000, proteinG: 300, loggedAtISO: '2026-10-23T12:00:00', mealTime: 'lunch', purineMg: 1500 }] } } });
-    const b = buildDinnerBrief(NOW)!;
-    expect(b.budgetKcal).toBe(0);
-    expect(b.proteinLeftG).toBe(0);
-    expect(b.headroom.purine).toBe(-300);
-  });
-
-  it('is null when the plan\'s dinner (its last meal) is already eaten or was removed', () => {
-    const log = useNutritionStore.getState().logs['2026-10-23'];
-    useNutritionStore.setState({ logs: { '2026-10-23': { ...log, mealsEaten: { meal3: true } } } });
-    expect(buildDinnerBrief(NOW)).toBeNull();
-    useNutritionStore.setState({ logs: { '2026-10-23': { ...log, removedMealSlots: ['meal3'] } } });
-    expect(buildDinnerBrief(NOW)).toBeNull();
-  });
-});
-
-describe('dinnerCardVisible', () => {
-  it('shows from 15:00 until the eating window closes at 20:00, and only with a brief', () => {
-    const at = (h: number, m = 0) => new Date(2026, 9, 23, h, m);
-    expect(dinnerCardVisible(at(14, 59), BRIEF)).toBe(false);
-    expect(dinnerCardVisible(at(15), BRIEF)).toBe(true);
-    expect(dinnerCardVisible(at(19, 59), BRIEF)).toBe(true);
-    expect(dinnerCardVisible(at(20), BRIEF)).toBe(false);
-    expect(dinnerCardVisible(at(16), null)).toBe(false);
-  });
-});
 
 describe('dinnerVerdict', () => {
   it('light under 150 kcal left; the plan\'s dinner fits within 100 kcal of slack, otherwise it is over by the difference', () => {

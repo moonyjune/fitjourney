@@ -4,4 +4,5 @@ export const USER_DATA_KEYS = {
   uricTarget: 'uricTarget',
   foodDb: 'foodDb',
   limits: 'limits',
+  mealMode: 'mealMode',
 } as const;

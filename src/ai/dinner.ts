@@ -1,21 +1,20 @@
-import { IF_EATING_END_HOUR, getDayType } from '../constants/plan';
 import { foodKey } from '../food/remember';
 import { NEVER_AS_MEAL, scaleFood } from '../food/swaps';
 import type { FoodEntry } from '../food/types';
-import { toDateKey } from '../utils/date';
-import { makeDayEvaluator } from './coachContext';
 
-/** The dinner card shows from this hour until the eating window closes. */
-export const DINNER_FROM_HOUR = 15;
 /** Below this many kcal left, dinner is a light one (vegetables, lean protein), not a meal. */
 export const LIGHT_BUDGET_KCAL = 150;
 export const MAX_DINNER_IDEAS = 3;
 
 export type Room = { purine: number; salt: number; sugar: number };
 
-/** What is left of today, worked out here from the logs: the AI is only told it, never asked to compute it. */
+/** What is left for one meal, worked out here from the logs: the AI is only told it, never asked to compute it. */
 export interface DinnerBrief {
   hour: number;
+  /** What kind of meal it is (breakfast, lunch, dinner or any other); absent counts as dinner. */
+  meal?: 'breakfast' | 'lunch' | 'dinner' | 'meal';
+  /** The hour by which the meal should be eaten. */
+  eatByHour?: number;
   /** Calories still available: TDEE + exercise − the daily deficit target − what was eaten. 0 when nothing is left. */
   budgetKcal: number;
   /** Protein still missing from the day's target. */
@@ -23,38 +22,8 @@ export interface DinnerBrief {
   /** Room left in each limit (limit minus the day so far); negative when already over. */
   headroom: Room;
   limits: Room;
-  /** The plan's own dinner (its last meal of the day), if it is still to be eaten. */
+  /** The plan's own meal for this slot (fasting mode), if there is one. */
   planMeal?: { label: string; kcal: number; proteinG: number };
-}
-
-const r1 = (n: number) => Math.round(n * 10) / 10;
-
-/** Today so far against the targets, and the plan's dinner. Null when the plan has no meal left to eat tonight (the last
- *  meal is already eaten or removed): then there is no dinner to suggest. */
-export function buildDinnerBrief(now: Date = new Date()): DinnerBrief | null {
-  const { evaluate, logs, plan, settings, limits, tdeeKcal } = makeDayEvaluator(now);
-  const dateKey = toDateKey(now);
-  const today = evaluate(dateKey);
-  const meals = plan.mealTemplates[getDayType(now)];
-  const last = meals[meals.length - 1];
-  const log = logs[dateKey];
-  const planMealLeft = !!last && !log?.mealsEaten[last.slot] && !(log?.removedMealSlots ?? []).includes(last.slot);
-  if (!planMealLeft) return null;
-  const budget = tdeeKcal + today.burnedKcal - settings.targetDailyDeficitKcal - today.eatenKcal;
-  const n = today.nutrients;
-  return {
-    hour: now.getHours(),
-    budgetKcal: Math.max(0, Math.round(budget)),
-    proteinLeftG: Math.max(0, Math.round(settings.proteinTargetG - today.proteinG)),
-    headroom: { purine: Math.round(limits.purineMg - n.purineMg), salt: r1(limits.saltG - n.saltG), sugar: r1(limits.sugarG - n.sugarG) },
-    limits: { purine: limits.purineMg, salt: limits.saltG, sugar: limits.sugarG },
-    planMeal: { label: last.label, kcal: last.calories, proteinG: last.proteinG },
-  };
-}
-
-/** The card is for the afternoon and evening, while eating is still allowed. */
-export function dinnerCardVisible(now: Date, brief: DinnerBrief | null): boolean {
-  return brief !== null && now.getHours() >= DINNER_FROM_HOUR && now.getHours() < IF_EATING_END_HOUR;
 }
 
 export type DinnerVerdict =
