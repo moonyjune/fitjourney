@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dayKey } from '../supabase/functions/_shared/usage';
 import { useIsAiAdmin } from '../src/ai/useIsAiAdmin';
+import { AiModelCard } from '../src/components/quest/AiModelCard';
 import { AiUsageCard, tokensText, usdText } from '../src/components/quest/AiUsageCard';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
@@ -73,6 +74,10 @@ export default function AiAdminScreen() {
 
         <View style={styles.gap}>
           <AiUsageCard />
+        </View>
+
+        <View style={styles.gap}>
+          <AiModelCard />
         </View>
 
         <HudText size={17} accessibilityRole="header" style={styles.gap}>

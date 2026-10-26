@@ -3,6 +3,7 @@
 // only builds its prompt and tool. Deploy: every function that imports this is deployed with `npx supabase functions deploy <name>`.
 //
 // Secrets / env:  ANTHROPIC_API_KEY (required)   AI_MODEL (default claude-sonnet-5-5)   AI_DISABLED=1 (kill switch)
+//                 The admin can change the model and prices on the AI & cost screen (table ai_settings); that wins over AI_MODEL / AI_PRICE_*.
 //                 AI_WORKSPACE_ID (only for an API key that is not tied to one workspace)   AI_PRICE_IN_PER_MTOK / AI_PRICE_OUT_PER_MTOK (cost estimate only)
 
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
@@ -12,7 +13,8 @@ import {
   isToolChoiceUnsupported,
   systemFor,
   toolChoiceFor,
-  DEFAULT_PRICE_IN_PER_MTOK,
+  type AiConfig,
+  resolveAiConfig,
   RETRY_WAITS_MS,
   canRetry,
   summarizeUpstreamError,
@@ -21,10 +23,8 @@ import {
   USER_BUDGET_MESSAGE,
   budgetFrom,
   budgetReached,
-  DEFAULT_PRICE_OUT_PER_MTOK,
   dayKey,
   estimateCostUsd,
-  priceFrom,
   quotaMessage,
   quotaReached,
   shouldRetry,
@@ -38,9 +38,24 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-export const MODEL = Deno.env.get('AI_MODEL') || 'claude-sonnet-5-5';
-const PRICE_IN = priceFrom(Deno.env.get('AI_PRICE_IN_PER_MTOK'), DEFAULT_PRICE_IN_PER_MTOK);
-const PRICE_OUT = priceFrom(Deno.env.get('AI_PRICE_OUT_PER_MTOK'), DEFAULT_PRICE_OUT_PER_MTOK);
+const ENV_CONFIG = { model: Deno.env.get('AI_MODEL') ?? undefined, priceIn: Deno.env.get('AI_PRICE_IN_PER_MTOK') ?? undefined, priceOut: Deno.env.get('AI_PRICE_OUT_PER_MTOK') ?? undefined };
+const CONFIG_TTL_MS = 30_000;
+let configCache: { at: number; config: AiConfig } | null = null;
+
+/** The model and prices in force: the admin's saved choice (ai_settings), else the environment. Read at most every 30 s per instance. */
+async function loadConfig(admin: SupabaseClient): Promise<AiConfig> {
+  if (configCache && Date.now() - configCache.at < CONFIG_TTL_MS) return configCache.config;
+  let rows: { key: string; value: string }[] | null = null;
+  try {
+    const { data } = await admin.from('ai_settings').select('key,value');
+    rows = data;
+  } catch (error) {
+    console.warn('[ai] settings not read, using the environment:', error);
+  }
+  const config = resolveAiConfig(rows, ENV_CONFIG);
+  configCache = { at: Date.now(), config };
+  return config;
+}
 const USER_BUDGET = budgetFrom(Deno.env.get('AI_USER_DAILY_BUDGET_USD'), DEFAULT_USER_DAILY_BUDGET_USD);
 const GLOBAL_BUDGET = budgetFrom(Deno.env.get('AI_DAILY_BUDGET_USD'), 0);
 
@@ -96,7 +111,7 @@ async function globalCostToday(admin: SupabaseClient): Promise<number> {
   return Number(data ?? 0);
 }
 
-async function recordUsage(admin: SupabaseClient, userId: string, feature: AiFeature, usage: TokenUsage | undefined): Promise<void> {
+async function recordUsage(admin: SupabaseClient, userId: string, feature: AiFeature, usage: TokenUsage | undefined, config: AiConfig): Promise<void> {
   try {
     await admin.rpc('ai_usage_bump', {
       p_user: userId,
@@ -104,22 +119,22 @@ async function recordUsage(admin: SupabaseClient, userId: string, feature: AiFea
       p_feature: feature,
       p_in: usage?.input_tokens ?? 0,
       p_out: usage?.output_tokens ?? 0,
-      p_cost: estimateCostUsd(usage, PRICE_IN, PRICE_OUT),
-      p_model: MODEL,
+      p_cost: estimateCostUsd(usage, config.priceInPerMtok, config.priceOutPerMtok),
+      p_model: config.model,
     });
   } catch (error) {
     console.warn('[ai] usage not recorded:', error);
   }
 }
 
-/** Set once a model has refused a forced tool call, so later calls in this instance go straight to the working mode. */
-let forceTool = true;
+/** Models that have refused a forced tool call, so later calls with them in this instance go straight to the working mode. */
+const noForcedTool = new Set<string>();
 
-async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown>; usage?: TokenUsage } | { error: string; status: number }> {
+async function callClaude(call: AiCall, model: string): Promise<{ input: Record<string, unknown>; usage?: TokenUsage } | { error: string; status: number }> {
   const bodyFor = (forced: boolean) => {
     const system = systemFor(call.system, call.tool.name, forced);
     return JSON.stringify({
-      model: MODEL,
+      model,
       max_tokens: call.maxTokens,
       ...(system ? { system } : {}),
       tools: [call.tool],
@@ -135,7 +150,7 @@ async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: anthropicHeaders(ANTHROPIC_API_KEY!, Deno.env.get('AI_WORKSPACE_ID')),
-        body: bodyFor(forceTool),
+        body: bodyFor(!noForcedTool.has(model)),
         signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
       });
     } catch (error) {
@@ -156,10 +171,10 @@ async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown
     const retryable = response === null || shouldRetry(response.status);
     if (response) {
       const text = await response.text();
-      if (forceTool && isToolChoiceUnsupported(response.status, text)) {
+      if (!noForcedTool.has(model) && isToolChoiceUnsupported(response.status, text)) {
         // This model does not take a forced tool call: switch to letting it choose, and go again at once (not a failed attempt).
         console.warn('[ai] model refuses a forced tool call; switching to tool_choice auto');
-        forceTool = false;
+        noForcedTool.add(model);
         attempt -= 1;
         continue;
       }
@@ -209,9 +224,10 @@ export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>
       if (budgetReached(await userCostToday(admin, user.id), USER_BUDGET)) return jsonResponse({ error: USER_BUDGET_MESSAGE }, 429);
       if (GLOBAL_BUDGET > 0 && budgetReached(await globalCostToday(admin), GLOBAL_BUDGET)) return jsonResponse({ error: GLOBAL_BUDGET_MESSAGE }, 503);
 
-      const outcome = await callClaude(planned.call);
+      const config = await loadConfig(admin);
+      const outcome = await callClaude(planned.call, config.model);
       if ('error' in outcome) return jsonResponse({ error: outcome.error }, outcome.status);
-      await recordUsage(admin, user.id, feature, outcome.usage);
+      await recordUsage(admin, user.id, feature, outcome.usage, config);
       if (planned.after) await planned.after(outcome.input, ctx);
       return jsonResponse({ [planned.responseKey]: outcome.input });
     } catch (error) {

@@ -494,6 +494,64 @@ $$;
 revoke all on function public.is_ai_admin() from public, anon;
 grant execute on function public.is_ai_admin() to authenticated;
 
+-- Cài đặt AI do tài khoản trong ai_admins chọn trên màn "AI & chi phí": model (key 'model') và giá ước tính USD / 1 triệu token
+-- (key 'price_in', 'price_out'). Edge Function đọc bằng service role (bỏ qua RLS); không client nào đọc/ghi trực tiếp.
+create table if not exists public.ai_settings (
+  key text primary key check (key in ('model', 'price_in', 'price_out')),
+  value text not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.ai_settings enable row level security;
+revoke all on public.ai_settings from public, anon, authenticated;
+
+create or replace function public.ai_admin_get_settings()
+returns table (key text, value text)
+language plpgsql
+security definer set search_path = public
+stable
+as $$
+begin
+  if not public.is_ai_admin() then
+    raise exception 'Không có quyền xem.';
+  end if;
+  return query select s.key, s.value from public.ai_settings s;
+end;
+$$;
+revoke all on function public.ai_admin_get_settings() from public, anon;
+grant execute on function public.ai_admin_get_settings() to authenticated;
+
+-- Đặt một cài đặt. Model: chữ thường/số/dấu . - _ (3-60 ký tự). Giá: số từ 0 đến 1000. Giá trị rỗng = xoá (quay về cấu hình máy chủ).
+create or replace function public.ai_admin_set_setting(p_key text, p_value text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v text := btrim(coalesce(p_value, ''));
+begin
+  if not public.is_ai_admin() then
+    raise exception 'Không có quyền đổi.';
+  end if;
+  if p_key not in ('model', 'price_in', 'price_out') then
+    raise exception 'Cài đặt không hợp lệ.';
+  end if;
+  if v = '' then
+    delete from public.ai_settings where key = p_key;
+    return;
+  end if;
+  if p_key = 'model' and v !~ '^[a-z0-9][a-z0-9._-]{2,59}$' then
+    raise exception 'Tên model không hợp lệ.';
+  end if;
+  if p_key in ('price_in', 'price_out') and (v !~ '^[0-9]+(\.[0-9]+)?$' or v::numeric > 1000) then
+    raise exception 'Giá không hợp lệ (số từ 0 đến 1000).';
+  end if;
+  insert into public.ai_settings (key, value, updated_at) values (p_key, v, now())
+  on conflict (key) do update set value = excluded.value, updated_at = now();
+end;
+$$;
+revoke all on function public.ai_admin_set_setting(text, text) from public, anon;
+grant execute on function public.ai_admin_set_setting(text, text) to authenticated;
+
 -- Tổng hợp toàn ứng dụng theo ngày (p_days ngày gần nhất tính đến p_today). Chỉ tài khoản trong ai_admins gọi được.
 create or replace function public.ai_admin_by_day(p_today date, p_days integer default 14)
 returns table (day date, users bigint, calls bigint, tokens_in bigint, tokens_out bigint, cost_usd numeric)

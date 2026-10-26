@@ -24,7 +24,11 @@ const mockIsAdmin = jest.fn<() => Promise<boolean>>();
 const mockByDay = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockByUser = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockUsage = jest.fn<(...a: unknown[]) => Promise<unknown>>();
+const mockSettings = jest.fn<() => Promise<Record<string, string> | null>>();
+const mockSave = jest.fn<(...a: unknown[]) => Promise<{ ok: true } | { ok: false; message: string }>>();
 jest.mock('../../sync/cloudSync', () => ({
+  fetchAiSettings: () => mockSettings(),
+  saveAiSetting: (...a: unknown[]) => mockSave(...a),
   fetchIsAiAdmin: () => mockIsAdmin(),
   fetchAiAdminByDay: (...a: unknown[]) => mockByDay(...a),
   fetchAiAdminByUser: (...a: unknown[]) => mockByUser(...a),
@@ -159,6 +163,8 @@ describe('AI & cost screen', () => {
     mockByDay.mockResolvedValue(DAYS);
     mockByUser.mockResolvedValue(USERS);
     mockUsage.mockResolvedValue([{ feature: 'photo', calls: 3, tokensIn: 9000, tokensOut: 2100, costUsd: 0.06 }]);
+    mockSettings.mockResolvedValue({ model: 'claude-sonnet-5-5', price_in: '3' });
+    mockSave.mockResolvedValue({ ok: true });
   });
   afterEach(() => {
     act(() => renderer?.unmount());
@@ -173,6 +179,7 @@ describe('AI & cost screen', () => {
     expect(mockByDay).not.toHaveBeenCalled();
     expect(mockByUser).not.toHaveBeenCalled();
     expect(mockUsage).not.toHaveBeenCalled();
+    expect(mockSettings).not.toHaveBeenCalled(); // the model setting is for admins only
   });
 
   it('for an admin: own use today, the app-wide days with the running total, and today per user', async () => {
@@ -209,5 +216,55 @@ describe('AI & cost screen', () => {
     const r = await mount();
     expect(allText(r)).toContain('Chưa tải được số liệu');
     expect(allText(r)).toContain('Chưa có lượt dùng AI.');
+  });
+
+  describe('Model setting', () => {
+    const input = (r: ReactTestRenderer, label: string) => r.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.props.onChangeText === 'function')[0];
+    const press = (r: ReactTestRenderer, label: string) => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === label)[0];
+    const saveButton = (r: ReactTestRenderer) => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.title === 'Lưu')[0];
+
+    it('shows the saved model and price, and the model choices', async () => {
+      const r = await mount();
+      expect(input(r, 'Model (tên gọi trong API)').props.value).toBe('claude-sonnet-5-5');
+      expect(input(r, 'Giá vào (USD / 1 triệu token)').props.value).toBe('3');
+      expect(press(r, 'claude-opus-5-5')).toBeDefined();
+    });
+
+    it('tapping a model and saving sends model and both prices to the server', async () => {
+      const r = await mount();
+      await act(async () => press(r, 'claude-haiku-5-5').props.onPress());
+      await act(async () => input(r, 'Giá ra (USD / 1 triệu token)').props.onChangeText('5,5'));
+      await act(async () => saveButton(r).props.onPress());
+      expect(mockSave.mock.calls).toEqual([
+        ['model', 'claude-haiku-5-5'],
+        ['price_in', '3'],
+        ['price_out', '5.5'],
+      ]);
+      expect(allText(r)).toContain('Đã lưu');
+    });
+
+    it('does not send an invalid model name or price', async () => {
+      const r = await mount();
+      await act(async () => input(r, 'Model (tên gọi trong API)').props.onChangeText('Bad Model!'));
+      await act(async () => saveButton(r).props.onPress());
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(allText(r)).toContain('Tên model không hợp lệ');
+      await act(async () => input(r, 'Model (tên gọi trong API)').props.onChangeText('claude-sonnet-5-5'));
+      await act(async () => input(r, 'Giá vào (USD / 1 triệu token)').props.onChangeText('abc'));
+      await act(async () => saveButton(r).props.onPress());
+      expect(mockSave).not.toHaveBeenCalled();
+      expect(allText(r)).toContain('Giá không hợp lệ');
+    });
+
+    it('says why when the server refuses, and when the settings cannot be read', async () => {
+      mockSave.mockResolvedValue({ ok: false, message: 'Không có quyền đổi.' });
+      const r = await mount();
+      await act(async () => saveButton(r).props.onPress());
+      expect(allText(r)).toContain('Không lưu được: Không có quyền đổi.');
+      await act(async () => renderer?.unmount());
+      mockSettings.mockResolvedValue(null);
+      const r2 = await mount();
+      expect(allText(r2)).toContain('Không đọc được cài đặt');
+    });
   });
 });

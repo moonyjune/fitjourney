@@ -1006,6 +1006,30 @@ export async function fetchAiAdminByUser(day: string): Promise<AiUserTotal[] | n
   }
 }
 
+/** The AI settings an admin chose (model and prices); a key that was never set (or was cleared) is absent. Null when they cannot be read. */
+export async function fetchAiSettings(): Promise<Record<string, string> | null> {
+  try {
+    const { data, error } = await supabase.rpc('ai_admin_get_settings');
+    if (error) throw error;
+    return Object.fromEntries((data ?? []).map((r: Record<string, unknown>) => [String(r.key), String(r.value)]));
+  } catch (error) {
+    logSyncError('fetchAiSettings', error);
+    return null;
+  }
+}
+
+/** Saves one AI setting (admins only; the server checks and validates). An empty value clears it, back to the server's own setting. */
+export async function saveAiSetting(key: 'model' | 'price_in' | 'price_out', value: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const { error } = await supabase.rpc('ai_admin_set_setting', { p_key: key, p_value: value });
+    if (error) throw error;
+    return { ok: true };
+  } catch (error) {
+    logSyncError('saveAiSetting', error);
+    return { ok: false, message: error instanceof Error ? error.message : String((error as { message?: unknown })?.message ?? 'Lỗi không xác định') };
+  }
+}
+
 /** Classifies a failed AI request, for a device that the connectivity probe has just said is online. A request that "never reached
  *  the server" then is not the user's connection: the function is usually not deployed (the browser reports its 404 preflight as a
  *  network error), or the service is down. That is `unreachable`, with its own message, instead of a misleading "no network". */

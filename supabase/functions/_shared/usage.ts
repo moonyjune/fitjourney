@@ -30,6 +30,35 @@ export function priceFrom(raw: string | undefined, fallback: number): number {
   return raw !== undefined && raw.trim() !== '' && Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+export const DEFAULT_MODEL = 'claude-sonnet-5-5';
+/** A model id as the API takes it: lower-case letters, digits, dot, dash, underscore. */
+export const MODEL_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{2,59}$/;
+export const isModelId = (v: unknown): v is string => typeof v === 'string' && MODEL_ID_PATTERN.test(v);
+
+export interface AiConfig {
+  model: string;
+  priceInPerMtok: number;
+  priceOutPerMtok: number;
+}
+
+/** The model and prices the AI functions use: what the admin saved in `ai_settings` (keys model, price_in, price_out) wins over the
+ *  environment (AI_MODEL, AI_PRICE_*), which wins over the defaults. A saved value that is not valid is ignored. */
+export function resolveAiConfig(
+  rows: { key: string; value: string }[] | null | undefined,
+  env: { model?: string; priceIn?: string; priceOut?: string }
+): AiConfig {
+  const saved = new Map((rows ?? []).map((r) => [r.key, r.value]));
+  const envModel = env.model?.trim();
+  const savedModel = saved.get('model')?.trim();
+  const envIn = priceFrom(env.priceIn, DEFAULT_PRICE_IN_PER_MTOK);
+  const envOut = priceFrom(env.priceOut, DEFAULT_PRICE_OUT_PER_MTOK);
+  return {
+    model: isModelId(savedModel) ? savedModel : isModelId(envModel) ? envModel : DEFAULT_MODEL,
+    priceInPerMtok: priceFrom(saved.get('price_in'), envIn),
+    priceOutPerMtok: priceFrom(saved.get('price_out'), envOut),
+  };
+}
+
 /** Estimated dollars for one call from the `usage` block of the API response. Rounded to 1e-6. */
 export function estimateCostUsd(usage: TokenUsage | undefined, priceInPerMtok: number, priceOutPerMtok: number): number {
   const cost = (count(usage?.input_tokens) * priceInPerMtok + count(usage?.output_tokens) * priceOutPerMtok) / 1_000_000;

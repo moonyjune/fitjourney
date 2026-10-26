@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals';
-import { isToolChoiceUnsupported, systemFor, toolChoiceFor, anthropicHeaders, ATTEMPT_TIMEOUT_MS, MAX_ATTEMPTS, TOTAL_BUDGET_MS, canRetry, summarizeUpstreamError, DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, shouldRetry } from '../../../supabase/functions/_shared/usage';
+import { isToolChoiceUnsupported, systemFor, toolChoiceFor, anthropicHeaders, ATTEMPT_TIMEOUT_MS, MAX_ATTEMPTS, TOTAL_BUDGET_MS, canRetry, summarizeUpstreamError, DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, shouldRetry, resolveAiConfig, isModelId, DEFAULT_MODEL } from '../../../supabase/functions/_shared/usage';
 import { describeCoach, describePerson, sanitizeProfile } from '../../../supabase/functions/_shared/coach';
 import { cleanWeek, describeWeek, isDate } from '../../../supabase/functions/_shared/week';
 import { cleanName, cleanSwapRequest } from '../../../supabase/functions/_shared/swap';
@@ -7,6 +7,21 @@ import { cleanDinnerRequest } from '../../../supabase/functions/_shared/dinner';
 import { calibrationSummary, CALIBRATION_KEEP, useAiCalibrationStore } from '../../store/useAiCalibrationStore';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
+
+describe('AI model and price setting', () => {
+  it('uses what the admin saved over the environment, and the environment over the defaults', () => {
+    expect(resolveAiConfig([{ key: 'model', value: 'claude-opus-5-5' }, { key: 'price_in', value: '5' }, { key: 'price_out', value: '25' }], { model: 'claude-haiku-5-5', priceIn: '1', priceOut: '2' })).toEqual({ model: 'claude-opus-5-5', priceInPerMtok: 5, priceOutPerMtok: 25 });
+    expect(resolveAiConfig([], { model: 'claude-haiku-5-5', priceIn: '1', priceOut: '2' })).toEqual({ model: 'claude-haiku-5-5', priceInPerMtok: 1, priceOutPerMtok: 2 });
+    expect(resolveAiConfig(null, {})).toEqual({ model: DEFAULT_MODEL, priceInPerMtok: 3, priceOutPerMtok: 15 });
+  });
+  it('ignores a saved value that is not valid', () => {
+    expect(resolveAiConfig([{ key: 'model', value: 'Bad Model!' }, { key: 'price_in', value: '-4' }, { key: 'price_out', value: 'x' }], { model: 'claude-sonnet-5-5' })).toEqual({ model: 'claude-sonnet-5-5', priceInPerMtok: 3, priceOutPerMtok: 15 });
+  });
+  it('accepts model ids the API takes and nothing else', () => {
+    for (const ok of ['claude-sonnet-5-5', 'claude-fable-5-1', 'claude-3.5-haiku_x']) expect(isModelId(ok)).toBe(true);
+    for (const bad of ['', 'ab', 'Claude-5', 'claude sonnet', '-x-x-x', 'a'.repeat(61), 5, null]) expect(isModelId(bad)).toBe(false);
+  });
+});
 
 describe('usage helpers (server)', () => {
   it('estimates cost from the usage block at per-million prices, ignoring missing or nonsense counts', () => {
