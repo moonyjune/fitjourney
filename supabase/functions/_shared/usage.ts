@@ -110,3 +110,21 @@ export function anthropicHeaders(apiKey: string, workspaceId?: string): Record<s
   if (id && /^[A-Za-z0-9_-]{1,100}$/.test(id)) headers['anthropic-workspace-id'] = id;
   return headers;
 }
+
+/** Some models refuse a forced tool call (`tool_choice` of type "tool"/"any"). The API answers 400 and names `tool_choice`. */
+export function isToolChoiceUnsupported(status: number, body: string): boolean {
+  return status === 400 && /tool_choice/i.test(body) && /not supported|unsupported|not allowed|invalid/i.test(body);
+}
+
+/** The `tool_choice` to send: the named tool forced, or (for a model that refuses that) left to the model, which is then told in
+ *  the system prompt to answer by calling the tool. */
+export function toolChoiceFor(toolName: string, forced: boolean): { type: 'tool'; name: string } | { type: 'auto' } {
+  return forced ? { type: 'tool', name: toolName } : { type: 'auto' };
+}
+
+/** The system prompt for a call: the feature's own, plus, when the tool call is not forced, the instruction to make it. */
+export function systemFor(system: string | undefined, toolName: string, forced: boolean): string | undefined {
+  if (forced) return system;
+  const must = `Bạn PHẢI trả lời bằng cách gọi tool ${toolName} đúng một lần, không viết gì ngoài lời gọi tool.`;
+  return system ? `${system} ${must}` : must;
+}

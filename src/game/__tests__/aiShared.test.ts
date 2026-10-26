@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals';
-import { anthropicHeaders, ATTEMPT_TIMEOUT_MS, MAX_ATTEMPTS, TOTAL_BUDGET_MS, canRetry, summarizeUpstreamError, DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, shouldRetry } from '../../../supabase/functions/_shared/usage';
+import { isToolChoiceUnsupported, systemFor, toolChoiceFor, anthropicHeaders, ATTEMPT_TIMEOUT_MS, MAX_ATTEMPTS, TOTAL_BUDGET_MS, canRetry, summarizeUpstreamError, DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, shouldRetry } from '../../../supabase/functions/_shared/usage';
 import { describeCoach, describePerson, sanitizeProfile } from '../../../supabase/functions/_shared/coach';
 import { cleanWeek, describeWeek, isDate } from '../../../supabase/functions/_shared/week';
 import { cleanName, cleanSwapRequest } from '../../../supabase/functions/_shared/swap';
@@ -53,6 +53,31 @@ describe('usage helpers (server)', () => {
     expect(budgetFrom('-3', 0.6)).toBe(0);
     expect(budgetFrom(undefined, 0.6)).toBe(0.6);
     expect(budgetFrom('abc', 0.6)).toBe(0.6);
+  });
+});
+
+describe('models that refuse a forced tool call (server)', () => {
+  const refusal = JSON.stringify({ type: 'error', error: { type: 'invalid_request_error', message: 'tool_choice: type "tool" and "any" are not supported for this model.' } });
+
+  it('recognises the API refusing tool_choice, and nothing else', () => {
+    expect(isToolChoiceUnsupported(400, refusal)).toBe(true);
+    expect(isToolChoiceUnsupported(400, JSON.stringify({ error: { message: 'tool_choice is not allowed with thinking' } }))).toBe(true);
+    expect(isToolChoiceUnsupported(400, JSON.stringify({ error: { message: 'max_tokens: too large' } }))).toBe(false);
+    expect(isToolChoiceUnsupported(400, JSON.stringify({ error: { message: 'tool_choice: ok' } }))).toBe(false);
+    expect(isToolChoiceUnsupported(500, refusal)).toBe(false);
+    expect(isToolChoiceUnsupported(429, refusal)).toBe(false);
+  });
+
+  it('forces the tool, or leaves the choice to the model', () => {
+    expect(toolChoiceFor('report_x', true)).toEqual({ type: 'tool', name: 'report_x' });
+    expect(toolChoiceFor('report_x', false)).toEqual({ type: 'auto' });
+  });
+
+  it('adds the "call the tool" instruction to the system prompt only when the call is not forced', () => {
+    expect(systemFor('Vai trò.', 'report_x', true)).toBe('Vai trò.');
+    expect(systemFor(undefined, 'report_x', true)).toBeUndefined();
+    expect(systemFor('Vai trò.', 'report_x', false)).toBe('Vai trò. Bạn PHẢI trả lời bằng cách gọi tool report_x đúng một lần, không viết gì ngoài lời gọi tool.');
+    expect(systemFor(undefined, 'report_x', false)).toContain('tool report_x');
   });
 });
 

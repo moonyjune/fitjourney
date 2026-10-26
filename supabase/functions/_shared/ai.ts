@@ -9,6 +9,9 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import {
   ATTEMPT_TIMEOUT_MS,
   anthropicHeaders,
+  isToolChoiceUnsupported,
+  systemFor,
+  toolChoiceFor,
   DEFAULT_PRICE_IN_PER_MTOK,
   RETRY_WAITS_MS,
   canRetry,
@@ -109,15 +112,21 @@ async function recordUsage(admin: SupabaseClient, userId: string, feature: AiFea
   }
 }
 
+/** Set once a model has refused a forced tool call, so later calls in this instance go straight to the working mode. */
+let forceTool = true;
+
 async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown>; usage?: TokenUsage } | { error: string; status: number }> {
-  const body = JSON.stringify({
-    model: MODEL,
-    max_tokens: call.maxTokens,
-    ...(call.system ? { system: call.system } : {}),
-    tools: [call.tool],
-    tool_choice: { type: 'tool', name: call.tool.name },
-    messages: call.messages,
-  });
+  const bodyFor = (forced: boolean) => {
+    const system = systemFor(call.system, call.tool.name, forced);
+    return JSON.stringify({
+      model: MODEL,
+      max_tokens: call.maxTokens,
+      ...(system ? { system } : {}),
+      tools: [call.tool],
+      tool_choice: toolChoiceFor(call.tool.name, forced),
+      messages: call.messages,
+    });
+  };
   const started = Date.now();
   for (let attempt = 0; ; attempt++) {
     let response: Response | null = null;
@@ -126,7 +135,7 @@ async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: anthropicHeaders(ANTHROPIC_API_KEY!, Deno.env.get('AI_WORKSPACE_ID')),
-        body,
+        body: bodyFor(forceTool),
         signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
       });
     } catch (error) {
@@ -145,7 +154,15 @@ async function callClaude(call: AiCall): Promise<{ input: Record<string, unknown
     }
     const retryable = response === null || shouldRetry(response.status);
     if (response) {
-      failure = summarizeUpstreamError(response.status, await response.text());
+      const text = await response.text();
+      if (forceTool && isToolChoiceUnsupported(response.status, text)) {
+        // This model does not take a forced tool call: switch to letting it choose, and go again at once (not a failed attempt).
+        console.warn('[ai] model refuses a forced tool call; switching to tool_choice auto');
+        forceTool = false;
+        attempt -= 1;
+        continue;
+      }
+      failure = summarizeUpstreamError(response.status, text);
       console.error('[ai]', failure, 'attempt', attempt + 1, 'request-id', response.headers.get('request-id'));
     } else {
       console.error('[ai]', failure, 'attempt', attempt + 1);
