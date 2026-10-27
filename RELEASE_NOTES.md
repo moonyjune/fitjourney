@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.12 | no | — |
 | 0.11 | yes | — |
 | 0.10 | yes | — |
 | 0.09 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
@@ -23,6 +24,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.12
+- Analysis > Tuần/tháng: every week card has "Phân tích lại", which brings in the latest data from the cloud and works the week out again (it says when, or that only the device's data was used).
+- Every week card lists the days that lack a main meal and which one ("06/10: thiếu sáng, tối"), and the days with nothing logged. A "Không ăn …" button records that meal as not eaten (a 0 kcal "Không ăn" item, synced, removable in the Journal), so the day counts as fully logged.
+- Analysis > Nhận xét: each day shows its whole-day sodium, purine and sugar against the daily limits (within or over by how much). A meal warning now says it is about that meal alone and what share of the day's limit it used (e.g. "Natri riêng bữa này 1.600 mg = 80% trần cả ngày (2.000 mg)"). Comments are worked out again as soon as a food of the day is edited.
 
 ## 0.11
 - Sync: the cloud is now the only source of truth for the diary (food, water, weigh-ins, workouts, check-ins, habits and ticks, uric acid). Opening the app makes the device match the cloud; a record only the device has, with nothing waiting to be sent, is removed (this is what brought back old days such as 14/09 and foods already deleted on 26/10).

@@ -4,6 +4,8 @@ import { HudText } from '../../components/quest/HudText';
 import { fmtInt } from '../../insights/format';
 import { Line, Panel } from '../../insights/components/ui';
 import type { InsightsView } from '../../insights/useInsights';
+import type { DayRow } from '../../insights/days';
+import type { Thresholds } from '../../insights/thresholds';
 import { quest } from '../../theme/quest';
 import { buildDayFeedback, type Advice, type DayFeedback } from '../day';
 import { useFeedbackText, type FeedbackKey } from '../strings';
@@ -35,7 +37,33 @@ const dateText = (key: string) => {
   return `${d}/${m}/${y}`;
 };
 
-function DayCard({ day, kcal, lang }: { day: DayFeedback; kcal: number; lang: Lang }) {
+/** The whole day's sodium, purine and sugar against the daily limits (a meal warning below is about one meal only). */
+function DayTotals({ row, th, lang }: { row: DayRow; th: Thresholds; lang: Lang }) {
+  const f = useFeedbackText();
+  const parts = [
+    { key: 'sodium' as const, v: row.sodiumMg, max: th.sodiumMax, unit: ' mg' },
+    { key: 'purine' as const, v: row.purineMg, max: th.purineMax, unit: ' mg' },
+    { key: 'sugar' as const, v: row.sugarG, max: th.sugarMax, unit: ' g' },
+  ];
+  return (
+    <View style={styles.block}>
+      <HudText size={12} color={quest.textSecondary}>
+        {f('fb.dayTotals')}
+      </HudText>
+      {parts.map((p) => {
+        const over = Math.round(p.v) > p.max;
+        return (
+          <Line key={p.key} color={over ? quest.hpText : quest.xp}>
+            {`${f(`fb.total.${p.key}`, { v: fmtInt(p.v, lang), max: fmtInt(p.max, lang) })} · ${over ? f('fb.total.over', { d: `${fmtInt(p.v - p.max, lang)}${p.unit}` }) : f('fb.total.ok')}`}
+          </Line>
+        );
+      })}
+    </View>
+  );
+}
+
+function DayCard({ day, row, th, lang }: { day: DayFeedback; row: DayRow; th: Thresholds; lang: Lang }) {
+  const kcal = row.kcal;
   const f = useFeedbackText();
   const good = day.advice.filter((a) => a.key === 'veryGood' || a.key === 'goodSaltOnly');
   const todo = day.advice.filter((a) => a.key !== 'veryGood' && a.key !== 'goodSaltOnly');
@@ -50,6 +78,8 @@ function DayCard({ day, kcal, lang }: { day: DayFeedback; kcal: number; lang: La
           </HudText>
         )}
       </View>
+
+      <DayTotals row={row} th={th} lang={lang} />
 
       {good.map((a) => (
         <Line key={a.key} color={quest.xp}>
@@ -117,7 +147,7 @@ export function FeedbackTab({ view, lang }: { view: InsightsView; lang: Lang }) 
     <View style={styles.wrap}>
       {days.map((row) => {
         const day = buildDayFeedback(row.dateKey, items, insights.rows, thresholds);
-        return day ? <DayCard key={row.dateKey} day={day} kcal={row.kcal} lang={lang} /> : null;
+        return day ? <DayCard key={row.dateKey} day={day} row={row} th={thresholds} lang={lang} /> : null;
       })}
       <Pressable accessibilityRole="link" accessibilityLabel={f('fb.snackLink')} onPress={() => router.push('/learn')} style={styles.link}>
         <HudText size={13} color={quest.manaText}>

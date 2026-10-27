@@ -17,6 +17,8 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
+const mockRestore = jest.fn(async () => ({ ok: true, weights: 0, days: 0, workouts: 0, habits: 0, uric: 0 }));
+jest.mock('../../sync/restore', () => ({ restoreOwnData: () => mockRestore() }));
 jest.mock('../../sync/cloudSync', () => ({
   pushWeightEntry: jest.fn(),
   pushWorkoutEntry: jest.fn(),
@@ -140,6 +142,39 @@ describe('Analysis screen', () => {
     text = allText(r);
     expect(text).toContain('Tháng 10/2026');
     expect(text).not.toContain('Tuần 12/10–18/10');
+  });
+
+  it('week card: names each day and meal that is missing, and "not eaten" completes the day', async () => {
+    fillLogs(1500, 7); // 1-7 Oct, all three meals
+    const logs = useNutritionStore.getState().logs;
+    // 6 Oct: no breakfast and no dinner on record.
+    useNutritionStore.setState({ logs: { ...logs, [dayKey(5)]: { ...logs[dayKey(5)], extraItems: logs[dayKey(5)].extraItems.filter((i) => i.mealTime === 'lunch') } } });
+    const r = await mount();
+    await tap(r, 'Tuần/tháng');
+    let text = allText(r);
+    expect(text).toContain('Bữa thiếu cần kiểm tra');
+    expect(text).toContain('06/10: thiếu sáng, tối');
+    expect(text).toContain('Chưa ghi gì: 08/10, 09/10, 10/10, 11/10'); // the rest of that week, with nothing logged
+    await tap(r, 'Đánh dấu không ăn bữa sáng ngày 06/10');
+    text = allText(r);
+    expect(text).toContain('06/10: thiếu tối');
+    const added = useNutritionStore.getState().logs[dayKey(5)].extraItems.find((i) => i.mealTime === 'breakfast')!;
+    expect(added).toMatchObject({ name: 'Không ăn', calories: 0, proteinG: 0 });
+    await tap(r, 'Đánh dấu không ăn bữa tối ngày 06/10');
+    text = allText(r);
+    expect(text).not.toContain('06/10: thiếu');
+  });
+
+  it('week card: "analyse again" fetches the latest data from the cloud and says when', async () => {
+    fillLogs(1500, 7);
+    const r = await mount();
+    await tap(r, 'Tuần/tháng');
+    await tap(r, 'Phân tích lại Tuần 05/10–11/10');
+    expect(mockRestore).toHaveBeenCalledTimes(1);
+    expect(allText(r)).toMatch(/Đã phân tích lại lúc \d\d:\d\d với dữ liệu mới nhất\./);
+    mockRestore.mockResolvedValueOnce({ ok: false, weights: 0, days: 0, workouts: 0, habits: 0, uric: 0 });
+    await tap(r, 'Phân tích lại Tuần 05/10–11/10');
+    expect(allText(r)).toContain('Không lấy được dữ liệu từ cloud');
   });
 
   it('exercise tab: sizes the shortfall and offers the suggested set and the catalogue', async () => {

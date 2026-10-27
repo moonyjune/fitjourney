@@ -17,6 +17,7 @@ jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
+jest.mock('../../sync/restore', () => ({ restoreOwnData: jest.fn(async () => ({ ok: true })) }));
 jest.mock('../../sync/cloudSync', () => ({
   pushWeightEntry: jest.fn(),
   pushWorkoutEntry: jest.fn(),

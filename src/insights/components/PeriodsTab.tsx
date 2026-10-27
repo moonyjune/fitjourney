@@ -1,11 +1,15 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { HudText } from '../../components/quest/HudText';
 import { QuestSegment } from '../../components/quest/QuestSegment';
 import { quest, questRadius } from '../../theme/quest';
 import { useFeedbackText } from '../../feedback/strings';
 import { frequentFoods } from '../../feedback/repeats';
 import { toDateKey } from '../../utils/date';
+import { useNutritionStore } from '../../store/useNutritionStore';
+import { restoreOwnData } from '../../sync/restore';
+import type { MainMeal } from '../days';
+import { missingInPeriod, SKIPPED_MEAL_NAME } from '../missing';
 import { fmtDayMonth, fmtDec, fmtInt, fmtSigned } from '../format';
 import { periodIsOpen, type Finding, type Kaizen, type PeriodKind, type PeriodSummary } from '../periods';
 import type { InsightsKey } from '../strings';
@@ -35,7 +39,74 @@ function kaizenText(k: Kaizen, t: T, lang: Lang): string {
   return t(keys[k.kind], { v: k.kind === 'data' ? k.value : fmtInt(k.value, lang) });
 }
 
-function PeriodCard({ p, view, t, lang, open }: { p: PeriodSummary; view: InsightsView; t: T; lang: Lang; open: boolean }) {
+type Refresh = { key: string; state: 'busy' | 'done' | 'local'; time: string };
+
+const clock = () => {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+};
+
+/** Records a main meal as not eaten: a 0 kcal item named "Không ăn" at that meal (the diary's convention), saved and synced like any
+ *  food, so it can be removed again in the Journal. */
+function markSkipped(dateKey: string, meal: MainMeal) {
+  useNutritionStore.getState().addExtra(dateKey, SKIPPED_MEAL_NAME, 0, 0, meal, { fromFoodDb: true });
+}
+
+/** The days of a week that lack a main meal, each with a "not eaten" button per missing meal, and the days with nothing logged. */
+function MissingMeals({ p, view, t, today }: { p: PeriodSummary; view: InsightsView; t: T; today: string }) {
+  const { partial, empty } = missingInPeriod(view.insights.rows, p.fromKey, p.toKey, today);
+  if (partial.length === 0 && empty.length === 0) return null;
+  const mealName = (m: MainMeal) => t(`ins.meal.${m}`);
+  return (
+    <View style={styles.block}>
+      <HudText size={12} color={quest.hpText}>
+        {t('ins.missingTitle')}
+      </HudText>
+      {partial.map((d) => (
+        <View key={d.dateKey} style={styles.missingDay}>
+          <Line color={quest.text}>{t('ins.missingDay', { date: fmtDayMonth(d.dateKey), meals: d.missing.map(mealName).join(', ') })}</Line>
+          <View style={styles.chips}>
+            {d.missing.map((m) => (
+              <Pressable
+                key={m}
+                accessibilityRole="button"
+                accessibilityLabel={t('ins.markSkippedLabel', { meal: mealName(m), date: fmtDayMonth(d.dateKey) })}
+                onPress={() => markSkipped(d.dateKey, m)}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <HudText size={12} color={quest.manaText}>
+                  {t('ins.markSkipped', { meal: mealName(m) })}
+                </HudText>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ))}
+      {empty.length > 0 && <Line>{t('ins.emptyDays', { dates: empty.map(fmtDayMonth).join(', ') })}</Line>}
+      {partial.length > 0 && <Line size={11}>{t('ins.missingHint')}</Line>}
+    </View>
+  );
+}
+
+function PeriodCard({
+  p,
+  view,
+  t,
+  lang,
+  open,
+  refresh,
+  onReanalyze,
+}: {
+  p: PeriodSummary;
+  view: InsightsView;
+  t: T;
+  lang: Lang;
+  open: boolean;
+  refresh: Refresh | null;
+  onReanalyze: (key: string) => void;
+}) {
+  const today = toDateKey(new Date());
+  const mine = refresh?.key === `${p.kind}-${p.key}` ? refresh : null;
   const th = view.thresholds;
   const tf = useFeedbackText();
   const frequent = frequentFoods(view.items, p.fromKey, p.toKey);
@@ -61,6 +132,28 @@ function PeriodCard({ p, view, t, lang, open }: { p: PeriodSummary; view: Insigh
         )}
       </View>
       <Line size={12}>{t('ins.pDays', { n: p.days, m: p.missingDays })}</Line>
+      {p.kind === 'week' && (
+        <View style={styles.reanalyzeRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t('ins.reanalyze')} ${label(p, t)}`}
+            accessibilityState={{ busy: refresh?.state === 'busy', disabled: refresh?.state === 'busy' }}
+            disabled={refresh?.state === 'busy'}
+            onPress={() => onReanalyze(`${p.kind}-${p.key}`)}
+            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+          >
+            <HudText size={12} color={quest.manaText}>
+              {mine?.state === 'busy' ? t('ins.reanalyzing') : `↻ ${t('ins.reanalyze')}`}
+            </HudText>
+          </Pressable>
+          {mine && mine.state !== 'busy' && (
+            <Line size={11} color={mine.state === 'done' ? quest.xp : quest.gold} style={styles.reanalyzeNote}>
+              {t(mine.state === 'done' ? 'ins.reanalyzed' : 'ins.reanalyzeLocal', { time: mine.time })}
+            </Line>
+          )}
+        </View>
+      )}
+      {p.kind === 'week' && <MissingMeals p={p} view={view} t={t} today={today} />}
       <Line>{t('ins.pKcal', { k: int(p.avgKcal), b: int(p.avgBurn) })}</Line>
       <Line color={TONE_COLOR[toneHigh(p.avgDeficit, th.deficitOk, th.deficitFair)]}>
         {t('ins.pDeficit', { d: int(p.avgDeficit), diff: fmtSigned(p.avgDeficit - th.deficitOk, lang) })}
@@ -130,6 +223,13 @@ function PeriodCard({ p, view, t, lang, open }: { p: PeriodSummary; view: Insigh
 
 export function PeriodsTab({ view, t, lang }: { view: InsightsView; t: T; lang: Lang }) {
   const [kind, setKind] = useState<PeriodKind>('week');
+  const [refresh, setRefresh] = useState<Refresh | null>(null);
+  // The analysis follows the logs as they change; "analyse again" first brings in what was added elsewhere (another device, the coach,
+  // a fix in the cloud), then every figure, missing meal and comment is worked out again from it.
+  const reanalyze = (key: string) => {
+    setRefresh({ key, state: 'busy', time: '' });
+    restoreOwnData().then((r) => setRefresh({ key, state: r.ok ? 'done' : 'local', time: clock() }));
+  };
   const list = [...(kind === 'week' ? view.insights.weeks : view.insights.months)].reverse();
   const today = toDateKey(new Date());
   return (
@@ -152,7 +252,9 @@ export function PeriodsTab({ view, t, lang }: { view: InsightsView; t: T; lang: 
         {list.length === 0 ? (
           <Line>{t('ins.periodsEmpty')}</Line>
         ) : (
-          list.map((p) => <PeriodCard key={`${p.kind}-${p.key}`} p={p} view={view} t={t} lang={lang} open={periodIsOpen(p, today)} />)
+          list.map((p) => (
+            <PeriodCard key={`${p.kind}-${p.key}`} p={p} view={view} t={t} lang={lang} open={periodIsOpen(p, today)} refresh={refresh} onReanalyze={reanalyze} />
+          ))
         )}
       </View>
     </View>
@@ -168,4 +270,10 @@ const styles = StyleSheet.create({
   block: { marginTop: 8, gap: 2 },
   kaizen: { marginTop: 10, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised2, gap: 4 },
   kaizenTitle: { letterSpacing: 1.2 },
+  reanalyzeRow: { marginTop: 6, gap: 4, alignItems: 'flex-start' },
+  reanalyzeNote: { alignSelf: 'stretch' },
+  missingDay: { gap: 4, marginTop: 4 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },
+  chipPressed: { opacity: 0.7 },
 });

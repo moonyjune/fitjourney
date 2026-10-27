@@ -30,6 +30,8 @@ jest.mock('../../utils/photoStorage', () => ({
   AI_FULL_HD_EDGE_PX: 1920,
   imageUriToBase64: async () => ({ base64: 'QUJD', mediaType: 'image/png' }),
 }));
+const mockRestore = jest.fn(async () => ({ ok: true, weights: 0, days: 0, workouts: 0, habits: 0, uric: 0 }));
+jest.mock('../../sync/restore', () => ({ restoreOwnData: () => mockRestore() }));
 jest.mock('../../sync/cloudSync', () => ({
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
@@ -167,8 +169,9 @@ describe('Live comments in Add food', () => {
     await type(r, 'Muối (g)', '5');
     const text = allText(r);
     expect(text).toContain('Bữa trên 1.000 kcal');
-    expect(text).toContain('Purine bữa 400 mg');
-    expect(text).toContain('Natri bữa 2.000 mg'); // 5 g salt = 2,000 mg sodium
+    // A meal warning names the share of the WHOLE day's limit it used (limits: purine 600 mg, salt 5 g = 2,000 mg sodium).
+    expect(text).toContain('Purine riêng bữa này 400 mg = 67% trần cả ngày (600 mg)');
+    expect(text).toContain('Natri riêng bữa này 2.000 mg = 100% trần cả ngày (2.000 mg)'); // 5 g salt = 2,000 mg sodium
     expect(text).toContain('Bữa chính ít đạm');
   });
 
@@ -212,6 +215,39 @@ describe('Feedback tab and repeated foods in Analysis', () => {
     expect(text).toContain('✔ Lòng trắng trứng');
     expect(text).toContain('⚠ Mì gói: natri 1,500–2,000 mg/gói');
     expect(text).not.toContain('⚠ Tôm: purine trung bình–cao; mì tôm'); // "mì tôm" is noodles, not shrimp
+  });
+
+  it('shows the whole day against the limits, so a meal warning is not read as the day being over', async () => {
+    // 27/10-like day: one meal with 1,600 mg sodium (80% of 2,000) and 360 mg purine (60% of 600); the day stays within both.
+    useNutritionStore.setState({
+      logs: {
+        [D(27)]: day(D(27), [
+          food('trứng luộc', 'breakfast', { calories: 300, proteinG: 20 }),
+          food('thịt luộc cuốn bánh tráng', 'lunch', { calories: 700, proteinG: 40, saltG: 4, purineMg: 360 }),
+          food('sữa chua', 'dinner', { calories: 200, proteinG: 10, saltG: 0.25 }),
+        ]),
+      },
+    });
+    const r = await open();
+    const text = allText(r);
+    expect(text).toContain('Natri riêng bữa này 1.600 mg = 80% trần cả ngày (2.000 mg)');
+    expect(text).toContain('Purine riêng bữa này 360 mg = 60% trần cả ngày (600 mg)');
+    expect(text).toContain('Cả ngày so với ngưỡng:');
+    expect(text).toContain('Natri 1.700/2.000 mg · ✔ trong ngưỡng');
+    expect(text).toContain('Purine 360/600 mg · ✔ trong ngưỡng');
+  });
+
+  it('works the comments out again when a food of the day is edited', async () => {
+    useNutritionStore.setState({
+      logs: { [D(27)]: day(D(27), [food('cơm', 'breakfast'), food('canh', 'lunch', { saltG: 4 }), food('cá', 'dinner')]) },
+    });
+    const r = await open();
+    expect(allText(r)).toContain('Natri riêng bữa này 1.600 mg');
+    const lunch = useNutritionStore.getState().logs[D(27)].extraItems.find((i) => i.name === 'canh')!;
+    await act(async () => useNutritionStore.getState().updateExtra(D(27), lunch.id, { saltG: 6 }));
+    const text = allText(r);
+    expect(text).toContain('Natri riêng bữa này 2.400 mg = 120% trần cả ngày');
+    expect(text).toContain('Natri 2.400/2.000 mg · ⚠ vượt 400 mg');
   });
 
   it('links to the snack swaps', async () => {

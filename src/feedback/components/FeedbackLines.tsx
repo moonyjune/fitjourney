@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { HudText } from '../../components/quest/HudText';
 import { fmtInt } from '../../insights/format';
+import { useThresholds } from '../../insights/useThresholds';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { quest } from '../../theme/quest';
 import type { MealLine, MealWarning } from '../meal';
@@ -21,6 +22,9 @@ export const LINE_COLOR = { good: quest.xp, note: quest.gold, replace: quest.hpT
 export function FeedbackLines({ lines, warnings = [], repeats = [], live = false }: { lines: MealLine[]; warnings?: MealWarning[]; repeats?: RepeatHit[]; live?: boolean }) {
   const f = useFeedbackText();
   const lang = useSettingsStore((s) => s.language);
+  const th = useThresholds();
+  // A meal warning is about that meal alone: it says what share of the whole day's limit the meal used, and the limit itself.
+  const dayLimit = (w: MealWarning) => (w.key === 'sodium' ? th.sodiumMax : w.key === 'purine' ? th.purineMax : 0);
   if (lines.length === 0 && warnings.length === 0 && repeats.length === 0) return null;
   return (
     <View style={styles.wrap}>
@@ -38,7 +42,7 @@ export function FeedbackLines({ lines, warnings = [], repeats = [], live = false
       ))}
       {warnings.map((w) => (
         <HudText key={w.key} size={12} weight="medium" color={quest.hpText}>
-          {f(WARNING_KEY[w.key], { v: fmtInt(w.value, lang) })}
+          {f(WARNING_KEY[w.key], { v: fmtInt(w.value, lang), max: fmtInt(dayLimit(w), lang), p: dayLimit(w) > 0 ? Math.round((w.value / dayLimit(w)) * 100) : 0 })}
         </HudText>
       ))}
     </View>
