@@ -95,8 +95,9 @@ export interface AiContext {
 export type AiPlan = { call: AiCall; responseKey: string; after?: (input: Record<string, unknown>, ctx: AiContext) => Promise<void> } | Response;
 
 async function usedToday(admin: SupabaseClient, userId: string, feature: AiFeature): Promise<number> {
-  const { data } = await admin.from('ai_usage').select('calls').eq('user_id', userId).eq('day', dayKey()).eq('feature', feature).maybeSingle();
-  return Number(data?.calls ?? 0);
+  // One row per model, so a day on which the model was changed has several.
+  const { data } = await admin.from('ai_usage').select('calls').eq('user_id', userId).eq('day', dayKey()).eq('feature', feature);
+  return (data ?? []).reduce((sum, row) => sum + Number(row.calls ?? 0), 0);
 }
 
 /** Estimated dollars this user already spent today across every feature. */

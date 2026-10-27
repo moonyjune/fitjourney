@@ -23,6 +23,7 @@ jest.mock('../../lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() 
 const mockIsAdmin = jest.fn<() => Promise<boolean>>();
 const mockByDay = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockByUser = jest.fn<(...a: unknown[]) => Promise<unknown>>();
+const mockByDayModel = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockUsage = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockSettings = jest.fn<() => Promise<Record<string, string> | null>>();
 const mockSave = jest.fn<(...a: unknown[]) => Promise<{ ok: true } | { ok: false; message: string }>>();
@@ -32,6 +33,7 @@ jest.mock('../../sync/cloudSync', () => ({
   fetchIsAiAdmin: () => mockIsAdmin(),
   fetchAiAdminByDay: (...a: unknown[]) => mockByDay(...a),
   fetchAiAdminByUser: (...a: unknown[]) => mockByUser(...a),
+  fetchAiAdminByDayModel: (...a: unknown[]) => mockByDayModel(...a),
   fetchAiUsageToday: (...a: unknown[]) => mockUsage(...a),
 }));
 
@@ -57,6 +59,11 @@ function allText(r: ReactTestRenderer): string {
 const DAYS = [
   { day: '2026-10-26', users: 3, calls: 40, tokensIn: 100000, tokensOut: 20000, costUsd: 0.6 },
   { day: '2026-10-25', users: 2, calls: 10, tokensIn: 30000, tokensOut: 5000, costUsd: 0.0042 },
+];
+const DAY_MODELS = [
+  { day: '2026-10-26', model: 'claude-opus-5-5', users: 1, calls: 10, tokensIn: 40000, tokensOut: 8000, costUsd: 0.4 },
+  { day: '2026-10-26', model: 'claude-sonnet-5-5', users: 3, calls: 30, tokensIn: 60000, tokensOut: 12000, costUsd: 0.2 },
+  { day: '2026-10-25', model: 'claude-sonnet-5-5', users: 2, calls: 10, tokensIn: 30000, tokensOut: 5000, costUsd: 0.0042 },
 ];
 const USERS = [
   { userId: 'aaaaaaaa-1', email: 'owner@example.com', calls: 30, tokensIn: 80000, tokensOut: 15000, costUsd: 0.45 },
@@ -162,6 +169,7 @@ describe('AI & cost screen', () => {
     mockIsAdmin.mockResolvedValue(true);
     mockByDay.mockResolvedValue(DAYS);
     mockByUser.mockResolvedValue(USERS);
+    mockByDayModel.mockResolvedValue(DAY_MODELS);
     mockUsage.mockResolvedValue([{ feature: 'photo', calls: 3, tokensIn: 9000, tokensOut: 2100, costUsd: 0.06 }]);
     mockSettings.mockResolvedValue({ model: 'claude-sonnet-5-5', price_in: '3' });
     mockSave.mockResolvedValue({ ok: true });
@@ -177,6 +185,7 @@ describe('AI & cost screen', () => {
     const r = await mount();
     expect(allText(r)).toContain('chưa được cấp quyền');
     expect(mockByDay).not.toHaveBeenCalled();
+    expect(mockByDayModel).not.toHaveBeenCalled();
     expect(mockByUser).not.toHaveBeenCalled();
     expect(mockUsage).not.toHaveBeenCalled();
     expect(mockSettings).not.toHaveBeenCalled(); // the model setting is for admins only
@@ -194,6 +203,23 @@ describe('AI & cost screen', () => {
     expect(text).toContain('owner@example.com');
     expect(text).toContain('bbbbbbbb'); // no email: the start of the id
     expect(text).toContain('30 lượt · 95.0k token · $0.45');
+  });
+
+  it('splits the days by model: a total per model over the 14 days and a line per model under each day', async () => {
+    const r = await mount();
+    const text = allText(r);
+    expect(mockByDayModel).toHaveBeenCalledWith('2026-10-26', 14);
+    expect(text).toContain('claude-opus-5-5: 10 lượt · 48.0k token · $0.40'); // 14-day total and the 26th (only day with Opus)
+    expect(text).toContain('claude-sonnet-5-5: 40 lượt · 107.0k token · $0.20'); // 14-day total
+    expect(text).toContain('claude-sonnet-5-5: 30 lượt · 72.0k token · $0.20'); // the 26th
+    expect(text).toContain('claude-sonnet-5-5: 10 lượt · 35.0k token · $0.004'); // the 25th
+  });
+
+  it('still shows the day rows when the per-model figures cannot be read', async () => {
+    mockByDayModel.mockResolvedValue(null);
+    const text = allText(await mount());
+    expect(text).toContain('3 người · 40 lượt · 120.0k token · $0.60');
+    expect(text).not.toContain('claude-sonnet-5-5: ');
   });
 
   it('uses the Vietnam day: just after 17:00 UTC it is already the next day', async () => {
@@ -243,11 +269,10 @@ describe('AI & cost screen', () => {
       expect(allText(r)).toContain('Đã lưu');
     });
 
-    it('estimates one user per day and per month, and works the costs below out again when another model is picked', async () => {
+    it('estimates one user per day and per month at the picked model, but never reprices the recorded history', async () => {
       const r = await mount();
-      // Saved model: nothing changed yet, so the recorded costs are shown as they are.
       expect(allText(r)).toContain('Cộng dồn: 50 lượt · 155.0k token · ≈ $0.60');
-      expect(allText(r)).not.toContain('tính lại từ số token');
+      expect(allText(r)).toContain('không tính lại lịch sử');
       expect(allText(r)).toContain('Mỗi ngày: 31.0k token (vào 26.0k · ra 5.0k) ≈ $0.15');
       expect(allText(r)).toContain('Trung bình 1 tháng (30 ngày): 930.0k token ≈ $4.59');
 
@@ -255,9 +280,11 @@ describe('AI & cost screen', () => {
       const out = allText(r);
       expect(out).toContain('Mỗi ngày: 31.0k token (vào 26.0k · ra 5.0k) ≈ $0.05');
       expect(out).toContain('Trung bình 1 tháng (30 ngày): 930.0k token ≈ $1.53');
-      expect(out).toContain('tính lại từ số token theo giá của claude-haiku-5-5 (1 / 5 USD');
-      expect(out).toContain('2026-10-26 3 người · 40 lượt · 120.0k token · $0.2'); // repriced day row
-      expect(out).not.toContain('$0.60');
+      // History keeps the cost recorded at the time of each call, with that call's model.
+      expect(out).toContain('Cộng dồn: 50 lượt · 155.0k token · ≈ $0.60');
+      expect(out).toContain('3 người · 40 lượt · 120.0k token · $0.60');
+      expect(out).toContain('30 lượt · 95.0k token · $0.45');
+      expect(out).toContain('claude-sonnet-5-5: 30 lượt · 72.0k token · $0.20');
     });
 
     it('a price typed by hand moves the estimate; a model without a reference price keeps the typed prices', async () => {

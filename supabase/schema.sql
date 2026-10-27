@@ -406,6 +406,23 @@ create table if not exists public.ai_usage (
 
 alter table public.ai_usage add column if not exists last_model text;
 
+-- Mỗi model một dòng riêng: chi phí đã ghi giữ nguyên theo model và giá lúc gọi; đổi model chỉ ảnh hưởng các lượt gọi sau.
+-- Dòng cũ (trước khi có cột này) lấy last_model, nếu không có thì là model mặc định lúc đó (claude-sonnet-5-5).
+alter table public.ai_usage add column if not exists model text not null default '';
+update public.ai_usage set model = coalesce(nullif(last_model, ''), 'claude-sonnet-5-5') where model = '';
+do $$
+begin
+  if not exists (
+    select 1 from pg_index i
+    join pg_attribute a on a.attrelid = i.indrelid and a.attnum = any (i.indkey)
+    where i.indrelid = 'public.ai_usage'::regclass and i.indisprimary and a.attname = 'model'
+  ) then
+    alter table public.ai_usage drop constraint if exists ai_usage_pkey;
+    alter table public.ai_usage add primary key (user_id, day, feature, model);
+  end if;
+end;
+$$;
+
 -- Hàm cũ (không có model) được thay bằng bản có model.
 drop function if exists public.ai_usage_bump(uuid, date, text, bigint, bigint, numeric);
 create or replace function public.ai_usage_bump(p_user uuid, p_day date, p_feature text, p_in bigint, p_out bigint, p_cost numeric, p_model text)
@@ -413,9 +430,9 @@ returns void
 language sql
 security definer set search_path = public
 as $$
-  insert into public.ai_usage (user_id, day, feature, calls, tokens_in, tokens_out, cost_usd, last_model)
-  values (p_user, p_day, p_feature, 1, p_in, p_out, p_cost, p_model)
-  on conflict (user_id, day, feature) do update
+  insert into public.ai_usage (user_id, day, feature, model, calls, tokens_in, tokens_out, cost_usd, last_model)
+  values (p_user, p_day, p_feature, coalesce(nullif(p_model, ''), 'claude-sonnet-5-5'), 1, p_in, p_out, p_cost, p_model)
+  on conflict (user_id, day, feature, model) do update
     set calls = public.ai_usage.calls + 1,
         tokens_in = public.ai_usage.tokens_in + excluded.tokens_in,
         tokens_out = public.ai_usage.tokens_out + excluded.tokens_out,
@@ -462,14 +479,15 @@ create or replace view public.ai_cost_by_user_day as
   group by u.day, u.user_id, p.email
   order by u.day desc, cost_usd desc;
 
-create or replace view public.ai_cost_by_feature_day as
-  select day, feature, last_model,
+drop view if exists public.ai_cost_by_feature_day;
+create view public.ai_cost_by_feature_day as
+  select day, feature, model,
          sum(calls) as calls,
          sum(tokens_in) as tokens_in,
          sum(tokens_out) as tokens_out,
          round(sum(cost_usd), 4) as cost_usd
   from public.ai_usage
-  group by day, feature, last_model
+  group by day, feature, model
   order by day desc, cost_usd desc;
 
 revoke all on public.ai_cost_by_day, public.ai_cost_by_user_day, public.ai_cost_by_feature_day from public, anon, authenticated;
@@ -573,6 +591,28 @@ end;
 $$;
 revoke all on function public.ai_admin_by_day(date, integer) from public, anon;
 grant execute on function public.ai_admin_by_day(date, integer) to authenticated;
+
+-- Như trên nhưng tách theo model: mỗi (ngày, model) một dòng, chi phí là chi phí đã ghi lúc gọi.
+create or replace function public.ai_admin_by_day_model(p_today date, p_days integer default 14)
+returns table (day date, model text, users bigint, calls bigint, tokens_in bigint, tokens_out bigint, cost_usd numeric)
+language plpgsql
+security definer set search_path = public
+stable
+as $$
+begin
+  if not public.is_ai_admin() then
+    raise exception 'Không có quyền xem.';
+  end if;
+  return query
+    select u.day, u.model, count(distinct u.user_id), sum(u.calls)::bigint, sum(u.tokens_in)::bigint, sum(u.tokens_out)::bigint, round(sum(u.cost_usd), 4)
+    from public.ai_usage u
+    where u.day > p_today - greatest(1, least(p_days, 90)) and u.day <= p_today
+    group by u.day, u.model
+    order by u.day desc, sum(u.cost_usd) desc;
+end;
+$$;
+revoke all on function public.ai_admin_by_day_model(date, integer) from public, anon;
+grant execute on function public.ai_admin_by_day_model(date, integer) to authenticated;
 
 -- Chi tiết theo người dùng của một ngày.
 create or replace function public.ai_admin_by_user(p_day date)

@@ -23,7 +23,7 @@ import { cleanAiDinner, type DinnerBrief } from '../../ai/dinner';
 import { cleanDigest } from '../../ai/coachDigest';
 import { DEFAULT_PLAN } from '../../constants/plan';
 import { acceptSwap, cleanAiSwaps, type SwapContext, type SwapItem } from '../../food/swaps';
-import { classifyAiError, fetchClientRows, requestDigest, requestDinner, requestSwaps, fetchWeeklyReport, requestWeeklyReport, requestNutritionLabel, fetchAiAdminByDay, fetchAiAdminByUser, fetchAiUsageToday, fetchIsAiAdmin, fetchMealRecipe, pushMealRecipe, requestMealRecipe, requestMealText, requestPhotoAnalysis } from '../../sync/cloudSync';
+import { classifyAiError, fetchClientRows, requestDigest, requestDinner, requestSwaps, fetchWeeklyReport, requestWeeklyReport, requestNutritionLabel, fetchAiAdminByDay, fetchAiAdminByDayModel, fetchAiAdminByUser, fetchAiUsageToday, fetchIsAiAdmin, fetchMealRecipe, pushMealRecipe, requestMealRecipe, requestMealText, requestPhotoAnalysis } from '../../sync/cloudSync';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
@@ -333,7 +333,11 @@ describe('AI usage and admin reads', () => {
     expect(mockRpc).toHaveBeenCalledWith('ai_admin_by_day', { p_today: '2026-10-26', p_days: 7 });
     mockRpc.mockResolvedValueOnce({ data: [{ user_id: 'u9', email: null, calls: 1, tokens_in: 2, tokens_out: 3, cost_usd: 0.01 }] });
     expect(await fetchAiAdminByUser('2026-10-26')).toEqual([{ userId: 'u9', email: null, calls: 1, tokensIn: 2, tokensOut: 3, costUsd: 0.01 }]);
+    mockRpc.mockResolvedValueOnce({ data: [{ day: '2026-10-26', model: 'claude-opus-5-5', users: '1', calls: '2', tokens_in: '10', tokens_out: '5', cost_usd: '0.0004' }] });
+    expect(await fetchAiAdminByDayModel('2026-10-26', 14)).toEqual([{ day: '2026-10-26', model: 'claude-opus-5-5', users: 1, calls: 2, tokensIn: 10, tokensOut: 5, costUsd: 0.0004 }]);
+    expect(mockRpc).toHaveBeenCalledWith('ai_admin_by_day_model', { p_today: '2026-10-26', p_days: 14 });
     mockRpc.mockResolvedValue({ error: new Error('Không có quyền xem.') });
+    expect(await fetchAiAdminByDayModel('2026-10-26')).toBeNull();
     expect(await fetchAiAdminByDay('2026-10-26')).toBeNull();
     expect(await fetchAiAdminByUser('2026-10-26')).toBeNull();
   });
@@ -347,6 +351,19 @@ describe('AI usage and admin reads', () => {
     expect(await fetchAiUsageToday('2026-10-26')).toEqual([{ feature: 'photo', calls: 3, tokensIn: 9000, tokensOut: 2100, costUsd: 0.06 }]);
     expect(mockFrom).toHaveBeenCalledWith('ai_usage');
     expect(eq2).toHaveBeenCalledWith('day', '2026-10-26');
+    // A day on which the model was changed has one row per model: they are added up per feature.
+    eq2.mockResolvedValueOnce({
+      data: [
+        { feature: 'photo', calls: 2, tokens_in: '100', tokens_out: 10, cost_usd: '0.01' },
+        { feature: 'photo', calls: 1, tokens_in: '50', tokens_out: 5, cost_usd: '0.02' },
+        { feature: 'text', calls: 1, tokens_in: '1', tokens_out: 1, cost_usd: '0' },
+      ],
+      error: null,
+    });
+    expect(await fetchAiUsageToday('2026-10-26')).toEqual([
+      { feature: 'photo', calls: 3, tokensIn: 150, tokensOut: 15, costUsd: 0.03 },
+      { feature: 'text', calls: 1, tokensIn: 1, tokensOut: 1, costUsd: 0 },
+    ]);
     useAuthStore.setState({ session: null });
     mockFrom.mockClear();
     expect(await fetchAiUsageToday('2026-10-26')).toBeNull();

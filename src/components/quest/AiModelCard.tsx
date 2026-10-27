@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { checkModel, checkPrice, forecastPerUser, MODEL_PRESETS, PRESET_PRICES, pricingFrom, type Pricing } from '../../ai/aiSettings';
+import { checkModel, checkPrice, forecastPerUser, MODEL_PRESETS, PRESET_PRICES, pricingFrom } from '../../ai/aiSettings';
 import { tokensText, usdText } from './AiUsageCard';
 import type { AiDayTotal } from '../../sync/cloudSync';
 import { useGameText } from '../../game/strings';
@@ -11,22 +11,15 @@ import { QuestButton } from './QuestButton';
 
 /** AI & cost > Model: which Claude model the AI functions use, and the prices (USD per million tokens) the cost estimate uses.
  *  Saved on the server (admins only); the AI functions pick a change up within about half a minute. Empty = the server's own setting. */
-export function AiModelCard({ usage, onPricing }: { usage?: AiDayTotal[] | null; onPricing?: (p: Pricing | null) => void }) {
+export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
   const g = useGameText();
   const [loaded, setLoaded] = useState<'loading' | 'ready' | 'error'>('loading');
   const [model, setModel] = useState('');
   const [priceIn, setPriceIn] = useState('');
   const [priceOut, setPriceOut] = useState('');
   const [busy, setBusy] = useState(false);
-  // What the server holds now; the costs elsewhere on the screen are only worked out again once something here differs from it.
-  const [saved, setSaved] = useState({ model: '', priceIn: '', priceOut: '' });
   const pricing = pricingFrom(model, priceIn, priceOut);
-  const changed = model.trim() !== saved.model || priceIn.trim() !== saved.priceIn || priceOut.trim() !== saved.priceOut;
   const forecast = pricing && usage ? forecastPerUser(usage, pricing) : null;
-  useEffect(() => {
-    onPricing?.(loaded === 'ready' && changed ? pricing : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, model, priceIn, priceOut, saved]);
   const [message, setMessage] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
 
   useEffect(() => {
@@ -40,7 +33,6 @@ export function AiModelCard({ usage, onPricing }: { usage?: AiDayTotal[] | null;
       setModel(s.model ?? '');
       setPriceIn(s.price_in ?? '');
       setPriceOut(s.price_out ?? '');
-      setSaved({ model: s.model ?? '', priceIn: s.price_in ?? '', priceOut: s.price_out ?? '' });
       setLoaded('ready');
     });
     return () => {
@@ -68,7 +60,6 @@ export function AiModelCard({ usage, onPricing }: { usage?: AiDayTotal[] | null;
     setModel(m.value);
     setPriceIn(pi.value);
     setPriceOut(po.value);
-    setSaved({ model: m.value, priceIn: pi.value, priceOut: po.value });
     setMessage({ kind: 'ok', text: g('aiModel.saved') });
   }
 

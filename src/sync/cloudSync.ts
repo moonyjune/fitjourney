@@ -1020,7 +1020,14 @@ export async function fetchAiUsageToday(day: string): Promise<AiUsageRow[] | nul
   try {
     const { data, error } = await supabase.from('ai_usage').select('feature, calls, tokens_in, tokens_out, cost_usd').eq('user_id', userId).eq('day', day);
     if (error) throw error;
-    return (data ?? []).map((r) => ({ feature: String(r.feature), calls: Number(r.calls ?? 0), tokensIn: Number(r.tokens_in ?? 0), tokensOut: Number(r.tokens_out ?? 0), costUsd: Number(r.cost_usd ?? 0) }));
+    // One row per feature and model: a day on which the model was changed is added up per feature.
+    const byFeature = new Map<string, AiUsageRow>();
+    for (const r of data ?? []) {
+      const feature = String(r.feature);
+      const t = byFeature.get(feature) ?? { feature, calls: 0, tokensIn: 0, tokensOut: 0, costUsd: 0 };
+      byFeature.set(feature, { feature, calls: t.calls + Number(r.calls ?? 0), tokensIn: t.tokensIn + Number(r.tokens_in ?? 0), tokensOut: t.tokensOut + Number(r.tokens_out ?? 0), costUsd: t.costUsd + Number(r.cost_usd ?? 0) });
+    }
+    return [...byFeature.values()];
   } catch (error) {
     logSyncError('fetchAiUsageToday', error);
     return null;
@@ -1067,6 +1074,22 @@ export async function fetchAiAdminByDay(today: string, days = 14): Promise<AiDay
     return (data ?? []).map((r: Record<string, unknown>) => ({ day: String(r.day), users: Number(r.users ?? 0), calls: Number(r.calls ?? 0), tokensIn: Number(r.tokens_in ?? 0), tokensOut: Number(r.tokens_out ?? 0), costUsd: Number(r.cost_usd ?? 0) }));
   } catch (error) {
     logSyncError('fetchAiAdminByDay', error);
+    return null;
+  }
+}
+
+export interface AiDayModelTotal extends AiDayTotal {
+  model: string;
+}
+
+/** App-wide totals per day and model (admins only), at the cost recorded when each call was made. Null when it cannot be read. */
+export async function fetchAiAdminByDayModel(today: string, days = 14): Promise<AiDayModelTotal[] | null> {
+  try {
+    const { data, error } = await supabase.rpc('ai_admin_by_day_model', { p_today: today, p_days: days });
+    if (error) throw error;
+    return (data ?? []).map((r: Record<string, unknown>) => ({ day: String(r.day), model: String(r.model ?? ''), users: Number(r.users ?? 0), calls: Number(r.calls ?? 0), tokensIn: Number(r.tokens_in ?? 0), tokensOut: Number(r.tokens_out ?? 0), costUsd: Number(r.cost_usd ?? 0) }));
+  } catch (error) {
+    logSyncError('fetchAiAdminByDayModel', error);
     return null;
   }
 }

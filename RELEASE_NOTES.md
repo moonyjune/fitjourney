@@ -3,6 +3,11 @@
 Version numbers are `A.BC`, counting up from 0.01 (0.99 is followed by 1.00). The current number is `APP_VERSION` in `src/utils/buildInfo.ts` and is shown in
 Profile ("Phiên bản"). Every release adds an entry here, newest first, and bumps `APP_VERSION` to match (a test checks they agree).
 
+## 0.09
+- AI & cost: the day and user lists keep the cost recorded when each call was made, with that call's model and price. Picking another model (or price) above only changes the estimate for one user and the calls made after saving; history is no longer worked out again.
+- The 14-day list is split by model: a total per model over the 14 days and, under each day, one line per model (calls, tokens, cost).
+- Needs `supabase/schema.sql` run again (usage is now kept per model; older rows count as the model they were made with, Sonnet if unknown) and every AI function redeployed (they share the quota count).
+
 ## 0.08
 - Meal ideas: the AI's answer for a meal is kept (per day and meal), so reloading the page does not ask again and spend tokens; an idea that no longer fits what is left is hidden, not re-asked.
 - Tap "Xem công thức" on an idea: a dialog with ingredients, difficulty, time, tools, the steps (each with an icon), the nutrition against what is left for the meal, your star rating and a photo of the dish you made. A dish without a recipe can have one written once by the AI.
