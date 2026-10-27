@@ -12,6 +12,10 @@ import { deletePersistedPhoto } from '../utils/photoStorage';
 import { extraProofRef } from '../types';
 import { withIntakeCounters } from '../utils/dayIntake';
 
+export type ExtraPatch = Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG' | 'parts'>> & {
+  photoUri?: string | null;
+};
+
 interface NutritionState {
   logs: Record<string, DailyNutritionLog>;
   /** The "3 L a day until 25/10" default has been written once on this device. */
@@ -39,6 +43,9 @@ interface NutritionState {
     }
   ) => void;
   removeExtraItem: (dateKey: string, itemId: string) => void;
+  /** Changes a logged off-plan food in place (amounts, totals, breakdown, photo) and saves it, with no AI call. `photoUri: null` removes
+   *  the photo; a new one replaces the old (its proof and file go) and is saved as a meal proof. */
+  updateExtra: (dateKey: string, itemId: string, patch: ExtraPatch) => void;
   /** Commits a whole diary-table edit session (meal toggles, deleted default meals, edited/removed
    *  extra items) as a single write — the explicit "Save" action for DailyMealBreakdownTable's
    *  draft, instead of pushing on every micro-edit. */
@@ -152,6 +159,32 @@ export const useNutritionStore = create<NutritionState>()(
             note: name,
             dateISO: item.loggedAtISO,
           });
+        }
+      },
+      updateExtra: (dateKey, itemId, patch) => {
+        const old = (get().logs[dateKey]?.extraItems ?? []).find((i) => i.id === itemId);
+        if (!old) return;
+        const { photoUri, ...fields } = patch;
+        const next: ExtraFoodItem = { ...old, ...fields };
+        for (const key of ['purineMg', 'saltG', 'sugarG'] as const) if (!next[key]) delete next[key];
+        const parts = cleanParts(next.parts);
+        if (parts.length > 0) next.parts = parts;
+        else delete next.parts;
+        if (photoUri !== undefined) {
+          if (photoUri) next.photoUri = photoUri;
+          else delete next.photoUri;
+        }
+        set((state) => {
+          const current = state.logs[dateKey] ?? emptyLog(dateKey);
+          const updated = withIntakeCounters({ ...current, extraItems: (current.extraItems ?? []).map((i) => (i.id === itemId ? next : i)) });
+          pushNutritionLog(updated);
+          return { logs: { ...state.logs, [dateKey]: updated } };
+        });
+        if (photoUri !== undefined && photoUri !== old.photoUri) {
+          discardExtraPhoto(old);
+          if (photoUri) {
+            useProofStore.getState().addProof({ taskType: 'meal', taskRefId: extraProofRef(itemId), photoUri, note: next.name, dateISO: next.loggedAtISO });
+          }
         }
       },
       removeExtraItem: (dateKey, itemId) =>

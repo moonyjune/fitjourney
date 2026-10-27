@@ -87,7 +87,7 @@ export async function purgeBefore(cutoffKey: string): Promise<PurgeResult> {
     return { records };
   });
   for (const photo of useProofStore.getState().photos.filter((p) => p.dateISO.slice(0, 10) < cutoffKey)) {
-    useProofStore.getState().removeProof(photo.id);
+    useProofStore.getState().removeProof(photo.id, { cloud: false });
     result.photos += 1;
   }
   // A push still waiting for a connection would bring a removed day back.

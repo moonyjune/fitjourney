@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FoodThumb } from '../components/quest/FoodPhoto';
@@ -12,6 +12,7 @@ import { getDayType } from '../constants/plan';
 import { useGameText, type GameKey } from '../game/strings';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
+import { editPartPatch } from '../food/partScale';
 import { useDayEvaluator, useNow } from '../game/useGameState';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 import type { StringKey } from '../i18n/strings';
@@ -29,6 +30,8 @@ import { useLightStatusBar } from '../theme/useLightStatusBar';
 import { toDateKey } from '../utils/date';
 import { isoWeekNumber } from '../utils/isoWeek';
 import { addDays } from '../utils/milestones';
+import { setExtraPhoto, setSlotPhoto } from '../utils/mealPhotos';
+import { weekShiftFor } from '../utils/swipe';
 import { weekStartKey } from '../utils/weekKey';
 
 const MOOD_LABEL: Record<string, StringKey> = {
@@ -100,9 +103,11 @@ interface RowProps {
   workoutXpFor: string | null;
   isToday: boolean;
   onOpen: (item: TimelineItem) => void;
+  /** Small photo of the logged meal, when it has one on this device. */
+  thumbUri?: string;
 }
 
-function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen }: RowProps) {
+function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen, thumbUri }: RowProps) {
   let body: React.ReactNode = null;
   let label = '';
   let onPress: (() => void) | undefined;
@@ -138,7 +143,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
           <HudText size={14} style={styles.flex}>
             {item.label}
           </HudText>
-          {item.hasPhoto && <Chip tone="muted" label={g('journal.photo')} />}
+          {thumbUri ? <FoodThumb uri={thumbUri} name={item.label} size={36} /> : item.hasPhoto && <Chip tone="muted" label={g('journal.photo')} />}
           <Chip tone={item.eaten ? 'ok' : 'muted'} label={g(status)} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
@@ -162,7 +167,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
             {name}
           </HudText>
           {item.junk && <Chip tone="gold" label={g('journal.junk')} />}
-          <FoodThumb uri={item.photoUri} name={name} size={36} />
+          <FoodThumb uri={thumbUri ?? item.photoUri} name={name} size={36} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {item.kcal} kcal · {Math.round(item.proteinG)} g
@@ -330,27 +335,66 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
   const firstWorkout = timeline.find((i) => i.kind === 'workout');
   const workoutXpFor = workoutMissionDone && firstWorkout ? firstWorkout.id : null;
 
-  const [detail, setDetail] = useState<MealDetail | null>(null);
-  function openDetail(item: TimelineItem) {
-    if (item.kind === 'extra') {
-      const rawId = item.id.replace(/^extra-/, '');
-      const proof = photos.find((p) => p.taskRefId === extraProofRef(rawId));
-      setDetail({
-        title: item.name || g('journal.extra'),
-        time: clock(item.minutes),
-        kcal: item.kcal,
-        proteinG: item.proteinG,
-        purineMg: item.purineMg,
-        sugarG: item.sugarG,
-        saltG: item.saltG,
-        parts: item.parts,
-        photoUri: item.photoUri ?? proof?.photoUri ?? null,
-      });
-    } else if (item.kind === 'meal') {
-      const proof = photos.find((p) => p.taskType === 'meal' && p.taskRefId === item.slot && toDateKey(new Date(p.dateISO)) === selectedKey);
-      setDetail({ title: item.label, time: clock(item.minutes), kcal: item.kcal, proteinG: item.proteinG, purineMg: null, sugarG: null, saltG: null, photoUri: proof?.photoUri ?? null });
-    }
+  // The open meal is looked up again on every render, so an edit (an amount, the photo) shows in the dialog at once.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const updateExtra = useNutritionStore((s) => s.updateExtra);
+  const openItem = openId ? timeline.find((i) => i.id === openId) : undefined;
+  const dayPhotos = useMemo(() => photos.filter((p) => p.taskType === 'meal' && toDateKey(new Date(p.dateISO)) === selectedKey), [photos, selectedKey]);
+  const rawExtraId = (item: { id: string }) => item.id.replace(/^extra-/, '');
+  function photoOf(item: TimelineItem): string | undefined {
+    if (item.kind === 'meal') return dayPhotos.find((p) => p.taskRefId === item.slot)?.photoUri;
+    if (item.kind === 'extra') return photos.find((p) => p.taskRefId === extraProofRef(rawExtraId(item)))?.photoUri ?? item.photoUri;
+    return undefined;
   }
+  function openDetail(item: TimelineItem) {
+    if (item.kind === 'extra' || item.kind === 'meal') setOpenId(item.id);
+  }
+  let detail: MealDetail | null = null;
+  if (openItem?.kind === 'extra') {
+    detail = {
+      title: openItem.name || g('journal.extra'),
+      time: clock(openItem.minutes),
+      kcal: openItem.kcal,
+      proteinG: openItem.proteinG,
+      purineMg: openItem.purineMg,
+      sugarG: openItem.sugarG,
+      saltG: openItem.saltG,
+      parts: openItem.parts,
+      photoUri: photoOf(openItem) ?? null,
+    };
+  } else if (openItem?.kind === 'meal') {
+    detail = { title: openItem.label, time: clock(openItem.minutes), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photoUri: photoOf(openItem) ?? null };
+  }
+  function editPart(index: number, qty: number) {
+    if (client || openItem?.kind !== 'extra') return;
+    const id = rawExtraId(openItem);
+    const stored = logs[selectedKey]?.extraItems?.find((i) => i.id === id);
+    const patch = stored ? editPartPatch(stored, index, qty) : null;
+    if (patch) updateExtra(selectedKey, id, patch);
+  }
+  async function changePhoto(uri: string | null): Promise<boolean> {
+    if (client || !openItem) return false;
+    if (openItem.kind === 'extra') return setExtraPhoto(selectedKey, rawExtraId(openItem), uri);
+    if (openItem.kind === 'meal') return setSlotPhoto(selectedKey, openItem.slot, uri);
+    return false;
+  }
+
+  // Dragging the week strip sideways moves a week, like the arrows: right for the week before, left for the one after.
+  const shiftRef = useRef(shiftWeek);
+  shiftRef.current = shiftWeek;
+  const drag = useRef(new Animated.Value(0)).current;
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g2) => Math.abs(g2.dx) > 12 && Math.abs(g2.dx) > Math.abs(g2.dy) * 1.5,
+      onPanResponderMove: (_, g2) => drag.setValue(Math.max(-80, Math.min(80, g2.dx * 0.5))),
+      onPanResponderRelease: (_, g2) => {
+        const step = weekShiftFor(g2.dx, g2.vx);
+        if (step !== 0) shiftRef.current(step);
+        Animated.spring(drag, { toValue: 0, useNativeDriver: false, bounciness: 0 }).start();
+      },
+      onPanResponderTerminate: () => Animated.spring(drag, { toValue: 0, useNativeDriver: false, bounciness: 0 }).start(),
+    })
+  ).current;
 
   const weekdayLabel = (d: Date) => g(`weekday.${d.getDay()}` as GameKey);
   const dateLabel = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
@@ -376,11 +420,11 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
       <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
         <QuestHeader title={client ? `${g('journal.title')} · ${client.displayName}` : g('journal.title')} eyebrow={eyebrow} onBack={goBack} backLabel={g('common.back')} />
 
-        <View style={styles.stripWrap}>
+        <View style={styles.stripWrap} {...swipe.panHandlers}>
           <Pressable accessibilityRole="button" accessibilityLabel={g('journal.prevWeek')} onPress={() => shiftWeek(-1)} style={styles.arrow}>
             <QuestIcon name="back" size={18} color={quest.text} strokeWidth={2.4} />
           </Pressable>
-          <View style={styles.strip}>
+          <Animated.View style={[styles.strip, { transform: [{ translateX: drag }] }]}>
             {days.map((d) => {
               const selected = d.key === selectedKey;
               const wd = weekdayLabel(d.date);
@@ -416,7 +460,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
                 </Pressable>
               );
             })}
-          </View>
+          </Animated.View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={g('journal.nextWeek')}
@@ -467,7 +511,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
 
         <View style={styles.timeline}>
           {timeline.map((item) => (
-            <TimelineRow key={item.id} item={item} g={g} t={t} proteinTargetG={proteinTargetG} workoutXpFor={workoutXpFor} isToday={isToday && !client} onOpen={openDetail} />
+            <TimelineRow key={item.id} item={item} g={g} t={t} proteinTargetG={proteinTargetG} workoutXpFor={workoutXpFor} isToday={isToday && !client} onOpen={openDetail} thumbUri={photoOf(item)} />
           ))}
         </View>
 
@@ -475,7 +519,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
           {g('journal.waterNote')}
         </HudText>
       </ScrollView>
-      <MealDetailDialog detail={detail} onClose={() => setDetail(null)} />
+      <MealDetailDialog detail={detail} onClose={() => setOpenId(null)} canEditParts={!client} onEditPart={editPart} onPhoto={client ? undefined : changePhoto} />
     </View>
   );
 }

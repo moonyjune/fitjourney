@@ -12,6 +12,7 @@ import type { SwapContext, SwapItem } from '../food/swaps';
 import { DEV_ANALYSIS_DELAY_MS, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { generateCoachCode } from '../utils/coachCode';
+import { toDateKey } from '../utils/date';
 import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 import { isOnline, useSyncQueueStore, type SyncOp } from './syncQueue';
 import type {
@@ -337,6 +338,15 @@ export async function pushWorkoutEntry(entry: WorkoutLogEntry): Promise<void> {
   );
 }
 
+/** A photo kept inline on web (a data: URL, up to hundreds of KB) belongs in the proof storage, not in every day's row. */
+function withoutInlinePhotos(items: DailyNutritionLog['extraItems']): DailyNutritionLog['extraItems'] {
+  return items?.map((item) => {
+    if (!item.photoUri?.startsWith('data:')) return item;
+    const { photoUri: _inline, ...rest } = item;
+    return rest;
+  });
+}
+
 export async function pushNutritionLog(log: DailyNutritionLog): Promise<void> {
   const userId = currentUserId();
   if (!userId) return;
@@ -350,7 +360,7 @@ export async function pushNutritionLog(log: DailyNutritionLog): Promise<void> {
           meals_eaten: log.mealsEaten,
           extra_calories: log.extraCalories,
           extra_protein_g: log.extraProteinG,
-          extra_items: log.extraItems,
+          extra_items: withoutInlinePhotos(log.extraItems),
           water_ml: log.waterMl,
           removed_meal_slots: log.removedMealSlots ?? [],
           updated_at: new Date().toISOString(),
@@ -471,6 +481,11 @@ export async function pushPlan(plan: PlanData, updatedAtISO: string, targetUserI
   );
 }
 
+const PROOF_EXTENSIONS: Record<string, string> = { 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic' };
+
+/** Uploads a proof photo (the file, then its row) and is safe to run again: the same photo always lands on the same storage path
+ *  and row, so a retry after a half-finished attempt never doubles it. A photo whose file is gone cannot be uploaded, so it is dropped
+ *  instead of being queued forever. */
 export async function pushProofPhoto(proof: ProofPhoto): Promise<void> {
   const userId = currentUserId();
   if (!userId) return;
@@ -478,29 +493,63 @@ export async function pushProofPhoto(proof: ProofPhoto): Promise<void> {
     useSyncQueueStore.getState().enqueue({ type: 'proofPhoto', payload: proof });
     return;
   }
+  let blob: Blob;
   try {
-    const extension = proof.photoUri.split('.').pop()?.split('?')[0] || 'jpg';
-    const storagePath = `${userId}/${proof.id}.${extension}`;
-
     const response = await fetch(proof.photoUri);
-    const blob = await response.blob();
+    if (!response.ok) throw new Error(`photo not readable (${response.status})`);
+    blob = await response.blob();
+  } catch (error) {
+    logSyncError('pushProofPhoto:read', error);
+    return;
+  }
+  try {
+    const extension = PROOF_EXTENSIONS[blob.type] ?? 'jpg';
+    const storagePath = `${userId}/${proof.id}.${extension}`;
     const { error: uploadError } = await supabase.storage
       .from('proofs')
       .upload(storagePath, blob, { contentType: blob.type || 'image/jpeg', upsert: true });
     if (uploadError) throw uploadError;
 
-    const { error: insertError } = await supabase.from('proof_photos').insert({
+    const row = {
       user_id: userId,
-      entry_date: proof.dateISO.slice(0, 10),
+      entry_date: toDateKey(new Date(proof.dateISO)),
       task_type: proof.taskType,
       task_ref_id: proof.taskRefId,
       photo_path: storagePath,
       note: proof.note || null,
-    });
-    if (insertError) throw insertError;
+    };
+    const { data: existing, error: findError } = await supabase.from('proof_photos').select('id').eq('user_id', userId).eq('photo_path', storagePath).limit(1);
+    if (findError) throw findError;
+    const { error: writeError } = existing && existing.length > 0 ? await supabase.from('proof_photos').update(row).eq('id', existing[0].id) : await supabase.from('proof_photos').insert(row);
+    if (writeError) throw writeError;
   } catch (error) {
     logSyncError('pushProofPhoto', error);
     useSyncQueueStore.getState().enqueue({ type: 'proofPhoto', payload: proof });
+  }
+}
+
+/** Removes a proof photo from the cloud: its row and its file. Queued while offline and replayed later. */
+export async function deleteProofPhoto(proofId: string): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  if (!(await isOnline())) {
+    useSyncQueueStore.getState().enqueue({ type: 'proofDelete', payload: { proofId } });
+    return;
+  }
+  try {
+    const pattern = `${userId}/${proofId}.%`;
+    const { data, error } = await supabase.from('proof_photos').select('photo_path').eq('user_id', userId).like('photo_path', pattern);
+    if (error) throw error;
+    const paths = (data ?? []).map((r: { photo_path: string }) => r.photo_path);
+    if (paths.length > 0) {
+      const { error: removeError } = await supabase.storage.from('proofs').remove(paths);
+      if (removeError) throw removeError;
+      const { error: deleteError } = await supabase.from('proof_photos').delete().eq('user_id', userId).like('photo_path', pattern);
+      if (deleteError) throw deleteError;
+    }
+  } catch (error) {
+    logSyncError('deleteProofPhoto', error);
+    useSyncQueueStore.getState().enqueue({ type: 'proofDelete', payload: { proofId } });
   }
 }
 
@@ -1290,6 +1339,9 @@ export async function flushSyncQueue(): Promise<void> {
         break;
       case 'proofPhoto':
         await pushProofPhoto(op.payload);
+        break;
+      case 'proofDelete':
+        await deleteProofPhoto(op.payload.proofId);
         break;
       case 'plan':
         await pushPlan(op.payload.plan, op.payload.updatedAtISO, op.payload.targetUserId);

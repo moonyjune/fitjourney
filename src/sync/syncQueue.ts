@@ -18,6 +18,7 @@ export type SyncOp =
   | { id: string; type: 'workoutEntry'; payload: WorkoutLogEntry }
   | { id: string; type: 'nutritionLog'; payload: DailyNutritionLog }
   | { id: string; type: 'proofPhoto'; payload: ProofPhoto }
+  | { id: string; type: 'proofDelete'; payload: { proofId: string } }
   | { id: string; type: 'plan'; payload: { plan: PlanData; updatedAtISO: string; targetUserId?: string } }
   | { id: string; type: 'profile'; payload: UserSettings }
   | { id: string; type: 'feelingRecord'; payload: FeelingRecord }

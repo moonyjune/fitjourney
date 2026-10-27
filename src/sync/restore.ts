@@ -15,6 +15,7 @@ import { DEFAULT_TARGET_UMOL } from '../uric/types';
 import type { DailyNutritionLog, ExtraFoodItem, MealSlot, WeightEntry, WorkoutLogEntry } from '../types';
 import { dayHasFood, withIntakeCounters } from '../utils/dayIntake';
 import { currentUserId, pushNutritionLog, pushUserData } from './cloudSync';
+import { restoreProofPhotos } from './restorePhotos';
 import { USER_DATA_KEYS } from './userDataKeys';
 
 /**
@@ -358,6 +359,7 @@ async function run(): Promise<RestoreResult> {
       result.uric = newUric.length;
     }
     restoreUserData(new Map(userData.map((d) => [d.key, d.value])));
+    void restoreProofPhotos();
     return result;
   } catch (error) {
     console.warn('[restore] restoreOwnData failed:', error);

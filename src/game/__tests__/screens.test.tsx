@@ -37,7 +37,7 @@ jest.mock('expo-image-picker', () => ({}));
 jest.mock('../../utils/photoStorage', () => ({
   persistPickedPhoto: jest.fn(),
   imageUriToBase64: jest.fn(),
-  deletePersistedPhoto: jest.fn(),
+  deletePersistedPhoto: jest.fn(async () => undefined),
 }));
 jest.mock('../../sync/cloudSync', () => ({
   pushUserData: jest.fn(),
@@ -45,6 +45,7 @@ jest.mock('../../sync/cloudSync', () => ({
   pushWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
   pushProofPhoto: jest.fn(),
+  deleteProofPhoto: jest.fn(async () => undefined),
   pushFeelingRecord: jest.fn(),
   pushProfile: jest.fn(),
   pushPlan: jest.fn(),
@@ -62,6 +63,7 @@ import JournalScreen from '../../../app/journal';
 import QuickAddScreen from '../../../app/quick-add';
 import { useFeelingStore } from '../../store/useFeelingStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -110,6 +112,7 @@ describe('FitQuest logging screens', () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') }); // Friday, eating window open
     Object.values(mockRouter).forEach((fn) => fn.mockClear());
+    useProofStore.setState({ photos: [] });
     mockRouter.canGoBack.mockReturnValue(true);
     mockParams = { slot: 'meal3' };
     useSettingsStore.setState({
@@ -361,6 +364,56 @@ describe('FitQuest logging screens', () => {
       expect(r.root.findAll((n) => n.props.source?.uri === 'file:///docs/proofs/extra-9.jpg').length).toBeGreaterThan(0);
       act(() => pressable(r, (l) => l === 'Đóng').props.onPress());
       expect(allText(r)).not.toContain('CHI-TIẾT');
+    });
+
+    it('changes the amount of one food in the dialog and works the calories out again, offline, with no AI call', () => {
+      useNutritionStore.getState().addExtra(DATE, 'CHI-TIẾT-MỘT 30g, CHI-TIẾT-HAI 100g', 170, 8, 'afternoon_snack', {
+        parts: [{ name: 'CHI-TIẾT-MỘT 30g', calories: 110, proteinG: 4 }, { name: 'CHI-TIẾT-HAI 100g', calories: 60, proteinG: 4 }],
+      });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('CHI-TIẾT-MỘT 30g, CHI-TIẾT-HAI 100g')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Sửa lượng CHI-TIẾT-MỘT 30g').props.onPress());
+      const input = r.root.findAll((n) => n.props.accessibilityLabel === 'Lượng mới' && typeof n.props.onChangeText === 'function')[0];
+      expect(input.props.value).toBe('30');
+      act(() => input.props.onChangeText('60'));
+      expect(allText(r)).toContain('Sau khi sửa: 220 kcal · 8 g đạm');
+      act(() => pressable(r, (l) => l === 'Lưu').props.onPress());
+
+      const saved = useNutritionStore.getState().getLog(DATE).extraItems.find((i) => i.name.includes('CHI-TIẾT-MỘT'))!;
+      expect(saved.calories).toBe(280);
+      expect(saved.proteinG).toBe(12);
+      expect(saved.name).toBe('CHI-TIẾT-MỘT 60g, CHI-TIẾT-HAI 100g');
+      expect(saved.parts?.[0]).toMatchObject({ name: 'CHI-TIẾT-MỘT 60g', calories: 220, proteinG: 8 });
+      expect(useNutritionStore.getState().getLog(DATE).extraCalories).toBeGreaterThanOrEqual(280);
+      expect(allText(r)).toContain('CHI-TIẾT-MỘT 60g · 220 kcal · 8 g đạm');
+    });
+
+    it('does not accept an empty or zero amount', () => {
+      useNutritionStore.getState().addExtra(DATE, 'CHI-TIẾT-MỘT 30g, CHI-TIẾT-HAI 100g', 170, 8, 'afternoon_snack', {
+        parts: [{ name: 'CHI-TIẾT-MỘT 30g', calories: 110, proteinG: 4 }, { name: 'CHI-TIẾT-HAI 100g', calories: 60, proteinG: 4 }],
+      });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('CHI-TIẾT-MỘT 30g, CHI-TIẾT-HAI 100g')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Sửa lượng CHI-TIẾT-MỘT 30g').props.onPress());
+      const input = r.root.findAll((n) => n.props.accessibilityLabel === 'Lượng mới' && typeof n.props.onChangeText === 'function')[0];
+      act(() => input.props.onChangeText('0'));
+      expect(allText(r)).toContain('Nhập một số lớn hơn 0.');
+      const save = r.root.findAll((n) => n.props.accessibilityLabel === 'Lưu' && n.props.accessibilityState)[0];
+      expect(save.props.accessibilityState.disabled).toBe(true);
+    });
+
+    it('removes the photo of a logged meal from the dialog, and the meal keeps its figures', async () => {
+      useNutritionStore.getState().addExtra(DATE, 'Bánh ZZ', 300, 10, 'afternoon_snack', { photoUri: 'file:///docs/proofs/extra-5.jpg' });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('Bánh ZZ')).props.onPress());
+      expect(r.root.findAll((n) => n.props.source?.uri === 'file:///docs/proofs/extra-5.jpg').length).toBeGreaterThan(0);
+      await act(async () => {
+        await pressable(r, (l) => l === 'Xóa ảnh').props.onPress();
+      });
+      const item = useNutritionStore.getState().getLog(DATE).extraItems.find((i) => i.name === 'Bánh ZZ')!;
+      expect(item.photoUri).toBeUndefined();
+      expect(item.calories).toBe(300);
+      expect(allText(r)).toContain('Bữa này chưa có ảnh.');
     });
 
     it('shows the same deficit on the day strip as in the stats', () => {

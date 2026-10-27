@@ -4,12 +4,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { ProofPhoto, ProofTaskType } from '../types';
 import { toDateKey } from '../utils/date';
 import { deletePersistedPhoto } from '../utils/photoStorage';
-import { pushProofPhoto } from '../sync/cloudSync';
+import { deleteProofPhoto, pushProofPhoto } from '../sync/cloudSync';
 
 interface ProofState {
   photos: ProofPhoto[];
   addProof: (input: { taskType: ProofTaskType; taskRefId: string; photoUri: string; note: string; dateISO?: string }) => ProofPhoto;
-  removeProof: (id: string) => void;
+  /** Deletes the photo on this device and, unless `cloud` is false (the caller already removed it there), in the cloud. */
+  removeProof: (id: string, options?: { cloud?: boolean }) => void;
   /** Returns a new array each call — filter `photos` in a component's own useMemo instead of using this as a hook selector. */
   proofsForDateKey: (dateKey: string) => ProofPhoto[];
   proofFor: (dateKey: string, taskType: ProofTaskType, taskRefId: string) => ProofPhoto | undefined;
@@ -33,10 +34,11 @@ export const useProofStore = create<ProofState>()(
         pushProofPhoto(proof);
         return proof;
       },
-      removeProof: (id) => {
+      removeProof: (id, options) => {
         const target = get().photos.find((p) => p.id === id);
         if (target) {
           deletePersistedPhoto(target.photoUri).catch(() => {});
+          if (options?.cloud !== false) deleteProofPhoto(id).catch(() => {});
         }
         set((state) => ({ photos: state.photos.filter((p) => p.id !== id) }));
       },

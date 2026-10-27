@@ -17,13 +17,51 @@ async function ensureDir() {
  */
 export async function persistPickedPhoto(tempUri: string, id: string): Promise<string> {
   if (Platform.OS === 'web') {
-    // On web, blob/data URIs from the picker are already stable for the session.
-    return tempUri;
+    // A blob: URL dies with the page, so a photo kept as one is gone after a reload (and a queued upload of it can never run).
+    // Keep a small JPEG as a data: URL instead; it survives in the stored state and can still be uploaded later.
+    return webDataUrl(tempUri);
   }
   await ensureDir();
   const extension = tempUri.split('.').pop()?.split('?')[0] || 'jpg';
   const destination = `${PROOFS_DIR}${id}.${extension}`;
   await FileSystem.copyAsync({ from: tempUri, to: destination });
+  return destination;
+}
+
+/** Longest edge (px) of a photo kept on web, where it lives inside the stored state rather than in a file. */
+const WEB_MAX_EDGE_PX = 960;
+const WEB_JPEG_QUALITY = 0.7;
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function webDataUrl(uri: string): Promise<string> {
+  if (uri.startsWith('data:')) return uri;
+  try {
+    const small = await downscaleToBase64(uri, WEB_MAX_EDGE_PX, WEB_JPEG_QUALITY);
+    if (small) return `data:${small.mediaType};base64,${small.base64}`;
+  } catch {
+    // fall through to the picked file as it is
+  }
+  return blobToDataUrl(await (await fetch(uri)).blob());
+}
+
+/** Saves a photo that lives in the cloud on this device (a signed URL, valid for a short while) and returns its stable local URI. */
+export async function downloadPhoto(url: string, id: string): Promise<string> {
+  if (Platform.OS === 'web') return blobToDataUrl(await (await fetch(url)).blob());
+  await ensureDir();
+  const destination = `${PROOFS_DIR}${id}.jpg`;
+  const result = await FileSystem.downloadAsync(url, destination);
+  if (result.status !== 200) {
+    await FileSystem.deleteAsync(destination, { idempotent: true });
+    throw new Error(`download failed (${result.status})`);
+  }
   return destination;
 }
 
@@ -49,7 +87,7 @@ export const AI_FULL_HD_EDGE_PX = 1920;
 const AI_JPEG_QUALITY = 0.8;
 
 /** Shrinks a photo so its longest edge is at most `maxEdge` (never enlarges) and re-encodes it as JPEG. Returns base64. */
-async function downscaleToBase64(uri: string, maxEdge: number): Promise<{ base64: string; mediaType: string } | null> {
+async function downscaleToBase64(uri: string, maxEdge: number, quality: number = AI_JPEG_QUALITY): Promise<{ base64: string; mediaType: string } | null> {
   const context = ImageManipulator.manipulate(uri);
   const source = await context.renderAsync();
   const longest = Math.max(source.width, source.height);
@@ -57,7 +95,7 @@ async function downscaleToBase64(uri: string, maxEdge: number): Promise<{ base64
     context.resize(source.width >= source.height ? { width: maxEdge } : { height: maxEdge });
   }
   const rendered = await context.renderAsync();
-  const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: AI_JPEG_QUALITY, base64: true });
+  const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: quality, base64: true });
   return saved.base64 ? { base64: saved.base64, mediaType: 'image/jpeg' } : null;
 }
 
