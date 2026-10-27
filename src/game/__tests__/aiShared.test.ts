@@ -276,9 +276,14 @@ describe('what the swap request lets into its prompt (server)', () => {
 describe('what the dinner request lets into its prompt (server)', () => {
   const ok = { budgetKcal: 600, proteinLeftG: 100, headroom: { purine: 800, salt: 5, sugar: 20 }, limits: { purine: 1200, salt: 7, sugar: 25 }, hour: 16 };
 
+  it('keeps the dishes to avoid: short, clean, at most 40', () => {
+    expect(cleanDinnerRequest({ ...ok, avoidNames: ['Cá hấp', ' <b>Gà</b> ', '', 5] })!.avoid).toEqual(['Cá hấp', 'b Gà /b']);
+    expect(cleanDinnerRequest({ ...ok, avoidNames: Array.from({ length: 60 }, (_, i) => `Món ${i}`) })!.avoid).toHaveLength(40);
+  });
+
   it('keeps a good request with negative room allowed, and short clean favorites (8 at most)', () => {
     expect(cleanDinnerRequest({ ...ok, headroom: { purine: -50, salt: 0, sugar: 20 }, favorites: ['Phở bò', ' <b>Cơm</b> gà ', '', 5] })).toEqual({
-      ...ok, meal: 'dinner', eatByHour: 19, exact: false, proteinExact: false, strictKcal: false, headroom: { purine: -50, salt: 0, sugar: 20 }, favorites: ['Phở bò', 'b Cơm /b gà'],
+      ...ok, meal: 'dinner', eatByHour: 19, exact: false, proteinExact: false, strictKcal: false, avoid: [], headroom: { purine: -50, salt: 0, sugar: 20 }, favorites: ['Phở bò', 'b Cơm /b gà'],
     });
     expect(cleanDinnerRequest({ ...ok, favorites: Array.from({ length: 12 }, (_, i) => `Món ${i}`) })!.favorites).toHaveLength(8);
   });

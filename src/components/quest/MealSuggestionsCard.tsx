@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { cleanAiDinner, dinnerIdeasFromFoods, dinnerVerdict, type DinnerIdea } from '../../ai/dinner';
+import { acceptDinner, cleanAiDinner, dinnerIdeasFromFoods, dinnerVerdict, type DinnerBrief, type DinnerIdea } from '../../ai/dinner';
+import { ideaFromRecipe, recipeFromIdea, recipeKey, recipesFitting } from '../../cookbook/recipes';
+import { useCookbookStore } from '../../store/useCookbookStore';
+import { useMealIdeasStore } from '../../store/useMealIdeasStore';
+import { toDateKey } from '../../utils/date';
+import { RecipeDialog } from './RecipeDialog';
 import { buildMealPlan, DAY_BAND_KCAL, MAX_MEAL_KCAL, mealBrief, mealCardVisible, mealTimeFor, type MealKind, type SplitMeal } from '../../ai/mealSplit';
 import { buildTasteProfile } from '../../ai/tasteProfile';
 import { useAiErrorText } from '../../ai/usePhotoAnalysis';
@@ -67,13 +72,18 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
   const minute = Math.floor(now.getTime() / 60_000);
   const plan = useMemo(() => buildMealPlan(new Date(minute * 60_000), prefs), [minute, logs, workouts, settings, fasting, prefs]); // eslint-disable-line react-hooks/exhaustive-deps
   const signature = plan ? `${plan.fasting}|${prefKcal}|${prefProtein}|${prefStrict}|${plan.totals.budgetKcal}|${plan.totals.proteinLeftG}|${plan.split.meals.map((m) => `${m.slot.id}:${m.kcal}`).join()}` : '';
-  const [aiIdeas, setAiIdeas] = useState<Record<string, DinnerIdea[]>>({});
+  // The AI's answers are kept (per day and meal) so reloading the page does not ask, and pay, again; each one also goes into the cook book.
+  const day = toDateKey(new Date(minute * 60_000));
+  const storedIdeas = useMealIdeasStore((s) => s.byDay[day]);
+  const book = useCookbookStore((s) => s.recipes);
+  const aiIdeas: Record<string, DinnerIdea[]> = storedIdeas ?? {};
+  const [viewing, setViewing] = useState<{ idea: DinnerIdea; brief: DinnerBrief; label: string; kind: MealKind } | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ id: string; kind: AiErrorKind } | null>(null);
 
-  // What is left changes when something is logged or the mode is switched: earlier AI answers no longer fit.
+  // What is left changes when something is logged or the mode is switched: the failure message no longer applies, and kept AI answers
+  // are re-checked against the new share when they are shown (the ones that no longer fit are hidden, not asked for again).
   useEffect(() => {
-    setAiIdeas({});
     setFailure(null);
   }, [signature]);
 
@@ -81,18 +91,24 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
   const { totals, split } = plan;
   const labelOf = (m: SplitMeal) => m.slot.label ?? g(KIND_KEY[m.slot.kind]);
 
-  async function askAi(meal: SplitMeal, dbNames: Set<string>) {
+  async function askAi(meal: SplitMeal, dbNames: Set<string>, shown: DinnerIdea[]) {
     if (busyId || !plan) return;
     const brief = mealBrief(plan.totals, meal, prefs);
     setBusyId(meal.slot.id);
     setFailure(null);
-    const outcome = await requestDinner(brief, buildTasteProfile().favorites);
+    // Dishes the user already has (cook book, and the ideas on screen) are not asked for again.
+    const have = new Set([...useCookbookStore.getState().recipes.map((r) => r.id), ...shown.map((i) => recipeKey(i.name))]);
+    const avoid = [...useCookbookStore.getState().recipes.map((r) => r.name), ...shown.map((i) => i.name)].slice(0, 40);
+    const outcome = await requestDinner(brief, buildTasteProfile().favorites, avoid);
     setBusyId(null);
     if (!outcome.ok) {
       setFailure({ id: meal.slot.id, kind: outcome.kind });
       return;
     }
-    setAiIdeas((prev) => ({ ...prev, [meal.slot.id]: cleanAiDinner(outcome.result, brief).filter((i) => !dbNames.has(i.name)) }));
+    const fresh = cleanAiDinner(outcome.result, brief).filter((i) => !dbNames.has(i.name) && !have.has(recipeKey(i.name)));
+    const previous = useMealIdeasStore.getState().get(day, meal.slot.id) ?? [];
+    useMealIdeasStore.getState().set(day, meal.slot.id, [...previous, ...fresh]);
+    useCookbookStore.getState().saveMany(fresh.map((i) => recipeFromIdea(i)));
   }
 
   return (
@@ -108,6 +124,7 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
         {g('meals.dayBand', { low: Math.max(0, totals.dayTargetKcal - DAY_BAND_KCAL), high: totals.dayTargetKcal, max: MAX_MEAL_KCAL })}
       </HudText>
       <MealPrefsEditor />
+      <QuestButton variant="ghost" icon="list" title={g('cookbook.open', { n: book.length })} accessibilityLabel={g('cookbook.open', { n: book.length })} onPress={() => router.push('/cookbook')} />
       {split.meals.length > 1 && (
         <HudText size={12} weight="medium" color={quest.manaText}>
           {g('meals.split', { kcal: totals.budgetKcal, n: split.meals.length })}
@@ -122,7 +139,10 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
       {split.meals.map((meal) => {
         const brief = mealBrief(totals, meal, prefs);
         const dbIdeas = dinnerIdeasFromFoods(brief, foods).slice(0, DB_IDEAS_PER_MEAL);
-        const ideas = [...dbIdeas, ...(aiIdeas[meal.slot.id] ?? [])];
+        const aiList = (aiIdeas[meal.slot.id] ?? []).filter((i) => acceptDinner(brief, i));
+        const aiKeys = new Set([...dbIdeas, ...aiList].map((i) => recipeKey(i.name)));
+        const bookIdeas = recipesFitting(book, brief, 3).filter((r) => !aiKeys.has(r.id)).map(ideaFromRecipe);
+        const ideas = [...bookIdeas, ...dbIdeas, ...aiList];
         const asked = aiIdeas[meal.slot.id] !== undefined;
         const verdict = meal.slot.plan && !meal.light ? dinnerVerdict(brief) : null;
         const name = labelOf(meal);
@@ -156,9 +176,9 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
 
             {ideas.map((idea) => (
               <View key={`${idea.source}-${idea.name}`} style={styles.idea}>
-                <HudText size={13}>{idea.name}</HudText>
+                <HudText size={13}>{idea.recipe?.emoji ? `${idea.recipe.emoji} ${idea.name}` : idea.name}</HudText>
                 <HudText size={11} color={idea.source === 'db' ? quest.manaText : quest.goldLight}>
-                  {idea.source === 'db' ? g('dinner.fromDb') : g('swap.fromAi')}
+                  {idea.source === 'db' ? g('dinner.fromDb') : idea.source === 'book' ? g('cookbook.fromBook') : g('swap.fromAi')}
                   {idea.source === 'ai' && idea.accuracy !== undefined ? ` · ${g('ai.accuracy', { pct: idea.accuracy })}` : ''}
                 </HudText>
                 {idea.amount ? (
@@ -174,22 +194,23 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
                     {idea.how}
                   </HudText>
                 ) : null}
-                <QuestButton variant="mana" title={g('dinner.log')} accessibilityLabel={g('dinner.logLabel', { name: idea.name })} onPress={() => openInAddFood(idea, meal.slot.kind)} />
+                <View style={styles.ideaButtons}>
+                  <QuestButton variant="ghost" title={g('meals.viewRecipe')} accessibilityLabel={`${g('meals.viewRecipe')}: ${idea.name}`} onPress={() => setViewing({ idea, brief, label: name, kind: meal.slot.kind })} />
+                  <QuestButton variant="mana" title={g('dinner.log')} accessibilityLabel={g('dinner.logLabel', { name: idea.name })} onPress={() => openInAddFood(idea, meal.slot.kind)} />
+                </View>
               </View>
             ))}
 
-            {!asked && (
-              <QuestButton
-                variant="ghost"
-                icon="chart"
-                title={busyId === meal.slot.id ? g('dinner.asking') : g('meals.askAi', { meal: name })}
-                accessibilityLabel={busyId === meal.slot.id ? g('dinner.asking') : g('meals.askAi', { meal: name })}
-                onPress={() => {
-                  void askAi(meal, new Set(dbIdeas.map((i) => i.name)));
-                }}
-                loading={busyId === meal.slot.id}
-              />
-            )}
+            <QuestButton
+              variant="ghost"
+              icon="chart"
+              title={busyId === meal.slot.id ? g('dinner.asking') : asked ? g('meals.more') : g('meals.askAi', { meal: name })}
+              accessibilityLabel={busyId === meal.slot.id ? g('dinner.asking') : asked ? `${g('meals.more')}: ${name}` : g('meals.askAi', { meal: name })}
+              onPress={() => {
+                void askAi(meal, new Set(dbIdeas.map((i) => i.name)), ideas);
+              }}
+              loading={busyId === meal.slot.id}
+            />
             {asked && ideas.length === 0 && (
               <HudText size={12} weight="medium" color={quest.textSecondary}>
                 {g('meals.none', { meal: name })}
@@ -200,14 +221,15 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
                 {aiErrorText(failure.kind)}
               </HudText>
             )}
-            {(aiIdeas[meal.slot.id] ?? []).length > 0 && (
+            {aiList.length > 0 && (
               <HudText size={11} weight="medium" color={quest.textSecondary}>
-                {g('swap.disclaimer')}
+                {g('meals.savedToBook')} · {g('swap.disclaimer')}
               </HudText>
             )}
           </View>
         );
       })}
+      <RecipeDialog idea={viewing?.idea ?? null} brief={viewing?.brief} mealLabel={viewing?.label} onClose={() => setViewing(null)} onLog={viewing ? (i) => { setViewing(null); openInAddFood(i, viewing.kind); } : undefined} />
     </View>
   );
 }
@@ -215,5 +237,6 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
 const styles = StyleSheet.create({
   card: { gap: 6, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   meal: { gap: 4, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
+  ideaButtons: { gap: 6 },
   idea: { gap: 3, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg },
 });

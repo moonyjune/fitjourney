@@ -1,6 +1,7 @@
 import { foodKey } from '../food/remember';
 import { NEVER_AS_MEAL, scaleFood } from '../food/swaps';
 import type { FoodEntry } from '../food/types';
+import { cleanRecipeDetails, type RecipeDetails } from '../cookbook/recipes';
 
 /** Below this many kcal left, dinner is a light one (vegetables, lean protein), not a meal. */
 export const LIGHT_BUDGET_KCAL = 150;
@@ -51,8 +52,11 @@ export interface DinnerIdea {
   purineMg: number;
   saltG: number;
   sugarG: number;
-  source: 'db' | 'ai';
+  /** `db`: the user's own foods, `ai`: asked now, `book`: a dish from the cook book. */
+  source: 'db' | 'ai' | 'book';
   amount?: string;
+  /** How to make it (ingredients, steps, time, difficulty), when it is known. */
+  recipe?: RecipeDetails;
   how?: string;
   accuracy?: number;
 }
@@ -135,6 +139,8 @@ export function cleanAiDinner(raw: unknown, brief: DinnerBrief): DinnerIdea[] {
     const key = foodKey(name);
     if (!key || seen.has(key) || !acceptDinner(brief, idea)) continue;
     seen.add(key);
+    const recipe = cleanRecipeDetails(o);
+    if (Object.keys(recipe).length > 0) idea.recipe = recipe;
     if (typeof o.how === 'string' && o.how.trim()) idea.how = o.how.trim().slice(0, 300);
     if (typeof o.accuracyPercent === 'number' && Number.isFinite(o.accuracyPercent)) idea.accuracy = Math.max(0, Math.min(100, Math.round(o.accuracyPercent)));
     out.push(idea);

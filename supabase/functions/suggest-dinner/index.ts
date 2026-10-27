@@ -30,9 +30,20 @@ const DINNER_TOOL = {
             sugarG: { type: 'number', description: 'Free/added sugar in grams; 0 if none.' },
             saltG: { type: 'number', description: 'Table salt in grams including sauces and broth.' },
             how: { type: 'string', description: 'One or two Vietnamese sentences: how to make or buy it simply (few tools), and why it fits what is left today.' },
+            emoji: { type: 'string', description: 'One emoji for the dish.' },
+            minutes: { type: 'integer', description: 'Minutes to prepare and cook.' },
+            difficulty: { type: 'integer', minimum: 1, maximum: 5, description: '1 very easy to 5 hard.' },
+            equipment: { type: 'array', maxItems: 4, items: { type: 'string' }, description: 'Everyday tools only (chảo, nồi, nồi cơm điện, lò vi sóng...).' },
+            ingredients: {
+              type: 'array',
+              maxItems: 14,
+              description: 'Ingredients for ONE portion.',
+              items: { type: 'object', properties: { name: { type: 'string' }, quantity: { type: 'string', description: 'e.g. "150g", "1 quả".' } }, required: ['name', 'quantity'] },
+            },
+            steps: { type: 'array', maxItems: 8, items: { type: 'string' }, description: 'Cooking steps in Vietnamese, one short sentence each (at least 3).' },
             accuracyPercent: ACCURACY_PROPERTY,
           },
-          required: ['name', 'calories', 'proteinG', 'accuracyPercent'],
+          required: ['name', 'calories', 'proteinG', 'accuracyPercent', 'ingredients', 'steps', 'minutes', 'difficulty'],
         },
       },
     },
@@ -71,9 +82,10 @@ serveAi('dinner', async (body) => {
           `mỗi chất nằm trong phần còn lại (phần còn lại ≤ 0 thì gần như không có chất đó).`) +
     ` Món đúng kiểu ${word}, đơn giản, ít dụng cụ, nguyên liệu dễ mua ở chợ hoặc siêu thị Việt Nam, ăn xong trước ${req.eatByHour}h.` +
     (req.favorites.length ? ` Món người dùng hay ăn (để hợp khẩu vị, nhưng đừng lặp lại y nguyên): ${req.favorites.join('; ')}.` : '') +
-    ` Ghi accuracyPercent cho từng món. Gọi tool report_dinner_ideas.`;
+    (req.avoid.length ? ` Người dùng đã có các món này, hãy đề xuất MÓN KHÁC, không trùng: ${req.avoid.join('; ')}.` : '') +
+    ` Với mỗi món ghi đủ nguyên liệu (cho một khẩu phần), các bước nấu ngắn gọn, thời gian nấu, độ khó và dụng cụ. Ghi accuracyPercent cho từng món. Gọi tool report_dinner_ideas.`;
   return {
     responseKey: 'result',
-    call: { tool: DINNER_TOOL, system: SYSTEM, maxTokens: 3000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },
+    call: { tool: DINNER_TOOL, system: SYSTEM, maxTokens: 5000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },
   };
 });

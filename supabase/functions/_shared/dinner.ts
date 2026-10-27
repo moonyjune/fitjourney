@@ -28,6 +28,8 @@ export interface DinnerRequest {
   /** Never more calories than `budgetKcal`. */
   strictKcal: boolean;
   favorites: string[];
+  /** Dishes already known to the user (the cook book and the ideas just shown): the model must propose others. */
+  avoid: string[];
 }
 
 /** The request as a clean object, or null when it is unusable (no budget figure or hour). */
@@ -50,6 +52,7 @@ export function cleanDinnerRequest(raw: unknown): DinnerRequest | null {
     exact: r.exact === true,
     proteinExact: r.proteinExact === true,
     strictKcal: r.strictKcal === true,
+    avoid: (Array.isArray(r.avoidNames) ? r.avoidNames : []).map((f: unknown) => cleanName(f, 80)).filter(Boolean).slice(0, 40),
     favorites: (Array.isArray(r.favorites) ? r.favorites : []).map((f: unknown) => cleanName(f, 60)).filter(Boolean).slice(0, 8),
   };
 }

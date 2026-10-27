@@ -6,4 +6,5 @@ export const USER_DATA_KEYS = {
   limits: 'limits',
   mealMode: 'mealMode',
   mealPrefs: 'mealPrefs',
+  cookbook: 'cookbook',
 } as const;

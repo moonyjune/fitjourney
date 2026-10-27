@@ -3,6 +3,12 @@
 Version numbers are `A.BC`, counting up from 0.01 (0.99 is followed by 1.00). The current number is `APP_VERSION` in `src/utils/buildInfo.ts` and is shown in
 Profile ("Phiên bản"). Every release adds an entry here, newest first, and bumps `APP_VERSION` to match (a test checks they agree).
 
+## 0.08
+- Meal ideas: the AI's answer for a meal is kept (per day and meal), so reloading the page does not ask again and spend tokens; an idea that no longer fits what is left is hidden, not re-asked.
+- Tap "Xem công thức" on an idea: a dialog with ingredients, difficulty, time, tools, the steps (each with an icon), the nutrition against what is left for the meal, your star rating and a photo of the dish you made. A dish without a recipe can have one written once by the AI.
+- Cook book: every AI idea is saved (also synced to the cloud), reusable from the meal card (dishes that fit are offered without the AI) and from a Cook book screen (Profile or the meal card). "Gợi ý món khác" asks the AI for new dishes that are not in the cook book.
+- Needs the `suggest-dinner` and `generate-meal-recipe` functions redeployed for the AI to send the full recipe and to write the recipe of a named dish.
+
 ## 0.07
 - Fix: a day could hold two foods under the same id (seen on 26/10), so deleting or editing one changed both and the day table got stuck. Every food now gets its own id, and days already saved that way are repaired on opening (device and cloud).
 

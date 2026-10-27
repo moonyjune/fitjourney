@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { HABIT_STATUSES, type CheckValue, type Habit, type HabitAuto, type HabitChecks } from '../habits/types';
 import type { UricReading } from '../uric/types';
+import { cleanCookbook, cookbookForCloud } from '../cookbook/recipes';
+import { useCookbookStore } from '../store/useCookbookStore';
 import { useFoodDbStore } from '../store/useFoodDbStore';
 import { useHabitStore } from '../store/useHabitStore';
 import { useLearnStore } from '../store/useLearnStore';
@@ -278,6 +280,13 @@ function restoreUserData(remote: Map<string, unknown>): void {
   if (sameJson(prefsLocal, NO_MEAL_PREFS)) {
     if (isObj(prefsRemote)) useMealPrefStore.setState(cleanMealPrefs(prefsRemote));
   } else if (!sameJson(prefsLocal, prefsRemote)) void pushUserData(USER_DATA_KEYS.mealPrefs, prefsLocal);
+
+  // Cook book: dishes only the cloud has are added; the device's own copy wins, and what only the device has is saved up.
+  const remoteBook = cleanCookbook(remote.get(USER_DATA_KEYS.cookbook));
+  useCookbookStore.getState().merge(remoteBook);
+  const book = useCookbookStore.getState().recipes;
+  const haveRemote = new Set(remoteBook.map((r) => r.id));
+  if (book.some((r) => !haveRemote.has(r.id))) void pushUserData(USER_DATA_KEYS.cookbook, cookbookForCloud(book));
 
   const foods = remote.get(USER_DATA_KEYS.foodDb);
   const localFoods = useFoodDbStore.getState();

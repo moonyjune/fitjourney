@@ -6,6 +6,8 @@ import {
   DEFAULT_WATER_TARGET_ML,
 } from '../constants/plan';
 import { useAchievementStore } from './useAchievementStore';
+import { useCookbookStore } from './useCookbookStore';
+import { useMealIdeasStore } from './useMealIdeasStore';
 import { useCelebrationStore } from './useCelebrationStore';
 import { useFeelingStore } from './useFeelingStore';
 import { useFoodDbStore } from './useFoodDbStore';
@@ -65,6 +67,8 @@ export function resetAllLocalStores() {
   useAiReportStore.setState({ weekly: {} });
   useMealModeStore.setState({ fasting: true });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });
+  useCookbookStore.setState({ recipes: [] });
+  useMealIdeasStore.setState({ byDay: {} });
   useAiDigestStore.setState({ weeks: {} });
   useWorkoutStore.setState({ entries: [] });
   // Epoch timestamp guarantees the next syncFromRemote() treats any remote plan as newer.

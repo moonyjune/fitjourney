@@ -12,6 +12,7 @@ import type { SwapContext, SwapItem } from '../food/swaps';
 import { DEV_ANALYSIS_DELAY_MS, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { generateCoachCode } from '../utils/coachCode';
+import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
 import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
 import { isOnline, useSyncQueueStore, type SyncOp } from './syncQueue';
@@ -868,6 +869,33 @@ export async function requestMealRecipe(
   }
 }
 
+/** The recipe of one named dish (generate-meal-recipe with `dishName`), for a dish that was saved without one. The answer must be for that dish:
+ *  a server that does not know `dishName` yet answers with a dish of its own, which is refused rather than saved under the wrong name. */
+export async function requestDishRecipe(
+  dishName: string,
+  calories: number,
+  proteinG: number,
+  mealLabel: string
+): Promise<{ ok: true; recipe: MealRecipeSuggestion } | { ok: false; message: string; kind: AiErrorKind | 'stale' }> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-meal-recipe', {
+      body: { mealLabel, dayType: 'rest', targetCalories: Math.max(1, calories), targetProtein: Math.max(1, proteinG), dishName },
+    });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
+    const recipe = data.recipe as MealRecipeSuggestion;
+    if (!recipe || foodKey(recipe.dishName ?? '') !== foodKey(dishName)) return { ok: false, message: 'The server has not been updated to write a recipe for a named dish.', kind: 'stale' };
+    return { ok: true, recipe };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
 /** A non-2xx Edge Function response surfaces as a bare "non-2xx status code" FunctionsHttpError —
  *  the actual `{ error: "..." }` body (e.g. "chưa cấu hình ANTHROPIC_API_KEY") is on
  *  `error.context`, a Response, not on the caught error's `message`. Unwrap it when possible. */
@@ -1210,7 +1238,7 @@ export type DinnerOutcome = { ok: true; result: unknown } | { ok: false; message
 
 /** Calls the suggest-dinner edge function: dinner ideas for what is left of today (the brief is worked out on the device). The
  *  answer is raw; the caller checks each idea with `cleanAiDinner`. Same rules as the other AI requests. */
-export async function requestDinner(brief: DinnerBrief, favorites: string[]): Promise<DinnerOutcome> {
+export async function requestDinner(brief: DinnerBrief, favorites: string[], avoidNames: string[] = []): Promise<DinnerOutcome> {
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
@@ -1219,7 +1247,7 @@ export async function requestDinner(brief: DinnerBrief, favorites: string[]): Pr
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
-    const body = { budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, meal: brief.meal, eatByHour: brief.eatByHour, exact: brief.exact, proteinExact: brief.proteinExact, strictKcal: brief.strictKcal, favorites };
+    const body = { budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, meal: brief.meal, eatByHour: brief.eatByHour, exact: brief.exact, proteinExact: brief.proteinExact, strictKcal: brief.strictKcal, favorites, avoidNames };
     const { data, error } = await supabase.functions.invoke('suggest-dinner', { body });
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };

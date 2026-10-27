@@ -520,7 +520,7 @@ describe('requestDinner', () => {
     mockInvoke.mockResolvedValue({ data: { result: { options: [] } } });
     expect(await requestDinner({ ...brief, meal: 'lunch', eatByHour: 15 }, ['Phở bò'])).toEqual({ ok: true, result: { options: [] } });
     expect(mockInvoke).toHaveBeenCalledWith('suggest-dinner', {
-      body: { budgetKcal: 600, proteinLeftG: 100, headroom: brief.headroom, limits: brief.limits, hour: 17, meal: 'lunch', eatByHour: 15, favorites: ['Phở bò'] },
+      body: { budgetKcal: 600, proteinLeftG: 100, headroom: brief.headroom, limits: brief.limits, hour: 17, meal: 'lunch', eatByHour: 15, favorites: ['Phở bò'], avoidNames: [] },
     });
     expect(JSON.stringify(mockInvoke.mock.calls[0])).not.toContain('secret');
   });

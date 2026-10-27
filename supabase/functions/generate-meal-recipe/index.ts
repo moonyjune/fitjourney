@@ -54,7 +54,8 @@ const RECIPE_TOOL = {
 };
 
 serveAi('recipe', async (body) => {
-  const { mealLabel, dayType, targetCalories, targetProtein, avoidDishNames, favorites, dislikes } = body as {
+  const { mealLabel, dayType, targetCalories, targetProtein, avoidDishNames, favorites, dislikes, dishName } = body as {
+    dishName?: string;
     mealLabel: string;
     dayType: 'training' | 'rest';
     targetCalories: number;
@@ -83,6 +84,18 @@ serveAi('recipe', async (body) => {
   const tasteText =
     (likes.length ? ` Món người dùng hay ăn (để hiểu khẩu vị; gợi ý món cùng gu nhưng KHÁC các món này): ${likes.join('; ')}.` : '') +
     (dislikeNames.length ? ` Món họ tự đánh dấu là đồ ăn vặt/không tốt, đừng gợi ý món tương tự: ${dislikeNames.join('; ')}.` : '');
+  const wanted = typeof dishName === 'string' ? dishName.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100) : '';
+  if (wanted) {
+    // The dish is already chosen: write its recipe (for one portion of about the given calories), do not pick another.
+    return {
+      responseKey: 'recipe',
+      call: {
+        tool: RECIPE_TOOL,
+        maxTokens: 3000,
+        messages: [{ role: 'user', content: `Viết công thức cho đúng món "${wanted}" (một khẩu phần khoảng ${Math.round(targetCalories)} kcal, ${Math.round(targetProtein)} g đạm), cho ${mealLabel}. Giữ nguyên tên món trong dishName. Dễ làm tại nhà, tối đa 3 dụng cụ thông dụng, nguyên liệu dễ mua ở Việt Nam, ít dầu mỡ, muối, đường. Gọi tool report_recipe.` }],
+      },
+    };
+  }
   const prompt =
     `Gợi ý MỘT món ăn Việt Nam khác cho "${mealLabel}" (${dayType === 'training' ? 'ngày tập luyện' : 'ngày nghỉ'}), ` +
     `sao cho tổng calo khoảng ${Math.round(targetCalories)}kcal và protein khoảng ${Math.round(targetProtein)}g ` +

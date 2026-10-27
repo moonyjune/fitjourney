@@ -44,7 +44,9 @@ import { buildMealPlan, mealBrief } from '../../ai/mealSplit';
 import { MealSuggestionsCard } from '../../components/quest/MealSuggestionsCard';
 import type { FoodEntry } from '../../food/types';
 import { mergeFoods, useFoodDbStore } from '../../store/useFoodDbStore';
+import { useCookbookStore } from '../../store/useCookbookStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
+import { useMealIdeasStore } from '../../store/useMealIdeasStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -86,6 +88,8 @@ describe('Meal suggestions card (Camp)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockParams = {};
+    useCookbookStore.setState({ recipes: [] });
+    useMealIdeasStore.setState({ byDay: {} });
     useSettingsStore.setState({ language: 'vi', gender: null, age: null, heightCm: null, activityLevel: null, calorieTargetKcal: 1900, targetDailyDeficitKcal: 1100, proteinTargetG: 200 });
     useLimitsStore.setState({ purineMg: 1200, saltG: 7, sugarG: 25 });
     useWorkoutStore.setState({ entries: [] });
@@ -234,7 +238,7 @@ describe('Meal suggestions card (Camp)', () => {
     expect(allText(r)).not.toContain('Độ chính xác ước tính: 91%');
   });
 
-  it('forgets the AI\'s answers when something is logged or the mode changes (what is left changed)', async () => {
+  it('keeps the AI\'s answers when the page is reloaded, hides the ones that no longer fit, and does not ask again', async () => {
     useMealModeStore.setState({ fasting: false });
     useNutritionStore.setState({ logs: {} });
     useSettingsStore.setState({ calorieTargetKcal: 2800 });
@@ -242,11 +246,77 @@ describe('Meal suggestions card (Camp)', () => {
     const r = await mount(AT(8));
     await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
     expect(allText(r)).toContain('Trứng ốp la + bánh mì');
+    expect(mockDinner).toHaveBeenCalledTimes(1);
+
+    // "Reload": the card is built again from nothing but what was stored.
+    act(() => renderer?.unmount());
+    const again = await mount(AT(8));
+    expect(allText(again)).toContain('Trứng ốp la + bánh mì');
+    expect(find(again, 'Nhờ AI gợi ý Bữa sáng')).toBeUndefined(); // already asked
+    expect(mockDinner).toHaveBeenCalledTimes(1);
+
+    // Later in the day, with much less left, the stored idea is not offered any more (and is not asked for again either).
     await act(async () => {
-      logLunch(300);
+      logLunch(1700);
     });
-    expect(allText(r)).not.toContain('Trứng ốp la + bánh mì');
-    expect(find(r, 'Nhờ AI gợi ý Bữa sáng')).toBeDefined();
+    expect(allText(again)).not.toContain('Đã lưu vào cook book'); // the AI list is hidden; the dish may still come from the cook book for a later meal
+    expect(allText(again)).not.toContain('Độ chính xác ước tính: 70%');
+  });
+
+  it('saves every AI idea into the cook book (once) and offers cook book dishes that fit, without the AI', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    mockDinner.mockResolvedValue({ ok: true, result: { options: [{ name: 'Trứng ốp la + bánh mì', calories: 650, proteinG: 30, accuracyPercent: 70, steps: ['Đập trứng', 'Chiên trứng'], ingredients: [{ name: 'Trứng', quantity: '2 quả' }], minutes: 10, difficulty: 1 }] } });
+    const r = await mount(AT(8));
+    await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
+    const book = useCookbookStore.getState().recipes;
+    expect(book).toHaveLength(1);
+    expect(book[0]).toMatchObject({ name: 'Trứng ốp la + bánh mì', source: 'ai', minutes: 10, difficulty: 1, steps: ['Đập trứng', 'Chiên trứng'] });
+    expect(allText(r)).toContain('Cook book (1 món)');
+
+    // A new day with nothing asked: the dish comes from the cook book, no AI call.
+    useMealIdeasStore.setState({ byDay: {} });
+    mockDinner.mockClear();
+    act(() => renderer?.unmount());
+    const next = await mount(AT(8));
+    expect(allText(next)).toContain('Trứng ốp la + bánh mì');
+    expect(allText(next)).toContain('Từ cook book');
+    expect(mockDinner).not.toHaveBeenCalled();
+  });
+
+  it('asks for other dishes: sends the cook book and the dishes on screen to avoid, and shows only new ones', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    mockDinner.mockResolvedValueOnce({ ok: true, result: { options: [{ name: 'Món một', calories: 650, proteinG: 30, accuracyPercent: 70 }] } });
+    const r = await mount(AT(8));
+    await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
+    mockDinner.mockResolvedValueOnce({ ok: true, result: { options: [{ name: 'Món một', calories: 650, proteinG: 30, accuracyPercent: 70 }, { name: 'Món hai', calories: 640, proteinG: 30, accuracyPercent: 70 }] } });
+    await act(async () => find(r, 'Gợi ý món khác: Bữa sáng')!.props.onPress());
+    expect((mockDinner.mock.calls[1] as unknown[])[2]).toEqual(expect.arrayContaining(['Món một']));
+    expect(allText(r)).toContain('Món hai');
+    expect(useCookbookStore.getState().recipes.map((x) => x.name).sort()).toEqual(['Món hai', 'Món một']);
+  });
+
+  it('opens a dialog with the recipe, and the user can rate the dish', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    mockDinner.mockResolvedValue({ ok: true, result: { options: [{ name: 'Cá hấp gừng', calories: 650, proteinG: 30, accuracyPercent: 70, emoji: '🐟', steps: ['Rửa cá', 'Hấp cá 10 phút'], ingredients: [{ name: 'Cá', quantity: '200g' }], minutes: 20, difficulty: 2, equipment: ['nồi hấp'] }] } });
+    const r = await mount(AT(8));
+    await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
+    await act(async () => find(r, 'Xem công thức: Cá hấp gừng')!.props.onPress());
+    const text = allText(r);
+    expect(text).toContain('NGUYÊN LIỆU');
+    expect(text).toContain('Cá — 200g');
+    expect(text).toContain('CÁCH NẤU');
+    expect(text).toContain('1. Rửa cá');
+    expect(text).toContain('20 phút');
+    expect(text).toContain('★★☆☆☆'); // difficulty 2
+    expect(text).toContain('PHÂN TÍCH DINH DƯỠNG');
+    await act(async () => find(r, 'Chấm 4 sao')!.props.onPress());
+    expect(useCookbookStore.getState().recipes[0].rating).toBe(4);
   });
 
   it.each([

@@ -284,6 +284,7 @@ export default function ProfileScreen() {
         <MenuRow icon="list" label={tl('learn.profileRow')} hint={tl('learn.profileRowHint')} onPress={() => router.push('/learn')} />
         <MenuRow icon="check" label={tb('hb.profileRow')} hint={tb('hb.profileRowHint')} onPress={() => router.push('/habits')} />
         <MenuRow icon="bowl" label={tf('fdb.profileRow')} hint={tf('fdb.profileRowHint')} onPress={() => router.push('/food-db')} />
+        <MenuRow icon="list" label={g('cookbook.title')} hint={g('cookbook.empty')} onPress={() => router.push('/cookbook')} />
         <MenuRow icon="flame" label={ti('ins.profileRow')} hint={ti('ins.profileRowHint')} onPress={() => router.push('/insights')} />
         <MenuRow icon="flame" label={g('week.profileRow')} hint={g('week.profileRowHint')} onPress={() => router.push('/weekly-report')} />
         {isAiAdmin && <MenuRow icon="chart" label={g('aiAdmin.profileRow')} hint={g('aiAdmin.profileRowHint')} onPress={() => router.push('/ai-admin')} />}

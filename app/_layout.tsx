@@ -161,6 +161,7 @@ export default function RootLayout() {
           <Stack.Screen name="quick-add" options={{ presentation: 'transparentModal', animation: 'fade' }} />
           <Stack.Screen name="checkin" options={{ presentation: 'transparentModal', animation: 'fade' }} />
           <Stack.Screen name="journal" />
+          <Stack.Screen name="cookbook" />
           <Stack.Screen name="client-journal" />
           <Stack.Screen name="client-history" />
           <Stack.Screen name="boss" />
