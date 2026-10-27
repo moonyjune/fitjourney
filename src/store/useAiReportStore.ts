@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { WeeklyReport } from '../ai/weeklyReport';
 
 export interface StoredReport {
@@ -32,6 +32,6 @@ export const useAiReportStore = create<ReportState>()(
           return { weekly: next };
         }),
     }),
-    { name: 'ai-report-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'ai-report-store', storage: createJSONStorage(() => appStorage) }
   )
 );

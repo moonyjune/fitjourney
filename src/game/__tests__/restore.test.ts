@@ -23,6 +23,7 @@ const KEYS: Record<string, string[]> = {
   habits: ['user_id', 'client_id'],
   habit_checks: ['user_id', 'habit_client_id', 'entry_date'],
   uric_readings: ['user_id', 'client_id'],
+  feeling_records: ['user_id', 'client_id'],
   user_data: ['user_id', 'key'],
 };
 
@@ -66,13 +67,27 @@ jest.mock('../../lib/supabase', () => ({
         };
         return query;
       },
-      delete: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }),
+      delete: () => {
+        let filter: Row = {};
+        const query = {
+          eq: (col: string, val: unknown) => {
+            filter = { ...filter, [col]: val };
+            return query;
+          },
+          lt: () => query,
+          then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
+            mockDb[table] = (mockDb[table] ?? []).filter((r) => !Object.entries(filter).every(([k, v]) => r[k] === v));
+            return Promise.resolve({ error: null }).then(resolve, reject);
+          },
+        };
+        return query;
+      },
     }),
   },
 }));
 
 import { WATER_DEFAULT_ML } from '../../store/useNutritionStore';
-import { waterFills, mergeChecks, mergeNutrition, mergeWeights, mergeWorkouts, restoreOwnData } from '../../sync/restore';
+import { mergeChecks, mergeNutrition, mergeWeights, mergeWorkouts, restoreOwnData } from '../../sync/restore';
 import { whenPushesSettled } from '../../sync/cloudSync';
 import { applyDiaryImport, type DiaryImportFile } from '../../import/diaryImport';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -87,6 +102,8 @@ import { useUricStore } from '../../store/useUricStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useSyncQueueStore } from '../../sync/syncQueue';
+import { useFeelingStore } from '../../store/useFeelingStore';
+import { flushSyncQueue, pushNutritionLog } from '../../sync/cloudSync';
 
 const signIn = (id = 'user-1') => useAuthStore.setState({ session: { user: { id, email: 'a@b.c' } } as never, devMode: false });
 
@@ -184,19 +201,67 @@ describe('restore from the cloud', () => {
     expect(snapshot()).toEqual(once);
   });
 
-  it('what is already on the device wins over the cloud copy', async () => {
+  it('the cloud wins over a device copy with nothing waiting; a write still waiting keeps the device copy', async () => {
     applyDiaryImport(diary());
     await whenPushesSettled();
-    // The device has a different version of 1 Oct, a changed habit and another target.
+    // An old copy on the device that never reached the cloud and is not waiting (e.g. brought back by the browser): the cloud wins.
     useNutritionStore.setState((s) => ({ logs: { ...s.logs, '2026-10-01': { ...s.logs['2026-10-01'], waterMl: 777 } } }));
+    // A tick made offline waits in the queue: the device keeps it.
+    mockOnline = false;
     useHabitStore.getState().setCheck('2026-10-01', 'diary-h-01', 'missed');
+    await whenPushesSettled();
     mockDb.habit_checks = [{ id: 'x1', user_id: 'user-1', habit_client_id: 'diary-h-01', entry_date: '2026-10-01', value: 'done' }];
     await restoreOwnData();
-    expect(useNutritionStore.getState().logs['2026-10-01'].waterMl).toBe(777);
+    expect(useNutritionStore.getState().logs['2026-10-01'].waterMl).toBe(0);
     expect(useHabitStore.getState().checks['2026-10-01']['diary-h-01']).toBe('missed');
   });
 
-  it('a day the device has with no water takes the cloud figure (e.g. water seeded in SQL), a typed figure is kept', async () => {
+  it('records only the device has, with nothing waiting, are removed (an old copy must not come back)', async () => {
+    applyDiaryImport(diary());
+    await whenPushesSettled();
+    const day = { dateISO: '2026-09-14', mealsEaten: {}, extraCalories: 500, extraProteinG: 0, extraItems: [], waterMl: 0 };
+    useNutritionStore.setState((s) => ({ logs: { ...s.logs, '2026-09-14': day } }));
+    useWeightStore.setState((s) => ({ entries: [{ id: 'old-w', dateISO: '2026-09-14T05:00:00.000Z', weightKg: 112 }, ...s.entries] }));
+    await restoreOwnData();
+    expect(useNutritionStore.getState().logs['2026-09-14']).toBeUndefined();
+    expect(useWeightStore.getState().entries.map((e) => e.id)).not.toContain('old-w');
+    expect(Object.keys(useNutritionStore.getState().logs).sort()).toEqual(['2026-10-01', '2026-10-02']);
+  });
+
+  it('a weigh-in or workout deleted on the device is deleted in the cloud and does not come back', async () => {
+    applyDiaryImport(diary());
+    await whenPushesSettled();
+    useWeightStore.getState().removeEntry('diary-w-20261002-1');
+    useWorkoutStore.getState().removeEntry('diary-20261001-1');
+    await whenPushesSettled();
+    await restoreOwnData();
+    expect(useWeightStore.getState().entries.map((e) => e.id)).not.toContain('diary-w-20261002-1');
+    expect(useWorkoutStore.getState().entries).toEqual([]);
+  });
+
+  it('check-ins: restored from the cloud, those the cloud never got are sent up once, a deleted one stays deleted', async () => {
+    mockDb.feeling_records = [
+      { id: 'f-old', user_id: 'user-1', client_id: null, logged_at: '2026-10-26T11:16:33.961+00:00', craving_level: 2, hunger_level: 3, mood: 'neutral', workout_condition: null, note: null },
+    ];
+    const mine = { id: '1793000000000', loggedAtISO: '2026-10-25T08:00:00.000Z', cravingLevel: 3, hungerLevel: 2, mood: 'good' as const, workoutCondition: null, note: 'chỉ trên máy' };
+    const sameAsCloud = { ...mine, id: '1793010993961', loggedAtISO: '2026-10-26T11:16:33.961Z', note: '' };
+    useFeelingStore.setState({ records: [mine, sameAsCloud], cloudChecked: false });
+    await restoreOwnData();
+    await whenPushesSettled();
+    expect(useFeelingStore.getState().records.map((r) => r.id).sort()).toEqual(['1793000000000', 'cloud-f-old']);
+    expect(mockDb.feeling_records.map((r) => r.client_id ?? r.id)).toEqual(['f-old', '1793000000000']);
+    // After a sign-out the device is empty: everything comes back from the cloud.
+    resetAllLocalStores();
+    signIn();
+    await restoreOwnData();
+    expect(useFeelingStore.getState().records.map((r) => r.id)).toEqual(['1793000000000', 'cloud-f-old']);
+    useFeelingStore.getState().removeRecord('1793000000000');
+    await whenPushesSettled();
+    await restoreOwnData();
+    expect(useFeelingStore.getState().records.map((r) => r.id)).toEqual(['cloud-f-old']);
+  });
+
+  it('water comes from the cloud for every day it has (the cloud is the source of truth)', async () => {
     mockDb.nutrition_logs = [
       { id: 'n1', user_id: 'user-1', entry_date: '2026-10-01', water_ml: 3000, extra_items: [], meals_eaten: {} },
       { id: 'n2', user_id: 'user-1', entry_date: '2026-10-02', water_ml: 3000, extra_items: [], meals_eaten: {} },
@@ -207,8 +272,7 @@ describe('restore from the cloud', () => {
     await restoreOwnData();
     const logs = useNutritionStore.getState().logs;
     expect(logs['2026-10-01'].waterMl).toBe(3000);
-    expect(logs['2026-10-01'].extraCalories).toBe(5);
-    expect(logs['2026-10-02'].waterMl).toBe(1200);
+    expect(logs['2026-10-02'].waterMl).toBe(3000);
   });
 
   it('a failed request leaves the device as it was and reports not ok', async () => {
@@ -385,18 +449,6 @@ describe('merge rules', () => {
     expect(mergeWeights([], [row({ entry_date: 'soon', weight_kg: '100' }), row({ entry_date: '2026-10-01', weight_kg: '0' }), row({ entry_date: '2026-10-01', weight_kg: 'x' })])).toEqual([]);
   });
 
-  it('waterFills: only days known locally with no water, and a positive cloud figure', () => {
-    const day = (waterMl: number) => ({ dateISO: 'x', mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl });
-    const fills = waterFills({ '2026-10-01': day(0), '2026-10-02': day(500), '2026-10-03': day(0), '2026-10-04': day(0) }, [
-      row({ entry_date: '2026-10-01', water_ml: '3000' }),
-      row({ entry_date: '2026-10-02', water_ml: '3000' }),
-      row({ entry_date: '2026-10-03', water_ml: '0' }),
-      row({ entry_date: '2026-10-09', water_ml: '3000' }),
-      row({ entry_date: 'soon', water_ml: '3000' }),
-    ]);
-    expect(fills).toEqual({ '2026-10-01': 3000 });
-  });
-
   it('applyWaterDefault: 3 L for 21/9-25/10 on days with no water, typed water kept, only once, reset on sign-out', () => {
     useNutritionStore.getState().addWater('2026-10-02', 1200);
     expect(useNutritionStore.getState().applyWaterDefault()).toBe(34); // 35 days minus the typed one
@@ -459,14 +511,14 @@ describe('a device that kept an older version of a day', () => {
   const cloudRow = (calories: number) => ({ id: 'n1', user_id: 'user-1', entry_date: '2026-10-27', meals_eaten: {}, extra_calories: calories, extra_protein_g: 17, extra_items: [item(calories)], water_ml: 0, removed_meal_slots: [] });
   const local = (calories: number) => ({ dateISO: '2026-10-27', mealsEaten: {}, extraCalories: calories, extraProteinG: 17, extraItems: [item(calories)], waterMl: 1200 });
 
-  it('takes the cloud food when nothing of that day is waiting to be sent, and keeps the water typed here', async () => {
+  it('takes the cloud food and water when nothing of that day is waiting to be sent', async () => {
     useNutritionStore.setState({ logs: { '2026-10-27': local(705) } });
     mockDb.nutrition_logs = [cloudRow(480)];
     await restoreOwnData();
     const day = useNutritionStore.getState().logs['2026-10-27'];
     expect(day.extraItems[0].calories).toBe(480);
     expect(day.extraCalories).toBe(480);
-    expect(day.waterMl).toBe(1200);
+    expect(day.waterMl).toBe(0);
   });
 
   it('keeps the device version while that day still waits in the retry queue', async () => {
@@ -476,5 +528,54 @@ describe('a device that kept an older version of a day', () => {
     mockDb.nutrition_logs = [cloudRow(480)];
     await restoreOwnData();
     expect(useNutritionStore.getState().logs['2026-10-27'].extraItems[0].calories).toBe(705);
+  });
+});
+
+describe('the retry queue', () => {
+  const day = (waterMl: number, ids: string[]) => ({
+    dateISO: '2026-10-26', mealsEaten: {}, extraCalories: ids.length * 100, extraProteinG: 0, waterMl,
+    extraItems: ids.map((id) => ({ id, name: id, calories: 100, proteinG: 0, mealTime: 'lunch' as const, loggedAtISO: '2026-10-26T05:00:00.000Z' })),
+  });
+
+  it('keeps one write per day and sends the day as it is now, so an old copy cannot undo a later change', async () => {
+    mockOnline = false;
+    useNutritionStore.setState({ logs: { '2026-10-26': day(1000, ['a', 'extra']) } });
+    await pushNutritionLog(day(1000, ['a', 'extra']));
+    useNutritionStore.setState({ logs: { '2026-10-26': day(2000, ['a']) } });
+    await pushNutritionLog(day(2000, ['a']));
+    expect(useSyncQueueStore.getState().pending).toHaveLength(1);
+    mockOnline = true;
+    await flushSyncQueue();
+    const row = mockDb.nutrition_logs.find((r) => r.entry_date === '2026-10-26')!;
+    expect(row.water_ml).toBe(2000);
+    expect((row.extra_items as { id: string }[]).map((i) => i.id)).toEqual(['a']);
+    expect(useSyncQueueStore.getState().pending).toEqual([]);
+  });
+
+  it('a day removed from the device is not sent again from the queue', async () => {
+    mockOnline = false;
+    await pushNutritionLog(day(1000, ['a']));
+    useNutritionStore.setState({ logs: {} });
+    mockOnline = true;
+    await flushSyncQueue();
+    expect(mockDb.nutrition_logs ?? []).toEqual([]);
+  });
+
+  it('a write that reached the cloud drops an older waiting write of the same record', async () => {
+    mockOnline = false;
+    await pushNutritionLog(day(1000, ['a']));
+    mockOnline = true;
+    useNutritionStore.setState({ logs: { '2026-10-26': day(2000, ['a']) } });
+    await pushNutritionLog(day(2000, ['a']));
+    expect(useSyncQueueStore.getState().pending).toEqual([]);
+  });
+});
+
+describe('upgrading the retry queue', () => {
+  it('drops food days queued under the old rules once, keeps every other waiting write', async () => {
+    const options = (useSyncQueueStore as unknown as { persist: { getOptions: () => { migrate: (s: unknown, v: number) => { pending: { type: string }[] } } } }).persist.getOptions();
+    const old = { pending: [{ id: '1-a', type: 'nutritionLog', payload: {} }, { id: '2-b', type: 'weightEntry', payload: { id: 'w' } }] };
+    expect(options.migrate(old, 0).pending.map((p) => p.type)).toEqual(['weightEntry']);
+    expect(options.migrate(old, 1).pending).toHaveLength(2);
   });
 });

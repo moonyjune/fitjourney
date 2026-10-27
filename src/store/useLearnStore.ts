@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { pushUserData } from '../sync/cloudSync';
 import { USER_DATA_KEYS } from '../sync/userDataKeys';
 
@@ -21,6 +21,6 @@ export const useLearnStore = create<LearnState>()(
         return Object.keys(incoming).length;
       },
     }),
-    { name: 'learn-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'learn-store', storage: createJSONStorage(() => appStorage) }
   )
 );

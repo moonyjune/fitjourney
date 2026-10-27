@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { deleteUricReading, pushUricReading, pushUserData } from '../sync/cloudSync';
 import { USER_DATA_KEYS } from '../sync/userDataKeys';
 import { DEFAULT_TARGET_UMOL, type UricReading } from '../uric/types';
@@ -57,6 +57,6 @@ export const useUricStore = create<UricState>()(
         pushUserData(USER_DATA_KEYS.uricTarget, get().targetUmol);
       },
     }),
-    { name: 'uric-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'uric-store', storage: createJSONStorage(() => appStorage) }
   )
 );

@@ -15,7 +15,7 @@ import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
 import { DEFAULT_TARGET_DAILY_DEFICIT_KCAL } from '../utils/tdee';
-import { isOnline, useSyncQueueStore, type SyncOp } from './syncQueue';
+import { currentDay, isOnline, opKey, useSyncQueueStore, type NewSyncOp } from './syncQueue';
 import type {
   ActivityLevel,
   ChatRole,
@@ -55,7 +55,7 @@ function logSyncError(context: string, error: unknown) {
  * when the request itself fails (most commonly a flaky connection). See sync/syncQueue.ts.
  */
 async function pushOrQueue(
-  op: Omit<SyncOp, 'id'>,
+  op: NewSyncOp,
   attempt: () => PromiseLike<{ error: unknown }>,
   context: string
 ): Promise<void> {
@@ -68,7 +68,8 @@ async function pushOrQueue(
   }
 }
 
-async function tryPush(op: Omit<SyncOp, 'id'>, attempt: () => PromiseLike<{ error: unknown }>, context: string): Promise<void> {
+async function tryPush(op: NewSyncOp, attempt: () => PromiseLike<{ error: unknown }>, context: string): Promise<void> {
+  const startedMs = Date.now();
   if (!(await isOnline())) {
     useSyncQueueStore.getState().enqueue(op);
     return;
@@ -76,6 +77,8 @@ async function tryPush(op: Omit<SyncOp, 'id'>, attempt: () => PromiseLike<{ erro
   try {
     const { error } = await attempt();
     if (error) throw error;
+    // The record as it is now reached the cloud: an older write of it still waiting would only undo this one.
+    useSyncQueueStore.getState().settled(opKey(op), startedMs);
   } catch (error) {
     logSyncError(context, error);
     useSyncQueueStore.getState().enqueue(op);
@@ -314,6 +317,35 @@ export async function pushWeightEntry(entry: WeightEntry): Promise<void> {
         { onConflict: 'user_id,client_id' }
       ),
     'pushWeightEntry'
+  );
+}
+
+/** Ids of records that came from the cloud without an id of the device (made before records had one) are `cloud-<row id>`. */
+const CLOUD_ROW = 'cloud-';
+
+export async function deleteWeightEntry(entryId: string): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'weightDelete', payload: { entryId } },
+    () => {
+      const q = supabase.from('weight_entries').delete().eq('user_id', userId);
+      return entryId.startsWith(CLOUD_ROW) ? q.eq('id', entryId.slice(CLOUD_ROW.length)) : q.eq('client_id', entryId);
+    },
+    'deleteWeightEntry'
+  );
+}
+
+export async function deleteWorkoutEntry(entryId: string): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'workoutDelete', payload: { entryId } },
+    () => {
+      const q = supabase.from('workout_entries').delete().eq('user_id', userId);
+      return entryId.startsWith(CLOUD_ROW) ? q.eq('id', entryId.slice(CLOUD_ROW.length)) : q.eq('client_id', entryId);
+    },
+    'deleteWorkoutEntry'
   );
 }
 
@@ -686,16 +718,30 @@ export async function pushFeelingRecord(record: FeelingRecord): Promise<void> {
   await pushOrQueue(
     { type: 'feelingRecord', payload: record },
     () =>
-      supabase.from('feeling_records').insert({
+      supabase.from('feeling_records').upsert({
         user_id: userId,
+        client_id: record.id,
         logged_at: record.loggedAtISO,
         craving_level: record.cravingLevel,
         hunger_level: record.hungerLevel,
         mood: record.mood,
         workout_condition: record.workoutCondition,
         note: record.note || null,
-      }),
+      }, { onConflict: 'user_id,client_id' }),
     'pushFeelingRecord'
+  );
+}
+
+export async function deleteFeelingRecord(recordId: string): Promise<void> {
+  const userId = currentUserId();
+  if (!userId) return;
+  await pushOrQueue(
+    { type: 'feelingDelete', payload: { recordId } },
+    () => {
+      const q = supabase.from('feeling_records').delete().eq('user_id', userId);
+      return recordId.startsWith(CLOUD_ROW) ? q.eq('id', recordId.slice(CLOUD_ROW.length)) : q.eq('client_id', recordId);
+    },
+    'deleteFeelingRecord'
   );
 }
 
@@ -1394,7 +1440,17 @@ export async function requestMealText(text: string, profile?: BodyProfile, coach
  * Call this on app start and whenever connectivity is restored (see sync/syncQueue.ts's listener
  * wiring in app/_layout.tsx).
  */
-export async function flushSyncQueue(): Promise<void> {
+let flushing: Promise<void> | null = null;
+
+/** Sends every waiting write (one at a time; a second call while one runs waits for it instead of sending everything twice). */
+export function flushSyncQueue(): Promise<void> {
+  flushing ??= flushOnce().finally(() => {
+    flushing = null;
+  });
+  return flushing;
+}
+
+async function flushOnce(): Promise<void> {
   if (!(await isOnline())) return;
   const { pending, dequeue } = useSyncQueueStore.getState();
   for (const op of pending) {
@@ -1406,8 +1462,20 @@ export async function flushSyncQueue(): Promise<void> {
       case 'workoutEntry':
         await pushWorkoutEntry(op.payload);
         break;
-      case 'nutritionLog':
-        await pushNutritionLog(op.payload);
+      case 'nutritionLog': {
+        // The day as it is on the device now, not the copy from when the write first failed; a day no longer here is not sent.
+        const day = currentDay(op.payload.dateISO.slice(0, 10));
+        if (day) await pushNutritionLog(day);
+        break;
+      }
+      case 'weightDelete':
+        await deleteWeightEntry(op.payload.entryId);
+        break;
+      case 'workoutDelete':
+        await deleteWorkoutEntry(op.payload.entryId);
+        break;
+      case 'feelingDelete':
+        await deleteFeelingRecord(op.payload.recordId);
         break;
       case 'proofPhoto':
         await pushProofPhoto(op.payload);

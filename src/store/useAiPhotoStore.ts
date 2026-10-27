@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 
 interface AiPhotoState {
   /** Send photos to the AI at Full HD (1920 px) instead of the smaller default (1280 px). */
@@ -20,6 +20,6 @@ export const useAiPhotoStore = create<AiPhotoState>()(
       aiEnabled: true,
       setAiEnabled: (aiEnabled) => set({ aiEnabled }),
     }),
-    { name: 'ai-photo-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'ai-photo-store', storage: createJSONStorage(() => appStorage) }
   )
 );

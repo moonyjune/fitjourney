@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { ExerciseId } from '../game/training/exercises';
 import { applyRating, progressFor, type ExerciseProgress, type Rating } from '../game/training/progress';
 
@@ -32,6 +32,6 @@ export const useTrainingStore = create<TrainingState>()(
         return leveledUp;
       },
     }),
-    { name: 'training-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'training-store', storage: createJSONStorage(() => appStorage) }
   )
 );

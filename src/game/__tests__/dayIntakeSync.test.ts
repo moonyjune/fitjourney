@@ -6,7 +6,7 @@ jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: jest.fn(), de
 jest.mock('../../lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() }, from: jest.fn() } }));
 
 import { limitsFrom } from '../../coach/clientSnapshot';
-import { daysToPush, foodFills } from '../../sync/restore';
+import { reconcileNutrition } from '../../sync/restore';
 import type { DailyNutritionLog, ExtraFoodItem } from '../../types';
 import { dayHasFood, extraIntake, withIntakeCounters } from '../../utils/dayIntake';
 import { evaluateDay } from '../missions';
@@ -53,23 +53,30 @@ describe('evaluateDay uses the items for the totals and rounds the deficit', () 
   });
 });
 
-describe('restore: days the device has without food', () => {
+describe('restore: the cloud is the source of truth for the days', () => {
   const row = (date: string, items: ExtraFoodItem[], water = 0) => ({ entry_date: date, meals_eaten: {}, extra_calories: items.reduce((s, i) => s + i.calories, 0), extra_protein_g: 0, extra_items: items, water_ml: water });
-  it('takes the cloud food for a local day that only has the default water, keeping the local water', () => {
+  it('takes the cloud food and water for every day the cloud has', () => {
     const local = { '2026-10-24': log({ dateISO: '2026-10-24', waterMl: 3000 }) };
-    const fills = foodFills(local, [row('2026-10-24', [item('d1', 440, 20), item('d2', 436, 40)], 500)]);
-    expect(fills['2026-10-24'].extraItems).toHaveLength(2);
-    expect(fills['2026-10-24'].extraCalories).toBe(876);
-    expect(fills['2026-10-24'].waterMl).toBe(3000);
+    const out = reconcileNutrition(local, [row('2026-10-24', [item('d1', 440, 20), item('d2', 436, 40)], 500)], new Set());
+    expect(out['2026-10-24'].extraItems).toHaveLength(2);
+    expect(out['2026-10-24'].extraCalories).toBe(876);
+    expect(out['2026-10-24'].waterMl).toBe(500);
   });
-  it('leaves a day that already has food alone, and a day the device does not know', () => {
-    const local = { '2026-10-24': log({ dateISO: '2026-10-24', extraItems: [item('mine', 100, 1)] }) };
-    expect(foodFills(local, [row('2026-10-24', [item('d1', 440, 20)]), row('2026-10-25', [item('d2', 1, 1)])])).toEqual({});
+  it('drops a day only the device has (an old copy brought back by the browser, or removed elsewhere)', () => {
+    const local = { '2026-09-14': log({ dateISO: '2026-09-14', extraItems: [item('old', 500, 1)] }), '2026-10-25': log({ dateISO: '2026-10-25', extraItems: [item('b', 400, 1)] }) };
+    expect(Object.keys(reconcileNutrition(local, [row('2026-10-25', [item('b', 400, 1)])], new Set()))).toEqual(['2026-10-25']);
   });
-  it('sends up a day with food that the cloud has no food for', () => {
-    const local = { '2026-10-24': log({ dateISO: '2026-10-24', extraItems: [item('a', 400, 1)] }), '2026-10-25': log({ dateISO: '2026-10-25', extraItems: [item('b', 400, 1)] }), '2026-10-26': log({ dateISO: '2026-10-26', waterMl: 3000 }) };
-    const pushed = daysToPush(local, [row('2026-10-25', [item('b', 400, 1)]), row('2026-10-24', [], 3000)]);
-    expect(pushed.map((l) => l.dateISO)).toEqual(['2026-10-24']);
+  it('a food removed on the device but back in an old cloud copy: the device wins only while its write is waiting', () => {
+    const local = { '2026-10-26': log({ dateISO: '2026-10-26', extraItems: [item('a', 100, 1)], waterMl: 2000 }) };
+    const rows = [row('2026-10-26', [item('a', 100, 1), item('extra', 300, 1)], 1500)];
+    expect(reconcileNutrition(local, rows, new Set(['day:2026-10-26']))['2026-10-26']).toBe(local['2026-10-26']);
+    expect(reconcileNutrition(local, rows, new Set())['2026-10-26'].extraItems.map((i) => i.id)).toEqual(['a', 'extra']);
+  });
+  it('keeps a waiting day the cloud does not have yet, and the device object when nothing differs', () => {
+    const local = { '2026-10-27': log({ dateISO: '2026-10-27', waterMl: 2500 }), '2026-10-25': log({ dateISO: '2026-10-25', extraItems: [item('b', 400, 1)] }) };
+    const out = reconcileNutrition(local, [row('2026-10-25', [item('b', 400, 1)])], new Set(['day:2026-10-27']));
+    expect(out['2026-10-27'].waterMl).toBe(2500);
+    expect(out['2026-10-25']).toBe(local['2026-10-25']);
   });
 });
 

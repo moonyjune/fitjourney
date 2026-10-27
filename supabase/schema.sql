@@ -211,6 +211,10 @@ create table if not exists public.feeling_records (
   created_at timestamptz not null default now()
 );
 
+-- Id của check-in trên máy: gửi lại không tạo bản trùng, xoá trên máy thì xoá được đúng dòng trên cloud.
+alter table public.feeling_records add column if not exists client_id text;
+create unique index if not exists feeling_records_user_client_id_key on public.feeling_records (user_id, client_id);
+
 -- Cached AI weekly suggestion so re-opening the screen doesn't re-spend a Claude call.
 create table if not exists public.weekly_suggestions (
   id uuid primary key default gen_random_uuid(),

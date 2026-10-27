@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { cookbookForCloud, mergeRecipe, recipeKey, type CookbookRecipe, type RecipeDetails } from '../cookbook/recipes';
 import { pushUserData } from '../sync/cloudSync';
 import { USER_DATA_KEYS } from '../sync/userDataKeys';
@@ -60,6 +60,6 @@ export const useCookbookStore = create<CookbookState>()(
         },
       };
     },
-    { name: 'cookbook-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'cookbook-store', storage: createJSONStorage(() => appStorage) }
   )
 );

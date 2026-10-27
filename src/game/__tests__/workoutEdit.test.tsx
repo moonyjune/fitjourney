@@ -47,6 +47,8 @@ const mockPushProof = jest.fn();
 jest.mock('../../sync/cloudSync', () => ({
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: (...a: unknown[]) => mockPushWorkout(...a),
+  deleteWorkoutEntry: jest.fn(),
+  deleteWeightEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
   pushProofPhoto: (...a: unknown[]) => mockPushProof(...a),
   deleteProofPhoto: jest.fn(async () => undefined),

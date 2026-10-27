@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { LIMITS } from '../game/constants';
 import { pushUserData } from '../sync/cloudSync';
 import { USER_DATA_KEYS } from '../sync/userDataKeys';
@@ -41,7 +41,7 @@ export const useLimitsStore = create<LimitsState>()(
     }),
     {
       name: 'limits-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       version: 1,
       // v0 shipped 400 mg / 5 g defaults that the built-in plan itself could not meet. Anyone still sitting exactly on
       // those old defaults never chose them, so move them to the new ones; anything else was a deliberate choice.

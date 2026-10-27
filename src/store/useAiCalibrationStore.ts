@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 
 export interface AiEstimate {
   /** Calories the AI estimated. */
@@ -32,7 +32,7 @@ export const useAiCalibrationStore = create<CalibrationState>()(
       },
       clear: () => set({ estimates: [] }),
     }),
-    { name: 'ai-calibration-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'ai-calibration-store', storage: createJSONStorage(() => appStorage) }
   )
 );
 

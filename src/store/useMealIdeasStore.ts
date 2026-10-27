@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { DinnerIdea } from '../ai/dinner';
 
 /** Days kept: the ideas asked for today are not asked (and paid for) again after a reload. Older days are dropped. */
@@ -31,6 +31,6 @@ export const useMealIdeasStore = create<MealIdeasState>()(
           return { byDay: rest };
         }),
     }),
-    { name: 'meal-ideas-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'meal-ideas-store', storage: createJSONStorage(() => appStorage) }
   )
 );

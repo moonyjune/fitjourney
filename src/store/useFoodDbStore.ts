@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { BUILT_IN_FOODS } from '../food/foodData';
 import { rememberableFood } from '../food/remember';
 import type { FoodEntry } from '../food/types';
@@ -94,7 +94,7 @@ export const useFoodDbStore = create<FoodDbState>()(
       },
       touchRecent: (id) => set((s) => ({ recent: [id, ...s.recent.filter((r) => r !== id)].slice(0, MAX_RECENT) })),
     }),
-    { name: 'food-db-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'food-db-store', storage: createJSONStorage(() => appStorage) }
   )
 );
 

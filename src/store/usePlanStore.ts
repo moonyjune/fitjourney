@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { Alert } from 'react-native';
 import type { PlanData } from '../types';
 import { DEFAULT_PLAN } from '../constants/plan';
@@ -57,7 +57,7 @@ export const usePlanStore = create<PlanState>()(
     }),
     {
       name: 'plan-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
     }
   )
 );

@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { WorkoutLogEntry } from '../types';
 import { toDateKey } from '../utils/date';
-import { pushWorkoutEntry } from '../sync/cloudSync';
+import { deleteWorkoutEntry, pushWorkoutEntry } from '../sync/cloudSync';
 import { useProofStore } from './useProofStore';
 
 /** What can be changed on a logged workout. The id never changes; `templateId` stays so a plan template's step
@@ -46,6 +46,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       removeEntry: (id) => {
         discardWorkoutPhotos(id);
         set((state) => ({ entries: state.entries.filter((e) => e.id !== id) }));
+        deleteWorkoutEntry(id);
       },
       updateEntry: (id, patch) => {
         const entry = get().entries.find((e) => e.id === id);
@@ -67,7 +68,7 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'workout-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
     }
   )
 );

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { pushUserData } from '../sync/cloudSync';
 import { USER_DATA_KEYS } from '../sync/userDataKeys';
 import { setFastingState } from '../utils/mealMode';
@@ -21,7 +21,7 @@ export const useMealModeStore = create<MealModeState>()(
         pushUserData(USER_DATA_KEYS.mealMode, { fasting });
       },
     }),
-    { name: 'meal-mode-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'meal-mode-store', storage: createJSONStorage(() => appStorage) }
   )
 );
 

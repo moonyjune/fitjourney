@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 
 interface CelebrationState {
   /** Highest level whose celebration was already shown (or that existed when tracking began); null = not tracking yet.
@@ -15,6 +15,6 @@ export const useCelebrationStore = create<CelebrationState>()(
       seenLevel: null,
       markSeen: (level) => set({ seenLevel: level }),
     }),
-    { name: 'celebration-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'celebration-store', storage: createJSONStorage(() => appStorage) }
   )
 );

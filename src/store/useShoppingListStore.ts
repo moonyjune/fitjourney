@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { weekStartKey } from '../utils/weekKey';
 
 export interface ShoppingCustomItem {
@@ -71,7 +71,7 @@ export const useShoppingListStore = create<ShoppingListState>()(
     }),
     {
       name: 'shopping-list-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
     }
   )
 );

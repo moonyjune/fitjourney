@@ -75,19 +75,19 @@ describe('habit sync', () => {
     expect(useSyncQueueStore.getState().pending).toEqual([]);
   });
 
-  it('queues a write made offline and replays it, in order, when the connection is back', async () => {
+  it('queues writes made offline, one per record (the newest tick wins), and sends them when the connection is back', async () => {
     mockNet.mockResolvedValue({ isConnected: false, isInternetReachable: false });
     await pushHabit(habit);
     await pushHabitCheck('diary-h-07', '2026-10-05', 'done');
     await pushHabitCheck('diary-h-07', '2026-10-05', null);
     expect(mockFrom).not.toHaveBeenCalled();
-    expect(useSyncQueueStore.getState().pending.map((p) => p.type)).toEqual(['habit', 'habitCheck', 'habitCheck']);
+    expect(useSyncQueueStore.getState().pending.map((p) => p.type)).toEqual(['habit', 'habitCheck']);
 
     mockNet.mockResolvedValue({ isConnected: true, isInternetReachable: true });
     await flushSyncQueue();
     expect(useSyncQueueStore.getState().pending).toEqual([]);
-    expect(mockFrom.mock.calls.map((c) => c[0])).toEqual(['habits', 'habit_checks', 'habit_checks']);
-    expect(mockUpsert).toHaveBeenCalledTimes(2);
+    expect(mockFrom.mock.calls.map((c) => c[0])).toEqual(['habits', 'habit_checks']);
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
     expect(mockDelete).toHaveBeenCalledTimes(1);
   });
 

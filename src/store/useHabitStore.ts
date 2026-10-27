@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { CheckValue, Habit, HabitChecks } from '../habits/types';
 import { pushHabit, pushHabitCheck } from '../sync/cloudSync';
 
@@ -71,6 +71,6 @@ export const useHabitStore = create<HabitState>()(
         return fresh.length;
       },
     }),
-    { name: 'habit-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'habit-store', storage: createJSONStorage(() => appStorage) }
   )
 );

@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.11 | yes | — |
 | 0.10 | yes | — |
 | 0.09 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
 | 0.08 | no | suggest-dinner, generate-meal-recipe |
@@ -22,6 +23,14 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.11
+- Sync: the cloud is now the only source of truth for the diary (food, water, weigh-ins, workouts, check-ins, habits and ticks, uric acid). Opening the app makes the device match the cloud; a record only the device has, with nothing waiting to be sent, is removed (this is what brought back old days such as 14/09 and foods already deleted on 26/10).
+- A change that could not be sent waits in the queue once per record, and is sent as the record is at that moment, never an older copy, so it can no longer undo a later change (this is what lost the water of 27/10). Food days queued under the old rules are dropped once.
+- Deleting a weigh-in, a workout or a check-in now deletes it in the cloud too (before it only left the device and could come back).
+- Check-ins (Nhật ký cảm giác) come back from the cloud after a sign-out or on another device; check-ins this device has that the cloud never got are sent up once.
+- Web: the app's data is kept in IndexedDB instead of localStorage (about 5 MB, which meal photos filled up so saves failed silently and a reload showed an old copy); existing data is moved over on first open, and localStorage is still used when a browser will not open IndexedDB.
+- Needs `supabase/schema.sql` run again (check-ins get an id of the device: `feeling_records.client_id`).
 
 ## 0.10
 - AI & cost: the list by user is split by model too: under each user, one line per model they used that day (calls, tokens, the cost recorded at the time).

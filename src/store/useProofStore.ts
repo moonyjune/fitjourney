@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { ProofPhoto, ProofTaskType } from '../types';
 import { toDateKey } from '../utils/date';
 import { deletePersistedPhoto } from '../utils/photoStorage';
@@ -50,7 +50,7 @@ export const useProofStore = create<ProofState>()(
     }),
     {
       name: 'proof-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
     }
   )
 );

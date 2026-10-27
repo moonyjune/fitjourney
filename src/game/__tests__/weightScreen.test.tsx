@@ -20,6 +20,8 @@ jest.mock('../../sync/cloudSync', () => ({
   pushWeightEntry: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
+  deleteWorkoutEntry: jest.fn(),
+  deleteWeightEntry: jest.fn(),
   pushProfile: jest.fn(),
   pushPlan: jest.fn(),
   pullProfile: jest.fn(async () => null),

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { UserSettings } from '../types';
 import {
   DEFAULT_CALORIE_TARGET,
@@ -129,7 +129,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'settings-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
     }
   )
 );

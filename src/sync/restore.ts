@@ -14,19 +14,21 @@ import { TARGET_RANGE, useUricStore } from '../store/useUricStore';
 import { useWeightStore } from '../store/useWeightStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { DEFAULT_TARGET_UMOL } from '../uric/types';
-import type { DailyNutritionLog, ExtraFoodItem, MealSlot, WeightEntry, WorkoutLogEntry } from '../types';
-import { dayHasFood, withIntakeCounters } from '../utils/dayIntake';
-import { currentUserId, pushNutritionLog, pushUserData, whenPushesSettled } from './cloudSync';
-import { useSyncQueueStore } from './syncQueue';
+import type { DailyNutritionLog, ExtraFoodItem, FeelingRecord, MealSlot, Mood, WeightEntry, WorkoutCondition, WorkoutLogEntry } from '../types';
+import { useFeelingStore } from '../store/useFeelingStore';
+import { withIntakeCounters } from '../utils/dayIntake';
+import { currentUserId, pushFeelingRecord, pushNutritionLog, pushUserData, whenPushesSettled } from './cloudSync';
+import { pendingKeys } from './syncQueue';
 import { healLog, uniqueExtraIds } from '../utils/extraIds';
 import { restoreProofPhotos } from './restorePhotos';
 import { USER_DATA_KEYS } from './userDataKeys';
 
 /**
- * Restores the signed-in user's own records from the cloud into the device stores: the app keeps a local copy of
- * everything and only pushes changes, so after signing out (which wipes the device) or on a new device the cloud copy is
- * what brings the diary back. Rule everywhere: what is already on this device wins (it is newer or the user's edit);
- * the cloud only fills in what is missing.
+ * Brings the device in line with the cloud. The cloud is the source of truth for the diary (food, water, weigh-ins, workouts,
+ * check-ins, habits and ticks, uric acid): after a restore the device holds exactly the cloud's records. The only exception is a
+ * record with a write still waiting in the retry queue: there the device's copy (or its removal) is newer and is kept until it is sent.
+ * A record the device has but the cloud does not, with nothing waiting, is gone from the device too (it was removed elsewhere, or is
+ * an old copy the browser brought back). Settings (user_data) keep their own rules below.
  */
 
 type Row = Record<string, unknown>;
@@ -36,6 +38,8 @@ const PAGE = 1000;
 /** Rows saved without a time of day are put at midday in Vietnam (05:00 UTC), the same time the diary import uses. */
 const DEFAULT_TIME = 'T05:00:00.000Z';
 const MEAL_SLOTS: MealSlot[] = ['meal1', 'meal2', 'meal3'];
+const MOODS: Mood[] = ['great', 'good', 'neutral', 'stressed', 'tired'];
+const WORKOUT_CONDITIONS: WorkoutCondition[] = ['energetic', 'normal', 'tired', 'sore', 'skipped'];
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 const num = (v: unknown): number => {
@@ -93,65 +97,12 @@ export function mergeNutrition(local: Record<string, DailyNutritionLog>, rows: R
   return added;
 }
 
-const rowHasFood = (r: Row): boolean =>
-  (Array.isArray(r.extra_items) && r.extra_items.length > 0) || num(r.extra_calories) > 0 || Object.values((r.meals_eaten ?? {}) as Record<string, unknown>).some((v) => v === true);
-
-/** Days this device holds with no food (e.g. only the default water) while the cloud has food for them (e.g. a diary seeded in SQL, or
- *  eaten on another device). Food is taken from the cloud; the device's own water figure stays when it has one. */
-export function foodFills(local: Record<string, DailyNutritionLog>, rows: Row[]): Record<string, DailyNutritionLog> {
-  const fills: Record<string, DailyNutritionLog> = {};
-  for (const r of rows) {
-    const date = dayKey(r.entry_date);
-    if (!date || !local[date] || dayHasFood(local[date]) || !rowHasFood(r)) continue;
-    const cloud = mergeNutrition({}, [r])[date];
-    if (!cloud) continue;
-    fills[date] = withIntakeCounters({ ...cloud, waterMl: local[date].waterMl > 0 ? local[date].waterMl : cloud.waterMl });
-  }
-  return fills;
-}
-
 const foodShape = (log: Pick<DailyNutritionLog, 'extraItems' | 'mealsEaten' | 'removedMealSlots'>): string =>
   JSON.stringify({
     items: (log.extraItems ?? []).map(({ photoUri: _photo, ...rest }) => rest),
     eaten: MEAL_SLOTS.filter((s) => log.mealsEaten?.[s]),
     removed: [...(log.removedMealSlots ?? [])].sort(),
   });
-
-/** Days where the device still shows an older version of the food than the cloud: every edit of this device has reached the cloud (nothing of
- *  that day is waiting in the retry queue), so a different cloud version is the newer one, e.g. an edit made here that the browser then failed to
- *  keep, or one made on another device. The cloud's food is taken; the device's own water figure and photo files stay. */
-export function staleFoodFixes(local: Record<string, DailyNutritionLog>, rows: Row[], waiting: Set<string>): Record<string, DailyNutritionLog> {
-  const fixes: Record<string, DailyNutritionLog> = {};
-  for (const r of rows) {
-    const date = dayKey(r.entry_date);
-    if (!date || !local[date] || waiting.has(date) || !dayHasFood(local[date]) || !rowHasFood(r)) continue;
-    const cloud = mergeNutrition({}, [r])[date];
-    if (!cloud || foodShape(cloud) === foodShape(local[date])) continue;
-    const photos = new Map((local[date].extraItems ?? []).map((i) => [i.id, i.photoUri]));
-    const extraItems = cloud.extraItems.map((i) => (photos.get(i.id) && !i.photoUri ? { ...i, photoUri: photos.get(i.id) } : i));
-    fixes[date] = withIntakeCounters({ ...cloud, extraItems, waterMl: local[date].waterMl > 0 ? local[date].waterMl : cloud.waterMl });
-  }
-  return fixes;
-}
-
-/** Days with food on this device that the cloud does not have food for (the push never arrived): they are sent up. */
-export function daysToPush(local: Record<string, DailyNutritionLog>, rows: Row[]): DailyNutritionLog[] {
-  const cloudFood = new Set(rows.filter(rowHasFood).map((r) => dayKey(r.entry_date)));
-  return Object.entries(local)
-    .filter(([date, log]) => DAY_KEY.test(date) && dayHasFood(log) && !cloudFood.has(date))
-    .map(([, log]) => log);
-}
-
-/** Days this device already has but with no water figure, while the cloud has one (e.g. seeded in SQL). */
-export function waterFills(local: Record<string, DailyNutritionLog>, rows: Row[]): Record<string, number> {
-  const fills: Record<string, number> = {};
-  for (const r of rows) {
-    const date = dayKey(r.entry_date);
-    const ml = num(r.water_ml);
-    if (date && local[date] && !(local[date].waterMl > 0) && ml > 0) fills[date] = ml;
-  }
-  return fills;
-}
 
 export function mergeWorkouts(local: WorkoutLogEntry[], rows: Row[]): WorkoutLogEntry[] {
   const have = new Set(local.map((e) => e.id));
@@ -230,6 +181,83 @@ export function mergeUric(local: UricReading[], rows: Row[]): UricReading[] {
     have.add(id);
   }
   return added;
+}
+
+
+/** The cloud's records, except where a write is waiting (key `prefix + id`): there the device's copy is kept, or left out when the device
+ *  removed it. With `preferLocal` the device's own object is kept for a record the cloud also has (fields the cloud does not store, such as
+ *  a workout's time of day). */
+export function reconcile<T extends { id: string }>(local: T[], cloud: T[], pending: Set<string>, prefix: string, preferLocal: boolean): T[] {
+  const localById = new Map(local.map((e) => [e.id, e]));
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const c of cloud) {
+    if (seen.has(c.id) || pending.has(prefix + c.id)) continue;
+    seen.add(c.id);
+    out.push(preferLocal ? (localById.get(c.id) ?? c) : c);
+  }
+  for (const l of local) if (!seen.has(l.id) && pending.has(prefix + l.id)) out.push(l);
+  return out;
+}
+
+/** The days as the cloud has them (food and water), except days with a write waiting, which stay as they are here. The device's photo
+ *  files are kept on the foods that still exist; a day the cloud has the same as the device keeps the device's object. */
+export function reconcileNutrition(local: Record<string, DailyNutritionLog>, rows: Row[], pending: Set<string>): Record<string, DailyNutritionLog> {
+  const out: Record<string, DailyNutritionLog> = {};
+  for (const r of rows) {
+    const date = dayKey(r.entry_date);
+    if (!date || pending.has(`day:${date}`)) continue;
+    const cloud = mergeNutrition({}, [r])[date];
+    if (!cloud) continue;
+    const mine = local[date];
+    if (mine && foodShape(mine) === foodShape(cloud) && mine.waterMl === cloud.waterMl) {
+      out[date] = mine;
+      continue;
+    }
+    const photos = new Map((mine?.extraItems ?? []).map((i) => [i.id, i.photoUri]));
+    const extraItems = cloud.extraItems.map((i) => (photos.get(i.id) && !i.photoUri ? { ...i, photoUri: photos.get(i.id) } : i));
+    out[date] = withIntakeCounters({ ...cloud, extraItems });
+  }
+  for (const [date, log] of Object.entries(local)) if (!out[date] && pending.has(`day:${date}`)) out[date] = log;
+  return out;
+}
+
+export function feelingsFromRows(rows: Row[]): FeelingRecord[] {
+  const out: FeelingRecord[] = [];
+  for (const r of rows) {
+    const logged = str(r.logged_at);
+    const mood = MOODS.find((m) => m === r.mood);
+    if (!logged || Number.isNaN(Date.parse(logged)) || !mood) continue;
+    const condition = WORKOUT_CONDITIONS.find((c) => c === r.workout_condition) ?? null;
+    out.push({
+      id: str(r.client_id) || `cloud-${str(r.id)}`,
+      loggedAtISO: new Date(logged).toISOString(),
+      cravingLevel: num(r.craving_level),
+      hungerLevel: num(r.hunger_level),
+      mood,
+      workoutCondition: condition,
+      note: str(r.note),
+    });
+  }
+  return out.sort((a, b) => a.loggedAtISO.localeCompare(b.loggedAtISO));
+}
+
+/** Check-ins on this device the cloud never got: until the check-in id existed they were sent without one, so some never arrived. They are
+ *  sent up once (not those the cloud already has from that time). */
+export function feelingsToUpload(local: FeelingRecord[], cloud: FeelingRecord[]): FeelingRecord[] {
+  const ids = new Set(cloud.map((c) => c.id));
+  const times = new Set(cloud.map((c) => Date.parse(c.loggedAtISO)));
+  return local.filter((l) => !ids.has(l.id) && !times.has(Date.parse(l.loggedAtISO)));
+}
+
+/** Ticks as the cloud has them, except a tick with a write waiting, which stays as it is here. */
+export function reconcileChecks(local: HabitChecks, rows: Row[], pending: Set<string>): HabitChecks {
+  const next = mergeChecks({}, rows);
+  for (const [date, day] of Object.entries(next)) for (const habitId of Object.keys(day)) if (pending.has(`check:${habitId}:${date}`)) delete day[habitId];
+  for (const [date, day] of Object.entries(local))
+    for (const [habitId, value] of Object.entries(day)) if (pending.has(`check:${habitId}:${date}`)) (next[date] ??= {})[habitId] = value;
+  for (const date of Object.keys(next)) if (Object.keys(next[date]).length === 0) delete next[date];
+  return next;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -338,13 +366,14 @@ async function run(): Promise<RestoreResult> {
   try {
     // Writes still on their way would make the cloud copy read below look older than the device's.
     await whenPushesSettled();
-    const [weights, nutrition, workouts, habits, checks, uric, userData] = await Promise.all([
+    const [weights, nutrition, workouts, habits, checks, uric, feelings, userData] = await Promise.all([
       fetchAll('weight_entries', userId),
       fetchAll('nutrition_logs', userId),
       fetchAll('workout_entries', userId),
       fetchAll('habits', userId),
       fetchAll('habit_checks', userId),
       fetchAll('uric_readings', userId),
+      fetchAll('feeling_records', userId),
       supabase.from('user_data').select('key,value').eq('user_id', userId).then(({ data, error }) => {
         if (error) throw error;
         return (data ?? []) as { key: string; value: unknown }[];
@@ -354,60 +383,52 @@ async function run(): Promise<RestoreResult> {
     if (currentUserId() !== userId) return EMPTY;
 
     const result: RestoreResult = { ok: true, weights: 0, days: 0, workouts: 0, habits: 0, uric: 0 };
-    // Each merge reads the stores at the moment it applies, so anything logged while the requests ran is kept.
-    const newWeights = mergeWeights(useWeightStore.getState().entries, weights);
-    if (newWeights.length > 0) {
-      useWeightStore.setState((s) => ({
-        entries: [...s.entries, ...mergeWeights(s.entries, weights)].sort((a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime()),
-      }));
-      result.weights = newWeights.length;
-    }
-    const newLogs = mergeNutrition(useNutritionStore.getState().logs, nutrition);
-    result.days = Object.keys(newLogs).length;
-    if (result.days > 0) useNutritionStore.setState((s) => ({ logs: { ...mergeNutrition(s.logs, nutrition), ...s.logs } }));
-    const food = foodFills(useNutritionStore.getState().logs, nutrition);
-    if (Object.keys(food).length > 0) {
-      useNutritionStore.setState((s) => ({ logs: { ...s.logs, ...foodFills(s.logs, nutrition) } }));
-      result.days += Object.keys(food).length;
-    }
-    const waiting = new Set(useSyncQueueStore.getState().pending.flatMap((op) => (op.type === 'nutritionLog' ? [op.payload.dateISO.slice(0, 10)] : [])));
-    const stale = staleFoodFixes(useNutritionStore.getState().logs, nutrition, waiting);
-    if (Object.keys(stale).length > 0) {
-      useNutritionStore.setState((s) => ({ logs: { ...s.logs, ...staleFoodFixes(s.logs, nutrition, waiting) } }));
-      result.days += Object.keys(stale).length;
-    }
-    // A cloud day saved with two foods under one id is repaired here (see healLog); the repaired copy goes back up.
+    // Read at the moment each store is set, so a write made while the requests ran is still treated as waiting.
+    const pending = () => pendingKeys();
+
+    useNutritionStore.setState((s) => {
+      const logs = reconcileNutrition(s.logs, nutrition, pending());
+      result.days = Object.keys(logs).filter((d) => logs[d] !== s.logs[d]).length + Object.keys(s.logs).filter((d) => !logs[d]).length;
+      return { logs };
+    });
+    // A cloud day saved with two foods under one id is repaired on the device (healLog); the repaired copy goes back up.
     for (const r of nutrition) {
       const date = dayKey(r.entry_date);
       const items = Array.isArray(r.extra_items) ? (r.extra_items as { id?: unknown }[]).filter((i) => i && typeof i.id === 'string') : [];
       const log = date ? useNutritionStore.getState().logs[date] : undefined;
       if (log && uniqueExtraIds(items as { id: string }[]).changed) void pushNutritionLog(healLog(log));
     }
-    for (const log of daysToPush(useNutritionStore.getState().logs, nutrition)) void pushNutritionLog(log);
-    const fills = waterFills(useNutritionStore.getState().logs, nutrition);
-    if (Object.keys(fills).length > 0) {
-      useNutritionStore.setState((s) => {
-        const logs = { ...s.logs };
-        for (const [date, ml] of Object.entries(waterFills(s.logs, nutrition))) logs[date] = { ...logs[date], waterMl: ml };
-        return { logs };
-      });
-    }
-    const newWorkouts = mergeWorkouts(useWorkoutStore.getState().entries, workouts);
-    if (newWorkouts.length > 0) {
-      useWorkoutStore.setState((s) => ({ entries: [...s.entries, ...mergeWorkouts(s.entries, workouts)] }));
-      result.workouts = newWorkouts.length;
-    }
-    const newHabits = mergeHabits(useHabitStore.getState().habits, habits);
-    if (newHabits.length > 0) {
-      useHabitStore.setState((s) => ({ habits: [...s.habits, ...mergeHabits(s.habits, habits)].sort((a, b) => a.sort - b.sort) }));
-      result.habits = newHabits.length;
-    }
-    useHabitStore.setState((s) => ({ checks: mergeChecks(s.checks, checks) }));
-    const newUric = mergeUric(useUricStore.getState().readings, uric);
-    if (newUric.length > 0) {
-      useUricStore.setState((s) => ({ readings: [...s.readings, ...mergeUric(s.readings, uric)] }));
-      result.uric = newUric.length;
-    }
+
+    const cloudWeights = mergeWeights([], weights);
+    useWeightStore.setState((s) => {
+      const entries = reconcile(s.entries, cloudWeights, pending(), 'weight:', true).sort((a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime());
+      result.weights = Math.abs(entries.length - s.entries.length);
+      return { entries };
+    });
+    const cloudWorkouts = mergeWorkouts([], workouts);
+    useWorkoutStore.setState((s) => {
+      const entries = reconcile(s.entries, cloudWorkouts, pending(), 'workout:', true);
+      result.workouts = Math.abs(entries.length - s.entries.length);
+      return { entries };
+    });
+    const cloudHabits = mergeHabits([], habits);
+    useHabitStore.setState((s) => {
+      const list = reconcile(s.habits, cloudHabits, pending(), 'habit:', false).sort((a, b) => a.sort - b.sort);
+      result.habits = Math.abs(list.length - s.habits.length);
+      return { habits: list, checks: reconcileChecks(s.checks, checks, pending()) };
+    });
+    const cloudUric = mergeUric([], uric);
+    useUricStore.setState((s) => {
+      const readings = reconcile(s.readings, cloudUric, pending(), 'uric:', false);
+      result.uric = Math.abs(readings.length - s.readings.length);
+      return { readings };
+    });
+
+    const cloudFeelings = feelingsFromRows(feelings);
+    const upload = useFeelingStore.getState().cloudChecked ? [] : feelingsToUpload(useFeelingStore.getState().records, cloudFeelings);
+    useFeelingStore.setState((s) => ({ records: [...reconcile(s.records, cloudFeelings, pending(), 'feeling:', true), ...upload].sort((a, b) => a.loggedAtISO.localeCompare(b.loggedAtISO)), cloudChecked: true }));
+    for (const record of upload) void pushFeelingRecord(record);
+
     restoreUserData(new Map(userData.map((d) => [d.key, d.value])));
     void restoreProofPhotos();
     return result;

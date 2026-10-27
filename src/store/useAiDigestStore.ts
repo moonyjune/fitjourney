@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { ClientStatus } from '../ai/coachDigest';
 
 export interface DigestEntry {
@@ -34,6 +34,6 @@ export const useAiDigestStore = create<DigestState>()(
           return { weeks: next };
         }),
     }),
-    { name: 'ai-digest-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'ai-digest-store', storage: createJSONStorage(() => appStorage) }
   )
 );

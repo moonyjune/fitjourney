@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import type { DailyNutritionLog, ExtraFoodItem, ExtraMealTime, MealPart, MealSlot } from '../types';
 import { toDateKey } from '../utils/date';
 import { loggedAtFor, type Clock } from '../utils/mealClock';
@@ -13,6 +13,7 @@ import { isInlinePhoto } from '../utils/inlinePhoto';
 import { extraProofRef } from '../types';
 import { withCountersAfterEdit, withIntakeCounters } from '../utils/dayIntake';
 import { healLog, newExtraId } from '../utils/extraIds';
+import { setDayReader } from '../sync/syncQueue';
 
 export type ExtraPatch = Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG' | 'parts'>> & {
   photoUri?: string | null;
@@ -217,7 +218,7 @@ export const useNutritionStore = create<NutritionState>()(
     }),
     {
       name: 'nutrition-store',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => appStorage),
       // Photos saved inline by an earlier build are already in the proof store: drop the second copy from the days.
       onRehydrateStorage: () => (state) => {
         // Days saved with two foods under one id (older builds) are repaired, and the repaired day is saved to the cloud.
@@ -243,6 +244,8 @@ export const useNutritionStore = create<NutritionState>()(
     }
   )
 );
+
+setDayReader((dateKey) => useNutritionStore.getState().logs[dateKey]);
 
 export function todayKey(): string {
   return toDateKey(new Date());

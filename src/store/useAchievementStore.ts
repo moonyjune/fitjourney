@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 
 interface AchievementState {
   /** Banner shown on the profile card; null = none. Local to this device. */
@@ -14,6 +14,6 @@ export const useAchievementStore = create<AchievementState>()(
       equippedBannerId: null,
       equipBanner: (id) => set({ equippedBannerId: id }),
     }),
-    { name: 'achievement-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'achievement-store', storage: createJSONStorage(() => appStorage) }
   )
 );

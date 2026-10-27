@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { appStorage } from '../lib/appStorage';
 import { pushUserData } from '../sync/cloudSync';
 import { USER_DATA_KEYS } from '../sync/userDataKeys';
 
@@ -42,7 +42,7 @@ export const useMealPrefStore = create<MealPrefState>()(
         pushUserData(USER_DATA_KEYS.mealPrefs, next);
       },
     }),
-    { name: 'meal-pref-store', storage: createJSONStorage(() => AsyncStorage) }
+    { name: 'meal-pref-store', storage: createJSONStorage(() => appStorage) }
   )
 );
 

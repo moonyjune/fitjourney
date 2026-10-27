@@ -74,17 +74,17 @@ describe('uric sync', () => {
     expect(useSyncQueueStore.getState().pending).toEqual([]);
   });
 
-  it('queues writes made offline and replays them in order when the connection is back', async () => {
+  it('queues writes made offline (a delete replaces the waiting save of the same reading) and sends them when the connection is back', async () => {
     mockNet.mockResolvedValue({ isConnected: false, isInternetReachable: false });
     await pushUricReading(reading);
     await deleteUricReading('diary-u-1');
     expect(mockFrom).not.toHaveBeenCalled();
-    expect(useSyncQueueStore.getState().pending.map((p) => p.type)).toEqual(['uricReading', 'uricDelete']);
+    expect(useSyncQueueStore.getState().pending.map((p) => p.type)).toEqual(['uricDelete']);
 
     mockNet.mockResolvedValue({ isConnected: true, isInternetReachable: true });
     await flushSyncQueue();
     expect(useSyncQueueStore.getState().pending).toEqual([]);
-    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(mockUpsert).not.toHaveBeenCalled();
     expect(mockDeleteCalled).toHaveBeenCalledTimes(1);
   });
 
