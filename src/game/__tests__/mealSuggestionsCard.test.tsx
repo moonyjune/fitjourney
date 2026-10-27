@@ -202,7 +202,7 @@ describe('Meal suggestions card (Camp)', () => {
     await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
     expect(mockDinner).toHaveBeenCalledTimes(1);
     const [brief] = mockDinner.mock.calls[0] as [Record<string, any>];
-    expect(brief).toMatchObject({ meal: 'breakfast', hour: 7, eatByHour: 11, budgetKcal: 700 }); // 2800 × .25
+    expect(brief).toMatchObject({ meal: 'breakfast', hour: 7, eatByHour: 11, budgetKcal: 600 }); // 2800 × .25 = 700, capped at 600 per meal
     const text = allText(r);
     expect(text).toContain('Trứng ốp la + bánh mì');
     expect(text).toContain('Chiên 5 phút.');
@@ -219,15 +219,15 @@ describe('Meal suggestions card (Camp)', () => {
     useSettingsStore.setState({ calorieTargetKcal: 3000 });
     const again = await mount(AT(16)); // 3000 left over meal 2 and 3: shares well above the plan's 500 / 713
     expect(allText(again)).toContain('theo kế hoạch (500 kcal) vẫn vừa với phần còn lại');
-    expect(allText(again)).not.toContain('nhiều hơn phần còn lại');
+    expect(allText(again)).toContain('nhiều hơn phần còn lại ~113 kcal'); // the dinner (713) only exceeds the 600 kcal cap of one meal
   });
 
   it('does not list an AI idea that has the same name as one already listed from the user\'s foods', async () => {
     useMealModeStore.setState({ fasting: false });
     useNutritionStore.setState({ logs: {} });
     useSettingsStore.setState({ calorieTargetKcal: 2800 });
-    useFoodDbStore.setState({ custom: [saved('Trứng chiên nhà làm', { kcal: 700, proteinG: 200, purineMg: 50, sodiumMg: 100, group: 'eggDairy' })] }); // the best fit for breakfast, so it is listed from the database
-    mockDinner.mockResolvedValue({ ok: true, result: { options: [{ name: 'Trứng chiên nhà làm', calories: 650, proteinG: 30, accuracyPercent: 91 }] } });
+    useFoodDbStore.setState({ custom: [saved('Trứng chiên nhà làm', { kcal: 600, proteinG: 200, purineMg: 50, sodiumMg: 100, group: 'eggDairy' })] }); // the best fit for breakfast, so it is listed from the database
+    mockDinner.mockResolvedValue({ ok: true, result: { options: [{ name: 'Trứng chiên nhà làm', calories: 600, proteinG: 30, accuracyPercent: 91 }] } });
     const r = await mount(AT(8));
     await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
     expect(allText(r)).toContain('Trứng chiên nhà làm');

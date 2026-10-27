@@ -5,6 +5,7 @@ import { useFoodDbStore } from '../store/useFoodDbStore';
 import { useHabitStore } from '../store/useHabitStore';
 import { useLearnStore } from '../store/useLearnStore';
 import { LIMIT_DEFAULTS, LIMIT_RANGE, useLimitsStore, type LimitKey } from '../store/useLimitsStore';
+import { cleanMealPrefs, NO_MEAL_PREFS, pick as pickPrefs, useMealPrefStore } from '../store/useMealPrefStore';
 import { useMealModeStore } from '../store/useMealModeStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { TARGET_RANGE, useUricStore } from '../store/useUricStore';
@@ -243,6 +244,13 @@ function restoreUserData(remote: Map<string, unknown>): void {
   if (localFasting) {
     if (remoteFasting === false) useMealModeStore.setState({ fasting: false });
   } else if (remoteFasting !== false) void pushUserData(USER_DATA_KEYS.mealMode, { fasting: false });
+
+  // Meal preferences (calories / protein wanted per meal): a device with none set takes the cloud's; a device with some pushes them.
+  const prefsLocal = pickPrefs(useMealPrefStore.getState());
+  const prefsRemote = remote.get(USER_DATA_KEYS.mealPrefs);
+  if (sameJson(prefsLocal, NO_MEAL_PREFS)) {
+    if (isObj(prefsRemote)) useMealPrefStore.setState(cleanMealPrefs(prefsRemote));
+  } else if (!sameJson(prefsLocal, prefsRemote)) void pushUserData(USER_DATA_KEYS.mealPrefs, prefsLocal);
 
   const foods = remote.get(USER_DATA_KEYS.foodDb);
   const localFoods = useFoodDbStore.getState();

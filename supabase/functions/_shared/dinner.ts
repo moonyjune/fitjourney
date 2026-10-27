@@ -22,6 +22,11 @@ export interface DinnerRequest {
   /** Which meal it is for (absent counts as dinner), and the hour it should be eaten by. */
   meal: 'breakfast' | 'lunch' | 'dinner' | 'meal';
   eatByHour: number;
+  /** The user set the calories (and maybe protein) wanted for this meal: the figures are targets to land within ±10% of. */
+  exact: boolean;
+  proteinExact: boolean;
+  /** Never more calories than `budgetKcal`. */
+  strictKcal: boolean;
   favorites: string[];
 }
 
@@ -42,6 +47,9 @@ export function cleanDinnerRequest(raw: unknown): DinnerRequest | null {
     hour,
     meal: MEALS.includes(r.meal) ? r.meal : 'dinner',
     eatByHour: bounded(r.eatByHour, 0, 24) ?? Math.min(24, hour + 3),
+    exact: r.exact === true,
+    proteinExact: r.proteinExact === true,
+    strictKcal: r.strictKcal === true,
     favorites: (Array.isArray(r.favorites) ? r.favorites : []).map((f: unknown) => cleanName(f, 60)).filter(Boolean).slice(0, 8),
   };
 }

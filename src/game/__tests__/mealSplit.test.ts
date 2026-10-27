@@ -14,6 +14,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import { buildMealPlan, COVER_MIN_KCAL, coveredMealIds, mealBrief, mealCardVisible, mealDefs, mealTimeFor, MIN_MEAL_KCAL, periodOfItem, remainingMeals, splitBudget, type DayTotals, type MealPlan } from '../../ai/mealSplit';
+import { acceptDinner } from '../../ai/dinner';
 import { DEFAULT_PLAN, getDayType } from '../../constants/plan';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
@@ -25,7 +26,7 @@ import { eatingEndHour, eatingStartHour, isFasting, lateMealHour, NORMAL_EATING_
 
 const FRIDAY = new Date('2026-10-23T12:00:00');
 const planMeals = DEFAULT_PLAN.mealTemplates[getDayType(FRIDAY)];
-const TOTALS: DayTotals = { hour: 8, budgetKcal: 1200, proteinLeftG: 120, headroom: { purine: 800, salt: 5, sugar: 20 }, limits: { purine: 1200, salt: 7, sugar: 25 } };
+const TOTALS: DayTotals = { hour: 8, dayTargetKcal: 1600, budgetKcal: 1200, proteinLeftG: 120, headroom: { purine: 800, salt: 5, sugar: 20 }, limits: { purine: 1200, salt: 7, sugar: 25 } };
 
 describe('meal mode helpers', () => {
   it('fasting: window 12-20 and a late meal from 20:00; normal day: 6-22 and a late meal from 21:00', () => {
@@ -184,8 +185,8 @@ describe('splitBudget', () => {
   });
 
   it('two meals left share what is left; one meal left gets everything', () => {
-    expect(split(1200, 1).meals.map((m) => m.kcal)).toEqual([560, 640]);
-    expect(split(1200, 2).meals.map((m) => [m.slot.id, m.kcal, m.proteinG])).toEqual([['dinner', 1200, 120]]);
+    expect(split(1200, 1).meals.map((m) => m.kcal)).toEqual([560, 600]); // the dinner share of 640 is capped at 600
+    expect(split(1200, 2).meals.map((m) => [m.slot.id, m.kcal, m.proteinG])).toEqual([['dinner', 600, 120]]); // one meal left gets all the protein but at most 600 kcal
   });
 
   it('with under 150 kcal left in total it is one light meal (the next one), the rest folded away', () => {
@@ -224,7 +225,7 @@ describe('buildMealPlan: the number of meals follows the day', () => {
     expect(buildMealPlan(at(8))!.split.meals.map((m) => m.slot.id)).toEqual(['breakfast', 'lunch', 'dinner']);
     expect(buildMealPlan(at(11))!.split.meals.map((m) => m.slot.id)).toEqual(['lunch', 'dinner']);
     expect(buildMealPlan(at(16))!.split.meals.map((m) => m.slot.id)).toEqual(['dinner']);
-    expect(buildMealPlan(at(16))!.split.meals[0].kcal).toBe(1900);
+    expect(buildMealPlan(at(16))!.split.meals[0].kcal).toBe(600); // 1900 left, but one meal is at most 600
     expect(buildMealPlan(at(22))).toBeNull();
   });
 
@@ -282,5 +283,38 @@ describe('mealBrief and meal times', () => {
 
   it('files a suggested food under the matching meal time', () => {
     expect([mealTimeFor('breakfast'), mealTimeFor('lunch'), mealTimeFor('dinner'), mealTimeFor('meal')]).toEqual(['breakfast', 'lunch', 'dinner', 'afternoon_snack']);
+  });
+});
+
+describe('meal size cap and the user\'s own figures', () => {
+  const slots = (n: number) => mealDefs(false, planMeals).slice(0, n);
+  it('no meal is sized above 600 kcal by default', () => {
+    const one = splitBudget(slots(1), { ...TOTALS, budgetKcal: 1000 });
+    expect(one.meals[0].kcal).toBe(600);
+    const three = splitBudget(slots(3), { ...TOTALS, budgetKcal: 1600 });
+    expect(three.meals.map((m) => m.kcal).every((k) => k <= 600)).toBe(true);
+    expect(three.meals.reduce((s, m) => s + m.kcal, 0)).toBeGreaterThanOrEqual(1500);
+  });
+  it('the wanted calories and protein per meal fill as many meals as the calories left allow', () => {
+    const prefs = { kcal: 500, proteinG: 35, strictKcal: false };
+    const split = splitBudget(slots(3), { ...TOTALS, budgetKcal: 1100 }, prefs);
+    expect(split.meals.map((m) => [m.kcal, m.proteinG])).toEqual([[500, 35], [500, 35]]);
+    expect(split.merged).toHaveLength(1);
+    const small = splitBudget(slots(3), { ...TOTALS, budgetKcal: 300 }, prefs);
+    expect(small.meals.map((m) => m.kcal)).toEqual([300]);
+  });
+  it('briefs carry the wanted flags, and ideas stay within ±10% (strict: never above)', () => {
+    const prefs = { kcal: 500, proteinG: 35, strictKcal: false };
+    const meal = splitBudget(slots(3), { ...TOTALS, budgetKcal: 1100 }, prefs).meals[0];
+    const brief = mealBrief(TOTALS, meal, prefs);
+    expect(brief).toMatchObject({ budgetKcal: 500, proteinLeftG: 35, exact: true, proteinExact: true });
+    const idea = (calories: number, proteinG: number) => ({ calories, proteinG, purineMg: 0, saltG: 0, sugarG: 0 });
+    expect(acceptDinner(brief, idea(540, 36))).toBe(true);
+    expect(acceptDinner(brief, idea(560, 36))).toBe(false);
+    expect(acceptDinner(brief, idea(480, 30))).toBe(false); // protein 14% under
+    const strict = { ...brief, strictKcal: true };
+    expect(acceptDinner(strict, idea(510, 36))).toBe(false);
+    expect(acceptDinner(strict, idea(480, 36))).toBe(true);
+    expect(acceptDinner(strict, idea(380, 36))).toBe(false); // too far under
   });
 });

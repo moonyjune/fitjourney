@@ -22,6 +22,12 @@ export interface DinnerBrief {
   /** Room left in each limit (limit minus the day so far); negative when already over. */
   headroom: Room;
   limits: Room;
+  /** The user set calories (and maybe protein) wanted per meal: `budgetKcal` is that target, and ideas must land within ±10% of it. */
+  exact?: boolean;
+  /** `proteinLeftG` is the protein the user wants in this meal: ideas must land within ±10% of it. */
+  proteinExact?: boolean;
+  /** Never more than `budgetKcal` (the usual 10% slack is not allowed). */
+  strictKcal?: boolean;
   /** The plan's own meal for this slot (fasting mode), if there is one. */
   planMeal?: { label: string; kcal: number; proteinG: number };
 }
@@ -62,10 +68,14 @@ export function acceptDinner(brief: DinnerBrief, idea: Pick<DinnerIdea, 'calorie
   if (![idea.calories, idea.proteinG, idea.purineMg, idea.saltG, idea.sugarG].every((n) => Number.isFinite(n) && n >= 0)) return false;
   if (brief.budgetKcal < LIGHT_BUDGET_KCAL) {
     if (idea.calories > 200 + EPS) return false;
-  } else if (idea.calories > brief.budgetKcal * 1.1 + EPS || idea.calories < brief.budgetKcal * 0.4 - EPS) {
-    return false;
+  } else {
+    const high = brief.budgetKcal * (brief.strictKcal ? 1 : 1.1);
+    const low = brief.budgetKcal * (brief.exact ? (brief.strictKcal ? 0.8 : 0.9) : 0.4);
+    if (idea.calories > high + EPS || idea.calories < low - EPS) return false;
   }
-  if (idea.proteinG < Math.min(brief.proteinLeftG * 0.6, 30) - EPS) return false;
+  if (brief.proteinExact && brief.proteinLeftG > 0) {
+    if (idea.proteinG < brief.proteinLeftG * 0.9 - EPS || idea.proteinG > brief.proteinLeftG * 1.1 + EPS) return false;
+  } else if (idea.proteinG < Math.min(brief.proteinLeftG * 0.6, 30) - EPS) return false;
   for (const k of keys) {
     const room = brief.headroom[k];
     const cap = room > 0 ? room : brief.limits[k] * 0.1;
@@ -77,7 +87,7 @@ export function acceptDinner(brief: DinnerBrief, idea: Pick<DinnerIdea, 'calorie
 /** Dinner ideas from the user's own food database (no AI): foods of a meal-like group scaled to the calories left, that pass
  *  `acceptDinner`; the ones that supply the most of the missing protein first. At most 3 distinct names. */
 export function dinnerIdeasFromFoods(brief: DinnerBrief, foods: FoodEntry[]): DinnerIdea[] {
-  const target = brief.budgetKcal < LIGHT_BUDGET_KCAL ? 150 : Math.min(700, brief.budgetKcal);
+  const target = brief.budgetKcal < LIGHT_BUDGET_KCAL ? 150 : Math.min(brief.exact ? 1500 : 700, brief.budgetKcal);
   const scored: { idea: DinnerIdea; score: number }[] = [];
   for (const food of foods) {
     if (NEVER_AS_MEAL.includes(food.group)) continue;

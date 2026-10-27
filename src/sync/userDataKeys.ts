@@ -5,4 +5,5 @@ export const USER_DATA_KEYS = {
   foodDb: 'foodDb',
   limits: 'limits',
   mealMode: 'mealMode',
+  mealPrefs: 'mealPrefs',
 } as const;

@@ -1170,7 +1170,7 @@ export async function requestDinner(brief: DinnerBrief, favorites: string[]): Pr
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
-    const body = { budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, meal: brief.meal, eatByHour: brief.eatByHour, favorites };
+    const body = { budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, meal: brief.meal, eatByHour: brief.eatByHour, exact: brief.exact, proteinExact: brief.proteinExact, strictKcal: brief.strictKcal, favorites };
     const { data, error } = await supabase.functions.invoke('suggest-dinner', { body });
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };

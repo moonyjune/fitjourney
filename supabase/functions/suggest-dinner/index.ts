@@ -57,9 +57,18 @@ serveAi('dinner', async (body) => {
     `Phần còn lại của các giới hạn trong bữa này (âm hoặc 0 nghĩa là đã đầy): purine ${req.headroom.purine} mg, muối ${req.headroom.salt} g, đường ${req.headroom.sugar} g.\n` +
     (light
       ? `Ngân sách calo gần hết: gợi ý tối đa 3 ${word} RẤT NHẸ (dưới 200 kcal, ví dụ rau luộc, canh rau, đạm nạc ít), vẫn nằm trong các giới hạn.`
-      : `Hãy gợi ý tối đa 3 món cho ${word}, con số cho MỘT khẩu phần: calo không quá ${Math.round(req.budgetKcal * 1.1)} kcal và khoảng ${Math.round(req.budgetKcal * 0.6)}-${Math.round(req.budgetKcal)} kcal, ` +
-        `đạm càng gần ${Math.round(req.proteinLeftG)} g càng tốt (ít nhất ${Math.round(Math.min(req.proteinLeftG * 0.6, 30))} g), ` +
-        `mỗi chất nằm trong phần còn lại (phần còn lại ≤ 0 thì gần như không có chất đó).`) +
+      : req.exact
+        ? `Hãy gợi ý tối đa 3 món cho ${word}, con số cho MỘT khẩu phần: người dùng muốn đúng khoảng ${Math.round(req.budgetKcal)} kcal, ` +
+          (req.strictKcal
+            ? `KHÔNG ĐƯỢC vượt ${Math.round(req.budgetKcal)} kcal (trong khoảng ${Math.round(req.budgetKcal * 0.8)}-${Math.round(req.budgetKcal)} kcal), `
+            : `lệch không quá 10% (${Math.round(req.budgetKcal * 0.9)}-${Math.round(req.budgetKcal * 1.1)} kcal), `) +
+          (req.proteinExact
+            ? `đạm khoảng ${Math.round(req.proteinLeftG)} g (lệch không quá 10%: ${Math.round(req.proteinLeftG * 0.9)}-${Math.round(req.proteinLeftG * 1.1)} g), `
+            : `đạm càng gần ${Math.round(req.proteinLeftG)} g càng tốt, `) +
+          `mỗi chất nằm trong phần còn lại (phần còn lại ≤ 0 thì gần như không có chất đó).`
+        : `Hãy gợi ý tối đa 3 món cho ${word}, con số cho MỘT khẩu phần: calo ${req.strictKcal ? 'KHÔNG ĐƯỢC vượt' : 'không quá'} ${Math.round(req.strictKcal ? req.budgetKcal : req.budgetKcal * 1.1)} kcal và khoảng ${Math.round(req.budgetKcal * 0.6)}-${Math.round(req.budgetKcal)} kcal, ` +
+          `đạm càng gần ${Math.round(req.proteinLeftG)} g càng tốt (ít nhất ${Math.round(Math.min(req.proteinLeftG * 0.6, 30))} g), ` +
+          `mỗi chất nằm trong phần còn lại (phần còn lại ≤ 0 thì gần như không có chất đó).`) +
     ` Món đúng kiểu ${word}, đơn giản, ít dụng cụ, nguyên liệu dễ mua ở chợ hoặc siêu thị Việt Nam, ăn xong trước ${req.eatByHour}h.` +
     (req.favorites.length ? ` Món người dùng hay ăn (để hợp khẩu vị, nhưng đừng lặp lại y nguyên): ${req.favorites.join('; ')}.` : '') +
     ` Ghi accuracyPercent cho từng món. Gọi tool report_dinner_ideas.`;

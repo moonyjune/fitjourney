@@ -178,8 +178,8 @@ export function fakeSwaps(item: SwapItem, ctx: SwapContext): { swaps: Record<str
  *  almost no purine, salt or sugar, so they hold up to the same checks the real answer goes through. Labelled as simulated. */
 export function fakeDinner(brief: DinnerBrief): { options: Record<string, unknown>[] } {
   const light = brief.budgetKcal < 150;
-  const kcal = light ? 120 : Math.round(brief.budgetKcal * 0.8);
-  const protein = Math.round(Math.min(brief.proteinLeftG, light ? 12 : 45) * 10) / 10;
+  const kcal = light ? 120 : Math.round(brief.budgetKcal * (brief.exact ? 0.97 : 0.8));
+  const protein = brief.proteinExact ? brief.proteinLeftG : Math.round(Math.min(brief.proteinLeftG, light ? 12 : 45) * 10) / 10;
   const make = (name: string, k: number) => ({
     name: `${name} (giả lập)`,
     calories: Math.round(kcal * k),

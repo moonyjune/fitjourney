@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { cleanAiDinner, dinnerIdeasFromFoods, dinnerVerdict, type DinnerIdea } from '../../ai/dinner';
-import { buildMealPlan, mealBrief, mealCardVisible, mealTimeFor, type MealKind, type SplitMeal } from '../../ai/mealSplit';
+import { buildMealPlan, DAY_BAND_KCAL, MAX_MEAL_KCAL, mealBrief, mealCardVisible, mealTimeFor, type MealKind, type SplitMeal } from '../../ai/mealSplit';
 import { buildTasteProfile } from '../../ai/tasteProfile';
 import { useAiErrorText } from '../../ai/usePhotoAnalysis';
 import { useGameText, type GameKey } from '../../game/strings';
 import { useAllFoods } from '../../store/useFoodDbStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
+import { pick as pickPrefs, useMealPrefStore } from '../../store/useMealPrefStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -15,6 +16,7 @@ import { requestDinner, type AiErrorKind } from '../../sync/cloudSync';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
+import { MealPrefsEditor } from './MealPrefsEditor';
 
 /** Ideas shown per meal from the user's own foods (the AI adds its own on request). */
 const DB_IDEAS_PER_MEAL = 2;
@@ -58,9 +60,13 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
   const workouts = useWorkoutStore((s) => s.entries);
   const settings = useSettingsStore((s) => s.targetDailyDeficitKcal + s.proteinTargetG + s.calorieTargetKcal);
   const fasting = useMealModeStore((s) => s.fasting);
+  const prefKcal = useMealPrefStore((s) => s.kcal);
+  const prefProtein = useMealPrefStore((s) => s.proteinG);
+  const prefStrict = useMealPrefStore((s) => s.strictKcal);
+  const prefs = useMemo(() => pickPrefs({ kcal: prefKcal, proteinG: prefProtein, strictKcal: prefStrict }), [prefKcal, prefProtein, prefStrict]);
   const minute = Math.floor(now.getTime() / 60_000);
-  const plan = useMemo(() => buildMealPlan(new Date(minute * 60_000)), [minute, logs, workouts, settings, fasting]); // eslint-disable-line react-hooks/exhaustive-deps
-  const signature = plan ? `${plan.fasting}|${plan.totals.budgetKcal}|${plan.totals.proteinLeftG}|${plan.split.meals.map((m) => `${m.slot.id}:${m.kcal}`).join()}` : '';
+  const plan = useMemo(() => buildMealPlan(new Date(minute * 60_000), prefs), [minute, logs, workouts, settings, fasting, prefs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const signature = plan ? `${plan.fasting}|${prefKcal}|${prefProtein}|${prefStrict}|${plan.totals.budgetKcal}|${plan.totals.proteinLeftG}|${plan.split.meals.map((m) => `${m.slot.id}:${m.kcal}`).join()}` : '';
   const [aiIdeas, setAiIdeas] = useState<Record<string, DinnerIdea[]>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [failure, setFailure] = useState<{ id: string; kind: AiErrorKind } | null>(null);
@@ -77,7 +83,7 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
 
   async function askAi(meal: SplitMeal, dbNames: Set<string>) {
     if (busyId || !plan) return;
-    const brief = mealBrief(plan.totals, meal);
+    const brief = mealBrief(plan.totals, meal, prefs);
     setBusyId(meal.slot.id);
     setFailure(null);
     const outcome = await requestDinner(brief, buildTasteProfile().favorites);
@@ -98,6 +104,10 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
       <HudText size={12} weight="medium" color={quest.textSecondary}>
         {g('dinner.room', { purine: room(totals.headroom.purine), salt: room(totals.headroom.salt), sugar: room(totals.headroom.sugar) })}
       </HudText>
+      <HudText size={12} weight="medium" color={quest.textSecondary}>
+        {g('meals.dayBand', { low: Math.max(0, totals.dayTargetKcal - DAY_BAND_KCAL), high: totals.dayTargetKcal, max: MAX_MEAL_KCAL })}
+      </HudText>
+      <MealPrefsEditor />
       {split.meals.length > 1 && (
         <HudText size={12} weight="medium" color={quest.manaText}>
           {g('meals.split', { kcal: totals.budgetKcal, n: split.meals.length })}
@@ -110,7 +120,7 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
       )}
 
       {split.meals.map((meal) => {
-        const brief = mealBrief(totals, meal);
+        const brief = mealBrief(totals, meal, prefs);
         const dbIdeas = dinnerIdeasFromFoods(brief, foods).slice(0, DB_IDEAS_PER_MEAL);
         const ideas = [...dbIdeas, ...(aiIdeas[meal.slot.id] ?? [])];
         const asked = aiIdeas[meal.slot.id] !== undefined;
@@ -122,6 +132,15 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
             <HudText size={12} weight="medium" color={quest.textSecondary}>
               {g('meals.budget', { kcal: meal.kcal, protein: meal.proteinG, purine: room(meal.headroom.purine), salt: room(meal.headroom.salt), sugar: room(meal.headroom.sugar) })}
             </HudText>
+            {!meal.light && prefs.kcal ? (
+              <HudText size={12} weight="medium" color={quest.goldLight}>
+                {g('meals.prefs.target', {
+                  kcal: meal.kcal,
+                  protein: prefs.proteinG ? g('meals.prefs.targetProtein', { protein: prefs.proteinG }) : '',
+                  strict: prefs.strictKcal ? g('meals.prefs.targetStrict') : '',
+                })}
+              </HudText>
+            ) : null}
             {meal.light && (
               <HudText size={12} weight="medium" color={quest.manaText}>
                 {g('dinner.light')}

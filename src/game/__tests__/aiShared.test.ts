@@ -278,9 +278,14 @@ describe('what the dinner request lets into its prompt (server)', () => {
 
   it('keeps a good request with negative room allowed, and short clean favorites (8 at most)', () => {
     expect(cleanDinnerRequest({ ...ok, headroom: { purine: -50, salt: 0, sugar: 20 }, favorites: ['Phở bò', ' <b>Cơm</b> gà ', '', 5] })).toEqual({
-      ...ok, meal: 'dinner', eatByHour: 19, headroom: { purine: -50, salt: 0, sugar: 20 }, favorites: ['Phở bò', 'b Cơm /b gà'],
+      ...ok, meal: 'dinner', eatByHour: 19, exact: false, proteinExact: false, strictKcal: false, headroom: { purine: -50, salt: 0, sugar: 20 }, favorites: ['Phở bò', 'b Cơm /b gà'],
     });
     expect(cleanDinnerRequest({ ...ok, favorites: Array.from({ length: 12 }, (_, i) => `Món ${i}`) })!.favorites).toHaveLength(8);
+  });
+
+  it('passes the wanted-figures flags only when they are exactly true', () => {
+    expect(cleanDinnerRequest({ ...ok, exact: true, proteinExact: true, strictKcal: true })).toMatchObject({ exact: true, proteinExact: true, strictKcal: true });
+    expect(cleanDinnerRequest({ ...ok, exact: 'yes', strictKcal: 1 })).toMatchObject({ exact: false, strictKcal: false });
   });
 
   it('knows which meal it is for and by when: a known meal and an hour in range are kept, anything else falls back (dinner, hour + 3)', () => {
