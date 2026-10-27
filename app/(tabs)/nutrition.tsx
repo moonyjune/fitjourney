@@ -316,6 +316,7 @@ export default function NutritionScreen() {
           mealsEaten={log.mealsEaten}
           extraItems={log.extraItems}
           legacyTotals={{ kcal: log.extraCalories, proteinG: log.extraProteinG }}
+          dateKey={dateKey}
           removedMealSlots={log.removedMealSlots}
           editable
           onSave={(draft) => saveDayLog(dateKey, draft)}

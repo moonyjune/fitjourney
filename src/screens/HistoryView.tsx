@@ -31,7 +31,8 @@ import type { StringKey } from '../i18n/strings';
 import { chartWidthFor, screenMaxWidthStyle } from '../theme/responsive';
 import { DailyMealBreakdownTable } from '../components/DailyMealBreakdownTable';
 import { actualDailyDeficitKcal, resolveTdeeKcal } from '../utils/tdee';
-import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood } from '../types';
+import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood, ProofPhoto } from '../types';
+import { PhotoViewer } from '../components/quest/PhotoViewer';
 import { useTabBarClearance } from '../components/quest/QuestTabBar';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 
@@ -44,6 +45,7 @@ interface DaySummary {
   workoutsCount: number;
   caloriesBurned: number;
   proofsCount: number;
+  proofs: ProofPhoto[];
   weightKg: number | null;
   meals: MealTemplate[];
   mealsEaten: Partial<Record<MealSlot, boolean>>;
@@ -224,6 +226,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           workoutsCount: dayWorkouts.length,
           caloriesBurned: dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0),
           proofsCount: dayProofs.length,
+          proofs: dayProofs,
           weightKg: dayWeight?.weightKg ?? null,
           deficitKcal: dayHasFood(log)
             ? actualDailyDeficitKcal(currentTdeeKcal, dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0), calories)
@@ -325,6 +328,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   const badges = unlockedStreakBadges(streak);
 
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+  const [viewing, setViewing] = useState<{ dateKey: string; photos: ProofPhoto[] } | null>(null);
   function toggleDayExpanded(dateKey: string) {
     setExpandedDays((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));
   }
@@ -372,6 +376,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   }, [weeklySummaries]);
 
   return (
+    <>
     <ScrollView
       style={styles.container}
       contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
@@ -578,9 +583,11 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
               </Meta>
             )}
             {d.proofsCount > 0 && (
-              <HudText size={12} color={quest.manaText} style={{ marginTop: 6 }}>
-                {t('history.proofBadge', { n: d.proofsCount })}
-              </HudText>
+              <Pressable accessibilityRole="link" accessibilityLabel={t('history.proofBadge', { n: d.proofsCount })} onPress={() => setViewing({ dateKey: d.dateKey, photos: d.proofs })} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+                <HudText size={12} color={quest.manaText} style={{ textDecorationLine: 'underline' }}>
+                  {t('history.proofBadge', { n: d.proofsCount })}
+                </HudText>
+              </Pressable>
             )}
             <Pressable
               accessibilityRole="button"
@@ -601,6 +608,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
                   mealsEaten={d.mealsEaten}
                   extraItems={d.extraItems}
                   legacyTotals={d.legacyTotals}
+                  dateKey={d.dateKey}
                   removedMealSlots={d.removedMealSlots}
                   editable={!client}
                   onSave={(draft) => saveDayLog(d.dateKey, draft)}
@@ -611,6 +619,12 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
         );
       })}
     </ScrollView>
+    <PhotoViewer
+      photos={viewing ? viewing.photos.map((p) => ({ uri: p.photoUri, label: p.note || undefined })) : null}
+      title={viewing ? g('photo.dayTitle', { date: formatDateVi(viewing.dateKey) }) : undefined}
+      onClose={() => setViewing(null)}
+    />
+    </>
   );
 }
 

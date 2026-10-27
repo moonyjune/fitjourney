@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
+import { PhotoViewer } from './PhotoViewer';
 import { QuestIcon } from './QuestIcon';
 
 interface FoodPhotoPickerProps {
@@ -120,19 +121,25 @@ interface FoodThumbProps {
   size?: number;
 }
 
-/** Small photo of a logged food, for lists. Renders nothing without a photo, or if the file can't be loaded
+/** Small photo of a logged food, for lists; tapping it shows the photo larger. Renders nothing without a photo, or if the file can't be loaded
  *  (e.g. an item synced from another device whose local file isn't here). */
 export function FoodThumb({ uri, name, size = 40 }: FoodThumbProps) {
   const g = useGameText();
   const [broken, setBroken] = useState(false);
+  const [open, setOpen] = useState(false);
   if (!uri || broken) return null;
   return (
-    <Image
-      source={{ uri }}
-      onError={() => setBroken(true)}
-      accessibilityLabel={g('food.photo.alt', { name })}
-      style={{ width: size, height: size, borderRadius: 8, backgroundColor: quest.raised }}
-    />
+    <>
+      <Pressable accessibilityRole="imagebutton" accessibilityLabel={g('photo.zoom')} hitSlop={6} onPress={() => setOpen(true)}>
+        <Image
+          source={{ uri }}
+          onError={() => setBroken(true)}
+          accessibilityLabel={g('food.photo.alt', { name })}
+          style={{ width: size, height: size, borderRadius: 8, backgroundColor: quest.raised }}
+        />
+      </Pressable>
+      <PhotoViewer photos={open ? [{ uri, label: name }] : null} onClose={() => setOpen(false)} />
+    </>
   );
 }
 

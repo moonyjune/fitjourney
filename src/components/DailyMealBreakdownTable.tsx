@@ -16,6 +16,7 @@ import { PartEditForm } from './quest/PartEditForm';
 import { QuestIcon } from './quest/QuestIcon';
 import { partsMatchTotals } from '../food/mealParts';
 import { parseClock, timeTextInvalid } from '../utils/mealClock';
+import { toDateKey } from '../utils/date';
 
 const EXTRA_MEAL_TIME_LABEL_KEY: Record<ExtraMealTime, StringKey> = {
   breakfast: 'extraMealTime.breakfast',
@@ -42,6 +43,8 @@ interface DailyMealBreakdownTableProps {
   removedMealSlots?: MealSlot[];
   /** Calories / protein the day carries as a bare total with no item to show (older days). Shown as one row that can be removed. */
   legacyTotals?: { kcal: number; proteinG: number };
+  /** The day shown (YYYY-MM-DD). With it an editable table can add a food to that day. */
+  dateKey?: string;
   /** Enables tapping a meal to toggle eaten/not, deleting a default meal from this specific day,
    *  editing an extra item's name/kcal/protein in place, and an explicit Save button that commits
    *  the whole draft at once. Omit for a read-only view. */
@@ -67,6 +70,7 @@ export function DailyMealBreakdownTable({
   extraItems,
   removedMealSlots,
   legacyTotals,
+  dateKey,
   editable,
   onSave,
   dark,
@@ -147,8 +151,24 @@ export function DailyMealBreakdownTable({
     setDirty(true);
   }
 
+  /** A new blank food on this day, to be typed over (name, time, calories, protein). */
+  function addExtraItem() {
+    if (!dateKey) return;
+    const today = new Date();
+    const at = toDateKey(today) === dateKey ? today : new Date(`${dateKey}T12:00:00`);
+    setDraftExtraItems((prev) => [...prev, { id: `${Date.now()}-${prev.length}`, name: '', calories: 0, proteinG: 0, mealTime: null, loggedAtISO: at.toISOString() }]);
+    setDirty(true);
+  }
+
+  function restoreMeals() {
+    setDraftRemovedSlots([]);
+    setDirty(true);
+  }
+
   function handleSave() {
-    onSave?.({ mealsEaten: draftMealsEaten, extraItems: draftExtraItems, removedMealSlots: draftRemovedSlots, ...(totalsCleared ? { clearTotals: true } : {}) });
+    // A food added here and left blank (no name, no calories) is not kept.
+    const kept = draftExtraItems.filter((i) => i.name.trim() !== '' || i.calories > 0 || i.proteinG > 0);
+    onSave?.({ mealsEaten: draftMealsEaten, extraItems: kept, removedMealSlots: draftRemovedSlots, ...(totalsCleared ? { clearTotals: true } : {}) });
     setDirty(false);
   }
 
@@ -280,6 +300,21 @@ export function DailyMealBreakdownTable({
         <Text style={[styles.cell, styles.numCol, styles.totalText]}>{totalProtein}</Text>
       </View>
 
+      {editable && (draftRemovedSlots.length > 0 || dateKey) && (
+        <View style={styles.actionsRow}>
+          {draftRemovedSlots.length > 0 && (
+            <TouchableOpacity accessibilityRole="button" onPress={restoreMeals} style={styles.actionBtn}>
+              <Text style={styles.actionText}>{t('mealLog.restoreMeals', { n: draftRemovedSlots.length })}</Text>
+            </TouchableOpacity>
+          )}
+          {dateKey && (
+            <TouchableOpacity accessibilityRole="button" onPress={addExtraItem} style={styles.actionBtn}>
+              <Text style={styles.actionText}>{t('mealLog.addItem')}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
       {editable && dirty && (
         <View style={styles.saveRow}>
           <Text style={styles.unsavedHint}>{t('mealLog.unsavedHint')}</Text>
@@ -403,6 +438,9 @@ const makeStyles = (dark: boolean) => {
     gap: spacing.sm,
   },
   unsavedHint: { fontSize: 11, color: c.muted, flex: 1 },
+  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, padding: spacing.sm },
+  actionBtn: { minHeight: 40, paddingHorizontal: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, justifyContent: 'center' },
+  actionText: { fontWeight: '700', fontSize: 13, color: c.totalText, ...font },
   darkSave: { backgroundColor: quest.gold, borderRadius: radius.sm, paddingHorizontal: spacing.md, minHeight: 44, justifyContent: 'center' },
   darkSaveText: { color: quest.onGold, fontSize: 13, fontFamily: questFonts.bold },
 });

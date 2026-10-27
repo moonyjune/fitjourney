@@ -11,7 +11,12 @@ const MAX_PER_RUN = 30;
 
 type Row = { entry_date: string; task_type: string; task_ref_id: string; photo_path: string; note: string | null; created_at: string | null };
 
-const idOfPath = (path: string): string => (path.split('/').pop() ?? '').replace(/\.[^.]+$/, '');
+/** The photo id in a storage path "<user>/<id>.<ext>". Older web builds wrote "<user>/<id>.app/<uuid>" (the extension was cut from a blob: URL), so the id is
+ *  whatever stands before the first dot of the part after the user folder. */
+const idOfPath = (path: string): string => (path.split('/')[1] ?? '').split('.')[0];
+
+/** A photo on this device that cannot be shown any more: web kept photos as blob: URLs, which are gone once the page is reloaded. */
+const isDead = (p: ProofPhoto): boolean => p.photoUri.startsWith('blob:');
 
 /** Brings the signed-in user's own meal and workout photos back from the cloud onto this device (a new device, or after signing out wipes it).
  *  What is already here wins: a photo is only added when the device has none with that id and none for the same meal or workout.
@@ -27,7 +32,7 @@ export async function restoreProofPhotos(): Promise<number> {
       .order('created_at', { ascending: false })
       .limit(200);
     if (error) throw error;
-    const have = useProofStore.getState().photos;
+    const have = useProofStore.getState().photos.filter((p) => !isDead(p));
     const haveIds = new Set(have.map((p) => p.id));
     const haveFor = new Set(have.map((p) => `${p.taskType}|${p.taskRefId}|${p.dateISO.slice(0, 10)}`));
     const missing = ((data ?? []) as Row[]).filter((r) => {
@@ -57,8 +62,11 @@ export async function restoreProofPhotos(): Promise<number> {
     // Signed out or switched account while downloading: do not put someone else's photos on this device.
     if (added.length === 0 || currentUserId() !== userId) return 0;
     useProofStore.setState((s) => {
-      const known = new Set(s.photos.map((p) => p.id));
-      return { photos: [...s.photos, ...added.filter((p) => !known.has(p.id))] };
+      // A photo that was only a dead link is replaced by the one just downloaded.
+      const replaced = new Set(added.map((p) => p.id));
+      const kept = s.photos.filter((p) => !(isDead(p) && replaced.has(p.id)));
+      const known = new Set(kept.map((p) => p.id));
+      return { photos: [...kept, ...added.filter((p) => !known.has(p.id))] };
     });
     // A food logged on another device points at that device's file; show the photo that is here.
     const byRef = new Map(added.map((p) => [p.taskRefId, p.photoUri]));

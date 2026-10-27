@@ -189,4 +189,17 @@ describe('restoring photos from the cloud', () => {
     useAuthStore.setState({ session: null });
     expect(await restoreProofPhotos()).toBe(0);
   });
+
+  it('replaces a photo that is only a dead blob: link (web before the fix), also for the old "<id>.app/<uuid>" storage path', async () => {
+    mockRows = [{ id: 'r1', user_id: 'u1', entry_date: '2026-10-27', task_type: 'meal', task_ref_id: 'extra:55', photo_path: 'u1/1793072031471.app/4ee93739-ec55', note: 'x', created_at: '2026-10-27T03:33:52Z' }];
+    useProofStore.setState({ photos: [{ ...proof, id: '1793072031471', dateISO: '2026-10-27T03:33:00.000Z', photoUri: 'blob:https://x/abc' }] });
+    useNutritionStore.setState({
+      logs: { '2026-10-27': { dateISO: '2026-10-27', mealsEaten: {}, extraCalories: 100, extraProteinG: 1, waterMl: 0, extraItems: [{ id: '55', name: 'Phở', calories: 100, proteinG: 1, mealTime: null, loggedAtISO: '2026-10-27T03:00:00.000Z', photoUri: 'blob:https://x/old' }] } },
+    });
+    expect(await restoreProofPhotos()).toBe(1);
+    const photos = useProofStore.getState().photos;
+    expect(photos).toHaveLength(1);
+    expect(photos[0].photoUri).toBe('file:///docs/proofs/cloud-1793072031471.jpg');
+    expect(useNutritionStore.getState().logs['2026-10-27'].extraItems[0].photoUri).toBe('file:///docs/proofs/cloud-1793072031471.jpg');
+  });
 });

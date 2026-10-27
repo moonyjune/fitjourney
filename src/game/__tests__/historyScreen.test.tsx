@@ -44,6 +44,7 @@ jest.mock('../../sync/cloudSync', () => ({
 
 import HistoryScreen from '../../../app/(tabs)/history';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -114,6 +115,69 @@ describe('History screen (FitQuest)', () => {
     expect(text(r)).toContain('Thu gọn');
     await act(async () => byLabel(r, /Thu gọn/).props.onPress());
     expect(text(r)).toContain('Xem chi tiết');
+  });
+
+  it('can delete every food of a day one by one, saving each time, and the table stays usable', async () => {
+    const k = dayKey(1);
+    const item = (id: string, calories: number) => ({ id, name: `Món ${id}`, calories, proteinG: 5, mealTime: null, loggedAtISO: `${k}T05:00:00.000Z` });
+    useNutritionStore.setState({
+      logs: { [k]: { dateISO: k, mealsEaten: {}, extraCalories: 300, extraProteinG: 10, extraItems: [item('a', 100), item('b', 200)], waterMl: 0 } },
+    });
+    const r = await render();
+    await act(async () => byLabel(r, /Xem chi tiết/).props.onPress());
+    const crosses = () => r.root.findAll((n) => n.props.accessibilityLabel === '✕' && typeof n.props.onPress === 'function');
+    const save = () => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAll((c) => (c.type as unknown) === 'Text' && [c.props.children].flat().join('').startsWith('Lưu')).length > 0).pop()!;
+
+    await act(async () => crosses()[0].props.onPress());
+    await act(async () => save().props.onPress());
+    expect(useNutritionStore.getState().logs[k].extraItems.map((i) => i.id)).toEqual(['b']);
+
+    await act(async () => crosses()[0].props.onPress()); // the last one
+    expect(text(r)).toContain('Tổng cộng');
+    await act(async () => save().props.onPress());
+    expect(useNutritionStore.getState().logs[k].extraItems).toEqual([]);
+    expect(useNutritionStore.getState().logs[k].extraCalories).toBe(0);
+
+    // Nothing left in the table is stuck: a plan meal can still be switched on and saved.
+    const meal = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAll((c) => (c.type as unknown) === 'Text' && [c.props.children].flat().join('').startsWith('Bữa')).length > 0)[0];
+    await act(async () => meal.props.onPress());
+    await act(async () => save().props.onPress());
+    expect(Object.values(useNutritionStore.getState().logs[k].mealsEaten).some(Boolean)).toBe(true);
+  });
+
+  it('a day emptied of everything can be filled again: add a food, restore removed meals, and see the day photos', async () => {
+    const k = dayKey(1);
+    useNutritionStore.setState({ logs: { [k]: { dateISO: k, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 500, removedMealSlots: ['meal1', 'meal2'] } } });
+    const r = await render();
+    await act(async () => byLabel(r, /Xem chi tiết/).props.onPress());
+    const press = (re: RegExp) =>
+      r.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAll((c) => (c.type as unknown) === 'Text' && re.test([c.props.children].flat(Infinity).join(''))).length > 0).pop()!;
+    await act(async () => press(/Khôi phục 2 bữa/).props.onPress());
+    await act(async () => press(/Thêm món/).props.onPress());
+    const inputs = r.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.placeholder !== undefined);
+    await act(async () => inputs[0].props.onChangeText('Bún bò'));
+    const kcal = r.root.findAll((n) => n.props.accessibilityLabel === 'Kcal' && typeof n.props.onChangeText === 'function')[0];
+    await act(async () => kcal.props.onChangeText('450'));
+    await act(async () => press(/^Lưu/).props.onPress());
+    const saved = useNutritionStore.getState().logs[k];
+    expect(saved.removedMealSlots).toEqual([]);
+    expect(saved.extraItems).toHaveLength(1);
+    expect(saved.extraItems[0]).toMatchObject({ name: 'Bún bò', calories: 450 });
+    expect(saved.extraCalories).toBe(450);
+  });
+
+  it('shows "N ảnh minh chứng" as an underlined link that opens the photos of that day', async () => {
+    const k = dayKey(0);
+    useNutritionStore.setState({ logs: { [k]: log(k) } });
+    useProofStore.setState({ photos: [{ id: 'p1', dateISO: `${k}T05:00:00.000Z`, taskType: 'meal', taskRefId: 'extra:1', photoUri: 'file:///a.jpg', note: 'Bữa sáng', createdAtISO: `${k}T05:00:00.000Z` }, { id: 'p2', dateISO: `${k}T06:00:00.000Z`, taskType: 'meal', taskRefId: 'extra:2', photoUri: 'file:///b.jpg', note: 'Bữa trưa', createdAtISO: `${k}T06:00:00.000Z` }] });
+    const r = await render();
+    const link = r.root.findAll((n) => n.props.accessibilityRole === 'link' && typeof n.props.onPress === 'function')[0];
+    expect(link.props.accessibilityLabel).toContain('2 ảnh minh chứng');
+    expect(link.findAll((n) => n.props.style && JSON.stringify(n.props.style).includes('underline')).length).toBeGreaterThan(0);
+    await act(async () => link.props.onPress());
+    const uris = r.root.findAll((n) => n.props.source?.uri).map((n) => n.props.source.uri);
+    expect(uris).toEqual(expect.arrayContaining(['file:///a.jpg', 'file:///b.jpg']));
+    useProofStore.setState({ photos: [] });
   });
 
   it('goes back through the header button', async () => {

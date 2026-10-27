@@ -32,7 +32,7 @@ import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { useIsAiAdmin } from '../../src/ai/useIsAiAdmin';
 import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
-import { BUILD_ID } from '../../src/utils/buildInfo';
+import { APP_VERSION, BUILD_ID } from '../../src/utils/buildInfo';
 
 type Lang = 'vi' | 'en';
 
@@ -462,7 +462,7 @@ export default function ProfileScreen() {
         <QuestButton variant="ghost" icon="out" title={g('profile.signOut')} onPress={confirmSignOut} />
       </View>
       <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.build}>
-        {g('profile.build', { id: BUILD_ID })}
+        {g('profile.build', { version: APP_VERSION, id: BUILD_ID })}
       </HudText>
     </ScrollView>
   );
