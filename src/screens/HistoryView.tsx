@@ -48,6 +48,7 @@ interface DaySummary {
   meals: MealTemplate[];
   mealsEaten: Partial<Record<MealSlot, boolean>>;
   extraItems: ExtraFoodItem[];
+  legacyTotals: { kcal: number; proteinG: number };
   removedMealSlots: MealSlot[];
   /** Deficit for that day using TODAY's TDEE (current weight/profile) — not a historical
    *  reconstruction, since weight/profile aren't necessarily known as of each past day. Null when
@@ -230,6 +231,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           meals,
           mealsEaten: log?.mealsEaten ?? {},
           extraItems: log?.extraItems ?? [],
+          legacyTotals: { kcal: log?.extraCalories ?? 0, proteinG: log?.extraProteinG ?? 0 },
           removedMealSlots: log?.removedMealSlots ?? [],
         };
       });
@@ -598,6 +600,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
                   meals={d.meals}
                   mealsEaten={d.mealsEaten}
                   extraItems={d.extraItems}
+                  legacyTotals={d.legacyTotals}
                   removedMealSlots={d.removedMealSlots}
                   editable={!client}
                   onSave={(draft) => saveDayLog(d.dateKey, draft)}

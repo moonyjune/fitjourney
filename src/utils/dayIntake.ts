@@ -25,6 +25,16 @@ export function withIntakeCounters(log: DailyNutritionLog): DailyNutritionLog {
   return { ...log, extraCalories: kcal, extraProteinG: proteinG };
 }
 
+/** The log after an edit, with its counters following the items. When the edit took away the last item the counters go to zero: `extraIntake`
+ *  falls back to the stored counters for a log without items (older days that only ever had a total), and without this the deleted food's
+ *  calories would stay on the day, and be saved to the cloud, with nothing left to delete. `clearTotals` zeroes them on purpose (the user removed
+ *  that leftover total). */
+export function withCountersAfterEdit(before: DailyNutritionLog, after: DailyNutritionLog, clearTotals = false): DailyNutritionLog {
+  const emptied = (before.extraItems?.length ?? 0) > 0 && (after.extraItems?.length ?? 0) === 0;
+  if (emptied || (clearTotals && (after.extraItems?.length ?? 0) === 0)) return { ...after, extraCalories: 0, extraProteinG: 0 };
+  return withIntakeCounters(after);
+}
+
 /** Does this day hold any logged food? A day with only water is not a day of eating. */
 export function dayHasFood(log: DailyNutritionLog | undefined): boolean {
   if (!log) return false;

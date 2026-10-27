@@ -24,6 +24,8 @@ export interface DailyLogDraft {
   mealsEaten: Partial<Record<MealSlot, boolean>>;
   extraItems: ExtraFoodItem[];
   removedMealSlots: MealSlot[];
+  /** The day's leftover total (a day with no items of its own but calories in its running total) was removed. */
+  clearTotals?: boolean;
 }
 
 interface DailyMealBreakdownTableProps {
@@ -31,6 +33,8 @@ interface DailyMealBreakdownTableProps {
   mealsEaten: Partial<Record<MealSlot, boolean>>;
   extraItems: ExtraFoodItem[];
   removedMealSlots?: MealSlot[];
+  /** Calories / protein the day carries as a bare total with no item to show (older days). Shown as one row that can be removed. */
+  legacyTotals?: { kcal: number; proteinG: number };
   /** Enables tapping a meal to toggle eaten/not, deleting a default meal from this specific day,
    *  editing an extra item's name/kcal/protein in place, and an explicit Save button that commits
    *  the whole draft at once. Omit for a read-only view. */
@@ -55,6 +59,7 @@ export function DailyMealBreakdownTable({
   mealsEaten,
   extraItems,
   removedMealSlots,
+  legacyTotals,
   editable,
   onSave,
   dark,
@@ -68,6 +73,8 @@ export function DailyMealBreakdownTable({
   const [draftExtraItems, setDraftExtraItems] = useState(extraItems);
   const [draftRemovedSlots, setDraftRemovedSlots] = useState<MealSlot[]>(removedMealSlots ?? []);
   const [dirty, setDirty] = useState(false);
+  const [totalsCleared, setTotalsCleared] = useState(false);
+  const legacy = extraItems.length === 0 && !totalsCleared && legacyTotals && legacyTotals.kcal > 0 ? legacyTotals : null;
   /** What is typed in a meal's time box, by item id (shown as typed until it is a valid time; a valid one is applied at once). */
   const [timeTexts, setTimeTexts] = useState<Record<string, string>>({});
 
@@ -94,7 +101,7 @@ export function DailyMealBreakdownTable({
   );
   const totalProtein = Math.round(10 * (
     visibleMeals.filter((m) => draftMealsEaten[m.slot]).reduce((s, m) => s + m.proteinG, 0) +
-    draftExtraItems.reduce((s, i) => s + i.proteinG, 0)
+    draftExtraItems.reduce((s, i) => s + i.proteinG, 0) + (legacy?.proteinG ?? 0)
   )) / 10;
 
   function toggleMeal(slot: MealSlot) {
@@ -131,7 +138,7 @@ export function DailyMealBreakdownTable({
   }
 
   function handleSave() {
-    onSave?.({ mealsEaten: draftMealsEaten, extraItems: draftExtraItems, removedMealSlots: draftRemovedSlots });
+    onSave?.({ mealsEaten: draftMealsEaten, extraItems: draftExtraItems, removedMealSlots: draftRemovedSlots, ...(totalsCleared ? { clearTotals: true } : {}) });
     setDirty(false);
   }
 
@@ -240,6 +247,20 @@ export function DailyMealBreakdownTable({
           <PartsDetail item={item} styles={styles} title={t('mealLog.partsTitle')} line={(p) => t('mealLog.partLine', { name: p.name, kcal: p.calories, protein: p.proteinG })} />
           </View>
         )
+      )}
+
+      {legacy && (
+        <View style={styles.row}>
+          <Text style={[styles.cell, styles.nameCol]}>{t('mealLog.legacyTotal')}</Text>
+          <Text style={[styles.cell, styles.statusCol, { color: accentColor }]}>{t('mealLog.extraSectionLabel')}</Text>
+          <Text style={[styles.cell, styles.numCol]}>{legacy.kcal}</Text>
+          <Text style={[styles.cell, styles.numCol]}>{legacy.proteinG}</Text>
+          {editable && (
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel="✕" onPress={() => { setTotalsCleared(true); setDirty(true); }} style={styles.deleteCol}>
+              <Text style={styles.deleteText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
 
       <View style={[styles.row, styles.totalRow]}>

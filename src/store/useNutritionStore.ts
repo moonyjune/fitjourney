@@ -10,7 +10,7 @@ import { useFoodDbStore } from './useFoodDbStore';
 import { useProofStore } from './useProofStore';
 import { deletePersistedPhoto } from '../utils/photoStorage';
 import { extraProofRef } from '../types';
-import { withIntakeCounters } from '../utils/dayIntake';
+import { withCountersAfterEdit, withIntakeCounters } from '../utils/dayIntake';
 
 export type ExtraPatch = Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG' | 'parts'>> & {
   photoUri?: string | null;
@@ -51,7 +51,7 @@ interface NutritionState {
    *  draft, instead of pushing on every micro-edit. */
   saveDayLog: (
     dateKey: string,
-    patch: { mealsEaten: Partial<Record<MealSlot, boolean>>; extraItems: ExtraFoodItem[]; removedMealSlots: MealSlot[] }
+    patch: { mealsEaten: Partial<Record<MealSlot, boolean>>; extraItems: ExtraFoodItem[]; removedMealSlots: MealSlot[]; clearTotals?: boolean }
   ) => void;
 }
 
@@ -193,7 +193,7 @@ export const useNutritionStore = create<NutritionState>()(
           const item = (current.extraItems ?? []).find((i) => i.id === itemId);
           if (!item) return state;
           discardExtraPhoto(item);
-          const updated = withIntakeCounters({ ...current, extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId) });
+          const updated = withCountersAfterEdit(current, { ...current, extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId) });
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
@@ -203,12 +203,11 @@ export const useNutritionStore = create<NutritionState>()(
           // Items dropped by this edit take their photo (file + proof) with them.
           const kept = new Set(patch.extraItems.map((i) => i.id));
           for (const old of current.extraItems ?? []) if (!kept.has(old.id)) discardExtraPhoto(old);
-          const updated: DailyNutritionLog = withIntakeCounters({
-            ...current,
-            mealsEaten: patch.mealsEaten,
-            extraItems: patch.extraItems,
-            removedMealSlots: patch.removedMealSlots,
-          });
+          const updated: DailyNutritionLog = withCountersAfterEdit(
+            current,
+            { ...current, mealsEaten: patch.mealsEaten, extraItems: patch.extraItems, removedMealSlots: patch.removedMealSlots },
+            patch.clearTotals
+          );
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
