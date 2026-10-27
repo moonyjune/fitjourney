@@ -3,6 +3,25 @@
 Version numbers are `A.BC`, counting up from 0.01 (0.99 is followed by 1.00). The current number is `APP_VERSION` in `src/utils/buildInfo.ts` and is shown in
 Profile ("Phiên bản"). Every release adds an entry here, newest first, and bumps `APP_VERSION` to match (a test checks they agree).
 
+## Server steps
+
+What each release needs on the server, so it is clear whether anything really has to be run again. Every release adds a row (a test checks it).
+- **schema.sql**: `yes` = run `supabase/schema.sql` again in the Supabase SQL Editor (it is safe to run more than once); `no` = no database change.
+- **Redeploy**: the Edge Functions whose code changed: `npx supabase functions deploy <name> …`; `—` = none.
+- Skipped a few releases? Run schema.sql once if any skipped row says `yes`, and deploy the union of their functions once: both always take the latest code.
+
+| Version | schema.sql | Redeploy |
+|---|---|---|
+| 0.09 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
+| 0.08 | no | suggest-dinner, generate-meal-recipe |
+| 0.07 | no | — |
+| 0.06 | no | — |
+| 0.05 | no | — |
+| 0.04 | no | — |
+| 0.03 | no | — |
+| 0.02 | no | suggest-dinner |
+| 0.01 | no | — |
+
 ## 0.09
 - AI & cost: the day and user lists keep the cost recorded when each call was made, with that call's model and price. Picking another model (or price) above only changes the estimate for one user and the calls made after saving; history is no longer worked out again.
 - The 14-day list is split by model: a total per model over the 14 days and, under each day, one line per model (calls, tokens, cost).
