@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { formatQty, partQuantity, scalePart } from '../../food/partScale';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useGameText } from '../../game/strings';
-import { quest, questFonts, questRadius } from '../../theme/quest';
+import { quest, questRadius } from '../../theme/quest';
 import type { MealPart } from '../../types';
 import { pickPhoto } from '../../utils/pickPhoto';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
+import { PartEditForm } from './PartEditForm';
 import { QuestIcon } from './QuestIcon';
 
 export interface MealDetail {
@@ -28,7 +28,7 @@ interface Props {
   onClose: () => void;
   /** Gives the parts a pencil to change their amounts (calls `onEditPart`). Off when the diary is someone else's. */
   canEditParts?: boolean;
-  onEditPart?: (index: number, qty: number) => void;
+  onEditPart?: (index: number, part: MealPart) => void;
   /** Gives the photo its take / choose / remove buttons. Resolves false when the photo could not be saved. */
   onPhoto?: (uri: string | null) => Promise<boolean>;
 }
@@ -38,7 +38,7 @@ interface Props {
 export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onPhoto }: Props) {
   const g = useGameText();
   const [brokenFor, setBrokenFor] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ index: number; text: string } | null>(null);
+  const [editing, setEditing] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (!detail) return null;
@@ -66,8 +66,6 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
     }
   }
 
-  const editedQty = editing ? parseFloat(editing.text.replace(',', '.')) : NaN;
-  const editedPart = editing && detail.parts ? scalePart(detail.parts[editing.index], editedQty) : null;
   const close = () => {
     setEditing(null);
     setPhotoError(null);
@@ -145,47 +143,22 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
                           accessibilityRole="button"
                           accessibilityLabel={g('journal.partEdit', { name: p.name })}
                           hitSlop={8}
-                          onPress={() => setEditing({ index: i, text: formatQty(partQuantity(p.name).qty) })}
+                          onPress={() => setEditing(i)}
                           style={styles.iconButton}
                         >
                           <QuestIcon name="edit" size={16} color={quest.gold} strokeWidth={2.2} />
                         </Pressable>
                       )}
                     </View>
-                    {editing?.index === i && (
-                      <View style={styles.editor}>
-                        <View style={styles.editRow}>
-                          <TextInput
-                            accessibilityLabel={g('journal.partQty')}
-                            value={editing.text}
-                            onChangeText={(text) => setEditing({ index: i, text })}
-                            keyboardType="decimal-pad"
-                            autoFocus
-                            selectTextOnFocus
-                            placeholderTextColor={quest.textSecondary}
-                            style={styles.input}
-                          />
-                          <Pressable
-                            accessibilityRole="button"
-                            accessibilityLabel={g('journal.partSave')}
-                            accessibilityState={{ disabled: !editedPart }}
-                            disabled={!editedPart}
-                            onPress={() => {
-                              onEditPart?.(i, editedQty);
-                              setEditing(null);
-                            }}
-                            style={[styles.iconButton, styles.saveButton, !editedPart && { opacity: 0.4 }]}
-                          >
-                            <QuestIcon name="check" size={18} color={quest.onGold} strokeWidth={2.6} />
-                          </Pressable>
-                          <Pressable accessibilityRole="button" accessibilityLabel={g('journal.partCancel')} onPress={() => setEditing(null)} style={styles.iconButton}>
-                            <QuestIcon name="x" size={18} color={quest.textSecondary} strokeWidth={2.4} />
-                          </Pressable>
-                        </View>
-                        <HudText size={11} weight="medium" color={editedPart ? quest.textSecondary : quest.hpText}>
-                          {editedPart ? g('journal.partPreview', { kcal: editedPart.calories, protein: editedPart.proteinG }) : g('journal.partInvalid')}
-                        </HudText>
-                      </View>
+                    {editing === i && (
+                      <PartEditForm
+                        part={p}
+                        onCancel={() => setEditing(null)}
+                        onSave={(next) => {
+                          onEditPart?.(i, next);
+                          setEditing(null);
+                        }}
+                      />
                     )}
                   </View>
                 ))}
@@ -229,8 +202,4 @@ const styles = StyleSheet.create({
   partBlock: { gap: 6 },
   partRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   iconButton: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  saveButton: { backgroundColor: quest.gold },
-  editor: { gap: 4, padding: 8, borderRadius: questRadius.row, backgroundColor: quest.raised },
-  editRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  input: { flex: 1, minWidth: 0, minHeight: 44, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, fontSize: 16, fontFamily: questFonts.semibold },
 });

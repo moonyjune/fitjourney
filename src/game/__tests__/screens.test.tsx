@@ -373,10 +373,11 @@ describe('FitQuest logging screens', () => {
       const r = render(<JournalScreen />);
       act(() => pressable(r, (l) => l.includes('CHI-TIẾT-MỘT 30g, CHI-TIẾT-HAI 100g')).props.onPress());
       act(() => pressable(r, (l) => l === 'Sửa lượng CHI-TIẾT-MỘT 30g').props.onPress());
-      const input = r.root.findAll((n) => n.props.accessibilityLabel === 'Lượng mới' && typeof n.props.onChangeText === 'function')[0];
+      const input = r.root.findAll((n) => n.props.accessibilityLabel === 'Lượng' && typeof n.props.onChangeText === 'function')[0];
       expect(input.props.value).toBe('30');
       act(() => input.props.onChangeText('60'));
-      expect(allText(r)).toContain('Sau khi sửa: 220 kcal · 8 g đạm');
+      const kcal = r.root.findAll((n) => n.props.accessibilityLabel === 'Kcal' && typeof n.props.onChangeText === 'function')[0];
+      expect(kcal.props.value).toBe('220'); // worked out from the amount
       act(() => pressable(r, (l) => l === 'Lưu').props.onPress());
 
       const saved = useNutritionStore.getState().getLog(DATE).extraItems.find((i) => i.name.includes('CHI-TIẾT-MỘT'))!;
@@ -395,9 +396,9 @@ describe('FitQuest logging screens', () => {
       const r = render(<JournalScreen />);
       act(() => pressable(r, (l) => l.includes('CHI-TIẾT-MỘT 30g, CHI-TIẾT-HAI 100g')).props.onPress());
       act(() => pressable(r, (l) => l === 'Sửa lượng CHI-TIẾT-MỘT 30g').props.onPress());
-      const input = r.root.findAll((n) => n.props.accessibilityLabel === 'Lượng mới' && typeof n.props.onChangeText === 'function')[0];
+      const input = r.root.findAll((n) => n.props.accessibilityLabel === 'Lượng' && typeof n.props.onChangeText === 'function')[0];
       act(() => input.props.onChangeText('0'));
-      expect(allText(r)).toContain('Nhập một số lớn hơn 0.');
+      expect(allText(r)).toContain('Lượng phải lớn hơn 0');
       const save = r.root.findAll((n) => n.props.accessibilityLabel === 'Lưu' && n.props.accessibilityState)[0];
       expect(save.props.accessibilityState.disabled).toBe(true);
     });

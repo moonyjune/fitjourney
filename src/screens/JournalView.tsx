@@ -12,7 +12,7 @@ import { getDayType } from '../constants/plan';
 import { useGameText, type GameKey } from '../game/strings';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
-import { editPartPatch } from '../food/partScale';
+import { replacePartPatch } from '../food/partScale';
 import { useDayEvaluator, useNow } from '../game/useGameState';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 import type { StringKey } from '../i18n/strings';
@@ -20,7 +20,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { usePlanStore } from '../store/usePlanStore';
-import { extraProofRef } from '../types';
+import { extraProofRef, type MealPart } from '../types';
 import { useProofStore } from '../store/useProofStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
@@ -365,11 +365,11 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
   } else if (openItem?.kind === 'meal') {
     detail = { title: openItem.label, time: clock(openItem.minutes), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photoUri: photoOf(openItem) ?? null };
   }
-  function editPart(index: number, qty: number) {
+  function editPart(index: number, part: MealPart) {
     if (client || openItem?.kind !== 'extra') return;
     const id = rawExtraId(openItem);
     const stored = logs[selectedKey]?.extraItems?.find((i) => i.id === id);
-    const patch = stored ? editPartPatch(stored, index, qty) : null;
+    const patch = stored ? replacePartPatch(stored, index, part) : null;
     if (patch) updateExtra(selectedKey, id, patch);
   }
   async function changePhoto(uri: string | null): Promise<boolean> {

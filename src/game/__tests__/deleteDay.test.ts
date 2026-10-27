@@ -5,10 +5,13 @@ const mockPush = jest.fn();
 jest.mock('../../sync/cloudSync', () => ({
   pushNutritionLog: (...a: unknown[]) => mockPush(...a),
   pushProofPhoto: jest.fn(),
+  pushUserData: jest.fn(),
   deleteProofPhoto: jest.fn(async () => undefined),
 }));
 jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: jest.fn(), deletePersistedPhoto: jest.fn(async () => undefined) }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { editPartPatch } from '../../food/partScale';
 import { useNutritionStore } from '../../store/useNutritionStore';
 
 const D = '2026-10-26';
@@ -45,5 +48,25 @@ describe('deleting a day of food', () => {
     useNutritionStore.getState().saveDayLog(D, { mealsEaten: {}, extraItems: [], removedMealSlots: [], clearTotals: true });
     expect(useNutritionStore.getState().logs[D].extraCalories).toBe(0);
     expect(useNutritionStore.getState().logs[D].extraProteinG).toBe(0);
+  });
+});
+
+describe('editing a food of a saved meal', () => {
+  it('is kept after a reload and is what gets saved to the cloud', async () => {
+    useNutritionStore.setState({ logs: {} });
+    useNutritionStore.getState().addExtra(D, 'Thịt 150g, Cơm 100g', 705, 40, 'lunch', {
+      parts: [{ name: 'Thịt 150g', calories: 450, proteinG: 30 }, { name: 'Cơm 100g', calories: 255, proteinG: 10 }],
+    });
+    const id = useNutritionStore.getState().logs[D].extraItems[0].id;
+    const item = useNutritionStore.getState().logs[D].extraItems[0];
+    useNutritionStore.getState().updateExtra(D, id, editPartPatch(item, 0, 75)!);
+
+    expect(useNutritionStore.getState().logs[D].extraCalories).toBe(480);
+    expect(mockPush).toHaveBeenLastCalledWith(expect.objectContaining({ extraCalories: 480, extraItems: [expect.objectContaining({ calories: 480 })] }));
+    await new Promise((r) => setTimeout(r, 0));
+    const stored = JSON.parse((await AsyncStorage.getItem('nutrition-store')) as string);
+    expect(stored.state.logs[D].extraItems[0].calories).toBe(480);
+    await useNutritionStore.persist.rehydrate();
+    expect(useNutritionStore.getState().logs[D].extraItems[0].calories).toBe(480);
   });
 });

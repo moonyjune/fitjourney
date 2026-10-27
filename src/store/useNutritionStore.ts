@@ -9,6 +9,7 @@ import { pushNutritionLog } from '../sync/cloudSync';
 import { useFoodDbStore } from './useFoodDbStore';
 import { useProofStore } from './useProofStore';
 import { deletePersistedPhoto } from '../utils/photoStorage';
+import { isInlinePhoto } from '../utils/inlinePhoto';
 import { extraProofRef } from '../types';
 import { withCountersAfterEdit, withIntakeCounters } from '../utils/dayIntake';
 
@@ -134,7 +135,8 @@ export const useNutritionStore = create<NutritionState>()(
         if (extras?.saltG) item.saltG = extras.saltG;
         if (extras?.sugarG) item.sugarG = extras.sugarG;
         if (extras?.junk) item.junk = true;
-        if (extras?.photoUri) item.photoUri = extras.photoUri;
+        // A photo kept inline (web) lives only in the proof store; a second copy here would fill the browser's storage and stop the day from saving.
+        if (extras?.photoUri && !isInlinePhoto(extras.photoUri)) item.photoUri = extras.photoUri;
         const parts = cleanParts(extras?.parts);
         if (parts.length > 0) item.parts = parts;
         set((state) => {
@@ -151,11 +153,11 @@ export const useNutritionStore = create<NutritionState>()(
           else db.remember(item);
         }
         // The photo also goes through the proof pipeline so it syncs and the coach sees it next to the plan meals.
-        if (item.photoUri) {
+        if (extras?.photoUri) {
           useProofStore.getState().addProof({
             taskType: 'meal',
             taskRefId: extraProofRef(item.id),
-            photoUri: item.photoUri,
+            photoUri: extras.photoUri,
             note: name,
             dateISO: item.loggedAtISO,
           });
@@ -171,7 +173,7 @@ export const useNutritionStore = create<NutritionState>()(
         if (parts.length > 0) next.parts = parts;
         else delete next.parts;
         if (photoUri !== undefined) {
-          if (photoUri) next.photoUri = photoUri;
+          if (photoUri && !isInlinePhoto(photoUri)) next.photoUri = photoUri;
           else delete next.photoUri;
         }
         set((state) => {
@@ -180,7 +182,7 @@ export const useNutritionStore = create<NutritionState>()(
           pushNutritionLog(updated);
           return { logs: { ...state.logs, [dateKey]: updated } };
         });
-        if (photoUri !== undefined && photoUri !== old.photoUri) {
+        if (photoUri !== undefined && (photoUri !== old.photoUri || isInlinePhoto(photoUri))) {
           discardExtraPhoto(old);
           if (photoUri) {
             useProofStore.getState().addProof({ taskType: 'meal', taskRefId: extraProofRef(itemId), photoUri, note: next.name, dateISO: next.loggedAtISO });
@@ -215,6 +217,16 @@ export const useNutritionStore = create<NutritionState>()(
     {
       name: 'nutrition-store',
       storage: createJSONStorage(() => AsyncStorage),
+      // Photos saved inline by an earlier build are already in the proof store: drop the second copy from the days.
+      onRehydrateStorage: () => (state) => {
+        if (!state || !Object.values(state.logs).some((l) => (l.extraItems ?? []).some((i) => isInlinePhoto(i.photoUri)))) return;
+        const logs = { ...state.logs };
+        for (const [k, l] of Object.entries(logs)) {
+          if (!(l.extraItems ?? []).some((i) => isInlinePhoto(i.photoUri))) continue;
+          logs[k] = { ...l, extraItems: l.extraItems.map((i) => (isInlinePhoto(i.photoUri) ? (({ photoUri: _p, ...rest }) => rest)(i) : i)) };
+        }
+        useNutritionStore.setState({ logs });
+      },
     }
   )
 );

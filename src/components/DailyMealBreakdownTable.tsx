@@ -6,7 +6,14 @@ import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
 import { quest, questFonts } from '../theme/quest';
 import type { StringKey } from '../i18n/strings';
-import type { ExtraFoodItem, ExtraMealTime, MealSlot, MealTemplate } from '../types';
+import type { ExtraFoodItem, ExtraMealTime, MealPart, MealSlot, MealTemplate } from '../types';
+import type { ExtraPatch } from '../store/useNutritionStore';
+import { replacePartPatch } from '../food/partScale';
+import { useGameText } from '../game/strings';
+import { useProofStore } from '../store/useProofStore';
+import { extraProofRef } from '../types';
+import { PartEditForm } from './quest/PartEditForm';
+import { QuestIcon } from './quest/QuestIcon';
 import { partsMatchTotals } from '../food/mealParts';
 import { parseClock, timeTextInvalid } from '../utils/mealClock';
 
@@ -69,6 +76,8 @@ export function DailyMealBreakdownTable({
   const okColor = dark ? quest.xp : colors.success;
   const mutedColor = dark ? quest.textSecondary : colors.textMuted;
   const accentColor = dark ? quest.mana : colors.primary;
+  const proofs = useProofStore((st) => st.photos);
+  const thumbOf = (item: ExtraFoodItem) => proofs.find((p) => p.taskRefId === extraProofRef(item.id))?.photoUri ?? item.photoUri;
   const [draftMealsEaten, setDraftMealsEaten] = useState(mealsEaten);
   const [draftExtraItems, setDraftExtraItems] = useState(extraItems);
   const [draftRemovedSlots, setDraftRemovedSlots] = useState<MealSlot[]>(removedMealSlots ?? []);
@@ -116,8 +125,9 @@ export function DailyMealBreakdownTable({
     setDirty(true);
   }
 
-  function updateExtraItem(itemId: string, patch: Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'loggedAtISO'>>) {
-    setDraftExtraItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, ...patch } : i)));
+  function updateExtraItem(itemId: string, patch: ExtraPatch & Partial<Pick<ExtraFoodItem, 'loggedAtISO'>>) {
+    const { photoUri: _ignored, ...fields } = patch;
+    setDraftExtraItems((prev) => prev.map((i) => (i.id === itemId ? { ...i, ...fields } : i)));
     setDirty(true);
   }
 
@@ -178,7 +188,7 @@ export function DailyMealBreakdownTable({
           // then meal-time/kcal/protein/delete on the line below.
           <View key={item.id} style={styles.extraRowEditable}>
             <View style={styles.extraNameRow}>
-              <FoodThumb uri={item.photoUri} name={item.name || t('mealLog.extraSectionLabel')} size={40} />
+              <FoodThumb uri={thumbOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={40} />
               <TextInput
                 placeholderTextColor={mutedColor}
                 style={[styles.nameInputFullWidth, styles.extraNameInput]}
@@ -227,13 +237,13 @@ export function DailyMealBreakdownTable({
                 <Text style={styles.deleteText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <PartsDetail item={item} styles={styles} title={t('mealLog.partsTitle')} line={(p) => t('mealLog.partLine', { name: p.name, kcal: p.calories, protein: p.proteinG })} />
+            <PartsDetail item={item} styles={styles} title={t('mealLog.partsTitle')} line={(p) => t('mealLog.partLine', { name: p.name, kcal: p.calories, protein: p.proteinG })} onEditPart={(index, part) => { const patch = replacePartPatch(item, index, part); if (patch) updateExtraItem(item.id, patch); }} />
           </View>
         ) : (
           <View key={item.id}>
           <View style={styles.row}>
             <View style={[styles.nameCol, styles.extraNameRow]}>
-              <FoodThumb uri={item.photoUri} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
+              <FoodThumb uri={thumbOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
               <Text style={[styles.cell, styles.extraNameInput]}>
                 {item.name || t('mealLog.extraSectionLabel')} <Text style={styles.extraTime}>({formatTime(item.loggedAtISO)})</Text>
               </Text>
@@ -287,15 +297,34 @@ export function DailyMealBreakdownTable({
 }
 
 /** The breakdown of a meal (its parts), shown under it, only while the parts still add up to the meal's calories. */
-function PartsDetail({ item, styles, title, line }: { item: ExtraFoodItem; styles: ReturnType<typeof makeStyles>; title: string; line: (p: NonNullable<ExtraFoodItem['parts']>[number]) => string }) {
+function PartsDetail({ item, styles, title, line, onEditPart }: { item: ExtraFoodItem; styles: ReturnType<typeof makeStyles>; title: string; line: (p: NonNullable<ExtraFoodItem['parts']>[number]) => string; onEditPart?: (index: number, part: MealPart) => void }) {
+  const g = useGameText();
+  const [editing, setEditing] = useState<number | null>(null);
   if (!partsMatchTotals(item)) return null;
   return (
     <View style={styles.parts}>
       <Text style={styles.partsTitle}>{title}</Text>
       {item.parts!.map((p, i) => (
-        <Text key={i} style={styles.partLine}>
-          {`• ${line(p)}`}
-        </Text>
+        <View key={i}>
+          <View style={styles.partRow}>
+            <Text style={[styles.partLine, { flex: 1 }]}>{`• ${line(p)}`}</Text>
+            {onEditPart && (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel={g('journal.partEdit', { name: p.name })} hitSlop={8} onPress={() => setEditing(i)} style={styles.partEditBtn}>
+                <QuestIcon name="edit" size={16} color={quest.gold} strokeWidth={2.2} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {editing === i && onEditPart && (
+            <PartEditForm
+              part={p}
+              onCancel={() => setEditing(null)}
+              onSave={(next) => {
+                onEditPart(i, next);
+                setEditing(null);
+              }}
+            />
+          )}
+        </View>
       ))}
     </View>
   );
@@ -353,6 +382,8 @@ const makeStyles = (dark: boolean) => {
   deleteBtn: { minWidth: 30, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
   extraTime: { fontSize: 10, color: c.muted },
   timeInvalid: { borderColor: c.danger },
+  partRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  partEditBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   parts: { paddingHorizontal: spacing.sm, paddingBottom: spacing.xs + 2, gap: 2 },
   partsTitle: { fontSize: 10, fontWeight: '800', color: c.muted, textTransform: 'uppercase' },
   partLine: { fontSize: 11, color: c.muted },

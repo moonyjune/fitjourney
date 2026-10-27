@@ -29,8 +29,8 @@ export async function persistPickedPhoto(tempUri: string, id: string): Promise<s
 }
 
 /** Longest edge (px) of a photo kept on web, where it lives inside the stored state rather than in a file. */
-const WEB_MAX_EDGE_PX = 960;
-const WEB_JPEG_QUALITY = 0.7;
+const WEB_MAX_EDGE_PX = 720;
+const WEB_JPEG_QUALITY = 0.6;
 
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise<string>((resolve, reject) => {
