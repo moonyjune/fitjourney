@@ -14,7 +14,8 @@ import { useWorkoutStore } from '../store/useWorkoutStore';
 import { DEFAULT_TARGET_UMOL } from '../uric/types';
 import type { DailyNutritionLog, ExtraFoodItem, MealSlot, WeightEntry, WorkoutLogEntry } from '../types';
 import { dayHasFood, withIntakeCounters } from '../utils/dayIntake';
-import { currentUserId, pushNutritionLog, pushUserData } from './cloudSync';
+import { currentUserId, pushNutritionLog, pushUserData, whenPushesSettled } from './cloudSync';
+import { useSyncQueueStore } from './syncQueue';
 import { restoreProofPhotos } from './restorePhotos';
 import { USER_DATA_KEYS } from './userDataKeys';
 
@@ -104,6 +105,30 @@ export function foodFills(local: Record<string, DailyNutritionLog>, rows: Row[])
     fills[date] = withIntakeCounters({ ...cloud, waterMl: local[date].waterMl > 0 ? local[date].waterMl : cloud.waterMl });
   }
   return fills;
+}
+
+const foodShape = (log: Pick<DailyNutritionLog, 'extraItems' | 'mealsEaten' | 'removedMealSlots'>): string =>
+  JSON.stringify({
+    items: (log.extraItems ?? []).map(({ photoUri: _photo, ...rest }) => rest),
+    eaten: MEAL_SLOTS.filter((s) => log.mealsEaten?.[s]),
+    removed: [...(log.removedMealSlots ?? [])].sort(),
+  });
+
+/** Days where the device still shows an older version of the food than the cloud: every edit of this device has reached the cloud (nothing of
+ *  that day is waiting in the retry queue), so a different cloud version is the newer one, e.g. an edit made here that the browser then failed to
+ *  keep, or one made on another device. The cloud's food is taken; the device's own water figure and photo files stay. */
+export function staleFoodFixes(local: Record<string, DailyNutritionLog>, rows: Row[], waiting: Set<string>): Record<string, DailyNutritionLog> {
+  const fixes: Record<string, DailyNutritionLog> = {};
+  for (const r of rows) {
+    const date = dayKey(r.entry_date);
+    if (!date || !local[date] || waiting.has(date) || !dayHasFood(local[date]) || !rowHasFood(r)) continue;
+    const cloud = mergeNutrition({}, [r])[date];
+    if (!cloud || foodShape(cloud) === foodShape(local[date])) continue;
+    const photos = new Map((local[date].extraItems ?? []).map((i) => [i.id, i.photoUri]));
+    const extraItems = cloud.extraItems.map((i) => (photos.get(i.id) && !i.photoUri ? { ...i, photoUri: photos.get(i.id) } : i));
+    fixes[date] = withIntakeCounters({ ...cloud, extraItems, waterMl: local[date].waterMl > 0 ? local[date].waterMl : cloud.waterMl });
+  }
+  return fixes;
 }
 
 /** Days with food on this device that the cloud does not have food for (the push never arrived): they are sent up. */
@@ -301,6 +326,8 @@ async function run(): Promise<RestoreResult> {
   const userId = currentUserId();
   if (!userId) return EMPTY;
   try {
+    // Writes still on their way would make the cloud copy read below look older than the device's.
+    await whenPushesSettled();
     const [weights, nutrition, workouts, habits, checks, uric, userData] = await Promise.all([
       fetchAll('weight_entries', userId),
       fetchAll('nutrition_logs', userId),
@@ -332,6 +359,12 @@ async function run(): Promise<RestoreResult> {
     if (Object.keys(food).length > 0) {
       useNutritionStore.setState((s) => ({ logs: { ...s.logs, ...foodFills(s.logs, nutrition) } }));
       result.days += Object.keys(food).length;
+    }
+    const waiting = new Set(useSyncQueueStore.getState().pending.flatMap((op) => (op.type === 'nutritionLog' ? [op.payload.dateISO.slice(0, 10)] : [])));
+    const stale = staleFoodFixes(useNutritionStore.getState().logs, nutrition, waiting);
+    if (Object.keys(stale).length > 0) {
+      useNutritionStore.setState((s) => ({ logs: { ...s.logs, ...staleFoodFixes(s.logs, nutrition, waiting) } }));
+      result.days += Object.keys(stale).length;
     }
     for (const log of daysToPush(useNutritionStore.getState().logs, nutrition)) void pushNutritionLog(log);
     const fills = waterFills(useNutritionStore.getState().logs, nutrition);

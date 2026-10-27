@@ -453,3 +453,28 @@ describe('merge rules', () => {
     expect(merged).toEqual({ '2026-10-01': { a: 'missed', b: 'done' } });
   });
 });
+
+describe('a device that kept an older version of a day', () => {
+  const item = (calories: number) => ({ id: 'x1', name: 'Bữa trưa', calories, proteinG: 17, mealTime: 'lunch' as const, loggedAtISO: '2026-10-27T05:00:00.000Z' });
+  const cloudRow = (calories: number) => ({ id: 'n1', user_id: 'user-1', entry_date: '2026-10-27', meals_eaten: {}, extra_calories: calories, extra_protein_g: 17, extra_items: [item(calories)], water_ml: 0, removed_meal_slots: [] });
+  const local = (calories: number) => ({ dateISO: '2026-10-27', mealsEaten: {}, extraCalories: calories, extraProteinG: 17, extraItems: [item(calories)], waterMl: 1200 });
+
+  it('takes the cloud food when nothing of that day is waiting to be sent, and keeps the water typed here', async () => {
+    useNutritionStore.setState({ logs: { '2026-10-27': local(705) } });
+    mockDb.nutrition_logs = [cloudRow(480)];
+    await restoreOwnData();
+    const day = useNutritionStore.getState().logs['2026-10-27'];
+    expect(day.extraItems[0].calories).toBe(480);
+    expect(day.extraCalories).toBe(480);
+    expect(day.waterMl).toBe(1200);
+  });
+
+  it('keeps the device version while that day still waits in the retry queue', async () => {
+    useNutritionStore.setState({ logs: { '2026-10-27': local(705) } });
+    useSyncQueueStore.setState({ pending: [{ id: 'q1', type: 'nutritionLog', payload: local(705) as never }] });
+    mockOnline = false;
+    mockDb.nutrition_logs = [cloudRow(480)];
+    await restoreOwnData();
+    expect(useNutritionStore.getState().logs['2026-10-27'].extraItems[0].calories).toBe(705);
+  });
+});
