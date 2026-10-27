@@ -237,10 +237,35 @@ describe('AI & cost screen', () => {
       await act(async () => saveButton(r).props.onPress());
       expect(mockSave.mock.calls).toEqual([
         ['model', 'claude-haiku-5-5'],
-        ['price_in', '3'],
+        ['price_in', '1'], // the reference price filled in by the preset
         ['price_out', '5.5'],
       ]);
       expect(allText(r)).toContain('Đã lưu');
+    });
+
+    it('estimates one user per day and per month, and works the costs below out again when another model is picked', async () => {
+      const r = await mount();
+      // Saved model: nothing changed yet, so the recorded costs are shown as they are.
+      expect(allText(r)).toContain('Cộng dồn: 50 lượt · 155.0k token · ≈ $0.60');
+      expect(allText(r)).not.toContain('tính lại từ số token');
+      expect(allText(r)).toContain('Mỗi ngày: 31.0k token (vào 26.0k · ra 5.0k) ≈ $0.15');
+      expect(allText(r)).toContain('Trung bình 1 tháng (30 ngày): 930.0k token ≈ $4.59');
+
+      await act(async () => press(r, 'claude-haiku-5-5').props.onPress()); // 1 / 5 USD
+      const out = allText(r);
+      expect(out).toContain('Mỗi ngày: 31.0k token (vào 26.0k · ra 5.0k) ≈ $0.05');
+      expect(out).toContain('Trung bình 1 tháng (30 ngày): 930.0k token ≈ $1.53');
+      expect(out).toContain('tính lại từ số token theo giá của claude-haiku-5-5 (1 / 5 USD');
+      expect(out).toContain('2026-10-26 3 người · 40 lượt · 120.0k token · $0.2'); // repriced day row
+      expect(out).not.toContain('$0.60');
+    });
+
+    it('a price typed by hand moves the estimate; a model without a reference price keeps the typed prices', async () => {
+      const r = await mount();
+      await act(async () => input(r, 'Giá ra (USD / 1 triệu token)').props.onChangeText('30'));
+      expect(allText(r)).toContain('(vào 26.0k · ra 5.0k) ≈ $0.23');
+      await act(async () => press(r, 'claude-fable-5-1').props.onPress());
+      expect(input(r, 'Giá ra (USD / 1 triệu token)').props.value).toBe('30');
     });
 
     it('does not send an invalid model name or price', async () => {

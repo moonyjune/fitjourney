@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dayKey } from '../supabase/functions/_shared/usage';
+import { costAt, type Pricing } from '../src/ai/aiSettings';
 import { useIsAiAdmin } from '../src/ai/useIsAiAdmin';
 import { AiModelCard } from '../src/components/quest/AiModelCard';
 import { AiUsageCard, tokensText, usdText } from '../src/components/quest/AiUsageCard';
@@ -32,6 +33,9 @@ export default function AiAdminScreen() {
   const [days, setDays] = useState<AiDayTotal[] | null | undefined>(undefined);
   const [selected, setSelected] = useState<string>(today);
   const [users, setUsers] = useState<AiUserTotal[] | null | undefined>(undefined);
+  // The model and prices being tried in the model card: the costs below are worked out again from the tokens at those prices.
+  const [pricing, setPricing] = useState<Pricing | null>(null);
+  const costOf = (r: { tokensIn: number; tokensOut: number; costUsd: number }) => (pricing ? costAt(r.tokensIn, r.tokensOut, pricing) : r.costUsd);
 
   useEffect(() => {
     if (!admin) return;
@@ -65,7 +69,7 @@ export default function AiAdminScreen() {
     );
   }
 
-  const total = (days ?? []).reduce((t, d) => ({ calls: t.calls + d.calls, tokens: t.tokens + d.tokensIn + d.tokensOut, cost: t.cost + d.costUsd }), { calls: 0, tokens: 0, cost: 0 });
+  const total = (days ?? []).reduce((t, d) => ({ calls: t.calls + d.calls, tokens: t.tokens + d.tokensIn + d.tokensOut, cost: t.cost + costOf(d) }), { calls: 0, tokens: 0, cost: 0 });
 
   return (
     <View style={styles.screen}>
@@ -77,12 +81,17 @@ export default function AiAdminScreen() {
         </View>
 
         <View style={styles.gap}>
-          <AiModelCard />
+          <AiModelCard usage={days} onPricing={setPricing} />
         </View>
 
         <HudText size={17} accessibilityRole="header" style={styles.gap}>
           {g('aiAdmin.byDay', { n: DAYS })}
         </HudText>
+        {pricing && (
+          <HudText size={11} weight="medium" color={quest.manaText}>
+            {g('aiAdmin.repriced', { model: pricing.model || g('aiModel.serverDefault'), pin: pricing.priceIn, pout: pricing.priceOut })}
+          </HudText>
+        )}
         {days === undefined ? (
           <HudText size={12} weight="medium" color={quest.textSecondary}>
             {g('aiAdmin.loading')}
@@ -104,14 +113,14 @@ export default function AiAdminScreen() {
               <Pressable
                 key={d.day}
                 accessibilityRole="button"
-                accessibilityLabel={`${d.day}. ${g('aiAdmin.dayRow', { users: d.users, calls: d.calls, tokens: tokensText(d.tokensIn + d.tokensOut), usd: usdText(d.costUsd) })}`}
+                accessibilityLabel={`${d.day}. ${g('aiAdmin.dayRow', { users: d.users, calls: d.calls, tokens: tokensText(d.tokensIn + d.tokensOut), usd: usdText(costOf(d)) })}`}
                 accessibilityState={{ selected: selected === d.day }}
                 onPress={() => setSelected(d.day)}
                 style={[styles.row, selected === d.day && styles.rowSelected]}
               >
                 <HudText size={13}>{d.day}</HudText>
                 <HudText size={12} weight="medium" color={quest.textSecondary}>
-                  {g('aiAdmin.dayRow', { users: d.users, calls: d.calls, tokens: tokensText(d.tokensIn + d.tokensOut), usd: usdText(d.costUsd) })}
+                  {g('aiAdmin.dayRow', { users: d.users, calls: d.calls, tokens: tokensText(d.tokensIn + d.tokensOut), usd: usdText(costOf(d)) })}
                 </HudText>
               </Pressable>
             ))}
@@ -140,7 +149,7 @@ export default function AiAdminScreen() {
                 {u.email ?? u.userId.slice(0, 8)}
               </HudText>
               <HudText size={12} weight="medium" color={quest.textSecondary}>
-                {g('aiAdmin.userRow', { calls: u.calls, tokens: tokensText(u.tokensIn + u.tokensOut), usd: usdText(u.costUsd) })}
+                {g('aiAdmin.userRow', { calls: u.calls, tokens: tokensText(u.tokensIn + u.tokensOut), usd: usdText(costOf(u)) })}
               </HudText>
             </View>
           ))

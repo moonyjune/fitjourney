@@ -3,6 +3,9 @@
 Version numbers are `A.BC`, counting up from 0.01 (0.99 is followed by 1.00). The current number is `APP_VERSION` in `src/utils/buildInfo.ts` and is shown in
 Profile ("Phiên bản"). Every release adds an entry here, newest first, and bumps `APP_VERSION` to match (a test checks they agree).
 
+## 0.06
+- AI & cost: while choosing a model (or editing the prices) the model card shows the estimate for one user: tokens per day, cost per day and per average month (30 days), from the real use of recent days. The day and user lists below are worked out again at the chosen model's prices. Tapping a preset fills in a reference price.
+
 ## 0.05
 - Journal: photos that were submitted from the web before 0.03 (and showed as empty after a reload) are brought back from the cloud; a dead local link no longer hides the cloud copy.
 - Tap any small food photo to see it larger; History: "N ảnh minh chứng" is now an underlined link that opens that day's photos.
