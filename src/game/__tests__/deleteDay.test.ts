@@ -12,6 +12,7 @@ jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: jest.fn(), de
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { editPartPatch } from '../../food/partScale';
+import { uniqueExtraIds } from '../../utils/extraIds';
 import { useNutritionStore } from '../../store/useNutritionStore';
 
 const D = '2026-10-26';
@@ -68,5 +69,40 @@ describe('editing a food of a saved meal', () => {
     expect(stored.state.logs[D].extraItems[0].calories).toBe(480);
     await useNutritionStore.persist.rehydrate();
     expect(useNutritionStore.getState().logs[D].extraItems[0].calories).toBe(480);
+  });
+});
+
+describe('two foods that were saved under one id (the 26/10 day)', () => {
+  const dup = (name: string, calories: number, id: string) => ({ id, name, calories, proteinG: 1, mealTime: 'breakfast' as const, loggedAtISO: `${D}T01:00:00.000Z` });
+  const day = () => [dup('Yến mạch', 114, '1793010836970'), dup('Sữa tươi', 32, '1793010836972'), dup('Táo', 95, '1793010836972')];
+
+  it('uniqueExtraIds keeps the first id and gives the repeats their own', () => {
+    const { items, changed } = uniqueExtraIds(day());
+    expect(changed).toBe(true);
+    expect(items.map((i) => i.id)).toEqual(['1793010836970', '1793010836972', '1793010836972-2']);
+    expect(uniqueExtraIds(items).changed).toBe(false);
+  });
+
+  it('a reload repairs the day and saves the repaired day; then deleting one food leaves the other', async () => {
+    useNutritionStore.setState({ logs: { [D]: { dateISO: D, mealsEaten: {}, extraCalories: 241, extraProteinG: 3, waterMl: 0, extraItems: day() } } });
+    await AsyncStorage.setItem('nutrition-store', JSON.stringify({ state: { logs: useNutritionStore.getState().logs, waterDefaultDone: false }, version: 0 }));
+    mockPush.mockClear();
+    await useNutritionStore.persist.rehydrate();
+    const ids = useNutritionStore.getState().logs[D].extraItems.map((i) => i.id);
+    expect(new Set(ids).size).toBe(3);
+    expect(mockPush).toHaveBeenCalledWith(expect.objectContaining({ dateISO: D }));
+    const taken = useNutritionStore.getState().logs[D].extraItems.find((i) => i.name === 'Táo')!;
+    useNutritionStore.getState().removeExtraItem(D, taken.id);
+    expect(useNutritionStore.getState().logs[D].extraItems.map((i) => i.name)).toEqual(['Yến mạch', 'Sữa tươi']);
+    expect(useNutritionStore.getState().logs[D].extraCalories).toBe(146);
+  });
+
+  it('foods logged within the same millisecond get different ids', () => {
+    useNutritionStore.setState({ logs: {} });
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1793010836972);
+    for (const n of ['a', 'b', 'c']) useNutritionStore.getState().addExtra(D, n, 10, 1, null);
+    now.mockRestore();
+    const ids = useNutritionStore.getState().logs[D].extraItems.map((i) => i.id);
+    expect(new Set(ids).size).toBe(3);
   });
 });

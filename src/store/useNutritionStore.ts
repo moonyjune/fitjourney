@@ -12,6 +12,7 @@ import { deletePersistedPhoto } from '../utils/photoStorage';
 import { isInlinePhoto } from '../utils/inlinePhoto';
 import { extraProofRef } from '../types';
 import { withCountersAfterEdit, withIntakeCounters } from '../utils/dayIntake';
+import { healLog, newExtraId } from '../utils/extraIds';
 
 export type ExtraPatch = Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG' | 'parts'>> & {
   photoUri?: string | null;
@@ -130,7 +131,7 @@ export const useNutritionStore = create<NutritionState>()(
           return { logs: { ...state.logs, [dateKey]: updated } };
         }),
       addExtra: (dateKey, name, calories, proteinG, mealTime, extras) => {
-        const item: ExtraFoodItem = { id: `${Date.now()}`, name, calories, proteinG, mealTime, loggedAtISO: loggedAtFor(dateKey, mealTime, new Date(), extras?.clock) };
+        const item: ExtraFoodItem = { id: newExtraId((get().logs[dateKey]?.extraItems ?? []).map((i) => i.id)), name, calories, proteinG, mealTime, loggedAtISO: loggedAtFor(dateKey, mealTime, new Date(), extras?.clock) };
         if (extras?.purineMg) item.purineMg = extras.purineMg;
         if (extras?.saltG) item.saltG = extras.saltG;
         if (extras?.sugarG) item.sugarG = extras.sugarG;
@@ -219,6 +220,18 @@ export const useNutritionStore = create<NutritionState>()(
       storage: createJSONStorage(() => AsyncStorage),
       // Photos saved inline by an earlier build are already in the proof store: drop the second copy from the days.
       onRehydrateStorage: () => (state) => {
+        // Days saved with two foods under one id (older builds) are repaired, and the repaired day is saved to the cloud.
+        if (state) {
+          const fixed = Object.entries(state.logs).filter(([, l]) => healLog(l) !== l);
+          if (fixed.length > 0) {
+            const logs = { ...state.logs };
+            for (const [k, l] of fixed) {
+              logs[k] = healLog(l);
+              pushNutritionLog(logs[k]);
+            }
+            useNutritionStore.setState({ logs });
+          }
+        }
         if (!state || !Object.values(state.logs).some((l) => (l.extraItems ?? []).some((i) => isInlinePhoto(i.photoUri)))) return;
         const logs = { ...state.logs };
         for (const [k, l] of Object.entries(logs)) {

@@ -16,6 +16,7 @@ import type { DailyNutritionLog, ExtraFoodItem, MealSlot, WeightEntry, WorkoutLo
 import { dayHasFood, withIntakeCounters } from '../utils/dayIntake';
 import { currentUserId, pushNutritionLog, pushUserData, whenPushesSettled } from './cloudSync';
 import { useSyncQueueStore } from './syncQueue';
+import { healLog, uniqueExtraIds } from '../utils/extraIds';
 import { restoreProofPhotos } from './restorePhotos';
 import { USER_DATA_KEYS } from './userDataKeys';
 
@@ -77,7 +78,7 @@ export function mergeNutrition(local: Record<string, DailyNutritionLog>, rows: R
     const raw = (r.meals_eaten ?? {}) as Record<string, unknown>;
     for (const slot of MEAL_SLOTS) if (raw[slot] === true) eaten[slot] = true;
     const removed = Array.isArray(r.removed_meal_slots) ? (r.removed_meal_slots as unknown[]).filter((s): s is MealSlot => MEAL_SLOTS.includes(s as MealSlot)) : [];
-    added[date] = {
+    added[date] = healLog({
       dateISO: date,
       mealsEaten: eaten,
       extraCalories: num(r.extra_calories),
@@ -85,7 +86,7 @@ export function mergeNutrition(local: Record<string, DailyNutritionLog>, rows: R
       extraItems: items,
       waterMl: num(r.water_ml),
       ...(removed.length > 0 ? { removedMealSlots: removed } : {}),
-    };
+    });
   }
   return added;
 }
@@ -365,6 +366,13 @@ async function run(): Promise<RestoreResult> {
     if (Object.keys(stale).length > 0) {
       useNutritionStore.setState((s) => ({ logs: { ...s.logs, ...staleFoodFixes(s.logs, nutrition, waiting) } }));
       result.days += Object.keys(stale).length;
+    }
+    // A cloud day saved with two foods under one id is repaired here (see healLog); the repaired copy goes back up.
+    for (const r of nutrition) {
+      const date = dayKey(r.entry_date);
+      const items = Array.isArray(r.extra_items) ? (r.extra_items as { id?: unknown }[]).filter((i) => i && typeof i.id === 'string') : [];
+      const log = date ? useNutritionStore.getState().logs[date] : undefined;
+      if (log && uniqueExtraIds(items as { id: string }[]).changed) void pushNutritionLog(healLog(log));
     }
     for (const log of daysToPush(useNutritionStore.getState().logs, nutrition)) void pushNutritionLog(log);
     const fills = waterFills(useNutritionStore.getState().logs, nutrition);
