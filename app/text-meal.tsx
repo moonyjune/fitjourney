@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cleanAdvice } from '../src/ai/adviceText';
-import { MEAL_TIMES, rowsFromResult, rowsFromSaved, validMealTime, type TextMealRow } from '../src/ai/textMeal';
+import { MEAL_TIMES, resolveFromDb, rowsFromResult, validMealTime, type TextMealRow } from '../src/ai/textMeal';
 import { useMealTextAnalysis } from '../src/ai/useMealTextAnalysis';
 import { accuracyOf } from '../src/ai/accuracy';
 import { useAiErrorText, useCalibrationText } from '../src/ai/usePhotoAnalysis';
@@ -81,20 +81,21 @@ export default function TextMealScreen() {
     }
     setEmptyHint(null);
     setAdvice(null);
-    // Foods saved before need no AI at all.
-    const fromSaved = rowsFromSaved(sentence, foods);
-    if (fromSaved) {
-      setRows(fromSaved);
+    // Foods the database already has (saved meals, or any food with its amount typed) are used as they are; only the rest goes to the AI.
+    const local = resolveFromDb(sentence, foods);
+    if (local && local.unknown.length === 0) {
+      setRows(local.rows);
       setNote({ kind: 'saved', reasoning: g('text.fromSaved'), accuracy: null });
       return;
     }
-    const result = await ai.analyze(sentence);
+    const known = local?.rows ?? [];
+    const result = await ai.analyze(local ? local.unknown.join(', ') : sentence);
     if (!result) return;
-    const next = rowsFromResult(result, foods);
+    const next = [...known, ...rowsFromResult(result, foods).map((r, i) => ({ ...r, key: `ai-${known.length + i}` }))];
     setRows(next);
     if (next.length === 0) setEmptyHint('foods');
     setMealTime(validMealTime(result.mealTime));
-    setNote({ kind: 'ai', reasoning: result.reasoning, accuracy: accuracyOf(result.accuracyPercent) });
+    setNote({ kind: 'ai', reasoning: known.length > 0 ? `${g('text.partlyFromDb', { n: known.length })} ${result.reasoning}` : result.reasoning, accuracy: accuracyOf(result.accuracyPercent) });
     setAdvice(cleanAdvice(result.advice));
   }
 

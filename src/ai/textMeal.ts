@@ -1,3 +1,4 @@
+import { lookupQuantified, type QuantifiedFood } from '../food/dbLookup';
 import { findRememberedFood, portionOf } from '../food/remember';
 import type { FoodEntry } from '../food/types';
 import type { ExtraMealTime } from '../types';
@@ -56,6 +57,39 @@ function savedRow(key: string, name: string, food: FoodEntry): TextMealRow {
     aiCalories: 0,
     baseline: `${food.name}|${p.calories}`,
   };
+}
+
+function quantifiedRow(key: string, q: QuantifiedFood): TextMealRow {
+  return {
+    key,
+    name: q.name,
+    calories: String(q.calories),
+    protein: String(q.proteinG),
+    purine: q.purineMg > 0 ? String(q.purineMg) : '',
+    salt: q.saltG > 0 ? String(q.saltG) : '',
+    sugar: q.sugarG > 0 ? String(q.sugarG) : '',
+    accuracy: null,
+    fromDb: true,
+    aiCalories: 0,
+    baseline: `${q.name}|${q.calories}`,
+  };
+}
+
+/** The foods of a sentence the user's database can answer (a saved food by name, or any database food with its amount typed:
+ *  "150g cơm", "2 quả trứng"), in order, and the parts it cannot answer, which are the only ones the AI is asked about. */
+export function resolveFromDb(text: string, foods: FoodEntry[]): { rows: TextMealRow[]; unknown: string[] } | null {
+  const parts = splitMealText(text);
+  if (parts.length === 0 || parts.length > MAX_ROWS) return null;
+  const rows: TextMealRow[] = [];
+  const unknown: string[] = [];
+  for (const [i, part] of parts.entries()) {
+    const saved = hasQuantity(part) ? undefined : findRememberedFood(foods, part);
+    const counted = saved ? null : lookupQuantified(part, foods);
+    if (saved) rows.push(savedRow(`saved-${i}`, part, saved));
+    else if (counted) rows.push(quantifiedRow(`db-${i}`, counted));
+    else unknown.push(part);
+  }
+  return { rows, unknown };
 }
 
 /** When every food in the sentence is one the user saved before (and no quantity is typed), the rows come straight from

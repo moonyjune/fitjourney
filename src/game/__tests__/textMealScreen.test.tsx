@@ -117,18 +117,18 @@ describe('Log food by text', () => {
     await press(r, ANALYZE);
     expect(mockText).not.toHaveBeenCalled();
     expect(allText(r)).toContain('Hãy nhập những gì bạn đã ăn.');
-    await type(r, 'Bạn đã ăn gì?', '  2 bát phở bò, 1 ly trà đá ít đường ');
+    await type(r, 'Bạn đã ăn gì?', '  2 tô mì quảng, 1 ly trà đá ít đường ');
     await press(r, ANALYZE);
     expect(mockText).toHaveBeenCalledTimes(1);
     const [sentence, profile, coach] = mockText.mock.calls[0] as [string, Record<string, unknown>, Record<string, any>];
-    expect(sentence).toBe('2 bát phở bò, 1 ly trà đá ít đường');
+    expect(sentence).toBe('2 tô mì quảng, 1 ly trà đá ít đường');
     expect(profile).toMatchObject({ weightKg: 106.2, heightCm: 172 });
     expect(coach.now).toMatchObject({ date: DATE, time: '16:10' });
   });
 
   it('shows one editable line per food with its own accuracy and the overall accuracy, and saves nothing yet', async () => {
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', '2 bát phở bò, 1 ly trà đá ít đường');
+    await type(r, 'Bạn đã ăn gì?', '2 tô mì quảng, 1 ly trà đá ít đường');
     await press(r, ANALYZE);
     expect((input(r, 'Tên món 1')).props.value).toBe('Phở bò (2 bát)');
     expect(input(r, 'Calo (kcal) món 1').props.value).toBe('820');
@@ -159,7 +159,7 @@ describe('Log food by text', () => {
     expect(items()[0]).toMatchObject({ name: 'Phở bò (2 bát), Trà đá không đường', calories: 725, proteinG: 48, mealTime: 'lunch', purineMg: 210, saltG: 4.6, sugarG: 10 });
     expect(items()[0].parts?.map((p) => [p.name, p.calories, p.proteinG])).toEqual([['Phở bò (2 bát)', 700, 48], ['Trà đá không đường', 25, 0]]);
     expect(mockRouter.back).toHaveBeenCalled();
-    expect(useFoodDbStore.getState().custom.map((f) => f.name)).toEqual(['Phở bò (2 bát), Trà đá không đường']);
+    expect(useFoodDbStore.getState().custom.map((f) => f.name)).toEqual(['Trà đá không đường']) // each new food on its own; "Phở bò" is already in the database;
   });
 
   it('the description can be rewritten; an emptied one falls back to the joined names; one food has no parts', async () => {
@@ -250,7 +250,7 @@ describe('Log food by text', () => {
     await press(r, 'Thêm bữa ăn vào hôm nay');
     expect(items().map((i) => [i.name, i.calories])).toEqual([['Bún riêu nhà nấu, Chè đậu xanh nhà nấu', 455]]);
     expect(items()[0].parts?.map((p) => p.name)).toEqual(['Bún riêu nhà nấu', 'Chè đậu xanh nhà nấu']);
-    expect(useFoodDbStore.getState().custom).toHaveLength(3); // the two foods stay, and the whole meal is remembered once
+    expect(useFoodDbStore.getState().custom).toHaveLength(2); // the two foods stay; the combination is not saved as a food of its own
   });
 
   it('a line taken from the database and then renamed counts as a new food and is remembered under its new name', async () => {

@@ -1,6 +1,7 @@
 import { SODIUM_MG_PER_SALT_G } from '../insights/thresholds';
 import type { ExtraFoodItem } from '../types';
 import { baseName } from './calc';
+import { isKnownWithQuantity } from './dbLookup';
 import { fold } from './search';
 import type { FoodEntry, FoodGroup } from './types';
 
@@ -57,6 +58,8 @@ export function rememberableFood(item: LoggedFood, known: FoodEntry[]): Omit<Foo
   if (nums.some((n) => !Number.isFinite(n) || n < 0)) return null;
   if (item.calories <= 0 && item.proteinG <= 0) return null;
   if (findFoodByName(known, name)) return null;
+  // "150 g Cơm" or "2 quả Trứng gà" is the database's own food with an amount, not a new food.
+  if (isKnownWithQuantity(name, known, item.calories)) return null;
   const unitG = 100 * Math.max(1, Math.ceil(item.calories / MAX_KCAL_PER_100));
   const k = 100 / unitG;
   return {

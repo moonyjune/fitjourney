@@ -347,6 +347,31 @@ describe('FitQuest logging screens', () => {
       expect(text).not.toContain('CHI-TIẾT');
     });
 
+    it('opens a dialog with the photo, totals and parts when a logged meal is tapped, and closes it again', () => {
+      useNutritionStore.getState().addExtra(DATE, 'Yến mạch 30g, Sữa chua 100g', 170, 8, 'afternoon_snack', {
+        photoUri: 'file:///docs/proofs/extra-9.jpg',
+        parts: [{ name: 'CHI-TIẾT-MỘT 30g', calories: 110, proteinG: 4 }, { name: 'CHI-TIẾT-HAI 100g', calories: 60, proteinG: 4 }],
+      });
+      const r = render(<JournalScreen />);
+      expect(allText(r)).not.toContain('CHI-TIẾT');
+      act(() => pressable(r, (l) => l.includes('Yến mạch 30g, Sữa chua 100g')).props.onPress());
+      const text = allText(r);
+      expect(text).toContain('CHI-TIẾT-MỘT 30g · 110 kcal · 4 g đạm');
+      expect(text).toContain('CHI-TIẾT-HAI 100g');
+      expect(r.root.findAll((n) => n.props.source?.uri === 'file:///docs/proofs/extra-9.jpg').length).toBeGreaterThan(0);
+      act(() => pressable(r, (l) => l === 'Đóng').props.onPress());
+      expect(allText(r)).not.toContain('CHI-TIẾT');
+    });
+
+    it('shows the same deficit on the day strip as in the stats', () => {
+      const r = render(<JournalScreen />);
+      const stat = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Thâm hụt '))[0];
+      const value = stat.props.accessibilityLabel.replace('Thâm hụt ', '');
+      const today = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('T6 23/10') && n.props.accessibilityState)[0];
+      expect(today.props.accessibilityLabel).toContain(`thâm hụt ${value.replace(/,/g, '')}`);
+      expect(today.findAll((n) => typeof n.props.children === 'string').map((n) => n.props.children)).toContain(value);
+    });
+
     it('includes a feeling check-in logged today', () => {
       useFeelingStore.setState({
         records: [{ id: 'f', loggedAtISO: `${DATE}T14:20:00`, cravingLevel: 2, hungerLevel: 3, mood: 'good', workoutCondition: null, note: '' }],

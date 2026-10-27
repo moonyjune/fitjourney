@@ -4,11 +4,11 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FoodThumb } from '../components/quest/FoodPhoto';
 import { HudText } from '../components/quest/HudText';
+import { MealDetailDialog, type MealDetail } from '../components/quest/MealDetailDialog';
 import { MoodFace } from '../components/quest/MoodFace';
 import { QuestHeader } from '../components/quest/QuestHeader';
 import { QuestIcon } from '../components/quest/QuestIcon';
 import { getDayType } from '../constants/plan';
-import { damageForDeficit } from '../game/boss';
 import { useGameText, type GameKey } from '../game/strings';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
@@ -19,6 +19,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { usePlanStore } from '../store/usePlanStore';
+import { extraProofRef } from '../types';
 import { useProofStore } from '../store/useProofStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
@@ -98,9 +99,10 @@ interface RowProps {
   proteinTargetG: number;
   workoutXpFor: string | null;
   isToday: boolean;
+  onOpen: (item: TimelineItem) => void;
 }
 
-function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday }: RowProps) {
+function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen }: RowProps) {
   let body: React.ReactNode = null;
   let label = '';
   let onPress: (() => void) | undefined;
@@ -129,6 +131,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday }: RowP
     const status = item.eaten ? 'journal.mealDone' : item.past ? 'journal.mealNotLogged' : 'journal.mealPending';
     label = `${item.label}. ${g(status)}`;
     if (isToday) onPress = () => router.push(`/meal/${item.slot}`);
+    else if (item.eaten) onPress = () => onOpen(item);
     body = (
       <View style={[styles.card, item.eaten ? styles.cardMeal : styles.cardPending]}>
         <View style={styles.cardHead}>
@@ -151,6 +154,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday }: RowP
   } else if (item.kind === 'extra') {
     const name = item.name || g('journal.extra');
     label = `${name}. ${item.kcal} kcal`;
+    onPress = () => onOpen(item);
     body = (
       <View style={[styles.card, styles.cardMeal]}>
         <View style={styles.cardHead}>
@@ -286,7 +290,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
         const key = toDateKey(date);
         const future = key > todayKey;
         const deficit = future ? null : evaluate(key).deficitKcal;
-        return { key, date, future, deficit, damage: deficit == null ? null : damageForDeficit(deficit).damage };
+        return { key, date, future, deficit };
       }),
     [monday, todayKey, evaluate]
   );
@@ -326,6 +330,28 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
   const firstWorkout = timeline.find((i) => i.kind === 'workout');
   const workoutXpFor = workoutMissionDone && firstWorkout ? firstWorkout.id : null;
 
+  const [detail, setDetail] = useState<MealDetail | null>(null);
+  function openDetail(item: TimelineItem) {
+    if (item.kind === 'extra') {
+      const rawId = item.id.replace(/^extra-/, '');
+      const proof = photos.find((p) => p.taskRefId === extraProofRef(rawId));
+      setDetail({
+        title: item.name || g('journal.extra'),
+        time: clock(item.minutes),
+        kcal: item.kcal,
+        proteinG: item.proteinG,
+        purineMg: item.purineMg,
+        sugarG: item.sugarG,
+        saltG: item.saltG,
+        parts: item.parts,
+        photoUri: item.photoUri ?? proof?.photoUri ?? null,
+      });
+    } else if (item.kind === 'meal') {
+      const proof = photos.find((p) => p.taskType === 'meal' && p.taskRefId === item.slot && toDateKey(new Date(p.dateISO)) === selectedKey);
+      setDetail({ title: item.label, time: clock(item.minutes), kcal: item.kcal, proteinG: item.proteinG, purineMg: null, sugarG: null, saltG: null, photoUri: proof?.photoUri ?? null });
+    }
+  }
+
   const weekdayLabel = (d: Date) => g(`weekday.${d.getDay()}` as GameKey);
   const dateLabel = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
   const eyebrow = g('journal.eyebrow', {
@@ -361,7 +387,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
               const dl = dateLabel(d.date);
               const a11y = d.future
                 ? `${wd} ${dl}`
-                : d.damage == null
+                : d.deficit == null
                   ? g('journal.dayNoData', { weekday: wd, date: dl })
                   : g('journal.day', { weekday: wd, date: dl, deficit: Math.round(d.deficit ?? 0) });
               return (
@@ -385,7 +411,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
                     {d.date.getDate()}
                   </HudText>
                   <HudText size={10} weight="medium" color={selected ? quest.onGold : quest.hpText}>
-                    {d.future ? '·' : d.damage == null ? '–' : `−${d.damage.toLocaleString('en-US')}`}
+                    {d.future ? '·' : d.deficit == null ? '–' : Math.round(d.deficit).toLocaleString('en-US')}
                   </HudText>
                 </Pressable>
               );
@@ -441,7 +467,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
 
         <View style={styles.timeline}>
           {timeline.map((item) => (
-            <TimelineRow key={item.id} item={item} g={g} t={t} proteinTargetG={proteinTargetG} workoutXpFor={workoutXpFor} isToday={isToday && !client} />
+            <TimelineRow key={item.id} item={item} g={g} t={t} proteinTargetG={proteinTargetG} workoutXpFor={workoutXpFor} isToday={isToday && !client} onOpen={openDetail} />
           ))}
         </View>
 
@@ -449,6 +475,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
           {g('journal.waterNote')}
         </HudText>
       </ScrollView>
+      <MealDetailDialog detail={detail} onClose={() => setDetail(null)} />
     </View>
   );
 }

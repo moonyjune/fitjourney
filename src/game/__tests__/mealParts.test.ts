@@ -108,7 +108,7 @@ describe('a meal with parts in the log', () => {
     expect(useNutritionStore.getState().logs['2026-10-23'].extraCalories).toBe(400); // totals count each meal once
   });
 
-  it('the journal timeline has ONE entry for the meal, with its totals, and never the parts', () => {
+  it('the journal timeline has ONE entry for the meal, with its totals; the parts ride along for the detail dialog', () => {
     useNutritionStore.getState().addExtra('2026-10-23', 'Yến mạch 30g, Sữa chua 100g, Sữa tươi 50ml', 200, 9.7, 'breakfast', { parts: [OATS, YOGURT, MILK], purineMg: 28, saltG: 0.15, sugarG: 7.4 });
     const timeline = buildTimeline({
       dateKey: '2026-10-23', now: new Date(2026, 9, 23, 23, 5), log: useNutritionStore.getState().logs['2026-10-23'], meals: DEFAULT_PLAN.mealTemplates.training,
@@ -117,7 +117,7 @@ describe('a meal with parts in the log', () => {
     const extras = timeline.filter((i) => i.kind === 'extra');
     expect(extras).toHaveLength(1);
     expect(extras[0]).toMatchObject({ name: 'Yến mạch 30g, Sữa chua 100g, Sữa tươi 50ml', kcal: 200, purineMg: 28, saltG: 0.15, sugarG: 7.4 });
-    expect(JSON.stringify(timeline)).not.toContain('Sữa tươi không đường 50ml'); // the part names stay out
+    expect(extras[0]).toMatchObject({ parts: [expect.objectContaining({ name: 'Yến mạch 30g' }), expect.anything(), expect.anything()] }); // listed only in the detail dialog
   });
 
   it('restoring from the cloud keeps the parts of a meal', () => {

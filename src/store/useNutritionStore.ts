@@ -137,7 +137,12 @@ export const useNutritionStore = create<NutritionState>()(
           return { logs: { ...state.logs, [dateKey]: updated } };
         });
         // A food the database does not know yet is remembered, so next time it needs neither typing nor an AI call.
-        if (!extras?.fromFoodDb) useFoodDbStore.getState().remember(item);
+        // A meal entered as several foods adds each food on its own (the one-line total of a combination is no use later).
+        if (!extras?.fromFoodDb) {
+          const db = useFoodDbStore.getState();
+          if (parts.length > 0) for (const part of parts) db.remember(part);
+          else db.remember(item);
+        }
         // The photo also goes through the proof pipeline so it syncs and the coach sees it next to the plan meals.
         if (item.photoUri) {
           useProofStore.getState().addProof({
