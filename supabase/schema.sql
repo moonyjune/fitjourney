@@ -638,6 +638,29 @@ $$;
 revoke all on function public.ai_admin_by_user(date) from public, anon;
 grant execute on function public.ai_admin_by_user(date) to authenticated;
 
+-- Như trên nhưng tách theo model: mỗi (người dùng, model) của ngày đó một dòng, chi phí là chi phí đã ghi lúc gọi.
+create or replace function public.ai_admin_by_user_model(p_day date)
+returns table (user_id uuid, model text, calls bigint, tokens_in bigint, tokens_out bigint, cost_usd numeric)
+language plpgsql
+security definer set search_path = public
+stable
+as $$
+begin
+  if not public.is_ai_admin() then
+    raise exception 'Không có quyền xem.';
+  end if;
+  return query
+    select u.user_id, u.model, sum(u.calls)::bigint, sum(u.tokens_in)::bigint, sum(u.tokens_out)::bigint, round(sum(u.cost_usd), 4)
+    from public.ai_usage u
+    where u.day = p_day
+    group by u.user_id, u.model
+    order by u.user_id, sum(u.cost_usd) desc
+    limit 1000;
+end;
+$$;
+revoke all on function public.ai_admin_by_user_model(date) from public, anon;
+grant execute on function public.ai_admin_by_user_model(date) to authenticated;
+
 -- AI: báo cáo đã tạo (tổng kết tuần...). Edge Function ghi; người dùng chỉ đọc báo cáo của mình.
 create table if not exists public.ai_reports (
   user_id uuid not null references public.profiles (id) on delete cascade,

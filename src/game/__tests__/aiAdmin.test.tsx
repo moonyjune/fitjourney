@@ -24,6 +24,7 @@ const mockIsAdmin = jest.fn<() => Promise<boolean>>();
 const mockByDay = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockByUser = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockByDayModel = jest.fn<(...a: unknown[]) => Promise<unknown>>();
+const mockByUserModel = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockUsage = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 const mockSettings = jest.fn<() => Promise<Record<string, string> | null>>();
 const mockSave = jest.fn<(...a: unknown[]) => Promise<{ ok: true } | { ok: false; message: string }>>();
@@ -34,6 +35,7 @@ jest.mock('../../sync/cloudSync', () => ({
   fetchAiAdminByDay: (...a: unknown[]) => mockByDay(...a),
   fetchAiAdminByUser: (...a: unknown[]) => mockByUser(...a),
   fetchAiAdminByDayModel: (...a: unknown[]) => mockByDayModel(...a),
+  fetchAiAdminByUserModel: (...a: unknown[]) => mockByUserModel(...a),
   fetchAiUsageToday: (...a: unknown[]) => mockUsage(...a),
 }));
 
@@ -68,6 +70,11 @@ const DAY_MODELS = [
 const USERS = [
   { userId: 'aaaaaaaa-1', email: 'owner@example.com', calls: 30, tokensIn: 80000, tokensOut: 15000, costUsd: 0.45 },
   { userId: 'bbbbbbbb-2', email: null, calls: 10, tokensIn: 20000, tokensOut: 5000, costUsd: 0.15 },
+];
+const USER_MODELS = [
+  { userId: 'aaaaaaaa-1', model: 'claude-opus-5-5', calls: 10, tokensIn: 40000, tokensOut: 8000, costUsd: 0.3 },
+  { userId: 'aaaaaaaa-1', model: 'claude-sonnet-5-5', calls: 20, tokensIn: 40000, tokensOut: 7000, costUsd: 0.15 },
+  { userId: 'bbbbbbbb-2', model: 'claude-sonnet-5-5', calls: 10, tokensIn: 20000, tokensOut: 5000, costUsd: 0.15 },
 ];
 
 describe('formatting', () => {
@@ -170,6 +177,7 @@ describe('AI & cost screen', () => {
     mockByDay.mockResolvedValue(DAYS);
     mockByUser.mockResolvedValue(USERS);
     mockByDayModel.mockResolvedValue(DAY_MODELS);
+    mockByUserModel.mockResolvedValue(USER_MODELS);
     mockUsage.mockResolvedValue([{ feature: 'photo', calls: 3, tokensIn: 9000, tokensOut: 2100, costUsd: 0.06 }]);
     mockSettings.mockResolvedValue({ model: 'claude-sonnet-5-5', price_in: '3' });
     mockSave.mockResolvedValue({ ok: true });
@@ -187,6 +195,7 @@ describe('AI & cost screen', () => {
     expect(mockByDay).not.toHaveBeenCalled();
     expect(mockByDayModel).not.toHaveBeenCalled();
     expect(mockByUser).not.toHaveBeenCalled();
+    expect(mockByUserModel).not.toHaveBeenCalled();
     expect(mockUsage).not.toHaveBeenCalled();
     expect(mockSettings).not.toHaveBeenCalled(); // the model setting is for admins only
   });
@@ -215,11 +224,30 @@ describe('AI & cost screen', () => {
     expect(text).toContain('claude-sonnet-5-5: 10 lượt · 35.0k token · $0.004'); // the 25th
   });
 
+  it('splits each user of the chosen day by model, and asks again for a tapped day', async () => {
+    const r = await mount();
+    expect(mockByUserModel).toHaveBeenCalledWith('2026-10-26');
+    const owner = r.root.findAll((n) => n.props.accessibilityLabel === 'owner@example.com' && n.props.accessible)[0];
+    const strings: string[] = [];
+    const walk = (n: unknown) => (typeof n === 'string' ? strings.push(n) : (n as { children?: unknown[] }).children?.forEach(walk));
+    walk(owner);
+    const ownerText = strings.join(' ');
+    expect(ownerText).toContain('claude-opus-5-5: 10 lượt · 48.0k token · $0.30');
+    expect(ownerText).toContain('claude-sonnet-5-5: 20 lượt · 47.0k token · $0.15');
+    expect(ownerText).not.toContain('25.0k'); // the other user's line is not under this one
+    expect(allText(r)).toContain('claude-sonnet-5-5: 10 lượt · 25.0k token · $0.15'); // the second user
+    const row = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('2026-10-25'))[0];
+    await act(async () => row.props.onPress());
+    expect(mockByUserModel).toHaveBeenLastCalledWith('2026-10-25');
+  });
+
   it('still shows the day rows when the per-model figures cannot be read', async () => {
     mockByDayModel.mockResolvedValue(null);
+    mockByUserModel.mockResolvedValue(null);
     const text = allText(await mount());
     expect(text).toContain('3 người · 40 lượt · 120.0k token · $0.60');
     expect(text).not.toContain('claude-sonnet-5-5: ');
+    expect(text).toContain('30 lượt · 95.0k token · $0.45'); // user rows without the split
   });
 
   it('uses the Vietnam day: just after 17:00 UTC it is already the next day', async () => {

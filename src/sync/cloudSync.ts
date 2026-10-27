@@ -1106,6 +1106,27 @@ export async function fetchAiAdminByUser(day: string): Promise<AiUserTotal[] | n
   }
 }
 
+export interface AiUserModelTotal {
+  userId: string;
+  model: string;
+  calls: number;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number;
+}
+
+/** One day split by user and model (admins only), at the cost recorded when each call was made. Null when it cannot be read. */
+export async function fetchAiAdminByUserModel(day: string): Promise<AiUserModelTotal[] | null> {
+  try {
+    const { data, error } = await supabase.rpc('ai_admin_by_user_model', { p_day: day });
+    if (error) throw error;
+    return (data ?? []).map((r: Record<string, unknown>) => ({ userId: String(r.user_id), model: String(r.model ?? ''), calls: Number(r.calls ?? 0), tokensIn: Number(r.tokens_in ?? 0), tokensOut: Number(r.tokens_out ?? 0), costUsd: Number(r.cost_usd ?? 0) }));
+  } catch (error) {
+    logSyncError('fetchAiAdminByUserModel', error);
+    return null;
+  }
+}
+
 /** The AI settings an admin chose (model and prices); a key that was never set (or was cleared) is absent. Null when they cannot be read. */
 export async function fetchAiSettings(): Promise<Record<string, string> | null> {
   try {

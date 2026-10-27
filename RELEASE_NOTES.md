@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.10 | yes | — |
 | 0.09 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
 | 0.08 | no | suggest-dinner, generate-meal-recipe |
 | 0.07 | no | — |
@@ -21,6 +22,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.10
+- AI & cost: the list by user is split by model too: under each user, one line per model they used that day (calls, tokens, the cost recorded at the time).
+- Needs `supabase/schema.sql` run again (new function `ai_admin_by_user_model`); until then the user rows show without the split.
 
 ## 0.09
 - AI & cost: the day and user lists keep the cost recorded when each call was made, with that call's model and price. Picking another model (or price) above only changes the estimate for one user and the calls made after saving; history is no longer worked out again.

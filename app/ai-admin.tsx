@@ -9,7 +9,7 @@ import { AiUsageCard, tokensText, usdText } from '../src/components/quest/AiUsag
 import { HudText } from '../src/components/quest/HudText';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { useGameText } from '../src/game/strings';
-import { fetchAiAdminByDay, fetchAiAdminByDayModel, fetchAiAdminByUser, type AiDayModelTotal, type AiDayTotal, type AiUserTotal } from '../src/sync/cloudSync';
+import { fetchAiAdminByDay, fetchAiAdminByDayModel, fetchAiAdminByUser, fetchAiAdminByUserModel, type AiDayModelTotal, type AiDayTotal, type AiUserModelTotal, type AiUserTotal } from '../src/sync/cloudSync';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
@@ -32,7 +32,7 @@ function totalsByModel(rows: AiDayModelTotal[]): { model: string; calls: number;
 }
 
 /** Profile > AI & cost. Only for the accounts on the server's `ai_admins` list: this account's use today, then the whole
- *  app's calls / tokens / estimated cost per day (split by model) and, for a tapped day, per user. Every cost shown is the one
+ *  app's calls / tokens / estimated cost per day and, for a tapped day, per user (both split by model). Every cost shown is the one
  *  recorded when the call was made, with that call's model and price: choosing another model only changes later calls. */
 export default function AiAdminScreen() {
   const g = useGameText();
@@ -45,6 +45,7 @@ export default function AiAdminScreen() {
   const [users, setUsers] = useState<AiUserTotal[] | null | undefined>(undefined);
   // Null when the per-model figures cannot be read (e.g. the new SQL has not been run): the day rows are then shown without the split.
   const [models, setModels] = useState<AiDayModelTotal[] | null>(null);
+  const [userModels, setUserModels] = useState<AiUserModelTotal[] | null>(null);
 
   useEffect(() => {
     if (!admin) return;
@@ -60,7 +61,9 @@ export default function AiAdminScreen() {
     if (!admin) return;
     let cancelled = false;
     setUsers(undefined);
+    setUserModels(null);
     fetchAiAdminByUser(selected).then((r) => !cancelled && setUsers(r));
+    fetchAiAdminByUserModel(selected).then((r) => !cancelled && setUserModels(r));
     return () => {
       cancelled = true;
     };
@@ -173,6 +176,13 @@ export default function AiAdminScreen() {
               <HudText size={12} weight="medium" color={quest.textSecondary}>
                 {g('aiAdmin.userRow', { calls: u.calls, tokens: tokensText(u.tokensIn + u.tokensOut), usd: usdText(u.costUsd) })}
               </HudText>
+              {(userModels ?? [])
+                .filter((m) => m.userId === u.userId)
+                .map((m) => (
+                  <HudText key={m.model} size={11} weight="medium" color={quest.manaText}>
+                    {g('aiAdmin.modelRow', { model: m.model, calls: m.calls, tokens: tokensText(m.tokensIn + m.tokensOut), usd: usdText(m.costUsd) })}
+                  </HudText>
+                ))}
             </View>
           ))
         )}
