@@ -82,7 +82,9 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
   const book = useCookbookStore((s) => s.recipes);
   const aiIdeas: Record<string, DinnerIdea[]> = storedIdeas ?? {};
   const [viewing, setViewing] = useState<{ idea: DinnerIdea; brief: DinnerBrief; label: string; kind: MealKind } | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  /** The request running: which meal and which button (AI or shared cookbook). Only that button shows it is busy; the other one waits,
+   *  because both replace the same suggestions. */
+  const [busy, setBusy] = useState<{ id: string; by: 'ai' | 'book' } | null>(null);
   const [failure, setFailure] = useState<{ id: string; kind: AiErrorKind } | null>(null);
   const [notice, setNotice] = useState<{ id: string; key: 'cookbook.sharedNone' | 'cookbook.sharedFailed' | 'meals.none' } | null>(null);
   const [query, setQuery] = useState('');
@@ -101,16 +103,16 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
   const labelOf = (m: SplitMeal) => m.slot.label ?? g(KIND_KEY[m.slot.kind]);
 
   async function askAi(meal: SplitMeal, dbNames: Set<string>, shown: DinnerIdea[]) {
-    if (busyId || !plan) return;
+    if (busy || !plan) return;
     const brief = mealBrief(plan.totals, meal, prefs);
-    setBusyId(meal.slot.id);
+    setBusy({ id: meal.slot.id, by: 'ai' });
     setFailure(null);
     setNotice(null);
     // Dishes the user already has (cook book, and the ideas on screen) are not asked for again.
     const have = new Set([...useCookbookStore.getState().recipes.map((r) => r.id), ...shown.map((i) => recipeKey(i.name))]);
     const avoid = [...useCookbookStore.getState().recipes.map((r) => r.name), ...shown.map((i) => i.name)].slice(0, 40);
     const outcome = await requestDinner(brief, buildTasteProfile().favorites, avoid);
-    setBusyId(null);
+    setBusy(null);
     if (!outcome.ok) {
       setFailure({ id: meal.slot.id, kind: outcome.kind });
       return;
@@ -136,13 +138,13 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
 
   /** 3 dishes from the cookbook shared by all users that fit this meal (and the search text, if any): no AI, no quota. */
   async function askCookbook(meal: SplitMeal, shown: DinnerIdea[]) {
-    if (busyId || !plan) return;
+    if (busy || !plan) return;
     const brief = mealBrief(plan.totals, meal, prefs);
-    setBusyId(meal.slot.id);
+    setBusy({ id: meal.slot.id, by: 'book' });
     setFailure(null);
     setNotice(null);
     const outcome = await searchSharedCookbook(brief, query, shown.map((i) => i.name));
-    setBusyId(null);
+    setBusy(null);
     if (!outcome.ok) {
       setNotice({ id: meal.slot.id, key: 'cookbook.sharedFailed' });
       return;
@@ -194,6 +196,8 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
         const aiList = (aiIdeas[meal.slot.id] ?? []).filter((i) => acceptDinner(brief, i));
         const aiKeys = new Set([...dbIdeas, ...aiList].map((i) => recipeKey(i.name)));
         const asked = aiIdeas[meal.slot.id] !== undefined;
+        const aiBusy = busy?.id === meal.slot.id && busy.by === 'ai';
+        const bookBusy = busy?.id === meal.slot.id && busy.by === 'book';
         // Once there are suggestions for this meal they take the place of the user's own cook book dishes.
         const bookIdeas = asked ? [] : recipesFitting(book, brief, 3).filter((r) => !aiKeys.has(r.id)).map(ideaFromRecipe);
         const ideas = [...aiList, ...dbIdeas, ...bookIdeas].slice(0, IDEAS_SHOWN);
@@ -268,22 +272,24 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
             <QuestButton
               variant="ghost"
               icon="chart"
-              title={busyId === meal.slot.id ? g('dinner.asking') : asked ? g('meals.more') : g('meals.askAi', { meal: name })}
-              accessibilityLabel={busyId === meal.slot.id ? g('dinner.asking') : asked ? `${g('meals.more')}: ${name}` : g('meals.askAi', { meal: name })}
+              title={aiBusy ? g('dinner.asking') : asked ? g('meals.more') : g('meals.askAi', { meal: name })}
+              accessibilityLabel={aiBusy ? g('dinner.asking') : asked ? `${g('meals.more')}: ${name}` : g('meals.askAi', { meal: name })}
               onPress={() => {
                 void askAi(meal, new Set(dbIdeas.map((i) => i.name)), ideas);
               }}
-              loading={busyId === meal.slot.id}
+              loading={aiBusy}
+              disabled={!!busy && !aiBusy}
             />
             <QuestButton
               variant="ghost"
               icon="list"
-              title={busyId === meal.slot.id ? g('cookbook.searching') : g('cookbook.askShared')}
-              accessibilityLabel={busyId === meal.slot.id ? g('cookbook.searching') : g('cookbook.askSharedLabel', { meal: name })}
+              title={bookBusy ? g('cookbook.searching') : g('cookbook.askShared')}
+              accessibilityLabel={bookBusy ? g('cookbook.searching') : g('cookbook.askSharedLabel', { meal: name })}
               onPress={() => {
                 void askCookbook(meal, ideas);
               }}
-              loading={busyId === meal.slot.id}
+              loading={bookBusy}
+              disabled={!!busy && !bookBusy}
             />
             {asked && ideas.length === 0 && (
               <HudText size={12} weight="medium" color={quest.textSecondary}>

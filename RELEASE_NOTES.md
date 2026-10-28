@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.17 | no | — |
 | 0.16 | no | — |
 | 0.15 | no | — |
 | 0.14 | no | analyze-proof-photo, parse-meal-text |
@@ -28,6 +29,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.17
+- Meal ideas: "Nhờ AI gợi ý" and "Gợi ý từ cookbook" no longer both show a spinner. Only the button pressed shows it is working; the other one is greyed out until the answer comes (both replace the same 3 dishes, so one request runs at a time).
 
 ## 0.16
 - History > Nhật ký hằng ngày: every meal already logged on a day (an off-plan food, or a plan meal marked eaten) has a camera button in the day's table. It opens the meal's photos: add up to 3 (camera or library), view them side by side with ‹ ›, or remove the one in view. Photos are saved straight away (no need to press "Lưu"). A plan meal's photo now also shows as a thumbnail in its row.

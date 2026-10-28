@@ -408,6 +408,25 @@ describe('Meal suggestions card (Camp)', () => {
     expect(mockShare).not.toHaveBeenCalled();
   });
 
+  it('only the button pressed shows it is busy; the other one is just unavailable until the answer comes', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    let answer: (o: SharedOutcome) => void = () => undefined;
+    mockSearchShared.mockImplementationOnce(() => new Promise<SharedOutcome>((resolve) => { answer = resolve; }));
+    const r = await mount(AT(8));
+    await act(async () => {
+      find(r, 'Gợi ý từ cookbook: Bữa sáng')!.props.onPress();
+    });
+    const busyOf = (label: string) => r.root.findAll((n) => n.props.accessibilityLabel === label && n.props.accessibilityState)[0]?.props.accessibilityState;
+    expect(busyOf('Đang tìm trong cookbook…')).toMatchObject({ busy: true });
+    const ai = r.root.findAll((n) => n.props.accessibilityState && String(n.props.accessibilityLabel).startsWith('Nhờ AI gợi ý'))[0];
+    expect(ai.props.accessibilityState).toMatchObject({ busy: false, disabled: true });
+    expect(allText(r)).not.toContain('Đang hỏi AI');
+    await act(async () => answer({ ok: true, ideas: [] }));
+    expect(r.root.findAll((n) => n.props.accessibilityState && String(n.props.accessibilityLabel).startsWith('Nhờ AI gợi ý'))[0].props.accessibilityState).toMatchObject({ disabled: false });
+  });
+
   it('says so when the shared cookbook has nothing new or cannot be read', async () => {
     useMealModeStore.setState({ fasting: false });
     useNutritionStore.setState({ logs: {} });
