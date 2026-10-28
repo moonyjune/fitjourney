@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.19 | no | — |
 | 0.18 | no | — |
 | 0.17 | no | — |
 | 0.16 | no | — |
@@ -30,6 +31,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.19
+- Quick add (+): a "Ghi cho ngày" row with ‹ › picks the day (today back to 30 days ago, never the future). Meals, off-plan food (including "Nhập bằng chữ" opened from there) and water go to that day; the screens show "Đang ghi cho: …" and the add button names the day. Weight, check-in and workouts still log for today.
+- Off-plan food: the photo box and the "more photos" box are one list (up to 3 photos, the first is the main one) with one pair of "Chụp ảnh" / "Chọn ảnh" buttons, and "Hỏi AI" / "Đọc nhãn" sit side by side under it instead of two more full-width buttons.
 
 ## 0.18
 - Recipe dialog: "Xóa khỏi cook book" is now a red delete button; pressing it closes the dialog (before, it stayed open and showed "Lưu vào cook book" again) and a message confirms "Đã xóa "…" khỏi cook book." on the Cook book screen and under the meal ideas.

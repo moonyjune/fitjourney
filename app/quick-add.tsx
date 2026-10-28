@@ -11,11 +11,14 @@ import { MISSION_XP } from '../src/game/constants';
 import { evaluateDay } from '../src/game/missions';
 import { useGameText } from '../src/game/strings';
 import { useNow, useTodayInput } from '../src/game/useGameState';
+import { logDayLabel } from '../src/game/useLogDate';
 import { useNutritionStore } from '../src/store/useNutritionStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useWeightStore } from '../src/store/useWeightStore';
 import { quest, questFonts, questRadius } from '../src/theme/quest';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { toDateKey } from '../src/utils/date';
+import { dateOfKey, oldestLogDateKey, shiftDateKey } from '../src/utils/logDate';
 
 const MIN_KG = 20;
 const MAX_KG = 300;
@@ -67,8 +70,13 @@ export default function QuickAddScreen() {
   const g = useGameText();
   useLightStatusBar();
   const now = useNow();
-  const input = useTodayInput(now);
-  const dateKey = input.dateKey;
+  const todayKey = toDateKey(now);
+  // The day meals and water go to: today unless another day is picked with ‹ › (up to MAX_LOG_DAYS_BACK days back).
+  const [picked, setPicked] = useState<string | null>(null);
+  const dateKey = picked && picked < todayKey && picked >= oldestLogDateKey(now) ? picked : todayKey;
+  const isToday = dateKey === todayKey;
+  const dayLabel = logDayLabel(dateKey, now, g);
+  const input = useTodayInput(now, dateKey);
 
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
   const waterTargetMl = useSettingsStore((s) => s.waterTargetMl);
@@ -77,7 +85,7 @@ export default function QuickAddScreen() {
   const addWeight = useWeightStore((s) => s.addEntry);
   const addWater = useNutritionStore((s) => s.addWater);
 
-  const meals = input.mealTemplatesByDayType[getDayType(now)];
+  const meals = input.mealTemplatesByDayType[getDayType(isToday ? now : dateOfKey(dateKey))];
   const nextMeal = meals.find((m) => !input.log?.mealsEaten[m.slot]);
   const workout = useMemo(() => evaluateDay(input).missions.find((m) => m.id === 'workout'), [input]);
   const waterMl = input.log?.waterMl ?? 0;
@@ -109,6 +117,16 @@ export default function QuickAddScreen() {
     AccessibilityInfo.announceForAccessibility(g('quick.weightSaved', { kg: label }));
   }
 
+  function pickDay(days: number) {
+    const next = shiftDateKey(dateKey, days);
+    setPicked(next >= todayKey ? null : next);
+    setLastWaterMl(null);
+    AccessibilityInfo.announceForAccessibility(g('quick.dateChanged', { day: logDayLabel(next >= todayKey ? todayKey : next, now, g) }));
+  }
+
+  /** Route params that carry the picked day; none for today, so the screens keep their usual "today" behaviour. */
+  const dateParams: Record<string, string> = isToday ? {} : { date: dateKey };
+
   function addWaterMl(ml: number) {
     addWater(dateKey, ml);
     setLastWaterMl(ml);
@@ -135,20 +153,67 @@ export default function QuickAddScreen() {
           </Pressable>
         </View>
 
+        <View style={styles.dateBox}>
+          <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+            {g('quick.date').toUpperCase()}
+          </HudText>
+          <View style={styles.dateRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={g('quick.datePrev')}
+              accessibilityState={{ disabled: dateKey <= oldestLogDateKey(now) }}
+              disabled={dateKey <= oldestLogDateKey(now)}
+              onPress={() => pickDay(-1)}
+              style={[styles.dateStep, dateKey <= oldestLogDateKey(now) && styles.off]}
+            >
+              <QuestIcon name="chevronLeft" size={20} color={quest.text} strokeWidth={2.4} />
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={isToday ? `${g('quick.date')}: ${dayLabel}` : `${g('quick.date')}: ${dayLabel}. ${g('quick.dateToday')}`}
+              disabled={isToday}
+              onPress={() => setPicked(null)}
+              style={[styles.dateValue, !isToday && styles.datePicked]}
+            >
+              <HudText size={16} color={isToday ? quest.text : quest.goldLight}>
+                {dayLabel}
+              </HudText>
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {isToday ? dateKey.split('-').reverse().slice(0, 2).join('/') : g('quick.dateToday')}
+              </HudText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={g('quick.dateNext')}
+              accessibilityState={{ disabled: isToday }}
+              disabled={isToday}
+              onPress={() => pickDay(1)}
+              style={[styles.dateStep, isToday && styles.off]}
+            >
+              <QuestIcon name="chevron" size={20} color={quest.text} strokeWidth={2.4} />
+            </Pressable>
+          </View>
+          {!isToday && (
+            <HudText size={11} weight="medium" color={quest.textSecondary}>
+              {g('quick.dateHint')}
+            </HudText>
+          )}
+        </View>
+
         <View style={styles.tiles}>
           <ActionTile
             icon="bowl"
             tint={quest.gold}
             title={g('quick.tileMeal')}
-            hint={nextMeal ? g('quick.tileMealNext', { time: mealTime }) : g('quick.tileMealAllDone')}
-            onPress={() => router.replace(`/meal/${(nextMeal ?? meals[meals.length - 1]).slot}`)}
+            hint={nextMeal ? g('quick.tileMealNext', { time: mealTime }) : g(isToday ? 'quick.tileMealAllDone' : 'quick.tileMealAllDoneDay')}
+            onPress={() => router.replace({ pathname: '/meal/[slot]', params: { slot: (nextMeal ?? meals[meals.length - 1]).slot, ...dateParams } })}
           />
           <ActionTile
             icon="plus"
             tint={quest.mana}
             title={g('quick.tileExtra')}
             hint={g('quick.tileExtraHint')}
-            onPress={() => router.replace('/add-food')}
+            onPress={() => router.replace({ pathname: '/add-food', params: dateParams })}
           />
           <ActionTile
             icon="smile"
@@ -239,6 +304,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dateBox: { gap: 6, marginTop: 16 },
+  eyebrow: { letterSpacing: 1.6 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  dateStep: {
+    width: 48,
+    height: 48,
+    borderRadius: 99,
+    backgroundColor: quest.panel,
+    borderWidth: 1.5,
+    borderColor: quest.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dateValue: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: questRadius.row,
+    backgroundColor: quest.panel,
+    borderWidth: 1.5,
+    borderColor: quest.border,
+  },
+  datePicked: { borderColor: quest.gold },
+  off: { opacity: 0.4 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
   tile: {
     flexBasis: '46%',

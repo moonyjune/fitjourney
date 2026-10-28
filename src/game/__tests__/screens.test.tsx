@@ -10,7 +10,7 @@ const mockRouter = {
   dismissTo: jest.fn(),
   setParams: jest.fn(),
 };
-let mockParams: { slot?: string } = { slot: 'meal3' };
+let mockParams: { slot?: string; date?: string } = { slot: 'meal3' };
 
 // The factory runs when the screens import expo-router, before `mockRouter` is initialised, so the
 // router methods defer to it at call time instead of capturing it here.
@@ -158,6 +158,29 @@ describe('FitQuest logging screens', () => {
       expect(allText(r)).toContain('+500 ml');
     });
 
+    it('logs meals and water for another day picked with ‹ ›, never a future one', () => {
+      const r = render(<QuickAddScreen />);
+      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true); // today is the latest day
+      act(() => pressable(r, (l) => l === 'Ngày trước').props.onPress());
+      act(() => pressable(r, (l) => l === 'Ngày trước').props.onPress());
+      const text = allText(r);
+      expect(text).toContain('T4 21/10');
+      expect(text).toContain('Áp dụng cho bữa ăn');
+
+      act(() => pressable(r, (l) => l === 'Thêm 250 ml nước').props.onPress());
+      expect(useNutritionStore.getState().logs['2026-10-21'].waterMl).toBe(250);
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3200); // today untouched
+
+      act(() => pressable(r, (l) => l.startsWith('Ngoài kế hoạch')).props.onPress());
+      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/add-food', params: { date: '2026-10-21' } });
+      act(() => pressable(r, (l) => l.startsWith('Bữa ăn')).props.onPress());
+      expect(mockRouter.replace).toHaveBeenLastCalledWith({ pathname: '/meal/[slot]', params: expect.objectContaining({ date: '2026-10-21' }) });
+
+      act(() => pressable(r, (l) => l.startsWith('Ghi cho ngày: T4 21/10')).props.onPress()); // back to today
+      expect(allText(r)).toContain('Hôm nay');
+      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true);
+    });
+
     it('steps and saves the weight, rejecting nonsense', () => {
       const r = render(<QuickAddScreen />);
       act(() => pressable(r, (l) => l === 'Tăng 0.1 kg').props.onPress());
@@ -178,9 +201,9 @@ describe('FitQuest logging screens', () => {
     it('routes each tile to the right place', () => {
       const r = render(<QuickAddScreen />);
       act(() => pressable(r, (l) => l.startsWith('Bữa ăn')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith('/meal/meal3');
+      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/meal/[slot]', params: { slot: 'meal3' } });
       act(() => pressable(r, (l) => l.startsWith('Ngoài kế hoạch')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith('/add-food');
+      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/add-food', params: {} });
       act(() => pressable(r, (l) => l.startsWith('Buổi tập')).props.onPress());
       expect(mockRouter.dismissTo).toHaveBeenCalledWith('/(tabs)/workout');
       act(() => pressable(r, (l) => l.startsWith('Cảm giác')).props.onPress());
@@ -221,6 +244,15 @@ describe('FitQuest logging screens', () => {
       expect(mockRouter.setParams).toHaveBeenCalledWith({ slot: 'meal1' });
     });
 
+    it('marks the meal eaten on the day picked in the quick-add sheet, and says which day', () => {
+      mockParams = { slot: 'meal3', date: '2026-10-22' };
+      const r = render(<MealDetailScreen />);
+      expect(allText(r)).toContain('Đang ghi cho: Hôm qua');
+      act(() => pressable(r, (l) => l.startsWith('Đã ăn')).props.onPress());
+      expect(useNutritionStore.getState().logs['2026-10-22'].mealsEaten.meal3).toBe(true);
+      expect(useNutritionStore.getState().logs[DATE].mealsEaten.meal3).toBeFalsy();
+    });
+
     it('handles an unknown meal without crashing', () => {
       mockParams = { slot: 'nope' };
       expect(allText(render(<MealDetailScreen />))).toContain('Không tìm thấy bữa ăn này');
@@ -256,6 +288,26 @@ describe('FitQuest logging screens', () => {
       expect(log.extraItems[0].sugarG).toBeUndefined(); // untouched optional fields are not stored
       expect(log.extraCalories).toBe(450);
       expect(mockRouter.back).toHaveBeenCalled();
+    });
+
+    it('saves to the day picked in the quick-add sheet; a future or malformed date means today', () => {
+      mockParams = { date: '2026-10-20' };
+      let r = render(<AddFoodScreen />);
+      expect(allText(r)).toContain('Đang ghi cho: T3 20/10');
+      act(() => textInput(r, 'Tên món').props.onChangeText('Chè'));
+      act(() => textInput(r, 'Calo (kcal)').props.onChangeText('250'));
+      act(() => pressable(r, (l) => l === 'Thêm vào T3 20/10').props.onPress());
+      expect(useNutritionStore.getState().logs['2026-10-20'].extraItems[0]).toMatchObject({ name: 'Chè', calories: 250 });
+      expect(new Date(useNutritionStore.getState().logs['2026-10-20'].extraItems[0].loggedAtISO).getDate()).toBe(20);
+      expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
+
+      for (const date of ['2026-10-24', '2026-02-31', 'hôm qua']) {
+        mockParams = { date };
+        act(() => r.unmount());
+        r = render(<AddFoodScreen />);
+        expect(allText(r)).not.toContain('Đang ghi cho');
+        expect(pressable(r, (l) => l === 'Thêm vào hôm nay')).toBeDefined();
+      }
     });
 
     it('warns live about the missions an item would break, before it is saved', () => {

@@ -67,11 +67,12 @@ export function useLimits(): Pick<Limits, 'purineMg' | 'saltG' | 'sugarG'> {
   return useMemo(() => ({ purineMg, saltG, sugarG }), [purineMg, saltG, sugarG]);
 }
 
-/** Everything `evaluateDay` needs for today, so a screen can preview a change before committing it. */
-export function useTodayInput(now: Date): DayInput {
+/** Everything `evaluateDay` needs for today (or for `dateKeyOverride`, when a screen logs to another day picked in the
+ *  quick-add sheet), so a screen can preview a change before committing it. */
+export function useTodayInput(now: Date, dateKeyOverride?: string): DayInput {
   const proteinTargetG = useSettingsStore((s) => s.proteinTargetG);
   const tdeeKcal = useTdeeKcal();
-  const dateKey = toDateKey(now);
+  const dateKey = dateKeyOverride ?? toDateKey(now);
   const log = useNutritionStore((s) => s.logs[dateKey]);
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const mealTemplatesByDayType = usePlanStore((s) => s.plan.mealTemplates);

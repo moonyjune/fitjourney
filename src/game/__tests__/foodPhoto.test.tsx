@@ -90,7 +90,7 @@ const textInput = (r: ReactTestRenderer, label: string): ReactTestInstance =>
   r.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.accessibilityLabel === label)[0];
 // Host nodes only: the Image composite and its host element both carry the same props.
 const images = (r: ReactTestRenderer, label: string) => r.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityLabel === label && n.props.source);
-const preview = (r: ReactTestRenderer) => images(r, 'Ảnh món ăn đã chọn');
+const preview = (r: ReactTestRenderer) => images(r, 'Ảnh món ăn đã chọn 1');
 const sourceUri = (n: ReactTestInstance) => (n.props.source as { uri: string }).uri;
 
 describe('Photo on an off-plan food', () => {
@@ -137,12 +137,12 @@ describe('Photo on an off-plan food', () => {
       await press(r, 'Chụp ảnh');
       expect(mockCameraPermission).toHaveBeenCalled();
       expect(preview(r).map(sourceUri)).toContain(CAM);
-      expect(allText(r)).not.toContain('Không bắt buộc. Ảnh được lưu'); // the hint gives way to the preview
+      expect(allText(r)).not.toContain('Không bắt buộc. Tối đa'); // the hint gives way to the photo count
     });
 
     it('chooses a photo from the gallery without asking for library permission', async () => {
       const r = await mount(<AddFoodScreen />);
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       expect(mockCameraPermission).not.toHaveBeenCalled();
       expect(preview(r).map(sourceUri)).toContain(GAL);
     });
@@ -152,7 +152,7 @@ describe('Photo on an off-plan food', () => {
       mockLaunchLibrary.mockResolvedValue({ canceled: true, assets: null });
       const r = await mount(<AddFoodScreen />);
       await press(r, 'Chụp ảnh');
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       expect(preview(r)).toHaveLength(0);
       expect(allText(r)).not.toContain('Không lấy được ảnh');
       expect(allText(r)).not.toContain('Camera');
@@ -166,7 +166,7 @@ describe('Photo on an off-plan food', () => {
       expect(allText(r)).toContain('Chưa có quyền dùng camera');
       expect(preview(r)).toHaveLength(0);
       // The gallery still works, and picking something clears the message.
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       expect(allText(r)).not.toContain('Chưa có quyền dùng camera');
       expect(preview(r)).toHaveLength(1);
     });
@@ -181,7 +181,7 @@ describe('Photo on an off-plan food', () => {
     it('reports a picker that throws, without crashing', async () => {
       mockLaunchLibrary.mockRejectedValue(new Error('boom'));
       const r = await mount(<AddFoodScreen />);
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       expect(allText(r)).toContain('Không lấy được ảnh');
     });
 
@@ -189,7 +189,7 @@ describe('Photo on an off-plan food', () => {
       const r = await mount(<AddFoodScreen />);
       await press(r, 'Chụp ảnh');
       expect(preview(r)).toHaveLength(1);
-      await press(r, 'Xóa ảnh');
+      await press(r, 'Xóa ảnh 1');
       expect(preview(r)).toHaveLength(0);
     });
   });
@@ -233,7 +233,7 @@ describe('Photo on an off-plan food', () => {
       mockPersist.mockRejectedValueOnce(new Error('disk full'));
       const r = await mount(<AddFoodScreen />);
       await fill(r, 'Phở bò');
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       await press(r, 'Thêm vào hôm nay');
 
       expect(items()).toHaveLength(0);
@@ -243,7 +243,7 @@ describe('Photo on an off-plan food', () => {
       expect(textInput(r, 'Calo (kcal)').props.value).toBe('320');
       expect(preview(r)).toHaveLength(1);
 
-      await press(r, 'Xóa ảnh');
+      await press(r, 'Xóa ảnh 1');
       expect(allText(r)).not.toContain('Không lưu được ảnh nên món chưa được thêm');
       await press(r, 'Thêm vào hôm nay');
       expect(items()).toHaveLength(1);
@@ -273,7 +273,7 @@ describe('Photo on an off-plan food', () => {
       await press(r, 'Chụp ảnh');
       await press(r, 'Thêm vào hôm nay');
       expect(pressable(r, 'Chụp ảnh').props.disabled).toBe(true);
-      expect(pressable(r, 'Xóa ảnh').props.disabled).toBe(true);
+      expect(pressable(r, 'Xóa ảnh 1').props.disabled).toBe(true);
       expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Thêm vào hôm nay' && n.props.accessibilityState?.busy === true).length).toBeGreaterThan(0);
       await press(r, 'Thêm vào hôm nay'); // a second tap while busy is ignored
       expect(mockPersist).toHaveBeenCalledTimes(1);
@@ -391,7 +391,7 @@ describe('Photo on an off-plan food', () => {
 
     it('saves every photo of the meal (each with its own id), the first one as the food\'s own photo', async () => {
       const r = await mount(<AddFoodScreen />);
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///tmp/b.jpg' }, { uri: 'file:///tmp/c.jpg' }] });
       await press(r, 'Chọn ảnh');
       await act(async () => textInput(r, 'Tên món').props.onChangeText('Bún chả'));

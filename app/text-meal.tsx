@@ -15,6 +15,8 @@ import { QuestField } from '../src/components/quest/QuestField';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { useGameText } from '../src/game/strings';
 import { useNow, useTodayInput } from '../src/game/useGameState';
+import { useLogDate } from '../src/game/useLogDate';
+import { LogDateBanner } from '../src/components/quest/LogDateBanner';
 import type { StringKey } from '../src/i18n/strings';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { useAllFoods } from '../src/store/useFoodDbStore';
@@ -51,7 +53,8 @@ export default function TextMealScreen() {
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow();
-  const input = useTodayInput(now);
+  const day = useLogDate(now);
+  const input = useTodayInput(now, day.dateKey);
   const addExtra = useNutritionStore((s) => s.addExtra);
   const foods = useAllFoods();
   const ai = useMealTextAnalysis();
@@ -165,6 +168,7 @@ export default function TextMealScreen() {
         <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.subtitle}>
           {g('text.subtitle')}
         </HudText>
+        {!day.isToday && <LogDateBanner label={day.label} />}
 
         <View style={styles.form}>
           <QuestField
@@ -304,7 +308,7 @@ export default function TextMealScreen() {
 
       {rows.length > 0 && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-          <QuestButton icon="plus" title={g('text.saveMeal')} onPress={() => { void save(); }} loading={saving} />
+          <QuestButton icon="plus" title={day.isToday ? g('text.saveMeal') : g('text.saveMealOn', { day: day.label })} onPress={() => { void save(); }} loading={saving} />
         </View>
       )}
     </View>

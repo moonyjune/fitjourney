@@ -17,8 +17,9 @@ interface MealTextPhotosProps {
   disabled?: boolean;
   /** How many photos fit (default MAX_MEAL_TEXT_PHOTOS). */
   max?: number;
-  /** 'more': the extra photos of a meal that already has its main photo (other texts). Default: the text entry's texts. */
-  kind?: 'text' | 'more';
+  /** 'more': the extra photos of a meal that already has its main photo; 'meal': every photo of a logged food, the first
+   *  being the main one (other texts). Default: the text entry's texts. */
+  kind?: 'text' | 'more' | 'meal';
 }
 
 type PhotoError = 'cameraDenied' | 'cameraDeniedAsk' | 'failed';
@@ -28,7 +29,7 @@ type PhotoError = 'cameraDenied' | 'cameraDeniedAsk' | 'failed';
 export function MealTextPhotos({ photos, onChange, disabled, max = MAX_MEAL_TEXT_PHOTOS, kind = 'text' }: MealTextPhotosProps) {
   const g = useGameText();
   const [error, setError] = useState<PhotoError | null>(null);
-  const k = kind === 'more' ? 'photo.more' : 'text.photos';
+  const k = kind === 'more' ? 'photo.more' : kind === 'meal' ? 'meal.photos' : 'text.photos';
   const room = max - photos.length;
   const full = room <= 0;
 
@@ -62,10 +63,10 @@ export function MealTextPhotos({ photos, onChange, disabled, max = MAX_MEAL_TEXT
         <View style={styles.thumbs}>
           {photos.map((uri, i) => (
             <View key={`${i}-${uri}`} style={styles.thumbBox}>
-              <Image source={{ uri }} style={styles.thumb} accessibilityLabel={g('text.photos.alt', { n: i + 1 })} />
+              <Image source={{ uri }} style={styles.thumb} accessibilityLabel={g(kind === 'meal' ? 'meal.photos.alt' : 'text.photos.alt', { n: i + 1 })} />
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={g('text.photos.remove', { n: i + 1 })}
+                accessibilityLabel={g(kind === 'meal' ? 'meal.photos.remove' : 'text.photos.remove', { n: i + 1 })}
                 disabled={disabled}
                 hitSlop={8}
                 onPress={() => onChange(photos.filter((_, j) => j !== i))}

@@ -171,7 +171,7 @@ describe('Photo → AI analysis in the screens', () => {
   describe('Add food', () => {
     const withPhoto = async () => {
       const r = await mount(<AddFoodScreen />);
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       return r;
     };
     const items = () => useNutritionStore.getState().logs[DATE].extraItems;
@@ -179,7 +179,7 @@ describe('Photo → AI analysis in the screens', () => {
     it('offers the AI button only once a photo is attached', async () => {
       const r = await mount(<AddFoodScreen />);
       expect(r.root.findAll((n) => n.props.accessibilityLabel === ANALYZE)).toHaveLength(0);
-      await press(r, 'Chọn từ thư viện');
+      await press(r, 'Chọn ảnh');
       expect(pressable(r, ANALYZE)).toBeDefined();
     });
 
@@ -190,14 +190,14 @@ describe('Photo → AI analysis in the screens', () => {
 
       mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///p2.jpg' }, { uri: 'file:///p3.jpg' }, { uri: 'file:///p4.jpg' }] });
       await press(r, 'Chọn ảnh');
-      expect(allText(r)).toContain('Đã thêm đủ 2 ảnh');
+      expect(allText(r)).toContain('Đã đủ 3 ảnh');
       await press(r, ANALYZE);
       expect(mockAnalysis.mock.calls[1][1]).toBe('QUJD');
       expect(mockAnalysis.mock.calls[1][6]).toEqual([{ base64: 'QUJD', mediaType: 'image/png' }, { base64: 'QUJD', mediaType: 'image/png' }]);
       expect(mockToBase64).toHaveBeenCalledWith('file:///p3.jpg', { maxEdge: 1280 });
       expect(mockToBase64).not.toHaveBeenCalledWith('file:///p4.jpg', expect.anything());
 
-      await press(r, 'Xóa ảnh đính kèm 1');
+      await press(r, 'Xóa ảnh 2');
       await press(r, ANALYZE);
       expect(mockAnalysis.mock.calls[2][6]).toHaveLength(1);
 
@@ -403,7 +403,9 @@ describe('Photo → AI analysis in the screens', () => {
         await press(r, READ);
         expect(allText(r)).toContain('Từ nhãn dinh dưỡng');
         mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///tmp/other.png' }] });
-        await press(r, 'Chọn từ thư viện');
+        await press(r, 'Chọn ảnh');
+        expect(allText(r)).toContain('Từ nhãn dinh dưỡng'); // another photo of the same meal keeps the reading of the main one
+        await press(r, 'Xóa ảnh 1'); // other.png becomes the main photo
         expect(allText(r)).not.toContain('Từ nhãn dinh dưỡng');
         expect(textInput(r, 'Số phần đã ăn')).toBeUndefined();
       });
@@ -412,7 +414,7 @@ describe('Photo → AI analysis in the screens', () => {
         const r = await withPhoto();
         await press(r, READ);
         expect(allText(r)).toContain('Từ nhãn dinh dưỡng');
-        await press(r, 'Xóa ảnh');
+        await press(r, 'Xóa ảnh 1');
         expect(allText(r)).not.toContain('Từ nhãn dinh dưỡng');
       });
     });
@@ -485,10 +487,10 @@ describe('Photo → AI analysis in the screens', () => {
         r = await withPhoto();
         await press(r, ANALYZE);
         expect(allText(r)).toContain('Chi tiết các món AI nhận ra');
-        await press(r, 'Xóa ảnh');
+        await press(r, 'Xóa ảnh 1');
         expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
         // A new photo starts clean: the earlier photo's foods are not carried onto the next meal.
-        await press(r, 'Chọn từ thư viện');
+        await press(r, 'Chọn ảnh');
         expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
         await type(r, 'Calo (kcal)', '200');
         await press(r, 'Thêm vào hôm nay');
@@ -588,7 +590,7 @@ describe('Photo → AI analysis in the screens', () => {
       await act(async () => button.props.onPress());
       await act(async () => button.props.onPress());
       expect(mockAnalysis).toHaveBeenCalledTimes(1);
-      expect(pressable(r, 'Đang phân tích…').props.accessibilityState).toMatchObject({ busy: true }); // shown as busy, not tappable twice
+      expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Đang phân tích…' && n.props.accessibilityState)[0].props.accessibilityState).toMatchObject({ busy: true }); // shown as busy, not tappable twice
       await act(async () => finish({ ok: true, result: MEAL_OK }));
       expect(textInput(r, 'Calo (kcal)').props.value).toBe('612');
     });
@@ -617,7 +619,7 @@ describe('Photo → AI analysis in the screens', () => {
       const r = await withPhoto();
       await press(r, ANALYZE);
       expect(allText(r)).toContain('Gợi ý từ AI');
-      await press(r, 'Xóa ảnh');
+      await press(r, 'Xóa ảnh 1');
       expect(allText(r)).not.toContain('Gợi ý từ AI');
       expect(r.root.findAll((n) => n.props.accessibilityLabel === ANALYZE)).toHaveLength(0);
     });
@@ -680,7 +682,7 @@ describe('Photo → AI analysis in the screens', () => {
       it('with a photo and a saved name, the AI button reuses the saved figures and does not call the AI', async () => {
         useFoodDbStore.getState().remember({ name: 'Cơm gà xối mỡ', calories: 700, proteinG: 41, purineMg: 180, saltG: 2.5, sugarG: 3 });
         const r = await mount(<AddFoodScreen />);
-        await press(r, 'Chọn từ thư viện');
+        await press(r, 'Chọn ảnh');
         await type(r, 'Tên món', 'Cơm gà xối mỡ');
         await press(r, ANALYZE);
         expect(mockAnalysis).not.toHaveBeenCalled();

@@ -8,8 +8,8 @@ import { AiAdviceCard } from '../src/components/quest/AiAdviceCard';
 import { defaultEaten, labelToFigures, type Eaten, type NutritionLabel } from '../src/ai/nutritionLabel';
 import { useLabelReading } from '../src/ai/useLabelReading';
 import { useAccuracyText, useAiErrorText, useCalibrationText, usePhotoAnalysis } from '../src/ai/usePhotoAnalysis';
-import { FoodPhotoPicker } from '../src/components/quest/FoodPhoto';
-import { MAX_MEAL_TEXT_PHOTOS, MealTextPhotos } from '../src/components/quest/MealTextPhotos';
+import { MealTextPhotos } from '../src/components/quest/MealTextPhotos';
+import { MAX_MEAL_PHOTOS } from '../src/utils/photoOrder';
 import { DraftFeedback } from '../src/feedback/components/DraftFeedback';
 import { FoodLookup, type LookupResult } from '../src/food/components/FoodLookup';
 import { lookupDescribedFood } from '../src/food/describeLookup';
@@ -31,6 +31,8 @@ import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { logWithExtra, previewDayChange } from '../src/game/preview';
 import { useGameText } from '../src/game/strings';
 import { useNow, useTodayInput } from '../src/game/useGameState';
+import { useLogDate } from '../src/game/useLogDate';
+import { LogDateBanner } from '../src/components/quest/LogDateBanner';
 import type { StringKey } from '../src/i18n/strings';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { useAllFoods } from '../src/store/useFoodDbStore';
@@ -76,7 +78,10 @@ export default function AddFoodScreen() {
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow();
-  const input = useTodayInput(now);
+  const day = useLogDate(now);
+  const input = useTodayInput(now, day.dateKey);
+  /** Keeps the picked day when moving on to the text entry. */
+  const dateParams: Record<string, string> = day.isToday ? {} : { date: day.dateKey };
   const addExtra = useNutritionStore((s) => s.addExtra);
 
   // A food can arrive through the route (a dinner idea from Camp): it only fills the form, nothing is saved.
@@ -184,6 +189,22 @@ export default function AddFoodScreen() {
   }
 
   const typed = aiFields.typed;
+
+  /** One list holds every photo of the food; the first is the main one (kept as the food's photo). A new main photo
+   *  starts the photo analysis and label reading over; other changes only drop the AI's answer. */
+  function changePhotos(photos: string[]) {
+    const main = photos[0] ?? null;
+    if (main !== photoUri) {
+      lab.reset();
+      setParts([]);
+      aiCalories.current = null;
+    }
+    setPhotoUri(main);
+    setMorePhotos(photos.slice(1));
+    setSaveFailed(false);
+    ai.reset();
+    setAiNote(null);
+  }
 
   /** The extra photos of the meal, kept on the device like the first one (they are saved with it). */
   async function persistMore(uris: string[]): Promise<string[]> {
@@ -420,9 +441,10 @@ export default function AddFoodScreen() {
         <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.subtitle}>
           {g('food.subtitle')}
         </HudText>
+        {!day.isToday && <LogDateBanner label={day.label} />}
 
         <View style={styles.form}>
-          <QuestButton variant="ghost" icon="chart" title={g('text.link')} onPress={() => router.push('/text-meal')} />
+          <QuestButton variant="ghost" icon="chart" title={g('text.link')} onPress={() => router.push({ pathname: '/text-meal', params: dateParams })} />
           <FoodLookup onApply={applyLookup} onOpenDb={() => router.push('/food-db')} />
           <QuestField label={g('food.name')} value={name} onChangeText={(v) => { typed('name', setName)(v); setDbOutcome(null); }} placeholder={g('food.namePlaceholder')} />
           {saved && String(portionOf(saved).calories) !== calories.trim() && (
@@ -495,7 +517,7 @@ export default function AddFoodScreen() {
           {dbOutcome?.kind === 'added' && (
             <View style={styles.aiNote} accessibilityLiveRegion="polite">
               <HudText size={12} color={quest.manaText}>
-                {g('food.db.added', { name: dbOutcome.name })}
+                {day.isToday ? g('food.db.added', { name: dbOutcome.name }) : g('food.db.addedOn', { name: dbOutcome.name, day: day.label })}
               </HudText>
               <HudText size={12} weight="medium" color={quest.textSecondary}>
                 {g('food.db.source', { food: dbOutcome.food, kcal: dbOutcome.kcal })}
@@ -511,7 +533,7 @@ export default function AddFoodScreen() {
                 variant="ghost"
                 icon="chart"
                 title={g('food.db.toText')}
-                onPress={() => router.push({ pathname: '/text-meal', params: { text: dbOutcome.text } })}
+                onPress={() => router.push({ pathname: '/text-meal', params: { text: dbOutcome.text, ...dateParams } })}
               />
             </View>
           )}
@@ -547,43 +569,39 @@ export default function AddFoodScreen() {
             />
           </View>
 
-          <FoodPhotoPicker
-            uri={photoUri}
-            onChange={(uri) => {
-              setPhotoUri(uri);
-              if (!uri) setMorePhotos([]);
-              setSaveFailed(false);
-              ai.reset();
-              lab.reset();
-              setParts([]);
-              aiCalories.current = null;
-              setAiNote(null);
-            }}
-            disabled={saving}
+          <MealTextPhotos
+            kind="meal"
+            max={MAX_MEAL_PHOTOS}
+            photos={photoUri ? [photoUri, ...morePhotos] : []}
+            onChange={changePhotos}
+            disabled={saving || ai.analyzing || lab.reading}
           />
           {photoUri && (
-            <MealTextPhotos
-              kind="more"
-              max={MAX_MEAL_TEXT_PHOTOS - 1}
-              photos={morePhotos}
-              onChange={(photos) => {
-                setMorePhotos(photos);
-                ai.reset();
-                setAiNote(null);
-              }}
-              disabled={saving || ai.analyzing}
-            />
-          )}
-          {photoUri && (
             <View style={styles.group}>
-              <QuestButton
-                variant="ghost"
-                icon="chart"
-                title={ai.analyzing ? g('ai.analyzing') : g('ai.analyze')}
-                onPress={() => { void analyzePhoto(); }}
-                loading={ai.analyzing}
-                disabled={saving}
-              />
+              <View style={styles.pair}>
+                <View style={styles.pairCell}>
+                  <QuestButton
+                    variant="ghost"
+                    icon="chart"
+                    title={g('ai.analyzeShort')}
+                    accessibilityLabel={ai.analyzing ? g('ai.analyzing') : g('ai.analyze')}
+                    onPress={() => { void analyzePhoto(); }}
+                    loading={ai.analyzing}
+                    disabled={saving || lab.reading}
+                  />
+                </View>
+                <View style={styles.pairCell}>
+                  <QuestButton
+                    variant="ghost"
+                    icon="list"
+                    title={g('label.readShort')}
+                    accessibilityLabel={lab.reading ? g('label.reading') : g('label.read')}
+                    onPress={() => { void readLabel(); }}
+                    loading={lab.reading}
+                    disabled={saving || ai.analyzing}
+                  />
+                </View>
+              </View>
               {ai.error && (
                 <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
                   {aiErrorText(ai.error.kind, ai.error.message)}
@@ -628,14 +646,6 @@ export default function AddFoodScreen() {
                 </View>
               )}
               {advice && !ai.error && <AiAdviceCard advice={advice} />}
-              <QuestButton
-                variant="ghost"
-                icon="list"
-                title={lab.reading ? g('label.reading') : g('label.read')}
-                onPress={() => { void readLabel(); }}
-                loading={lab.reading}
-                disabled={saving || ai.analyzing}
-              />
               {lab.error && (
                 <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
                   {aiErrorText(lab.error.kind, lab.error.message)}
@@ -705,7 +715,7 @@ export default function AddFoodScreen() {
 
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
         <View style={screenMaxWidthStyle}>
-          <QuestButton icon="plus" title={g('food.save')} onPress={() => { void save(); }} loading={saving} />
+          <QuestButton icon="plus" title={day.isToday ? g('food.save') : g('food.saveOn', { day: day.label })} onPress={() => { void save(); }} loading={saving} />
         </View>
       </View>
     </View>

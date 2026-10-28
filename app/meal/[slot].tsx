@@ -14,6 +14,9 @@ import { sumItemNutrients } from '../../src/game/nutrients';
 import { logWithMealToggled, previewDayChange } from '../../src/game/preview';
 import { useGameText } from '../../src/game/strings';
 import { useNow, useTodayInput } from '../../src/game/useGameState';
+import { useLogDate } from '../../src/game/useLogDate';
+import { LogDateBanner } from '../../src/components/quest/LogDateBanner';
+import { dateOfKey } from '../../src/utils/logDate';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
 import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
@@ -31,10 +34,11 @@ export default function MealDetailScreen() {
   useLightStatusBar();
   const { slot } = useLocalSearchParams<{ slot: string }>();
   const now = useNow();
-  const input = useTodayInput(now);
+  const day = useLogDate(now);
+  const input = useTodayInput(now, day.dateKey);
   const toggleMeal = useNutritionStore((s) => s.toggleMeal);
 
-  const meals = input.mealTemplatesByDayType[getDayType(now)];
+  const meals = input.mealTemplatesByDayType[getDayType(day.isToday ? now : dateOfKey(day.dateKey))];
   const meal = meals.find((m) => m.slot === slot);
   const eaten = !!(meal && input.log?.mealsEaten[meal.slot]);
 
@@ -81,6 +85,8 @@ export default function MealDetailScreen() {
             </View>
           }
         />
+
+        {!day.isToday && <LogDateBanner label={day.label} />}
 
         <View style={styles.switchRow} accessibilityLabel={g('meal.switch')}>
           {meals.map((m, i) => (
