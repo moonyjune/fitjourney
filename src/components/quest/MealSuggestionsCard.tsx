@@ -22,6 +22,7 @@ import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { MealPrefsEditor } from './MealPrefsEditor';
+import { FlashNotice, useFlash } from './FlashNotice';
 
 /** Ideas shown per meal from the user's own foods (the AI adds its own on request). */
 const DB_IDEAS_PER_MEAL = 2;
@@ -86,6 +87,7 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
    *  because both replace the same suggestions. */
   const [busy, setBusy] = useState<{ id: string; by: 'ai' | 'book' } | null>(null);
   const [failure, setFailure] = useState<{ id: string; kind: AiErrorKind } | null>(null);
+  const [flash, showFlash] = useFlash();
   const [notice, setNotice] = useState<{ id: string; key: 'cookbook.sharedNone' | 'cookbook.sharedFailed' | 'meals.none' } | null>(null);
   const [query, setQuery] = useState('');
   // Meals whose list of dishes the user folded away (not kept: every list is open when the card is built).
@@ -314,7 +316,15 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
           </View>
         );
       })}
-      <RecipeDialog idea={viewing?.idea ?? null} brief={viewing?.brief} mealLabel={viewing?.label} onClose={() => setViewing(null)} onLog={viewing ? (i) => { setViewing(null); openInAddFood(i, viewing.kind); } : undefined} />
+      <FlashNotice text={flash} />
+      <RecipeDialog
+        idea={viewing?.idea ?? null}
+        brief={viewing?.brief}
+        mealLabel={viewing?.label}
+        onClose={() => setViewing(null)}
+        onLog={viewing ? (i) => { setViewing(null); openInAddFood(i, viewing.kind); } : undefined}
+        onRemoved={(name) => showFlash(g('recipe.removed', { name }))}
+      />
     </View>
   );
 }

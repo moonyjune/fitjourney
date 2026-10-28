@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.18 | no | — |
 | 0.17 | no | — |
 | 0.16 | no | — |
 | 0.15 | no | — |
@@ -29,6 +30,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.18
+- Recipe dialog: "Xóa khỏi cook book" is now a red delete button; pressing it closes the dialog (before, it stayed open and showed "Lưu vào cook book" again) and a message confirms "Đã xóa "…" khỏi cook book." on the Cook book screen and under the meal ideas.
 
 ## 0.17
 - Meal ideas: "Nhờ AI gợi ý" and "Gợi ý từ cookbook" no longer both show a spinner. Only the button pressed shows it is working; the other one is greyed out until the answer comes (both replace the same 3 dishes, so one request runs at a time).

@@ -7,7 +7,7 @@ import { QuestIcon, type QuestIconName } from './QuestIcon';
 interface QuestButtonProps {
   title: string;
   onPress: () => void;
-  variant?: 'gold' | 'ghost' | 'mana';
+  variant?: 'gold' | 'ghost' | 'mana' | 'danger';
   icon?: QuestIconName;
   disabled?: boolean;
   loading?: boolean;
@@ -16,9 +16,11 @@ interface QuestButtonProps {
 
 /** Full-width 56 px action button. `gold` is the primary call to action. */
 export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, loading, accessibilityLabel }: QuestButtonProps) {
-  const filled = variant !== 'ghost';
-  const background = variant === 'gold' ? quest.gold : variant === 'mana' ? quest.mana : quest.panel;
-  const foreground = filled ? quest.onGold : quest.text;
+  // 'danger' (delete) is outlined in red on a dark red panel, so it never looks like the main action.
+  const danger = variant === 'danger';
+  const filled = variant === 'gold' || variant === 'mana';
+  const background = variant === 'gold' ? quest.gold : variant === 'mana' ? quest.mana : danger ? quest.bossPanel : quest.panel;
+  const foreground = filled ? quest.onGold : danger ? quest.hpText : quest.text;
   return (
     <PressScale
       scaleTo={0.97}
@@ -29,7 +31,7 @@ export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, 
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        { backgroundColor: background, borderColor: filled ? background : quest.border },
+        { backgroundColor: background, borderColor: filled ? background : danger ? quest.hp : quest.border },
         (disabled || loading) && { opacity: 0.5 },
         pressed && { opacity: 0.85 },
       ]}

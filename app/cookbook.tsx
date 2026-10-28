@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { acceptDinner, type DinnerIdea } from '../src/ai/dinner';
 import { buildMealPlan, mealBrief } from '../src/ai/mealSplit';
 import { ideaFromRecipe } from '../src/cookbook/recipes';
+import { FlashNotice, useFlash } from '../src/components/quest/FlashNotice';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { RecipeDialog } from '../src/components/quest/RecipeDialog';
@@ -31,6 +32,7 @@ export default function CookbookScreen() {
   const prefStrict = useMealPrefStore((s) => s.strictKcal);
   const [onlyFitting, setOnlyFitting] = useState(false);
   const [open, setOpen] = useState<DinnerIdea | null>(null);
+  const [flash, showFlash] = useFlash();
   // The share of the next meal still to come today, to tell which dishes fit it.
   const brief = useMemo(() => {
     const plan = buildMealPlan(new Date(), pickPrefs({ kcal: prefKcal, proteinG: prefProtein, strictKcal: prefStrict }));
@@ -45,6 +47,9 @@ export default function CookbookScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
         <QuestHeader title={g('cookbook.title')} onBack={goBack} backLabel={g('common.back')} />
+        <View style={styles.gap}>
+          <FlashNotice text={flash} />
+        </View>
         {brief && book.length > 0 && (
           <View style={styles.chips}>
             {[false, true].map((fit) => (
@@ -77,7 +82,7 @@ export default function CookbookScreen() {
           </Pressable>
         ))}
       </ScrollView>
-      <RecipeDialog idea={open} brief={brief ?? undefined} mealLabel="" onClose={() => setOpen(null)} />
+      <RecipeDialog idea={open} brief={brief ?? undefined} mealLabel="" onClose={() => setOpen(null)} onRemoved={(name) => showFlash(g('recipe.removed', { name }))} />
     </View>
   );
 }

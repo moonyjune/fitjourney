@@ -458,6 +458,13 @@ describe('Meal suggestions card (Camp)', () => {
     expect(text).toContain('PHÂN TÍCH DINH DƯỠNG');
     await act(async () => find(r, 'Chấm 4 sao')!.props.onPress());
     expect(useCookbookStore.getState().recipes[0].rating).toBe(4);
+
+    // Removing it from the cook book closes the dialog (no "save" button left behind) and says it was done.
+    await act(async () => find(r, 'Xóa khỏi cook book')!.props.onPress());
+    expect(useCookbookStore.getState().recipes.find((x) => x.name === 'Cá hấp gừng')).toBeUndefined();
+    expect(allText(r)).not.toContain('CÁCH NẤU');
+    expect(find(r, 'Lưu vào cook book')).toBeFalsy();
+    expect(allText(r)).toContain('Đã xóa "Cá hấp gừng" khỏi cook book.');
   });
 
   it.each([

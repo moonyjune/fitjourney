@@ -18,7 +18,8 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 /** One dish in full: ingredients, difficulty, time, the steps (each with a picture), the nutrition set against what is left for the meal, the user's
  *  stars, and the photo of how it turned out. A dish without a recipe (one of the user's own foods) can have one written by the AI, once; it is kept in
  *  the cook book, so it is never asked twice. */
-export function RecipeDialog({ idea, brief, mealLabel, onClose, onLog }: { idea: DinnerIdea | null; brief?: DinnerBrief; mealLabel?: string; onClose: () => void; onLog?: (idea: DinnerIdea) => void }) {
+/** `onRemoved` is told the dish's name once it was taken out of the cook book (the dialog closes then), so the screen can confirm it. */
+export function RecipeDialog({ idea, brief, mealLabel, onClose, onLog, onRemoved }: { idea: DinnerIdea | null; brief?: DinnerBrief; mealLabel?: string; onClose: () => void; onLog?: (idea: DinnerIdea) => void; onRemoved?: (name: string) => void }) {
   const g = useGameText();
   const aiErrorText = useAiErrorText();
   const book = useCookbookStore((s) => s.recipes);
@@ -203,7 +204,16 @@ export function RecipeDialog({ idea, brief, mealLabel, onClose, onLog }: { idea:
           <View style={styles.actions}>
             {onLog && <QuestButton variant="gold" title={g('dinner.log')} accessibilityLabel={g('dinner.logLabel', { name: shown.name })} onPress={() => { store.save(recipeFromIdea(idea)); store.markCooked(id); onLog(shown); }} />}
             {saved ? (
-              <QuestButton variant="ghost" title={g('recipe.removeFromBook')} onPress={() => { store.remove(id); }} />
+              <QuestButton
+                variant="danger"
+                icon="trash"
+                title={g('recipe.removeFromBook')}
+                onPress={() => {
+                  store.remove(id);
+                  onClose();
+                  onRemoved?.(shown.name);
+                }}
+              />
             ) : (
               <QuestButton variant="mana" title={g('recipe.saveToBook')} onPress={() => store.save(recipeFromIdea(idea))} />
             )}
