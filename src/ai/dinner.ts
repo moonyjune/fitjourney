@@ -52,8 +52,8 @@ export interface DinnerIdea {
   purineMg: number;
   saltG: number;
   sugarG: number;
-  /** `db`: the user's own foods, `ai`: asked now, `book`: a dish from the cook book. */
-  source: 'db' | 'ai' | 'book';
+  /** `db`: the user's own foods, `ai`: asked now, `book`: a dish from the cook book, `shared`: from the cook book shared by all users. */
+  source: 'db' | 'ai' | 'book' | 'shared';
   amount?: string;
   /** How to make it (ingredients, steps, time, difficulty), when it is known. */
   recipe?: RecipeDetails;

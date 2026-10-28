@@ -192,7 +192,7 @@ export function fakeDinner(brief: DinnerBrief): { options: Record<string, unknow
     how: `${SIMULATED}: gợi ý mẫu theo phần còn lại trong ngày, không phải của AI.`,
     accuracyPercent: 50,
   });
-  return { options: [make(light ? 'Rau luộc + đạm nạc' : 'Cá hấp + rau luộc', 1), make(light ? 'Canh rau' : 'Ức gà áp chảo + salad', 0.95)] };
+  return { options: [make(light ? 'Rau luộc + đạm nạc' : 'Cá hấp + rau luộc', 1), make(light ? 'Canh rau' : 'Ức gà áp chảo + salad', 0.95), make(light ? 'Đậu phụ hấp' : 'Trứng hấp + rau cải', 0.9)] };
 }
 
 /** Offline stand-in for the coach digest: one plain line per client built only from their numbers. Labelled as simulated. */

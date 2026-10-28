@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from '@jest/globals';
-import { isToolChoiceUnsupported, systemFor, toolChoiceFor, anthropicHeaders, ATTEMPT_TIMEOUT_MS, MAX_ATTEMPTS, TOTAL_BUDGET_MS, canRetry, summarizeUpstreamError, DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, shouldRetry, resolveAiConfig, isModelId, DEFAULT_MODEL } from '../../../supabase/functions/_shared/usage';
+import { isToolChoiceUnsupported, systemFor, toolChoiceFor, anthropicHeaders, ATTEMPT_TIMEOUT_MS, MAX_ATTEMPTS, TOTAL_BUDGET_MS, canRetry, summarizeUpstreamError, DAILY_QUOTA, budgetFrom, budgetReached, dayKey, estimateCostUsd, priceFrom, quotaMessage, quotaReached, quotaFrom, quotaKey, shouldRetry, resolveAiConfig, isModelId, DEFAULT_MODEL } from '../../../supabase/functions/_shared/usage';
 import { describeCoach, describePerson, sanitizeProfile } from '../../../supabase/functions/_shared/coach';
 import { cleanWeek, describeWeek, isDate } from '../../../supabase/functions/_shared/week';
 import { cleanName, cleanSwapRequest } from '../../../supabase/functions/_shared/swap';
@@ -45,8 +45,22 @@ describe('usage helpers (server)', () => {
       expect(quotaReached(feature, DAILY_QUOTA[feature] - 1)).toBe(false);
       expect(quotaReached(feature, DAILY_QUOTA[feature])).toBe(true);
     }
-    expect(DAILY_QUOTA).toMatchObject({ photo: 15, text: 30, label: 15, recipe: 10, report: 3, swap: 10, dinner: 5 });
+    expect(DAILY_QUOTA).toMatchObject({ photo: 15, text: 30, label: 15, recipe: 10, report: 3, swap: 10, dinner: 30 });
     expect(quotaMessage('photo')).toContain('15 lượt/ngày');
+  });
+
+  it('reads a feature\'s quota from app_settings (ai_quota.<feature>), falling back to the default', () => {
+    expect(quotaKey('dinner')).toBe('ai_quota.dinner');
+    expect(quotaFrom('dinner', null)).toBe(30);
+    expect(quotaFrom('dinner', [])).toBe(30);
+    expect(quotaFrom('dinner', [{ key: 'ai_quota.dinner', value: 40 }])).toBe(40);
+    expect(quotaFrom('dinner', [{ key: 'ai_quota.dinner', value: '12' }])).toBe(12);
+    expect(quotaFrom('dinner', [{ key: 'ai_quota.dinner', value: 0 }])).toBe(0); // 0 turns the feature off for the day
+    for (const bad of [-1, 2.5, 99999, 'abc', '', null, { n: 3 }]) expect(quotaFrom('dinner', [{ key: 'ai_quota.dinner', value: bad }])).toBe(30);
+    expect(quotaFrom('photo', [{ key: 'ai_quota.dinner', value: 40 }])).toBe(15); // another feature's row is not used
+    expect(quotaReached('dinner', 39, 40)).toBe(false);
+    expect(quotaReached('dinner', 40, 40)).toBe(true);
+    expect(quotaMessage('dinner', 40)).toContain('40 lượt/ngày');
   });
 
   it('retries only transient statuses, and buckets by UTC day', () => {

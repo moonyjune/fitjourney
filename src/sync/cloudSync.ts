@@ -6,7 +6,9 @@ import { useAuthStore } from '../store/useAuthStore';
 import type { BodyProfile } from '../ai/bodyProfile';
 import type { CoachContext } from '../ai/coachContext';
 import type { WeekInput } from '../ai/weeklyReport';
-import type { DinnerBrief } from '../ai/dinner';
+import type { DinnerBrief, DinnerIdea } from '../ai/dinner';
+import { cleanSearch, pickShared, SHARED_COOKBOOK_COLUMNS } from '../cookbook/shared';
+import { cookbookRows } from '../../supabase/functions/_shared/cookbook';
 import type { ClientRows } from '../ai/coachDigest';
 import type { SwapContext, SwapItem } from '../food/swaps';
 import { DEV_ANALYSIS_DELAY_MS, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
@@ -1346,6 +1348,42 @@ export async function requestDinner(brief: DinnerBrief, favorites: string[], avo
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
     return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+/** Adds meal ideas to the cook book shared by all users (a dish whose name is already there is left as it is). The server already
+ *  stores every answer of suggest-dinner; this covers ideas shown before it did. Best effort: a failure is logged, never shown. */
+export async function shareToCookbook(ideas: DinnerIdea[], meal: DinnerBrief['meal']): Promise<void> {
+  const userId = currentUserId();
+  if (!userId || ideas.length === 0) return;
+  const rows = cookbookRows(ideas, meal, userId);
+  if (rows.length === 0) return;
+  try {
+    const { error } = await supabase.from('cookbook_recipes').upsert(rows, { onConflict: 'name_key', ignoreDuplicates: true });
+    if (error) throw error;
+  } catch (error) {
+    logSyncError('shareToCookbook', error);
+  }
+}
+
+export type SharedCookbookOutcome = { ok: true; ideas: DinnerIdea[] } | { ok: false; kind: 'offline' | 'auth' | 'generic' };
+
+/** Up to 3 dishes of the shared cook book that fit a meal (no AI, no quota): rows whose calories can fit the meal, matching the
+ *  search text in the name, description or ingredients when there is one, newest first; then the meal's own check on the device (`pickShared`). */
+export async function searchSharedCookbook(brief: DinnerBrief, query: string, skipNames: string[]): Promise<SharedCookbookOutcome> {
+  if (!currentUserId()) return { ok: false, kind: 'auth' };
+  if (!(await isOnline())) return { ok: false, kind: 'offline' };
+  try {
+    const maxKcal = Math.max(200, Math.ceil(brief.budgetKcal * 1.1));
+    let request = supabase.from('cookbook_recipes').select(SHARED_COOKBOOK_COLUMNS).lte('calories', maxKcal);
+    const q = cleanSearch(query);
+    if (q) request = request.ilike('search_text', `%${q}%`);
+    const { data, error } = await request.order('created_at', { ascending: false }).limit(300);
+    if (error) throw error;
+    return { ok: true, ideas: pickShared(data ?? [], brief, skipNames) };
+  } catch (error) {
+    logSyncError('searchSharedCookbook', error);
+    return { ok: false, kind: 'generic' };
   }
 }
 

@@ -22,6 +22,9 @@ jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: jest.fn(), de
 
 type Outcome = { ok: true; result: unknown } | { ok: false; message: string; kind: 'notConfigured' | 'offline' | 'unreachable' | 'auth' | 'quota' | 'disabled' | 'generic' };
 const mockDinner = jest.fn<(...a: unknown[]) => Promise<Outcome>>();
+const mockShare = jest.fn<(...a: unknown[]) => Promise<void>>(async () => undefined);
+type SharedOutcome = { ok: true; ideas: unknown[] } | { ok: false; kind: 'offline' | 'auth' | 'generic' };
+const mockSearchShared = jest.fn<(...a: unknown[]) => Promise<SharedOutcome>>();
 jest.mock('../../sync/cloudSync', () => ({
   pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
@@ -36,6 +39,8 @@ jest.mock('../../sync/cloudSync', () => ({
   ensureCoachCode: jest.fn(),
   linkToCoach: jest.fn(),
   requestDinner: (...a: unknown[]) => mockDinner(...a),
+  shareToCookbook: (...a: unknown[]) => mockShare(...a),
+  searchSharedCookbook: (...a: unknown[]) => mockSearchShared(...a),
 }));
 
 import AddFoodScreen from '../../../app/add-food';
@@ -65,6 +70,17 @@ function allText(r: ReactTestRenderer): string {
     else if (typeof n === 'object') walk((n as { children?: unknown }).children);
   };
   walk(r.toJSON());
+  return parts.join(' ');
+}
+/** The text of one meal's block (the View labelled with the meal's name). */
+function mealText(r: ReactTestRenderer, meal: string): string {
+  const node = r.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityLabel === meal)[0];
+  const parts: string[] = [];
+  const walk = (n: ReactTestInstance | string) => {
+    if (typeof n === 'string') parts.push(n);
+    else n.children.forEach(walk);
+  };
+  if (node) walk(node);
   return parts.join(' ');
 }
 const find = (r: ReactTestRenderer, label: string): ReactTestInstance | undefined =>
@@ -296,7 +312,113 @@ describe('Meal suggestions card (Camp)', () => {
     await act(async () => find(r, 'Gợi ý món khác: Bữa sáng')!.props.onPress());
     expect((mockDinner.mock.calls[1] as unknown[])[2]).toEqual(expect.arrayContaining(['Món một']));
     expect(allText(r)).toContain('Món hai');
+    expect(mealText(r, 'Bữa sáng')).toContain('Món hai');
+    expect(mealText(r, 'Bữa sáng')).not.toContain('Món một'); // replaced, not added to
     expect(useCookbookStore.getState().recipes.map((x) => x.name).sort()).toEqual(['Món hai', 'Món một']);
+    expect(mockShare).toHaveBeenCalledTimes(1); // the replaced one goes into the shared cookbook
+    expect((mockShare.mock.calls[0][0] as { name: string }[]).map((i) => i.name)).toEqual(['Món một']);
+    expect(mockShare.mock.calls[0][1]).toBe('breakfast');
+  });
+
+  it('shows the AI\'s 3 dishes, replaces them on the next request (the old ones go to the shared cookbook) and keeps the new ones after a reload', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    const three = (p: string) => ({ ok: true as const, result: { options: [1, 2, 3].map((n) => ({ name: `${p} ${n}`, calories: 600 + n, proteinG: 30, accuracyPercent: 70 })) } });
+    mockDinner.mockResolvedValueOnce(three('Cũ'));
+    const r = await mount(AT(8));
+    await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
+    for (const n of [1, 2, 3]) expect(allText(r)).toContain(`Cũ ${n}`);
+    expect(mockShare).not.toHaveBeenCalled(); // nothing was replaced yet
+    mockDinner.mockResolvedValueOnce(three('Mới'));
+    await act(async () => find(r, 'Gợi ý món khác: Bữa sáng')!.props.onPress());
+    for (const n of [1, 2, 3]) {
+      expect(allText(r)).toContain(`Mới ${n}`);
+      expect(allText(r)).not.toContain(`Cũ ${n}`);
+    }
+    expect((mockShare.mock.calls[0][0] as { name: string }[]).map((i) => i.name)).toEqual(['Cũ 1', 'Cũ 2', 'Cũ 3']);
+    act(() => renderer?.unmount());
+    const again = await mount(AT(8));
+    for (const n of [1, 2, 3]) expect(allText(again)).toContain(`Mới ${n}`);
+    expect(mockDinner).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the dishes on screen when a new request brings nothing that fits', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    mockDinner.mockResolvedValueOnce({ ok: true, result: { options: [{ name: 'Món giữ lại', calories: 650, proteinG: 30, accuracyPercent: 70 }] } });
+    const r = await mount(AT(8));
+    await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
+    mockDinner.mockResolvedValueOnce({ ok: true, result: { options: [{ name: 'Phở tô lớn', calories: 1500, proteinG: 60, accuracyPercent: 70 }] } });
+    await act(async () => find(r, 'Gợi ý món khác: Bữa sáng')!.props.onPress());
+    expect(allText(r)).toContain('Món giữ lại');
+    expect(allText(r)).toContain('Chưa tìm được món hợp với phần của Bữa sáng.');
+    expect(mockShare).not.toHaveBeenCalled();
+  });
+
+  it('lists at most 3 dishes per meal, and one toggle folds and opens the whole list', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    // The user's own foods and cook book would add more: only 3 are listed, the suggestions first.
+    useCookbookStore.setState({ recipes: [{ id: 'mon sach', name: 'Món sách', calories: 600, proteinG: 40, purineMg: 0, saltG: 0, sugarG: 0, source: 'ai', createdAtISO: '2026-10-01T00:00:00Z' }] });
+    mockDinner.mockResolvedValueOnce({ ok: true, result: { options: [1, 2, 3].map((n) => ({ name: `Gợi ý ${n}`, calories: 600, proteinG: 30, accuracyPercent: 70 })) } });
+    const r = await mount(AT(8));
+    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Xem công thức: Món sách' && typeof n.props.onPress === 'function').length).toBeGreaterThan(0);
+    await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
+    const shown = () => mealText(r, 'Bữa sáng').match(/Xem công thức/g)?.length ?? 0;
+    expect(shown()).toBe(3);
+    expect(mealText(r, 'Bữa sáng')).toContain('Gợi ý (3) ▾');
+    for (const n of [1, 2, 3]) expect(mealText(r, 'Bữa sáng')).toContain(`Gợi ý ${n}`);
+    expect(mealText(r, 'Bữa sáng')).not.toContain('Cá hấp nhà làm'); // the user's foods are not a 4th and 5th
+    await act(async () => find(r, 'Thu gọn gợi ý: Bữa sáng')!.props.onPress());
+    expect(shown()).toBe(0);
+    expect(mealText(r, 'Bữa sáng')).not.toContain('Gợi ý 1');
+    expect(mealText(r, 'Bữa sáng')).toContain('Gợi ý (3) ▸');
+    expect(find(r, 'Gợi ý món khác: Bữa sáng')).toBeDefined(); // the buttons stay
+    await act(async () => find(r, 'Mở ra gợi ý: Bữa sáng')!.props.onPress());
+    expect(shown()).toBe(3);
+  });
+
+  it('suggests 3 dishes from the shared cookbook (with the search text) instead of the AI, and keeps them after a reload', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    const shared = [1, 2, 3].map((n) => ({ name: `Chung ${n}`, calories: 600, proteinG: 30, purineMg: 0, saltG: 0, sugarG: 0, source: 'shared', how: 'Từ người khác.' }));
+    mockSearchShared.mockResolvedValue({ ok: true, ideas: shared });
+    const r = await mount(AT(8));
+    await act(async () => r.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.accessibilityLabel === 'Tìm trong cookbook chung (tên món, nguyên liệu…)')[0].props.onChangeText('gà'));
+    await act(async () => find(r, 'Gợi ý từ cookbook: Bữa sáng')!.props.onPress());
+    expect(mockDinner).not.toHaveBeenCalled();
+    expect(mockSearchShared).toHaveBeenCalledTimes(1);
+    const [brief, query] = mockSearchShared.mock.calls[0] as [Record<string, unknown>, string];
+    expect(brief).toMatchObject({ meal: 'breakfast', budgetKcal: 600 });
+    expect(query).toBe('gà');
+    for (const n of [1, 2, 3]) expect(allText(r)).toContain(`Chung ${n}`);
+    expect(allText(r)).toContain('Từ cookbook chung');
+    act(() => renderer?.unmount());
+    const again = await mount(AT(8));
+    expect(allText(again)).toContain('Chung 1');
+    // Replacing dishes that came from the shared cookbook does not send them back to it.
+    mockSearchShared.mockResolvedValue({ ok: true, ideas: [{ ...shared[0], name: 'Chung 4' }] });
+    await act(async () => find(again, 'Gợi ý từ cookbook: Bữa sáng')!.props.onPress());
+    expect(allText(again)).toContain('Chung 4');
+    expect(allText(again)).not.toContain('Chung 1');
+    expect(mockShare).not.toHaveBeenCalled();
+  });
+
+  it('says so when the shared cookbook has nothing new or cannot be read', async () => {
+    useMealModeStore.setState({ fasting: false });
+    useNutritionStore.setState({ logs: {} });
+    useSettingsStore.setState({ calorieTargetKcal: 2800 });
+    mockSearchShared.mockResolvedValueOnce({ ok: true, ideas: [] });
+    const r = await mount(AT(8));
+    await act(async () => find(r, 'Gợi ý từ cookbook: Bữa sáng')!.props.onPress());
+    expect(allText(r)).toContain('Cookbook chung chưa có món mới nào hợp với phần của Bữa sáng.');
+    mockSearchShared.mockResolvedValueOnce({ ok: false, kind: 'offline' });
+    await act(async () => find(r, 'Gợi ý từ cookbook: Bữa sáng')!.props.onPress());
+    expect(allText(r)).toContain('Chưa tải được cookbook chung.');
   });
 
   it('opens a dialog with the recipe, and the user can rate the dish', async () => {
