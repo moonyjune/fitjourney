@@ -64,46 +64,72 @@ export function shouldCallRest(secondsLeft: number, restSec: number): boolean {
   return secondsLeft >= 1 && secondsLeft <= REST_COUNTDOWN_FROM && secondsLeft < restSec;
 }
 
-/** The voice always speaks English, whatever language the app is set to: only the on-screen text follows the setting.
- *  These phrases are therefore not part of the vi/en UI strings. */
-export const SPEECH = {
-  setsReps: '{sets} sets of {n} reps.',
-  setsRepsSide: '{sets} sets of {n} reps on each side.',
-  setsSeconds: '{sets} sets, hold for {n} seconds.',
-  bothSides: 'Do both sides in every set.',
-  pressStart: 'Press start when you are ready.',
-  nextSet: 'Set {s} of {t}.',
-  ready: 'Get ready.',
-  go: 'Go!',
-  switchSides: 'Switch sides.',
-  rest: 'Rest for {n} seconds. Next up: {name}, {rx}',
-  restOnly: 'Rest for {n} seconds.',
-  allDone: 'Workout complete. Great job!',
-} as const;
+/** The language the voice speaks, chosen in the session (not the app language): only the on-screen text follows the
+ *  app setting. These phrases are therefore not part of the vi/en UI strings. */
+export type SpeechLang = 'vi' | 'en';
+
+export const SPEECH_TEXT = {
+  en: {
+    setsReps: '{sets} sets of {n} reps.',
+    setsRepsSide: '{sets} sets of {n} reps on each side.',
+    setsSeconds: '{sets} sets, hold for {n} seconds.',
+    bothSides: 'Do both sides in every set.',
+    pressStart: 'Press start when you are ready.',
+    nextSet: 'Set {s} of {t}.',
+    ready: 'Get ready.',
+    go: 'Go!',
+    switchSides: 'Switch sides.',
+    rest: 'Rest for {n} seconds. Next up: {name}, {rx}',
+    restOnly: 'Rest for {n} seconds.',
+    allDone: 'Workout complete. Great job!',
+    sample: 'Hello! I will guide your workout.',
+  },
+  vi: {
+    setsReps: '{sets} hiệp, mỗi hiệp {n} lần.',
+    setsRepsSide: '{sets} hiệp, mỗi bên {n} lần.',
+    setsSeconds: '{sets} hiệp, mỗi hiệp giữ {n} giây.',
+    bothSides: 'Làm cả hai bên trong mỗi hiệp.',
+    pressStart: 'Bấm bắt đầu khi bạn sẵn sàng.',
+    nextSet: 'Hiệp {s} trên {t}.',
+    ready: 'Chuẩn bị.',
+    go: 'Bắt đầu!',
+    switchSides: 'Đổi bên.',
+    rest: 'Nghỉ {n} giây. Tiếp theo: {name}, {rx}',
+    restOnly: 'Nghỉ {n} giây.',
+    allDone: 'Hoàn thành buổi tập. Làm tốt lắm!',
+    sample: 'Xin chào! Mình sẽ hướng dẫn bạn tập.',
+  },
+} as const satisfies Record<SpeechLang, Record<string, string>>;
+
+/** The English phrases (the default voice language). */
+export const SPEECH = SPEECH_TEXT.en;
 
 function fill(template: string, params: Record<string, string | number> = {}): string {
   return template.replace(/\{(\w+)\}/g, (_, k: string) => String(params[k] ?? ''));
 }
 
 /** "3 sets of 8 reps" in words, so the voice reads a sentence instead of "3 × 8". */
-export function spokenAmount(step: Pick<SessionStep, 'sets' | 'amount' | 'unit' | 'perSide'>): string {
+export function spokenAmount(step: Pick<SessionStep, 'sets' | 'amount' | 'unit' | 'perSide'>, lang: SpeechLang = 'en'): string {
+  const t = SPEECH_TEXT[lang];
   const params = { sets: step.sets, n: step.amount };
-  if (step.unit === 'seconds') return fill(SPEECH.setsSeconds, params);
-  return fill(step.perSide ? SPEECH.setsRepsSide : SPEECH.setsReps, params);
+  if (step.unit === 'seconds') return fill(t.setsSeconds, params);
+  return fill(step.perSide ? t.setsRepsSide : t.setsReps, params);
 }
 
 /** What is said, in order, when a set is about to start. The first set of an exercise gets the full briefing (name,
  *  amount, the steps, the one-sided hint); later sets only say which set it is. */
-export function workScript(step: SessionStep, ex: Exercise, setIndex: number): string[] {
-  if (setIndex > 0) return [fill(SPEECH.nextSet, { s: setIndex + 1, t: step.sets })];
-  const lines = [ex.nameEn, spokenAmount(step), ...ex.steps.map((x) => x.en)];
-  if (step.perSide) lines.push(SPEECH.bothSides);
-  lines.push(SPEECH.pressStart);
+export function workScript(step: SessionStep, ex: Exercise, setIndex: number, lang: SpeechLang = 'en'): string[] {
+  const t = SPEECH_TEXT[lang];
+  if (setIndex > 0) return [fill(t.nextSet, { s: setIndex + 1, t: step.sets })];
+  const lines = [lang === 'vi' ? ex.nameVi : ex.nameEn, spokenAmount(step, lang), ...ex.steps.map((x) => x[lang])];
+  if (step.perSide) lines.push(t.bothSides);
+  lines.push(t.pressStart);
   return lines;
 }
 
 /** Said when a rest period begins: how long, and what is coming next. */
-export function restScript(restSec: number, next: SessionStep | undefined, ex: Exercise | undefined): string {
-  if (!next || !ex) return fill(SPEECH.restOnly, { n: restSec });
-  return fill(SPEECH.rest, { n: restSec, name: ex.nameEn, rx: spokenAmount(next) });
+export function restScript(restSec: number, next: SessionStep | undefined, ex: Exercise | undefined, lang: SpeechLang = 'en'): string {
+  const t = SPEECH_TEXT[lang];
+  if (!next || !ex) return fill(t.restOnly, { n: restSec });
+  return fill(t.rest, { n: restSec, name: lang === 'vi' ? ex.nameVi : ex.nameEn, rx: spokenAmount(next, lang) });
 }

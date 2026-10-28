@@ -48,7 +48,8 @@ import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
-import { toDateKey } from '../../utils/date';
+import { useHistoryViewStore } from '../../store/useHistoryViewStore';
+import { formatDateVi, toDateKey } from '../../utils/date';
 
 const dayKey = (back: number) => {
   const d = new Date();
@@ -81,6 +82,7 @@ describe('History screen (FitQuest)', () => {
     useNutritionStore.setState({ logs: {} });
     useWorkoutStore.setState({ entries: [] });
     useWeightStore.setState({ entries: [] });
+    useHistoryViewStore.setState({ layout: 'list' });
   });
   afterEach(() => {
     act(() => renderer?.unmount());
@@ -187,6 +189,74 @@ describe('History screen (FitQuest)', () => {
     mockRouter.canGoBack.mockReturnValueOnce(false);
     await act(async () => byLabel(r, /^Quay lại$/).props.onPress());
     expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)/profile');
+  });
+
+  describe('diary layouts', () => {
+    const viMonth = (k: string) => `Tháng ${Number(k.slice(5, 7))}/${k.slice(0, 4)}`;
+    const labels = (r: ReactTestRenderer) =>
+      r.root.findAll((n) => typeof n.props.onPress === 'function').map((n) => String(n.props.accessibilityLabel ?? ''));
+
+    it('list: groups the days by month, only the current month open, and older months open on tap', async () => {
+      const today = dayKey(0);
+      const old = dayKey(40); // always in an earlier month
+      useNutritionStore.setState({ logs: { [today]: log(today), [old]: log(old) } });
+      const r = await render();
+      const header = (k: string) => byLabel(r, new RegExp(`^${viMonth(k)}\\. 1 ngày có ghi chép$`));
+      expect(header(today).props.accessibilityState).toEqual({ expanded: true });
+      expect(header(old).props.accessibilityState).toEqual({ expanded: false });
+      expect(text(r)).toContain(formatDateVi(today));
+      expect(text(r)).not.toContain(formatDateVi(old));
+      await act(async () => header(old).props.onPress());
+      expect(text(r)).toContain(formatDateVi(old));
+      await act(async () => header(today).props.onPress());
+      expect(text(r)).not.toContain(formatDateVi(today));
+    });
+
+    it('calendar: remembered choice, deficit under each logged day, and a tap opens that day', async () => {
+      const today = dayKey(0);
+      useNutritionStore.setState({ logs: { [today]: log(today) } });
+      const r = await render();
+      await act(async () => byLabel(r, /^Lịch$/).props.onPress());
+      expect(useHistoryViewStore.getState().layout).toBe('calendar');
+      expect(text(r)).toContain('T2 | T3 | T4 | T5 | T6 | T7 | CN');
+      expect(text(r)).toContain(viMonth(today));
+      const cell = byLabel(r, new RegExp(`^${formatDateVi(today)}\\. (Thâm hụt|Ăn dư): \\d+ kcal$`));
+      expect(cell).toBeDefined();
+      // The cell shows the day number and the deficit as text.
+      const cellText = cell.findAll((n) => (n.type as unknown) === 'Text').map((n) => [n.props.children].flat().join(''));
+      expect(cellText[0]).toBe(String(Number(today.slice(8))));
+      expect(cellText[1]).toMatch(/^\+?\d+$/);
+      // A day with nothing logged has no deficit.
+      expect(labels(r)).toContain(formatDateVi(`${today.slice(0, 8)}${today.slice(8) === '01' ? '02' : '01'}`));
+      await act(async () => cell.props.onPress());
+      expect(text(r)).toContain('Thu gọn'); // the day's detail is open below the calendar
+      expect(text(r)).toContain('1200ml nước');
+    });
+
+    it('calendar: < and > change the month, and the picker jumps to any month and year', async () => {
+      useHistoryViewStore.setState({ layout: 'calendar' });
+      const now = new Date();
+      const r = await render();
+      const title = () => labels(r).find((l) => l.startsWith('Chọn tháng và năm: '))!;
+      expect(title()).toBe(`Chọn tháng và năm: Tháng ${now.getMonth() + 1}/${now.getFullYear()}`);
+      await act(async () => byLabel(r, /^Tháng sau$/).props.onPress());
+      const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      expect(title()).toBe(`Chọn tháng và năm: Tháng ${next.getMonth() + 1}/${next.getFullYear()}`);
+      await act(async () => byLabel(r, /^Tháng trước$/).props.onPress());
+      await act(async () => byLabel(r, /^Tháng trước$/).props.onPress());
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      expect(title()).toBe(`Chọn tháng và năm: Tháng ${prev.getMonth() + 1}/${prev.getFullYear()}`);
+
+      await act(async () => byLabel(r, /^Chọn tháng và năm/).props.onPress());
+      await act(async () => byLabel(r, /^Năm trước$/).props.onPress());
+      const y = prev.getFullYear() - 1;
+      await act(async () => byLabel(r, new RegExp(`^Tháng 3/${y}$`)).props.onPress());
+      expect(title()).toBe(`Chọn tháng và năm: Tháng 3/${y}`);
+      expect(labels(r)).not.toContain('Năm trước'); // the picker closed
+      // Nothing was logged that month: tapping a day says so.
+      await act(async () => byLabel(r, new RegExp(`^15/03/${y}$`)).props.onPress());
+      expect(text(r)).toContain(`Ngày 15/03/${y}: chưa có ghi chép.`);
+    });
   });
 
   it('follows the app language for the screen title', async () => {
