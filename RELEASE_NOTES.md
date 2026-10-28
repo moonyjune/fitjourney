@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.13 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
 | 0.12 | no | — |
 | 0.11 | yes | — |
 | 0.10 | yes | — |
@@ -24,6 +25,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.13
+- Meal ideas ("Gợi ý món khác"): each request returns 3 dishes and replaces the ones on screen; the replaced dishes go into a cookbook shared by all users. New "Gợi ý từ cookbook" (and a search box) suggests 3 fitting dishes from that cookbook without calling the AI. At most 3 dishes are listed per meal, under one header that folds or opens the whole list. Suggestions still survive a page reload.
+- The daily limit for meal ideas is read from the database (`app_settings`, key `ai_quota.dinner`, now 30 a day); any AI feature's limit can be set the same way.
+- Workout: the spoken coach can use Vietnamese or English (independent of the app language) and a female or male voice; when the device has no voice of that gender the pitch is shifted.
+- History > Nhật ký hằng ngày: switch between a list grouped by month (fold/open each month) and a calendar (‹ ›, month/year picker) that shows each day's kcal deficit; tapping a day opens its detail.
+- Món ngoài kế hoạch: type only the name (e.g. "2 quả trứng gà") and "+ Thêm vào hôm nay" looks it up in the food database and adds it with the database figures (noted under the form). Several foods or an unknown food give a message and a button to "Nhập bằng chữ" with the text filled in.
+- Nhập bằng chữ: attach up to 3 photos (camera or library) that go to the AI with the description; photos alone also work.
+- Needs `supabase/schema.sql` run again (tables `app_settings` and `cookbook_recipes`) and the AI functions redeployed (shared limit check changed; parse-meal-text and suggest-dinner changed).
 
 ## 0.12
 - Analysis > Tuần/tháng: every week card has "Phân tích lại", which brings in the latest data from the cloud and works the week out again (it says when, or that only the device's data was used).
