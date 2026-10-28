@@ -154,7 +154,7 @@ describe('offline dev ideas and route prefill', () => {
   it('the dev ideas pass the same checks as a real answer, for a normal budget and for a light one', () => {
     for (const brief of [BRIEF, { ...BRIEF, budgetKcal: 90, proteinLeftG: 15 }]) {
       const ideas = cleanAiDinner(fakeDinner(brief), brief);
-      expect(ideas).toHaveLength(2);
+      expect(ideas).toHaveLength(3);
       expect(ideas[0].name).toContain('(giả lập)');
     }
   });

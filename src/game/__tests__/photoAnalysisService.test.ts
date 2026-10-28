@@ -565,7 +565,7 @@ describe('requestDinner', () => {
     const out = await pending;
     expect(out.ok).toBe(true);
     const ideas = out.ok ? cleanAiDinner(out.result, brief) : [];
-    expect(ideas).toHaveLength(2);
+    expect(ideas).toHaveLength(3);
     expect(ideas[0].name).toContain('(giả lập)');
     expect(mockInvoke).not.toHaveBeenCalled();
   });

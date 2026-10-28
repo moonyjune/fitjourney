@@ -77,7 +77,7 @@ export function recipeFromIdea(idea: DinnerIdea, now: Date = new Date()): Cookbo
     purineMg: idea.purineMg,
     saltG: idea.saltG,
     sugarG: idea.sugarG,
-    source: idea.source === 'ai' ? 'ai' : idea.source === 'db' ? 'db' : 'manual',
+    source: idea.source === 'ai' || idea.source === 'shared' ? 'ai' : idea.source === 'db' ? 'db' : 'manual',
     createdAtISO: now.toISOString(),
     ...idea.recipe,
   };

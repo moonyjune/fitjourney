@@ -832,3 +832,55 @@ create policy "user_data_all_own" on public.user_data for all
 drop policy if exists "user_data_limits_select_by_coach" on public.user_data;
 create policy "user_data_limits_select_by_coach" on public.user_data for select
   using (key = 'limits' and public.is_coach_of(user_id));
+
+-- ===== Task 1: AI meal suggestions + shared cookbook =====
+-- Cài đặt chung của ứng dụng do máy chủ đọc (Edge Functions dùng khoá dịch vụ). Người dùng không đọc/ghi được.
+-- ai_quota.<feature>: số lượt AI mỗi người mỗi ngày cho tính năng đó (số nguyên 0-10000); thiếu thì dùng mặc định trong code.
+-- Đổi: update public.app_settings set value = '40', updated_at = now() where key = 'ai_quota.dinner';
+create table if not exists public.app_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz not null default now()
+);
+alter table public.app_settings enable row level security;
+revoke all on public.app_settings from public, anon, authenticated;
+insert into public.app_settings (key, value) values ('ai_quota.dinner', '30'::jsonb)
+on conflict (key) do nothing;
+
+-- Cook book chung: các món AI đã gợi ý (suggest-dinner lưu mọi câu trả lời; app lưu thêm các gợi ý bị thay thế), mọi người dùng đã đăng
+-- nhập đều đọc và tìm được, nên không phải hỏi AI lại. Trùng tên (không phân biệt hoa thường/khoảng trắng) thì giữ món đã có.
+create table if not exists public.cookbook_recipes (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 100),
+  name_key text generated always as (lower(regexp_replace(btrim(name), '\s+', ' ', 'g'))) stored,
+  description text check (description is null or char_length(description) <= 300),
+  meal text check (meal is null or meal in ('breakfast', 'lunch', 'dinner', 'meal')),
+  calories integer not null check (calories between 0 and 5000),
+  protein_g numeric not null default 0 check (protein_g between 0 and 500),
+  purine_mg numeric not null default 0 check (purine_mg between 0 and 20000),
+  salt_g numeric not null default 0 check (salt_g between 0 and 200),
+  sugar_g numeric not null default 0 check (sugar_g between 0 and 1000),
+  emoji text check (emoji is null or char_length(emoji) <= 8),
+  minutes integer check (minutes is null or minutes between 1 and 600),
+  difficulty integer check (difficulty is null or difficulty between 1 and 5),
+  equipment jsonb not null default '[]'::jsonb check (jsonb_typeof(equipment) = 'array' and pg_column_size(equipment) <= 2000),
+  ingredients jsonb not null default '[]'::jsonb check (jsonb_typeof(ingredients) = 'array' and pg_column_size(ingredients) <= 8000),
+  steps jsonb not null default '[]'::jsonb check (jsonb_typeof(steps) = 'array' and pg_column_size(steps) <= 12000),
+  created_by uuid references auth.users (id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now(),
+  -- Tên + mô tả + nguyên liệu, để tìm bằng một bộ lọc ilike.
+  search_text text generated always as (name || ' ' || coalesce(description, '') || ' ' || ingredients::text) stored
+);
+create unique index if not exists cookbook_recipes_name_key on public.cookbook_recipes (name_key);
+create index if not exists cookbook_recipes_calories on public.cookbook_recipes (calories);
+create index if not exists cookbook_recipes_created_at on public.cookbook_recipes (created_at desc);
+alter table public.cookbook_recipes enable row level security;
+revoke all on public.cookbook_recipes from public, anon;
+grant select, insert on public.cookbook_recipes to authenticated;
+
+drop policy if exists "cookbook_recipes_select_signed_in" on public.cookbook_recipes;
+create policy "cookbook_recipes_select_signed_in" on public.cookbook_recipes for select
+  to authenticated using (true);
+drop policy if exists "cookbook_recipes_insert_own" on public.cookbook_recipes;
+create policy "cookbook_recipes_insert_own" on public.cookbook_recipes for insert
+  to authenticated with check (created_by = auth.uid());

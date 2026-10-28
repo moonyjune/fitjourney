@@ -2,7 +2,7 @@
 
 export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest';
 
-/** Calls per user per day. */
+/** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
   photo: 15,
   text: 30,
@@ -10,7 +10,7 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   recipe: 10,
   report: 3,
   swap: 10,
-  dinner: 5,
+  dinner: 30,
   digest: 5,
 };
 
@@ -65,13 +65,24 @@ export function estimateCostUsd(usage: TokenUsage | undefined, priceInPerMtok: n
   return Math.round(cost * 1e6) / 1e6;
 }
 
-/** True when `usedToday` calls already reached the feature's daily quota. */
-export function quotaReached(feature: AiFeature, usedToday: number): boolean {
-  return usedToday >= DAILY_QUOTA[feature];
+/** The `app_settings` key holding a feature's calls per user per day. */
+export const quotaKey = (feature: AiFeature): string => `ai_quota.${feature}`;
+
+/** A feature's daily quota: the value saved in `app_settings` (a whole number 0-10000, as a JSON number or string) wins over
+ *  `DAILY_QUOTA`. Anything else (missing, not a number, out of range) falls back to the default. */
+export function quotaFrom(feature: AiFeature, rows: { key: string; value: unknown }[] | null | undefined): number {
+  const raw = (rows ?? []).find((r) => r.key === quotaKey(feature))?.value;
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN;
+  return Number.isInteger(n) && n >= 0 && n <= 10000 ? n : DAILY_QUOTA[feature];
 }
 
-export function quotaMessage(feature: AiFeature): string {
-  return `Bạn đã hết lượt AI hôm nay cho tính năng này (${DAILY_QUOTA[feature]} lượt/ngày). Hãy thử lại vào ngày mai hoặc tự nhập số liệu.`;
+/** True when `usedToday` calls already reached the feature's daily quota (`limit`, default `DAILY_QUOTA`). */
+export function quotaReached(feature: AiFeature, usedToday: number, limit: number = DAILY_QUOTA[feature]): boolean {
+  return usedToday >= limit;
+}
+
+export function quotaMessage(feature: AiFeature, limit: number = DAILY_QUOTA[feature]): string {
+  return `Bạn đã hết lượt AI hôm nay cho tính năng này (${limit} lượt/ngày). Hãy thử lại vào ngày mai hoặc tự nhập số liệu.`;
 }
 
 /** Whether an Anthropic HTTP status is worth one retry (rate limit, overloaded, transient server error). */

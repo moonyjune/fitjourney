@@ -80,7 +80,7 @@ export function RecipeDialog({ idea, brief, mealLabel, onClose, onLog }: { idea:
                   {shown.name}
                 </HudText>
                 <HudText size={11} weight="medium" color={quest.textSecondary}>
-                  {shown.source === 'ai' ? g('swap.fromAi') : shown.source === 'book' ? g('recipe.fromBook') : g('dinner.fromDb')}
+                  {shown.source === 'ai' ? g('swap.fromAi') : shown.source === 'book' ? g('recipe.fromBook') : shown.source === 'shared' ? g('cookbook.fromShared') : g('dinner.fromDb')}
                   {shown.amount ? ` · ${shown.amount}` : ''}
                 </HudText>
               </View>

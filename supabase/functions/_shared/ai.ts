@@ -25,6 +25,8 @@ import {
   budgetReached,
   dayKey,
   estimateCostUsd,
+  quotaFrom,
+  quotaKey,
   quotaMessage,
   quotaReached,
   shouldRetry,
@@ -55,6 +57,22 @@ async function loadConfig(admin: SupabaseClient): Promise<AiConfig> {
   const config = resolveAiConfig(rows, ENV_CONFIG);
   configCache = { at: Date.now(), config };
   return config;
+}
+let quotaCache: { at: number; rows: { key: string; value: unknown }[] } | null = null;
+
+/** A feature's calls per user per day: `app_settings` key `ai_quota.<feature>`, else the default in usage.ts. Read at most every 30 s. */
+async function loadQuota(admin: SupabaseClient, feature: AiFeature): Promise<number> {
+  if (!quotaCache || Date.now() - quotaCache.at >= CONFIG_TTL_MS) {
+    let rows: { key: string; value: unknown }[] = [];
+    try {
+      const { data } = await admin.from('app_settings').select('key,value').like('key', 'ai_quota.%');
+      rows = data ?? [];
+    } catch (error) {
+      console.warn('[ai] app_settings not read, using the default quotas:', error);
+    }
+    quotaCache = { at: Date.now(), rows };
+  }
+  return quotaFrom(feature, quotaCache.rows.filter((r) => r.key === quotaKey(feature)));
 }
 const USER_BUDGET = budgetFrom(Deno.env.get('AI_USER_DAILY_BUDGET_USD'), DEFAULT_USER_DAILY_BUDGET_USD);
 const GLOBAL_BUDGET = budgetFrom(Deno.env.get('AI_DAILY_BUDGET_USD'), 0);
@@ -221,7 +239,8 @@ export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>
       const planned = await plan(body ?? {}, ctx);
       if (planned instanceof Response) return planned;
 
-      if (quotaReached(feature, await usedToday(admin, user.id, feature))) return jsonResponse({ error: quotaMessage(feature) }, 429);
+      const quota = await loadQuota(admin, feature);
+      if (quotaReached(feature, await usedToday(admin, user.id, feature), quota)) return jsonResponse({ error: quotaMessage(feature, quota) }, 429);
       if (budgetReached(await userCostToday(admin, user.id), USER_BUDGET)) return jsonResponse({ error: USER_BUDGET_MESSAGE }, 429);
       if (GLOBAL_BUDGET > 0 && budgetReached(await globalCostToday(admin), GLOBAL_BUDGET)) return jsonResponse({ error: GLOBAL_BUDGET_MESSAGE }, 503);
 
