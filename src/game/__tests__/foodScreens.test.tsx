@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
+let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
   router: {
     push: (...a: unknown[]) => mockRouter.push(...a),
@@ -9,7 +10,7 @@ jest.mock('expo-router', () => ({
     back: () => mockRouter.back(),
     canGoBack: () => mockRouter.canGoBack(),
   },
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams,
   useFocusEffect: () => undefined,
 }));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
@@ -48,6 +49,7 @@ jest.mock('../../sync/cloudSync', () => ({
 
 import AddFoodScreen from '../../../app/add-food';
 import FoodDbScreen from '../../../app/food-db';
+import TextMealScreen from '../../../app/text-meal';
 import { BUILT_IN_FOODS } from '../../food/foodData';
 import { useFoodDbStore } from '../../store/useFoodDbStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
@@ -92,6 +94,7 @@ const type = async (r: ReactTestRenderer, label: string, v: string) => act(async
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockParams = {};
   useSettingsStore.setState({ language: 'vi' });
   useFoodDbStore.setState({ custom: [], overrides: {}, recent: [] });
   useNutritionStore.setState({ logs: {} });
@@ -292,5 +295,63 @@ describe('Food lookup in Add food', () => {
     await tap(r, 'Dùng cho món này');
     expect((input(r, 'Tên món').props as { value: string }).value).toBe('');
     expect((input(r, 'Calo (kcal)').props as { value: string }).value).toBe('');
+  });
+});
+
+describe('Add food with only a name: the food database answers', () => {
+  const today = toDateKey(new Date());
+  const items = () => useNutritionStore.getState().logs[today]?.extraItems ?? [];
+
+  it('adds ONE known food with the database figures, scaled to the amount typed, and says where they came from', async () => {
+    const r = await mount(<AddFoodScreen />);
+    await type(r, 'Tên món', '2 quả trứng gà');
+    await tap(r, 'Thêm vào hôm nay');
+    expect(items()).toHaveLength(1);
+    // 2 eggs x 50 g: 143 kcal, 12.6 g protein, 5 mg purine, 140 mg sodium ≈ 0.4 g salt
+    expect(items()[0]).toMatchObject({ name: '2 quả Trứng gà', calories: 143, proteinG: 12.6, purineMg: 5, saltG: 0.4 });
+    const text = allText(r);
+    expect(text).toContain('Lấy từ cơ sở dữ liệu món ăn: Trứng gà · 143 kcal');
+    expect(mockRouter.back).not.toHaveBeenCalled();
+    // The form is cleared, so a second tap does not add it again.
+    expect((input(r, 'Tên món').props as { value: string }).value).toBe('');
+    await tap(r, 'Thêm vào hôm nay');
+    expect(items()).toHaveLength(1);
+    // Figures from the database are not remembered as a new food.
+    expect(useFoodDbStore.getState().custom).toHaveLength(0);
+  });
+
+  it('a typed calorie figure still wins: the entry is saved as typed, without the lookup', async () => {
+    const r = await mount(<AddFoodScreen />);
+    await type(r, 'Tên món', 'Trứng gà');
+    await type(r, 'Calo (kcal)', '200');
+    await tap(r, 'Thêm vào hôm nay');
+    expect(items()[0]).toMatchObject({ name: 'Trứng gà', calories: 200 });
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it('several foods are not guessed: a message points to "Nhập bằng chữ"', async () => {
+    const r = await mount(<AddFoodScreen />);
+    await type(r, 'Tên món', 'phở bò, trứng gà');
+    await tap(r, 'Thêm vào hôm nay');
+    expect(items()).toHaveLength(0);
+    expect(allText(r)).toContain('có vẻ gồm nhiều món');
+    await tap(r, 'Phân tích bằng AI trong "Nhập bằng chữ"');
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/text-meal', params: { text: 'phở bò, trứng gà' } });
+  });
+
+  it('an unknown food shows a message and opens "Nhập bằng chữ" with the description filled in', async () => {
+    const r = await mount(<AddFoodScreen />);
+    await type(r, 'Tên món', 'bánh xèo');
+    await tap(r, 'Thêm vào hôm nay');
+    expect(items()).toHaveLength(0);
+    expect(allText(r)).toContain('Không tìm thấy "bánh xèo" trong cơ sở dữ liệu món ăn. Hãy dùng "Nhập bằng chữ" để AI phân tích.');
+    expect(allText(r)).not.toContain('Nhập calo hoặc đạm lớn hơn 0.');
+    await tap(r, 'Phân tích bằng AI trong "Nhập bằng chữ"');
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/text-meal', params: { text: 'bánh xèo' } });
+
+    act(() => renderer?.unmount());
+    mockParams = { text: 'bánh xèo' };
+    const t = await mount(<TextMealScreen />);
+    expect((input(t, 'Bạn đã ăn gì?').props as { value: string }).value).toBe('bánh xèo');
   });
 });
