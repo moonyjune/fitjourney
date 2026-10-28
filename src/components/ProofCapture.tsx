@@ -6,6 +6,9 @@ import { useNutritionStore } from '../store/useNutritionStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { persistPickedPhoto } from '../utils/photoStorage';
 import { MAX_MEAL_TEXT_PHOTOS, MealTextPhotos } from './quest/MealTextPhotos';
+import { FoodThumb } from './quest/FoodPhoto';
+import { sortedPhotos } from '../utils/photoOrder';
+import { toDateKey } from '../utils/date';
 import { aiNumberText, useAiFields } from '../ai/useAiFields';
 import { adviceLines, cleanAdvice } from '../ai/adviceText';
 import { useAccuracyText, useAiErrorText, usePhotoAnalysis } from '../ai/usePhotoAnalysis';
@@ -32,7 +35,13 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   const g = useGameText();
   const palette = variant === 'quest' ? questPalette : lightPalette;
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  const proof = useProofStore((s) => s.proofFor(dateKey, taskType, taskRefId));
+  const allPhotos = useProofStore((s) => s.photos);
+  // Every photo saved for this meal/session on this day, first one first (a meal can keep up to MAX_MEAL_TEXT_PHOTOS).
+  const saved = useMemo(
+    () => sortedPhotos(allPhotos.filter((p) => p.taskType === taskType && p.taskRefId === taskRefId && toDateKey(new Date(p.dateISO)) === dateKey)),
+    [allPhotos, dateKey, taskType, taskRefId]
+  );
+  const proof = saved[0];
   const addProof = useProofStore((s) => s.addProof);
   const removeProof = useProofStore((s) => s.removeProof);
   const addExtra = useNutritionStore((s) => s.addExtra);
@@ -41,7 +50,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
 
   const [isEditing, setIsEditing] = useState(false);
   const [pendingUri, setPendingUri] = useState<string | null>(null);
-  /** Extra photos of the same meal/session for the AI only; the first photo is the one kept as the proof. */
+  /** More photos of the same meal/session: they go to the AI with the first one and are saved with it. */
   const [morePhotos, setMorePhotos] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -149,6 +158,9 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
       const id = `${taskType}-${taskRefId}-${Date.now()}`;
       const persistedUri = await persistPickedPhoto(pendingUri, id);
       addProof({ taskType, taskRefId, photoUri: persistedUri, note, dateISO: new Date().toISOString() });
+      for (const [i, uri] of morePhotos.entries()) {
+        addProof({ taskType, taskRefId, photoUri: await persistPickedPhoto(uri, `${id}-${i + 1}`), note, dateISO: new Date().toISOString() });
+      }
 
       const cal = parseFloat(estimatedCalories.replace(',', '.'));
       const water = parseFloat(estimatedWaterMl.replace(',', '.'));
@@ -170,10 +182,10 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   if (proof) {
     return (
       <View style={styles.proofRow}>
-        <Image source={{ uri: proof.photoUri }} style={styles.thumbnail} />
+        <FoodThumb uris={saved.map((p) => p.photoUri)} name={contextLabel ?? ''} size={64} />
         <View style={styles.proofTextWrap}>
           {!!proof.note && <Text style={styles.proofNote}>{proof.note}</Text>}
-          <TouchableOpacity onPress={() => removeProof(proof.id)}>
+          <TouchableOpacity onPress={() => saved.forEach((p) => removeProof(p.id))}>
             <Text style={styles.removeText}>{t('proof.removeLink')}</Text>
           </TouchableOpacity>
         </View>

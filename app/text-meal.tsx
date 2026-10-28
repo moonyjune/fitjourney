@@ -30,6 +30,7 @@ import { deletePersistedPhoto, persistPickedPhoto } from '../src/utils/photoStor
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import type { PhotoAdvice } from '../src/sync/cloudSync';
 import type { ExtraMealTime } from '../src/types';
+import { MAX_MEAL_PHOTOS } from '../src/utils/photoOrder';
 
 /** Non-negative number from a text field; empty or invalid input counts as 0. */
 function num(text: string): number {
@@ -127,8 +128,14 @@ export default function TextMealScreen() {
     setSaving(true);
     const clock = parseClock(timeText);
     let persisted: string | undefined;
+    const more: string[] = [];
     try {
       if (photoUri) persisted = await persistPickedPhoto(photoUri, `extra-${Date.now()}`);
+      // The other attached photos are kept with the meal too (up to MAX_MEAL_PHOTOS in all).
+      if (photoUri) {
+        const others = attachments.filter((u) => u !== photoUri).slice(0, MAX_MEAL_PHOTOS - 1);
+        for (const [i, uri] of others.entries()) more.push(await persistPickedPhoto(uri, `extra-${Date.now()}-${i + 1}`));
+      }
       for (const r of savable) if (!r.fromDb) recordEstimate(r.aiCalories, num(r.calories));
       const single = savable.length === 1 ? savable[0] : null;
       addExtra(input.dateKey, mealTitle, totals.calories, totals.proteinG, mealTime, {
@@ -139,11 +146,12 @@ export default function TextMealScreen() {
         fromFoodDb: !!single && single.fromDb && single.baseline === `${single.name}|${single.calories}` && mealTitle === single.name.trim(),
         clock,
         photoUri: persisted,
+        morePhotoUris: more,
         parts: savable.length >= 2 ? partsOf : undefined,
       });
       goBack();
     } catch {
-      if (persisted) deletePersistedPhoto(persisted).catch(() => {});
+      for (const uri of [persisted, ...more]) if (uri) deletePersistedPhoto(uri).catch(() => {});
       setSaving(false);
     }
   }

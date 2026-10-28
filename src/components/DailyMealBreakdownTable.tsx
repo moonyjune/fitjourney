@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from './Button';
 import { FoodThumb } from './quest/FoodPhoto';
+import { extraPhotoRefs } from '../utils/photoOrder';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
 import { quest, questFonts } from '../theme/quest';
@@ -11,7 +12,6 @@ import type { ExtraPatch } from '../store/useNutritionStore';
 import { replacePartPatch } from '../food/partScale';
 import { useGameText } from '../game/strings';
 import { useProofStore } from '../store/useProofStore';
-import { extraProofRef } from '../types';
 import { PartEditForm } from './quest/PartEditForm';
 import { QuestIcon } from './quest/QuestIcon';
 import { partsMatchTotals } from '../food/mealParts';
@@ -81,7 +81,7 @@ export function DailyMealBreakdownTable({
   const mutedColor = dark ? quest.textSecondary : colors.textMuted;
   const accentColor = dark ? quest.mana : colors.primary;
   const proofs = useProofStore((st) => st.photos);
-  const thumbOf = (item: ExtraFoodItem) => proofs.find((p) => p.taskRefId === extraProofRef(item.id))?.photoUri ?? item.photoUri;
+  const thumbsOf = (item: ExtraFoodItem) => extraPhotoRefs(proofs, item).map((p) => p.uri);
   const [draftMealsEaten, setDraftMealsEaten] = useState(mealsEaten);
   const [draftExtraItems, setDraftExtraItems] = useState(extraItems);
   const [draftRemovedSlots, setDraftRemovedSlots] = useState<MealSlot[]>(removedMealSlots ?? []);
@@ -208,7 +208,7 @@ export function DailyMealBreakdownTable({
           // then meal-time/kcal/protein/delete on the line below.
           <View key={item.id} style={styles.extraRowEditable}>
             <View style={styles.extraNameRow}>
-              <FoodThumb uri={thumbOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={40} />
+              <FoodThumb uris={thumbsOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={40} />
               <TextInput
                 placeholderTextColor={mutedColor}
                 style={[styles.nameInputFullWidth, styles.extraNameInput]}
@@ -263,7 +263,7 @@ export function DailyMealBreakdownTable({
           <View key={item.id}>
           <View style={styles.row}>
             <View style={[styles.nameCol, styles.extraNameRow]}>
-              <FoodThumb uri={thumbOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
+              <FoodThumb uris={thumbsOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
               <Text style={[styles.cell, styles.extraNameInput]}>
                 {item.name || t('mealLog.extraSectionLabel')} <Text style={styles.extraTime}>({formatTime(item.loggedAtISO)})</Text>
               </Text>

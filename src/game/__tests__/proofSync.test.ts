@@ -181,6 +181,24 @@ describe('restoring photos from the cloud', () => {
     expect(useNutritionStore.getState().logs['2026-10-23'].extraItems[0].photoUri).toBe('file:///docs/proofs/cloud-111.jpg');
   });
 
+  it('brings every photo of a meal that has several, and the food keeps its first one', async () => {
+    mockRows = [
+      { ...cloudRow('111-2', 'extra:55'), created_at: '2026-10-23T08:00:02Z' },
+      { ...cloudRow('111', 'extra:55'), created_at: '2026-10-23T08:00:00Z' },
+      { ...cloudRow('111-1', 'extra:55'), created_at: '2026-10-23T08:00:01Z' },
+    ];
+    useProofStore.setState({ photos: [] });
+    useNutritionStore.setState({
+      logs: { '2026-10-23': { dateISO: '2026-10-23', mealsEaten: {}, extraCalories: 100, extraProteinG: 1, waterMl: 0, extraItems: [{ id: '55', name: 'Phở', calories: 100, proteinG: 1, mealTime: null, loggedAtISO: '2026-10-23T07:00:00.000Z' }] } },
+    });
+    expect(await restoreProofPhotos()).toBe(3);
+    expect(useNutritionStore.getState().logs['2026-10-23'].extraItems[0].photoUri).toBe('file:///docs/proofs/cloud-111.jpg');
+    // A device that already has one of the three gets the other two.
+    useProofStore.setState({ photos: useProofStore.getState().photos.filter((p) => p.id === '111') });
+    mockDownload.mockClear();
+    expect(await restoreProofPhotos()).toBe(2);
+  });
+
   it('adds nothing when everything is already here, or when nobody is signed in', async () => {
     mockRows = [cloudRow('111', 'extra:55')];
     useProofStore.setState({ photos: [{ ...proof, id: '111' }] });

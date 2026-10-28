@@ -185,6 +185,13 @@ export default function AddFoodScreen() {
 
   const typed = aiFields.typed;
 
+  /** The extra photos of the meal, kept on the device like the first one (they are saved with it). */
+  async function persistMore(uris: string[]): Promise<string[]> {
+    const kept: string[] = [];
+    for (const [i, uri] of uris.entries()) kept.push(await persistPickedPhoto(uri, `extra-${Date.now()}-${i + 1}`));
+    return kept;
+  }
+
   // Reading the nutrition facts panel (OCR, not an estimate): the printed figures are scaled to what was eaten, here in code.
   const lab = useLabelReading();
   const [eatenMode, setEatenMode] = useState<'servings' | 'amount'>('servings');
@@ -292,9 +299,11 @@ export default function AddFoodScreen() {
     setSaving(true);
     setSaveFailed(false);
     let persisted: string | undefined;
+    let more: string[] = [];
     try {
       // The picker hands back a temporary file the OS may clear; keep our own copy with the item.
       if (photoUri) persisted = await persistPickedPhoto(photoUri, `extra-${Date.now()}`);
+      if (photoUri) more = await persistMore(morePhotos);
       if (aiCalories.current !== null) recordEstimate(aiCalories.current, draft.calories);
       addExtra(input.dateKey, draft.name, draft.calories, draft.proteinG, mealTime, {
         purineMg: draft.purineMg,
@@ -302,6 +311,7 @@ export default function AddFoodScreen() {
         sugarG: draft.sugarG,
         junk: draft.junk,
         photoUri: persisted,
+        morePhotoUris: more,
         fromFoodDb: fromDb.current?.name === draft.name && fromDb.current.calories === calories.trim(),
         clock,
         parts: partsMatchTotals({ calories: draft.calories, parts }) ? parts : undefined,
@@ -309,7 +319,7 @@ export default function AddFoodScreen() {
       goBack();
     } catch {
       // Nothing was added: the form stays exactly as typed so the user can retry, or drop the photo.
-      if (persisted) deletePersistedPhoto(persisted).catch(() => {});
+      for (const uri of [persisted, ...more]) if (uri) deletePersistedPhoto(uri).catch(() => {});
       setSaveFailed(true);
       setSaving(false);
     }
@@ -328,14 +338,17 @@ export default function AddFoodScreen() {
     setSaving(true);
     setSaveFailed(false);
     let persisted: string | undefined;
+    let more: string[] = [];
     try {
       if (photoUri) persisted = await persistPickedPhoto(photoUri, `extra-${Date.now()}`);
+      if (photoUri) more = await persistMore(morePhotos);
       addExtra(input.dateKey, item.name, item.calories, item.proteinG, mealTime, {
         purineMg: item.purineMg || undefined,
         saltG: item.saltG || undefined,
         sugarG: item.sugarG || undefined,
         junk: draft.junk,
         photoUri: persisted,
+        morePhotoUris: more,
         fromFoodDb: true,
         clock,
       });
@@ -355,7 +368,7 @@ export default function AddFoodScreen() {
       fromDb.current = null;
       setDbOutcome({ kind: 'added', name: item.name, food: baseName(item.food.name), kcal: item.calories });
     } catch {
-      if (persisted) deletePersistedPhoto(persisted).catch(() => {});
+      for (const uri of [persisted, ...more]) if (uri) deletePersistedPhoto(uri).catch(() => {});
       if (alive.current) setSaveFailed(true);
     } finally {
       if (alive.current) setSaving(false);

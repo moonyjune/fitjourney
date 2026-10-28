@@ -21,8 +21,13 @@ export const useProofStore = create<ProofState>()(
     (set, get) => ({
       photos: [],
       addProof: ({ taskType, taskRefId, photoUri, note, dateISO }) => {
+        // Several photos of one meal are added in the same millisecond: each still needs its own id (it names the file in the cloud).
+        const base = `${Date.now()}`;
+        const taken = new Set(get().photos.map((p) => p.id));
+        let id = base;
+        for (let n = 1; taken.has(id); n += 1) id = `${base}-${n}`;
         const proof: ProofPhoto = {
-          id: `${Date.now()}`,
+          id,
           dateISO: dateISO ?? new Date().toISOString(),
           taskType,
           taskRefId,

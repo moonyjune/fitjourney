@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.15 | no | — |
 | 0.14 | no | analyze-proof-photo, parse-meal-text |
 | 0.13 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
 | 0.12 | no | — |
@@ -26,6 +27,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.15
+- A meal keeps all its photos (up to 3), not just the first: the extra photos chosen in "Món ngoài kế hoạch", "Nhập bằng chữ" or a meal's photo box are saved and synced with it, and come back on another device.
+- Battle log (Nhật ký) and History show one thumbnail per meal with a badge giving the number of photos; tapping it shows the photos side by side, with ‹ › and "2/3".
+- The meal detail shows its photos in the same row: add another one (up to 3) or remove the one in view.
 
 ## 0.14
 - One meal can be analysed from several photos: with a photo chosen in "Món ngoài kế hoạch" or in a meal's photo box, "Thêm ảnh cho AI" adds up to 2 more photos of the same meal (another angle, another dish, the receipt or label). The AI reads them all together as one meal and counts a dish seen twice only once. Only the first photo is kept with the food.

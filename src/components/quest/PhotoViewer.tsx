@@ -3,6 +3,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-nat
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
+import { PhotoStrip } from './PhotoStrip';
 import { QuestButton } from './QuestButton';
 
 export interface ViewerPhoto {
@@ -10,8 +11,9 @@ export interface ViewerPhoto {
   label?: string;
 }
 
-/** Photos at a readable size, one under the other. A photo that cannot be loaded (e.g. its file is on another device) says so instead of staying blank. */
-export function PhotoViewer({ photos, title, onClose }: { photos: ViewerPhoto[] | null; title?: string; onClose: () => void }) {
+/** Photos at a readable size, one under the other (or, with `strip`, the photos of one meal side by side with ‹ ›). A photo that cannot be
+ *  loaded (e.g. its file is on another device) says so instead of staying blank. */
+export function PhotoViewer({ photos, title, strip, onClose }: { photos: ViewerPhoto[] | null; title?: string; strip?: boolean; onClose: () => void }) {
   const g = useGameText();
   const [broken, setBroken] = useState<Record<string, boolean>>({});
   if (!photos) return null;
@@ -31,7 +33,8 @@ export function PhotoViewer({ photos, title, onClose }: { photos: ViewerPhoto[] 
                 {g('photo.none')}
               </HudText>
             )}
-            {photos.map((p, i) => (
+            {strip && photos.length > 0 && <PhotoStrip photos={photos} height={420} />}
+            {!strip && photos.map((p, i) => (
               <View key={`${p.uri.slice(-40)}-${i}`} style={styles.item}>
                 {p.label ? (
                   <HudText size={12} weight="medium" color={quest.textSecondary}>

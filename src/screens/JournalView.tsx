@@ -20,7 +20,7 @@ import { useTranslation } from '../i18n/useTranslation';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { usePlanStore } from '../store/usePlanStore';
-import { extraProofRef, type MealPart } from '../types';
+import type { MealPart } from '../types';
 import { useProofStore } from '../store/useProofStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
@@ -30,7 +30,8 @@ import { useLightStatusBar } from '../theme/useLightStatusBar';
 import { toDateKey } from '../utils/date';
 import { isoWeekNumber } from '../utils/isoWeek';
 import { addDays } from '../utils/milestones';
-import { setExtraPhoto, setSlotPhoto } from '../utils/mealPhotos';
+import { addExtraPhoto, addSlotPhoto, removeExtraPhoto } from '../utils/mealPhotos';
+import { extraPhotoRefs, slotPhotoRefs, type MealPhotoRef } from '../utils/photoOrder';
 import { weekShiftFor } from '../utils/swipe';
 import { weekStartKey } from '../utils/weekKey';
 
@@ -104,10 +105,11 @@ interface RowProps {
   isToday: boolean;
   onOpen: (item: TimelineItem) => void;
   /** Small photo of the logged meal, when it has one on this device. */
-  thumbUri?: string;
+  /** The meal's photos, first one first (shown as one thumbnail with a "several photos" badge). */
+  thumbs: string[];
 }
 
-function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen, thumbUri }: RowProps) {
+function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen, thumbs }: RowProps) {
   let body: React.ReactNode = null;
   let label = '';
   let onPress: (() => void) | undefined;
@@ -143,7 +145,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
           <HudText size={14} style={styles.flex}>
             {item.label}
           </HudText>
-          {thumbUri ? <FoodThumb uri={thumbUri} name={item.label} size={36} /> : item.hasPhoto && <Chip tone="muted" label={g('journal.photo')} />}
+          {thumbs.length > 0 ? <FoodThumb uris={thumbs} name={item.label} size={36} /> : item.hasPhoto && <Chip tone="muted" label={g('journal.photo')} />}
           <Chip tone={item.eaten ? 'ok' : 'muted'} label={g(status)} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
@@ -167,7 +169,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
             {name}
           </HudText>
           {item.junk && <Chip tone="gold" label={g('journal.junk')} />}
-          <FoodThumb uri={thumbUri ?? item.photoUri} name={name} size={36} />
+          <FoodThumb uris={thumbs} name={name} size={36} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {item.kcal} kcal · {Math.round(item.proteinG)} g
@@ -338,13 +340,14 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
   // The open meal is looked up again on every render, so an edit (an amount, the photo) shows in the dialog at once.
   const [openId, setOpenId] = useState<string | null>(null);
   const updateExtra = useNutritionStore((s) => s.updateExtra);
+  const removeProof = useProofStore((s) => s.removeProof);
   const openItem = openId ? timeline.find((i) => i.id === openId) : undefined;
   const dayPhotos = useMemo(() => photos.filter((p) => p.taskType === 'meal' && toDateKey(new Date(p.dateISO)) === selectedKey), [photos, selectedKey]);
   const rawExtraId = (item: { id: string }) => item.id.replace(/^extra-/, '');
-  function photoOf(item: TimelineItem): string | undefined {
-    if (item.kind === 'meal') return dayPhotos.find((p) => p.taskRefId === item.slot)?.photoUri;
-    if (item.kind === 'extra') return photos.find((p) => p.taskRefId === extraProofRef(rawExtraId(item)))?.photoUri ?? item.photoUri;
-    return undefined;
+  function photosOf(item: TimelineItem): MealPhotoRef[] {
+    if (item.kind === 'meal') return slotPhotoRefs(dayPhotos, selectedKey, item.slot);
+    if (item.kind === 'extra') return extraPhotoRefs(photos, { id: rawExtraId(item), photoUri: item.photoUri });
+    return [];
   }
   function openDetail(item: TimelineItem) {
     if (item.kind === 'extra' || item.kind === 'meal') setOpenId(item.id);
@@ -360,10 +363,10 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
       sugarG: openItem.sugarG,
       saltG: openItem.saltG,
       parts: openItem.parts,
-      photoUri: photoOf(openItem) ?? null,
+      photos: photosOf(openItem),
     };
   } else if (openItem?.kind === 'meal') {
-    detail = { title: openItem.label, time: clock(openItem.minutes), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photoUri: photoOf(openItem) ?? null };
+    detail = { title: openItem.label, time: clock(openItem.minutes), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photos: photosOf(openItem) };
   }
   function editPart(index: number, part: MealPart) {
     if (client || openItem?.kind !== 'extra') return;
@@ -372,10 +375,19 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
     const patch = stored ? replacePartPatch(stored, index, part) : null;
     if (patch) updateExtra(selectedKey, id, patch);
   }
-  async function changePhoto(uri: string | null): Promise<boolean> {
+  async function addPhoto(uri: string): Promise<boolean> {
     if (client || !openItem) return false;
-    if (openItem.kind === 'extra') return setExtraPhoto(selectedKey, rawExtraId(openItem), uri);
-    if (openItem.kind === 'meal') return setSlotPhoto(selectedKey, openItem.slot, uri);
+    if (openItem.kind === 'extra') return addExtraPhoto(selectedKey, rawExtraId(openItem), uri);
+    if (openItem.kind === 'meal') return addSlotPhoto(selectedKey, openItem.slot, uri);
+    return false;
+  }
+  async function removePhoto(photo: MealPhotoRef): Promise<boolean> {
+    if (client || !openItem) return false;
+    if (openItem.kind === 'extra') return removeExtraPhoto(selectedKey, rawExtraId(openItem), photo);
+    if (openItem.kind === 'meal' && photo.proofId) {
+      removeProof(photo.proofId);
+      return true;
+    }
     return false;
   }
 
@@ -511,7 +523,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
 
         <View style={styles.timeline}>
           {timeline.map((item) => (
-            <TimelineRow key={item.id} item={item} g={g} t={t} proteinTargetG={proteinTargetG} workoutXpFor={workoutXpFor} isToday={isToday && !client} onOpen={openDetail} thumbUri={photoOf(item)} />
+            <TimelineRow key={item.id} item={item} g={g} t={t} proteinTargetG={proteinTargetG} workoutXpFor={workoutXpFor} isToday={isToday && !client} onOpen={openDetail} thumbs={photosOf(item).map((p) => p.uri)} />
           ))}
         </View>
 
@@ -519,7 +531,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
           {g('journal.waterNote')}
         </HudText>
       </ScrollView>
-      <MealDetailDialog detail={detail} onClose={() => setOpenId(null)} canEditParts={!client} onEditPart={editPart} onPhoto={client ? undefined : changePhoto} />
+      <MealDetailDialog detail={detail} onClose={() => setOpenId(null)} canEditParts={!client} onEditPart={editPart} onAddPhoto={client ? undefined : addPhoto} onRemovePhoto={client ? undefined : removePhoto} />
     </View>
   );
 }

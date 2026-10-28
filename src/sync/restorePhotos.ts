@@ -5,6 +5,7 @@ import type { ProofPhoto, ProofTaskType } from '../types';
 import { downloadPhoto } from '../utils/photoStorage';
 import { extraProofRef } from '../types';
 import { currentUserId } from './cloudSync';
+import { sortedPhotos } from '../utils/photoOrder';
 
 /** Photos brought back per run: the newest first; the rest follow on the next start. */
 const MAX_PER_RUN = 30;
@@ -34,10 +35,16 @@ export async function restoreProofPhotos(): Promise<number> {
     if (error) throw error;
     const have = useProofStore.getState().photos.filter((p) => !isDead(p));
     const haveIds = new Set(have.map((p) => p.id));
-    const haveFor = new Set(have.map((p) => `${p.taskType}|${p.taskRefId}|${p.dateISO.slice(0, 10)}`));
+    // A meal can have several photos: one is missing here only while the device has fewer photos of it than the cloud.
+    const count = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+    const haveFor = new Map<string, number>();
+    for (const p of have) count(haveFor, `${p.taskType}|${p.taskRefId}|${p.dateISO.slice(0, 10)}`);
+    const cloudFor = new Map<string, number>();
+    for (const r of (data ?? []) as Row[]) count(cloudFor, `${r.task_type}|${r.task_ref_id}|${r.entry_date}`);
     const missing = ((data ?? []) as Row[]).filter((r) => {
       const id = idOfPath(r.photo_path);
-      return id && !haveIds.has(id) && !haveFor.has(`${r.task_type}|${r.task_ref_id}|${r.entry_date}`);
+      const key = `${r.task_type}|${r.task_ref_id}|${r.entry_date}`;
+      return id && !haveIds.has(id) && (haveFor.get(key) ?? 0) < (cloudFor.get(key) ?? 0);
     });
     const added: ProofPhoto[] = [];
     for (const row of missing.slice(0, MAX_PER_RUN)) {
@@ -69,7 +76,9 @@ export async function restoreProofPhotos(): Promise<number> {
       return { photos: [...kept, ...added.filter((p) => !known.has(p.id))] };
     });
     // A food logged on another device points at that device's file; show the photo that is here.
-    const byRef = new Map(added.map((p) => [p.taskRefId, p.photoUri]));
+    // A meal can have several photos: its own photo is the first one added.
+    const byRef = new Map<string, string>();
+    for (const p of sortedPhotos(added)) if (!byRef.has(p.taskRefId)) byRef.set(p.taskRefId, p.photoUri);
     useNutritionStore.setState((s) => {
       let changed = false;
       const logs = { ...s.logs };

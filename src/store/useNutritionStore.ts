@@ -11,6 +11,7 @@ import { useProofStore } from './useProofStore';
 import { deletePersistedPhoto } from '../utils/photoStorage';
 import { isInlinePhoto } from '../utils/inlinePhoto';
 import { extraProofRef } from '../types';
+import { sortedPhotos } from '../utils/photoOrder';
 import { withCountersAfterEdit, withIntakeCounters } from '../utils/dayIntake';
 import { healLog, newExtraId } from '../utils/extraIds';
 import { setDayReader } from '../sync/syncQueue';
@@ -37,6 +38,8 @@ interface NutritionState {
     mealTime: ExtraMealTime | null,
     /** Optional FitQuest fields; omitted ones are simply not stored on the item. */
     extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri'> & {
+      /** More photos of the same meal (after `photoUri`, which is the one shown first); kept as its proof photos. */
+      morePhotoUris?: string[];
       /** The figures came straight from a food in the database, so there is nothing new to remember. */
       fromFoodDb?: boolean;
       /** The time of day the user said they ate it; without it the meal's usual time (or now) is used. */
@@ -80,7 +83,16 @@ function emptyLog(dateKey: string): DailyNutritionLog {
   return log;
 }
 
-/** Removes the photo attached to an off-plan food item: the proof entry and the persisted file. */
+/** Removes the item's first photo only (the one `photoUri` points at), keeping any further photos of the meal. */
+function discardMainPhoto(item: Pick<ExtraFoodItem, 'id' | 'photoUri'>): void {
+  const proofs = useProofStore.getState();
+  const linked = sortedPhotos(proofs.photos.filter((x) => x.taskType === 'meal' && x.taskRefId === extraProofRef(item.id)));
+  const main = linked.find((p) => p.photoUri === item.photoUri) ?? (item.photoUri ? undefined : linked[0]);
+  if (main) proofs.removeProof(main.id);
+  else if (item.photoUri) deletePersistedPhoto(item.photoUri).catch(() => {});
+}
+
+/** Removes every photo attached to an off-plan food item: the proof entries and the persisted files. */
 function discardExtraPhoto(item: Pick<ExtraFoodItem, 'id' | 'photoUri'>): void {
   const proofs = useProofStore.getState();
   const ref = extraProofRef(item.id);
@@ -156,13 +168,9 @@ export const useNutritionStore = create<NutritionState>()(
         }
         // The photo also goes through the proof pipeline so it syncs and the coach sees it next to the plan meals.
         if (extras?.photoUri) {
-          useProofStore.getState().addProof({
-            taskType: 'meal',
-            taskRefId: extraProofRef(item.id),
-            photoUri: extras.photoUri,
-            note: name,
-            dateISO: item.loggedAtISO,
-          });
+          for (const photoUri of [extras.photoUri, ...(extras.morePhotoUris ?? [])]) {
+            useProofStore.getState().addProof({ taskType: 'meal', taskRefId: extraProofRef(item.id), photoUri, note: name, dateISO: item.loggedAtISO });
+          }
         }
       },
       updateExtra: (dateKey, itemId, patch) => {
@@ -185,7 +193,7 @@ export const useNutritionStore = create<NutritionState>()(
           return { logs: { ...state.logs, [dateKey]: updated } };
         });
         if (photoUri !== undefined && (photoUri !== old.photoUri || isInlinePhoto(photoUri))) {
-          discardExtraPhoto(old);
+          discardMainPhoto(old);
           if (photoUri) {
             useProofStore.getState().addProof({ taskType: 'meal', taskRefId: extraProofRef(itemId), photoUri, note: next.name, dateISO: next.loggedAtISO });
           }

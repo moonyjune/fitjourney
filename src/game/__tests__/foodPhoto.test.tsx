@@ -368,4 +368,87 @@ describe('Photo on an off-plan food', () => {
       expect(allText(r)).toContain('Bánh bao');
     });
   });
+
+  describe('several photos of one meal', () => {
+    const P1 = 'file:///docs/proofs/a.jpg';
+    const P2 = 'file:///docs/proofs/b.jpg';
+    const P3 = 'file:///docs/proofs/c.jpg';
+    const item: ExtraFoodItem = { id: '201', name: 'Bún chả', calories: 550, proteinG: 25, mealTime: 'lunch', loggedAtISO: `${DATE}T12:30:00`, photoUri: P1 };
+    const withThree = () => {
+      useNutritionStore.setState({
+        logs: { [DATE]: { dateISO: DATE, mealsEaten: {}, extraCalories: 550, extraProteinG: 25, extraItems: [item], waterMl: 0 } },
+      });
+      const at = `${DATE}T12:31:00.000Z`;
+      useProofStore.setState({
+        photos: [
+          { id: '9-2', dateISO: item.loggedAtISO, taskType: 'meal', taskRefId: extraProofRef(item.id), photoUri: P3, note: '', createdAtISO: at },
+          { id: '9', dateISO: item.loggedAtISO, taskType: 'meal', taskRefId: extraProofRef(item.id), photoUri: P1, note: '', createdAtISO: at },
+          { id: '9-1', dateISO: item.loggedAtISO, taskType: 'meal', taskRefId: extraProofRef(item.id), photoUri: P2, note: '', createdAtISO: at },
+        ],
+      });
+    };
+    const proofsOf = (id: string) => useProofStore.getState().photos.filter((p) => p.taskRefId === extraProofRef(id));
+
+    it('saves every photo of the meal (each with its own id), the first one as the food\'s own photo', async () => {
+      const r = await mount(<AddFoodScreen />);
+      await press(r, 'Chọn từ thư viện');
+      mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///tmp/b.jpg' }, { uri: 'file:///tmp/c.jpg' }] });
+      await press(r, 'Chọn ảnh');
+      await act(async () => textInput(r, 'Tên món').props.onChangeText('Bún chả'));
+      await act(async () => textInput(r, 'Calo (kcal)').props.onChangeText('550'));
+      await press(r, 'Thêm vào hôm nay');
+
+      const saved = useNutritionStore.getState().logs[DATE].extraItems[0];
+      const proofs = proofsOf(saved.id);
+      expect(proofs).toHaveLength(3);
+      expect(new Set(proofs.map((p) => p.id)).size).toBe(3);
+      expect(proofs[0].photoUri).toBe(saved.photoUri);
+      expect(mockPushProof).toHaveBeenCalledTimes(3);
+    });
+
+    it('the journal shows one thumbnail with a "3 photos" badge; tapping it shows them in a row with ‹ ›', async () => {
+      withThree();
+      const r = await mount(<JournalScreen />);
+      expect(images(r, 'Ảnh Bún chả').map(sourceUri)).toEqual([P1]);
+      await press(r, 'Xem 3 ảnh của bữa');
+      expect(allText(r)).toContain('1/3');
+      expect(images(r, 'Ảnh 1/3 Bún chả').map(sourceUri)).toEqual([P1]);
+      expect(images(r, 'Ảnh 3/3 Bún chả').map(sourceUri)).toEqual([P3]);
+      expect(pressable(r, 'Ảnh trước').props.disabled).toBe(true);
+      await press(r, 'Ảnh sau');
+      expect(allText(r)).toContain('2/3');
+      await press(r, 'Ảnh sau');
+      expect(allText(r)).toContain('3/3');
+      expect(pressable(r, 'Ảnh sau').props.disabled).toBe(true);
+    });
+
+    it('the diary table shows the same badge', async () => {
+      withThree();
+      const r = await mount(<DailyMealBreakdownTable dark meals={DEFAULT_PLAN.mealTemplates.training} mealsEaten={{}} extraItems={[item]} editable={false} />);
+      expect(images(r, 'Ảnh Bún chả')).toHaveLength(1);
+      expect(pressable(r, 'Xem 3 ảnh của bữa')).toBeDefined();
+    });
+
+    it('in the meal detail, removes only the photo in view, then offers to add one again', async () => {
+      withThree();
+      const r = await mount(<JournalScreen />);
+      await press(r, '12:30 Bún chả. 550 kcal');
+      expect(allText(r)).toContain('1/3');
+      expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Thêm ảnh (3/3)')).toHaveLength(0); // already 3
+      await press(r, 'Ảnh sau');
+      await press(r, 'Xóa ảnh này');
+      expect(proofsOf(item.id).map((p) => p.photoUri).sort()).toEqual([P1, P3]);
+      expect(useNutritionStore.getState().logs[DATE].extraItems[0].photoUri).toBe(P1);
+      expect(allText(r)).toContain('1/2');
+
+      // The first photo goes too: the food loses its own photo, the other one stays.
+      await press(r, 'Xóa ảnh này');
+      expect(proofsOf(item.id).map((p) => p.photoUri)).toEqual([P3]);
+      expect(useNutritionStore.getState().logs[DATE].extraItems[0].photoUri).toBeUndefined();
+
+      mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: GAL }] });
+      await press(r, 'Thêm ảnh (1/3)');
+      expect(proofsOf(item.id)).toHaveLength(2);
+    });
+  });
 });

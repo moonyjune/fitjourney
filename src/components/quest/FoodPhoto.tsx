@@ -117,33 +117,53 @@ export function FoodPhotoPicker({ uri, onChange, disabled, labels }: FoodPhotoPi
 
 interface FoodThumbProps {
   uri?: string;
+  /** Every photo of the meal, in order (the first is the one shown); more than one adds a badge. */
+  uris?: string[];
   name: string;
   size?: number;
 }
 
 /** Small photo of a logged food, for lists; tapping it shows the photo larger. Renders nothing without a photo, or if the file can't be loaded
- *  (e.g. an item synced from another device whose local file isn't here). */
-export function FoodThumb({ uri, name, size = 40 }: FoodThumbProps) {
+ *  (e.g. an item synced from another device whose local file isn't here). With `uris` (every photo of the meal, first one shown) a badge
+ *  says there are several, and the larger view shows them in a row with ‹ ›. */
+export function FoodThumb({ uri, uris, name, size = 40 }: FoodThumbProps) {
   const g = useGameText();
   const [broken, setBroken] = useState(false);
   const [open, setOpen] = useState(false);
-  if (!uri || broken) return null;
+  const all = uris && uris.length > 0 ? uris : uri ? [uri] : [];
+  const first = all[0];
+  if (!first || broken) return null;
+  const many = all.length > 1;
   return (
     <>
-      <Pressable accessibilityRole="imagebutton" accessibilityLabel={g('photo.zoom')} hitSlop={6} onPress={() => setOpen(true)}>
+      <Pressable
+        accessibilityRole="imagebutton"
+        accessibilityLabel={many ? g('photo.zoomMany', { n: all.length }) : g('photo.zoom')}
+        hitSlop={6}
+        onPress={() => setOpen(true)}
+      >
         <Image
-          source={{ uri }}
+          source={{ uri: first }}
           onError={() => setBroken(true)}
           accessibilityLabel={g('food.photo.alt', { name })}
           style={{ width: size, height: size, borderRadius: 8, backgroundColor: quest.raised }}
         />
+        {many && (
+          <View style={styles.badge} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <QuestIcon name="photos" size={10} color={quest.text} strokeWidth={2.4} />
+            <HudText size={9} color={quest.text}>
+              {all.length}
+            </HudText>
+          </View>
+        )}
       </Pressable>
-      <PhotoViewer photos={open ? [{ uri, label: name }] : null} onClose={() => setOpen(false)} />
+      <PhotoViewer photos={open ? all.map((u) => ({ uri: u, label: name })) : null} title={many ? name : undefined} strip={many} onClose={() => setOpen(false)} />
     </>
   );
 }
 
 const styles = StyleSheet.create({
+  badge: { position: 'absolute', right: -4, bottom: -4, flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.75)', borderWidth: 1, borderColor: quest.border },
   wrap: { gap: 8 },
   eyebrow: { letterSpacing: 1.6 },
   previewRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
