@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cleanAdvice } from '../src/ai/adviceText';
 import { MEAL_TIMES, resolveFromDb, rowsFromResult, validMealTime, type TextMealRow } from '../src/ai/textMeal';
@@ -58,7 +58,9 @@ export default function TextMealScreen() {
   const calibrationText = useCalibrationText();
   const recordEstimate = useAiCalibrationStore((s) => s.record);
 
-  const [text, setText] = useState('');
+  // Optional `text` param: a description handed over from Add food (a name the food database did not know) to start from.
+  const { text: textParam } = useLocalSearchParams<{ text?: string }>();
+  const [text, setText] = useState(typeof textParam === 'string' ? textParam : '');
   const [rows, setRows] = useState<TextMealRow[]>([]);
   const [mealTime, setMealTime] = useState<ExtraMealTime | null>(null);
   const [timeText, setTimeText] = useState('');

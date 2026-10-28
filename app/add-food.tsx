@@ -11,8 +11,10 @@ import { useAccuracyText, useAiErrorText, useCalibrationText, usePhotoAnalysis }
 import { FoodPhotoPicker } from '../src/components/quest/FoodPhoto';
 import { DraftFeedback } from '../src/feedback/components/DraftFeedback';
 import { FoodLookup, type LookupResult } from '../src/food/components/FoodLookup';
+import { lookupDescribedFood } from '../src/food/describeLookup';
 import { parsePrefill } from '../src/food/prefill';
 import { findRememberedFood, portionOf } from '../src/food/remember';
+import { baseName } from '../src/food/calc';
 import { useFoodText } from '../src/food/strings';
 import type { FoodEntry } from '../src/food/types';
 import { HudText } from '../src/components/quest/HudText';
@@ -97,6 +99,10 @@ export default function AddFoodScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  /** The outcome of looking a name-only entry up in the food database: what was added from it, or why nothing was. */
+  const [dbOutcome, setDbOutcome] = useState<
+    { kind: 'added'; name: string; food: string; kcal: number } | { kind: 'none' | 'multiple'; text: string } | null
+  >(null);
 
   // AI suggestions fill the inputs but never replace what the user typed: `aiFilled` remembers which fields still hold
   // an AI value (typing in a field forgets it), and only those, or empty ones, are overwritten by a later analysis.
@@ -269,7 +275,13 @@ export default function AddFoodScreen() {
 
   async function save() {
     if (saving) return;
+    setDbOutcome(null);
     if (!hasValue) {
+      // Only a name typed (no calories, no protein): the food database may know it.
+      if (draft.name && !calories.trim() && !protein.trim()) {
+        if (!timeInvalid) await saveFromDb();
+        return;
+      }
       setError(true);
       return;
     }
@@ -297,6 +309,52 @@ export default function AddFoodScreen() {
       if (persisted) deletePersistedPhoto(persisted).catch(() => {});
       setSaveFailed(true);
       setSaving(false);
+    }
+  }
+
+  /** Adds a name-only entry with the food database's figures when the name is ONE food it knows (an amount typed with it is
+   *  scaled), and stays on the form to show where the figures came from. Several foods or an unknown name are never guessed. */
+  async function saveFromDb() {
+    const text = draft.name;
+    const found = lookupDescribedFood(text, foods);
+    if (found.kind !== 'match') {
+      setDbOutcome({ kind: found.kind, text });
+      return;
+    }
+    const item = found.item;
+    setSaving(true);
+    setSaveFailed(false);
+    let persisted: string | undefined;
+    try {
+      if (photoUri) persisted = await persistPickedPhoto(photoUri, `extra-${Date.now()}`);
+      addExtra(input.dateKey, item.name, item.calories, item.proteinG, mealTime, {
+        purineMg: item.purineMg || undefined,
+        saltG: item.saltG || undefined,
+        sugarG: item.sugarG || undefined,
+        junk: draft.junk,
+        photoUri: persisted,
+        fromFoodDb: true,
+        clock,
+      });
+      if (!alive.current) return;
+      // Saved: the form is cleared so a second tap cannot add it twice; the note says what was added and from where.
+      setName('');
+      setPurine('');
+      setSalt('');
+      setSugar('');
+      setPhotoUri(null);
+      setParts([]);
+      ai.reset();
+      lab.reset();
+      setAiNote(null);
+      aiCalories.current = null;
+      fromDb.current = null;
+      setDbOutcome({ kind: 'added', name: item.name, food: baseName(item.food.name), kcal: item.calories });
+    } catch {
+      if (persisted) deletePersistedPhoto(persisted).catch(() => {});
+      if (alive.current) setSaveFailed(true);
+    } finally {
+      if (alive.current) setSaving(false);
     }
   }
 
@@ -349,7 +407,7 @@ export default function AddFoodScreen() {
         <View style={styles.form}>
           <QuestButton variant="ghost" icon="chart" title={g('text.link')} onPress={() => router.push('/text-meal')} />
           <FoodLookup onApply={applyLookup} onOpenDb={() => router.push('/food-db')} />
-          <QuestField label={g('food.name')} value={name} onChangeText={typed('name', setName)} placeholder={g('food.namePlaceholder')} />
+          <QuestField label={g('food.name')} value={name} onChangeText={(v) => { typed('name', setName)(v); setDbOutcome(null); }} placeholder={g('food.namePlaceholder')} />
           {saved && String(portionOf(saved).calories) !== calories.trim() && (
             <View style={styles.aiNote} accessibilityLiveRegion="polite">
               <HudText size={12} color={quest.manaText}>
@@ -411,6 +469,34 @@ export default function AddFoodScreen() {
             <HudText size={12} weight="medium" color={quest.goldLight} accessibilityLiveRegion="polite">
               {g('food.errorValue')}
             </HudText>
+          )}
+          {!calories.trim() && !protein.trim() && !dbOutcome && (
+            <HudText size={11} weight="medium" color={quest.textSecondary}>
+              {g('food.db.hint')}
+            </HudText>
+          )}
+          {dbOutcome?.kind === 'added' && (
+            <View style={styles.aiNote} accessibilityLiveRegion="polite">
+              <HudText size={12} color={quest.manaText}>
+                {g('food.db.added', { name: dbOutcome.name })}
+              </HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {g('food.db.source', { food: dbOutcome.food, kcal: dbOutcome.kcal })}
+              </HudText>
+            </View>
+          )}
+          {(dbOutcome?.kind === 'none' || dbOutcome?.kind === 'multiple') && (
+            <View style={styles.group} accessibilityLiveRegion="polite">
+              <HudText size={12} weight="medium" color={quest.goldLight} accessibilityRole="alert">
+                {g(dbOutcome.kind === 'none' ? 'food.db.notFound' : 'food.db.multiple', { text: dbOutcome.text })}
+              </HudText>
+              <QuestButton
+                variant="ghost"
+                icon="chart"
+                title={g('food.db.toText')}
+                onPress={() => router.push({ pathname: '/text-meal', params: { text: dbOutcome.text } })}
+              />
+            </View>
           )}
 
           <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
