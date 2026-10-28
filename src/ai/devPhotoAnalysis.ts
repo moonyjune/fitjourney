@@ -94,13 +94,15 @@ export function fakePhotoAnalysis(taskType: 'meal' | 'workout', profile?: BodyPr
 const MAX_FAKE_ITEMS = 5;
 
 /** Offline stand-in for the text parser: one line per comma/"và"/"+"-separated part, with figures derived only from the
- *  text, so the same sentence always gives the same answer. Always labelled as simulated. */
-export function fakeMealText(text: string, coach?: CoachContext): MealTextResult {
-  const parts = text
+ *  text, so the same sentence always gives the same answer; photos without any text give one line per photo. Always labelled
+ *  as simulated. */
+export function fakeMealText(text: string, coach?: CoachContext, imageCount = 0): MealTextResult {
+  const typed = text
     .split(/,|;|\+|\s+và\s+/i)
     .map((p) => p.trim())
     .filter(Boolean)
     .slice(0, MAX_FAKE_ITEMS);
+  const parts = typed.length > 0 ? typed : Array.from({ length: Math.min(imageCount, MAX_FAKE_ITEMS) }, (_, i) => `Món trong ảnh ${i + 1}`);
   const items = parts.map((name) => {
     const caloriesKcal = 150 + ((name.length * 37) % 350);
     return { name, caloriesKcal, proteinG: Math.round(caloriesKcal / 12), purineMg: 60, sugarG: 3, saltG: 1, accuracyPercent: 55 };

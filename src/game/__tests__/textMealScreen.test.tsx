@@ -18,7 +18,15 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 const mockPersist = jest.fn<(...a: unknown[]) => Promise<string | undefined>>();
-jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: (...a: unknown[]) => mockPersist(...a), deletePersistedPhoto: jest.fn(async () => undefined) }));
+const mockToBase64 = jest.fn(async (uri: string) => ({ base64: `B64:${uri}`, mediaType: 'image/jpeg' }));
+jest.mock('../../utils/photoStorage', () => ({
+  persistPickedPhoto: (...a: unknown[]) => mockPersist(...a),
+  deletePersistedPhoto: jest.fn(async () => undefined),
+  imageUriToBase64: (uri: string) => mockToBase64(uri),
+}));
+const mockPickOne = jest.fn<(...a: unknown[]) => Promise<unknown>>();
+const mockPickMany = jest.fn<(...a: unknown[]) => Promise<unknown>>();
+jest.mock('../../utils/pickPhoto', () => ({ pickPhoto: (...a: unknown[]) => mockPickOne(...a), pickPhotos: (...a: unknown[]) => mockPickMany(...a) }));
 
 type Outcome = { ok: true; result: Record<string, unknown> } | { ok: false; message: string; kind: 'notConfigured' | 'offline' | 'unreachable' | 'auth' | 'generic' };
 const mockText = jest.fn<(...a: unknown[]) => Promise<Outcome>>();
@@ -124,6 +132,68 @@ describe('Log food by text', () => {
     expect(sentence).toBe('2 tô mì quảng, 1 ly trà đá ít đường');
     expect(profile).toMatchObject({ weightKg: 106.2, heightCm: 172 });
     expect(coach.now).toMatchObject({ date: DATE, time: '16:10' });
+    expect(mockText.mock.calls[0]).toHaveLength(4);
+    expect(mockText.mock.calls[0][3]).toBeUndefined(); // text only: no photos, so the request is exactly as before
+    expect(mockToBase64).not.toHaveBeenCalled();
+  });
+
+  it('attaches up to 3 photos (library and camera), lets one be removed, and sends the rest with the text', async () => {
+    mockPickMany.mockResolvedValueOnce({ uris: ['file:///a.jpg', 'file:///b.jpg'] });
+    mockPickOne.mockResolvedValueOnce({ uri: 'file:///c.jpg' });
+    const r = await mount();
+    expect(allText(r)).toContain('ĐÍNH KÈM ẢNH');
+    await press(r, 'Chọn ảnh');
+    expect(mockPickMany).toHaveBeenCalledWith(3);
+    await press(r, 'Chụp ảnh');
+    expect(mockPickOne).toHaveBeenCalledWith('camera');
+    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh đính kèm 3' && n.props.source).length).toBeGreaterThan(0);
+    expect(allText(r)).toContain('Đã đủ 3 ảnh.');
+    expect(pressable(r, 'Chọn ảnh').props.disabled).toBe(true);
+    await press(r, 'Xóa ảnh đính kèm 2');
+    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh đính kèm 3' && n.props.source)).toHaveLength(0);
+    expect(allText(r)).toContain('2/3 ảnh');
+    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await press(r, ANALYZE);
+    expect(mockToBase64.mock.calls.map((c) => c[0])).toEqual(['file:///a.jpg', 'file:///c.jpg']);
+    const [sentence, , , images] = mockText.mock.calls[0] as [string, unknown, unknown, unknown];
+    expect(sentence).toBe('phở và trà');
+    expect(images).toEqual([
+      { base64: 'B64:file:///a.jpg', mediaType: 'image/jpeg' },
+      { base64: 'B64:file:///c.jpg', mediaType: 'image/jpeg' },
+    ]);
+    // The first attached photo becomes the meal's photo (still changeable before saving).
+    await press(r, 'Thêm bữa ăn vào hôm nay');
+    expect(mockPersist).toHaveBeenCalledWith('file:///a.jpg', expect.stringContaining('extra-'));
+  });
+
+  it('photos alone (no text) are enough, and with photos the database shortcut is skipped', async () => {
+    useFoodDbStore.setState({
+      custom: [{ id: 'c1', name: 'Bún riêu nhà nấu', group: 'soup', unit: 'phần', unitG: 100, kcal: 450, proteinG: 25, purineMg: 90, sugarG: 2, sodiumMg: 800, note: '', confidence: 'low', auto: true }],
+    });
+    mockPickMany.mockResolvedValueOnce({ uris: ['file:///a.jpg'] });
+    const r = await mount();
+    await press(r, 'Chọn ảnh');
+    await press(r, ANALYZE);
+    expect(mockText).toHaveBeenCalledTimes(1);
+    expect(mockText.mock.calls[0][0]).toBe('');
+    expect(mockText.mock.calls[0][3]).toEqual([{ base64: 'B64:file:///a.jpg', mediaType: 'image/jpeg' }]);
+    mockText.mockClear();
+    await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
+    await press(r, ANALYZE);
+    expect(mockText).toHaveBeenCalledTimes(1); // a known food still goes to the AI when photos are attached
+    expect(mockText.mock.calls[0][0]).toBe('bun rieu nha nau');
+  });
+
+  it('a cancelled or failed pick changes nothing', async () => {
+    mockPickMany.mockResolvedValueOnce(null);
+    mockPickOne.mockResolvedValueOnce({ error: 'failed' });
+    const r = await mount();
+    await press(r, 'Chọn ảnh');
+    await press(r, 'Chụp ảnh');
+    expect(allText(r)).toContain('Không lấy được ảnh.');
+    await type(r, 'Bạn đã ăn gì?', 'phở');
+    await press(r, ANALYZE);
+    expect(mockText.mock.calls[0][3]).toBeUndefined();
   });
 
   it('shows one editable line per food with its own accuracy and the overall accuracy, and saves nothing yet', async () => {

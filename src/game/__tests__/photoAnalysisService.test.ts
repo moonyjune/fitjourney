@@ -208,6 +208,27 @@ describe('requestMealText', () => {
     expect(JSON.stringify(mockInvoke.mock.calls[0])).not.toContain('secret@person.vn');
   });
 
+  it('sends the attached photos with the text; no photos (or an empty list) keeps the text-only body', async () => {
+    mockInvoke.mockResolvedValue({ data: { result: { items: [], reasoning: 'ok' } } });
+    const images = [{ base64: 'QUJD', mediaType: 'image/jpeg' }, { base64: 'REVG', mediaType: 'image/jpeg' }];
+    await requestMealText('phở', undefined, undefined, images);
+    expect(mockInvoke).toHaveBeenLastCalledWith('parse-meal-text', { body: { text: 'phở', profile: undefined, coach: undefined, images } });
+    await requestMealText('', undefined, undefined, images.slice(0, 1));
+    expect(mockInvoke).toHaveBeenLastCalledWith('parse-meal-text', { body: { text: '', profile: undefined, coach: undefined, images: images.slice(0, 1) } });
+    await requestMealText('phở', undefined, undefined, []);
+    expect(Object.keys((mockInvoke.mock.calls.at(-1) as [string, { body: object }])[1].body)).toEqual(['text', 'profile', 'coach']);
+  });
+
+  it('the offline dev account answers photos without text with one simulated line per photo', async () => {
+    jest.useFakeTimers();
+    signIn(true);
+    const pending = requestMealText('', undefined, undefined, [{ base64: 'QUJD', mediaType: 'image/jpeg' }, { base64: 'REVG', mediaType: 'image/jpeg' }]);
+    await jest.advanceTimersByTimeAsync(700);
+    const outcome = await pending;
+    expect(outcome.ok && outcome.result.items.map((i) => i.name)).toEqual(['Món trong ảnh 1', 'Món trong ảnh 2']);
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
   it('classifies failures like the photo analysis and does not try offline', async () => {
     mockInvoke.mockResolvedValueOnce({ data: { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.' } });
     expect(await requestMealText('phở')).toMatchObject({ ok: false, kind: 'notConfigured' });

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { requestMealText, type MealTextResult } from '../sync/cloudSync';
+import { imageUriToBase64 } from '../utils/photoStorage';
 import { buildBodyProfile } from './bodyProfile';
 import { buildCoachContext, type CoachContext } from './coachContext';
 import type { AnalysisFailure, AnalysisStatus } from './usePhotoAnalysis';
 
-/** Sends one typed/dictated sentence to the text parser (with the user's body data and the coach snapshot) and keeps the
- *  outcome. One request at a time; never throws; nothing is saved here. */
+/** Sends one typed/dictated sentence, and the photos attached to it (downscaled JPEGs), to the text parser (with the user's
+ *  body data and the coach snapshot) and keeps the outcome. One request at a time; never throws; nothing is saved here. */
 export function useMealTextAnalysis() {
   const [status, setStatus] = useState<AnalysisStatus>('idle');
   const [result, setResult] = useState<MealTextResult | null>(null);
@@ -20,7 +21,7 @@ export function useMealTextAnalysis() {
     };
   }, []);
 
-  const analyze = useCallback(async (text: string): Promise<MealTextResult | null> => {
+  const analyze = useCallback(async (text: string, photoUris: string[] = []): Promise<MealTextResult | null> => {
     if (busy.current) return null;
     busy.current = true;
     setStatus('analyzing');
@@ -32,7 +33,8 @@ export function useMealTextAnalysis() {
       } catch {
         coach = undefined; // advice is a bonus: never block the parsing on it
       }
-      const outcome = await requestMealText(text, buildBodyProfile(), coach);
+      const images = photoUris.length > 0 ? await Promise.all(photoUris.map((uri) => imageUriToBase64(uri))) : undefined;
+      const outcome = await requestMealText(text, buildBodyProfile(), coach, images);
       if (!mounted.current) return outcome.ok ? outcome.result : null;
       if (!outcome.ok) {
         setError({ kind: outcome.kind, message: outcome.message });

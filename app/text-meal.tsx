@@ -25,6 +25,7 @@ import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { clockText, MEAL_CLOCK, parseClock, timeTextInvalid } from '../src/utils/mealClock';
 import { joinTitle, sumParts } from '../src/food/mealParts';
 import { FoodPhotoPicker } from '../src/components/quest/FoodPhoto';
+import { MealTextPhotos } from '../src/components/quest/MealTextPhotos';
 import { deletePersistedPhoto, persistPickedPhoto } from '../src/utils/photoStorage';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import type { PhotoAdvice } from '../src/sync/cloudSync';
@@ -70,27 +71,31 @@ export default function TextMealScreen() {
   const [title, setTitle] = useState('');
   const [titleTouched, setTitleTouched] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  // Photos sent WITH the description to help the AI (up to 3); separate from the one photo saved with the meal.
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   async function analyze() {
     if (ai.analyzing) return;
     const sentence = text.trim();
-    if (!sentence) {
+    if (!sentence && attachments.length === 0) {
       setEmptyHint('text');
       return;
     }
     setEmptyHint(null);
     setAdvice(null);
     // Foods the database already has (saved meals, or any food with its amount typed) are used as they are; only the rest goes to the AI.
-    const local = resolveFromDb(sentence, foods);
+    // With photos attached the whole description goes to the AI with them: the photos may show more than the words say.
+    const local = attachments.length === 0 ? resolveFromDb(sentence, foods) : null;
     if (local && local.unknown.length === 0) {
       setRows(local.rows);
       setNote({ kind: 'saved', reasoning: g('text.fromSaved'), accuracy: null });
       return;
     }
     const known = local?.rows ?? [];
-    const result = await ai.analyze(local ? local.unknown.join(', ') : sentence);
+    const result = await ai.analyze(local ? local.unknown.join(', ') : sentence, attachments);
     if (!result) return;
+    if (!photoUri && attachments[0]) setPhotoUri(attachments[0]); // the meal's own photo, which the user can still change or remove
     const next = [...known, ...rowsFromResult(result, foods).map((r, i) => ({ ...r, key: `ai-${known.length + i}` }))];
     setRows(next);
     if (next.length === 0) setEmptyHint('foods');
@@ -163,6 +168,7 @@ export default function TextMealScreen() {
             multiline
             maxLength={400}
           />
+          <MealTextPhotos photos={attachments} onChange={setAttachments} disabled={ai.analyzing} />
           <QuestButton
             variant="ghost"
             icon="chart"
