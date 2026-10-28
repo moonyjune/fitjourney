@@ -1022,6 +1022,7 @@ export function classifyAiError(message: string, status?: number): AiErrorKind {
 
 /** Calls the analyze-proof-photo edge function; requires ANTHROPIC_API_KEY to be configured server-side. The photo goes
  *  straight to the vision model (no OCR step) together with the user's body data so the estimate fits the person.
+ *  `more` are extra photos of the same meal/session (up to 2), read together with the first as one result.
  *  The offline dev account never touches the network: it gets a clearly labelled simulated result. */
 export async function requestPhotoAnalysis(
   taskType: 'meal' | 'workout',
@@ -1029,7 +1030,8 @@ export async function requestPhotoAnalysis(
   mediaType: string,
   context: { label?: string; plannedCalories?: number },
   profile?: BodyProfile,
-  coach?: CoachContext
+  coach?: CoachContext,
+  more: MealTextImage[] = []
 ): Promise<PhotoAnalysisOutcome> {
   const off = aiTurnedOff();
   if (off) return off;
@@ -1040,7 +1042,7 @@ export async function requestPhotoAnalysis(
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
     const { data, error } = await supabase.functions.invoke('analyze-proof-photo', {
-      body: { taskType, imageBase64, mediaType, context, profile, coach },
+      body: { taskType, imageBase64, mediaType, context, profile, coach, ...(more.length > 0 ? { images: more } : {}) },
     });
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };

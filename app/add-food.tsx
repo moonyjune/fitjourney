@@ -9,6 +9,7 @@ import { defaultEaten, labelToFigures, type Eaten, type NutritionLabel } from '.
 import { useLabelReading } from '../src/ai/useLabelReading';
 import { useAccuracyText, useAiErrorText, useCalibrationText, usePhotoAnalysis } from '../src/ai/usePhotoAnalysis';
 import { FoodPhotoPicker } from '../src/components/quest/FoodPhoto';
+import { MAX_MEAL_TEXT_PHOTOS, MealTextPhotos } from '../src/components/quest/MealTextPhotos';
 import { DraftFeedback } from '../src/feedback/components/DraftFeedback';
 import { FoodLookup, type LookupResult } from '../src/food/components/FoodLookup';
 import { lookupDescribedFood } from '../src/food/describeLookup';
@@ -97,6 +98,8 @@ export default function AddFoodScreen() {
   const [junk, setJunk] = useState(false);
   const [error, setError] = useState(false);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  /** Extra photos of the same meal that only go to the AI with the main one (the main photo is the one kept with the food). */
+  const [morePhotos, setMorePhotos] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   /** The outcome of looking a name-only entry up in the food database: what was added from it, or why nothing was. */
@@ -172,11 +175,11 @@ export default function AddFoodScreen() {
 
   async function analyzePhoto() {
     if (!photoUri || ai.analyzing || saving) return;
-    if (saved) {
+    if (saved && morePhotos.length === 0) {
       applySaved(saved);
       return;
     }
-    const result = await ai.analyze(photoUri);
+    const result = await ai.analyze(photoUri, morePhotos);
     if (result && alive.current) applyAi(result);
   }
 
@@ -343,6 +346,7 @@ export default function AddFoodScreen() {
       setSalt('');
       setSugar('');
       setPhotoUri(null);
+      setMorePhotos([]);
       setParts([]);
       ai.reset();
       lab.reset();
@@ -534,6 +538,7 @@ export default function AddFoodScreen() {
             uri={photoUri}
             onChange={(uri) => {
               setPhotoUri(uri);
+              if (!uri) setMorePhotos([]);
               setSaveFailed(false);
               ai.reset();
               lab.reset();
@@ -543,6 +548,19 @@ export default function AddFoodScreen() {
             }}
             disabled={saving}
           />
+          {photoUri && (
+            <MealTextPhotos
+              kind="more"
+              max={MAX_MEAL_TEXT_PHOTOS - 1}
+              photos={morePhotos}
+              onChange={(photos) => {
+                setMorePhotos(photos);
+                ai.reset();
+                setAiNote(null);
+              }}
+              disabled={saving || ai.analyzing}
+            />
+          )}
           {photoUri && (
             <View style={styles.group}>
               <QuestButton

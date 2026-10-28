@@ -157,6 +157,17 @@ describe('requestPhotoAnalysis', () => {
       });
     });
 
+    it('sends extra photos of the same meal as `images`, and leaves the field out when there are none', async () => {
+      mockInvoke.mockResolvedValue({ data: { result: { reasoning: 'ok' } } });
+      const more = [{ base64: 'REVG', mediaType: 'image/jpeg' }];
+      await requestPhotoAnalysis('meal', 'QUJD', 'image/png', context, { weightKg: 90 }, undefined, more);
+      expect(mockInvoke).toHaveBeenLastCalledWith('analyze-proof-photo', {
+        body: { taskType: 'meal', imageBase64: 'QUJD', mediaType: 'image/png', context, profile: { weightKg: 90 }, coach: undefined, images: more },
+      });
+      await requestPhotoAnalysis('meal', 'QUJD', 'image/png', context, { weightKg: 90 }, undefined, []);
+      expect(mockInvoke.mock.calls[1][1]).not.toHaveProperty('body.images');
+    });
+
     it('reports "AI not configured" when the server answers with the missing-key message in the body', async () => {
       mockInvoke.mockResolvedValue({ data: { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.' } });
       expect(await requestPhotoAnalysis('meal', 'QUJD', 'image/jpeg', context)).toMatchObject({ ok: false, kind: 'notConfigured' });

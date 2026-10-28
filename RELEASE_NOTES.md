@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.14 | no | analyze-proof-photo, parse-meal-text |
 | 0.13 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
 | 0.12 | no | — |
 | 0.11 | yes | — |
@@ -25,6 +26,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.14
+- One meal can be analysed from several photos: with a photo chosen in "Món ngoài kế hoạch" or in a meal's photo box, "Thêm ảnh cho AI" adds up to 2 more photos of the same meal (another angle, another dish, the receipt or label). The AI reads them all together as one meal and counts a dish seen twice only once. Only the first photo is kept with the food.
+- Server: analyze-proof-photo accepts the extra photos; the photo check is shared with parse-meal-text.
 
 ## 0.13
 - Meal ideas ("Gợi ý món khác"): each request returns 3 dishes and replaces the ones on screen; the replaced dishes go into a cookbook shared by all users. New "Gợi ý từ cookbook" (and a search box) suggests 3 fitting dishes from that cookbook without calling the AI. At most 3 dishes are listed per meal, under one header that folds or opens the whole list. Suggestions still survive a page reload.

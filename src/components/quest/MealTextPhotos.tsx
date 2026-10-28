@@ -15,16 +15,21 @@ interface MealTextPhotosProps {
   onChange: (photos: string[]) => void;
   /** Locks the controls while the analysis runs. */
   disabled?: boolean;
+  /** How many photos fit (default MAX_MEAL_TEXT_PHOTOS). */
+  max?: number;
+  /** 'more': the extra photos of a meal that already has its main photo (other texts). Default: the text entry's texts. */
+  kind?: 'text' | 'more';
 }
 
 type PhotoError = 'cameraDenied' | 'cameraDeniedAsk' | 'failed';
 
 /** "Attach photos" for the text entry: camera or library (several at once where the platform allows; a file input on web),
  *  up to MAX_MEAL_TEXT_PHOTOS thumbnails, each with its own remove button. The photos only help the AI; nothing is saved here. */
-export function MealTextPhotos({ photos, onChange, disabled }: MealTextPhotosProps) {
+export function MealTextPhotos({ photos, onChange, disabled, max = MAX_MEAL_TEXT_PHOTOS, kind = 'text' }: MealTextPhotosProps) {
   const g = useGameText();
   const [error, setError] = useState<PhotoError | null>(null);
-  const room = MAX_MEAL_TEXT_PHOTOS - photos.length;
+  const k = kind === 'more' ? 'photo.more' : 'text.photos';
+  const room = max - photos.length;
   const full = room <= 0;
 
   async function take() {
@@ -32,7 +37,7 @@ export function MealTextPhotos({ photos, onChange, disabled }: MealTextPhotosPro
     const picked = await pickPhoto('camera');
     if (!picked) return;
     if ('error' in picked) setError(picked.error);
-    else onChange([...photos, picked.uri].slice(0, MAX_MEAL_TEXT_PHOTOS));
+    else onChange([...photos, picked.uri].slice(0, max));
   }
 
   async function choose() {
@@ -40,17 +45,17 @@ export function MealTextPhotos({ photos, onChange, disabled }: MealTextPhotosPro
     const picked = await pickPhotos(room);
     if (!picked) return;
     if ('error' in picked) setError(picked.error);
-    else onChange([...photos, ...picked.uris].slice(0, MAX_MEAL_TEXT_PHOTOS));
+    else onChange([...photos, ...picked.uris].slice(0, max));
   }
 
   const off = disabled || full;
   return (
     <View style={styles.wrap}>
       <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('text.photos.title').toUpperCase()}
+        {g(`${k}.title` as const).toUpperCase()}
       </HudText>
       <HudText size={12} weight="medium" color={quest.textSecondary}>
-        {full ? g('text.photos.full', { max: MAX_MEAL_TEXT_PHOTOS }) : photos.length > 0 ? g('text.photos.count', { n: photos.length, max: MAX_MEAL_TEXT_PHOTOS }) : g('text.photos.hint', { max: MAX_MEAL_TEXT_PHOTOS })}
+        {full ? g(`${k}.full` as const, { max }) : photos.length > 0 ? g(`${k}.count` as const, { n: photos.length, max }) : g(`${k}.hint` as const, { max })}
       </HudText>
 
       {photos.length > 0 && (

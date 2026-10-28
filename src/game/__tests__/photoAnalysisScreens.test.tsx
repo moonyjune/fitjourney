@@ -183,6 +183,30 @@ describe('Photo → AI analysis in the screens', () => {
       expect(pressable(r, ANALYZE)).toBeDefined();
     });
 
+    it('sends up to 2 more photos of the same meal with the main one, and only the main photo is kept with the food', async () => {
+      const r = await withPhoto();
+      await press(r, ANALYZE);
+      expect(mockAnalysis.mock.calls[0][6]).toEqual([]);
+
+      mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///p2.jpg' }, { uri: 'file:///p3.jpg' }, { uri: 'file:///p4.jpg' }] });
+      await press(r, 'Chọn ảnh');
+      expect(allText(r)).toContain('Đã thêm đủ 2 ảnh');
+      await press(r, ANALYZE);
+      expect(mockAnalysis.mock.calls[1][1]).toBe('QUJD');
+      expect(mockAnalysis.mock.calls[1][6]).toEqual([{ base64: 'QUJD', mediaType: 'image/png' }, { base64: 'QUJD', mediaType: 'image/png' }]);
+      expect(mockToBase64).toHaveBeenCalledWith('file:///p3.jpg', { maxEdge: 1280 });
+      expect(mockToBase64).not.toHaveBeenCalledWith('file:///p4.jpg', expect.anything());
+
+      await press(r, 'Xóa ảnh đính kèm 1');
+      await press(r, ANALYZE);
+      expect(mockAnalysis.mock.calls[2][6]).toHaveLength(1);
+
+      await press(r, 'Thêm vào hôm nay');
+      const saved = items();
+      expect(saved).toHaveLength(1);
+      expect(saved[0].photoUri).toMatch(/^file:\/\/\/docs\/proofs\/extra-/);
+    });
+
     it('shrinks the photo for the AI by default and sends Full HD only when the setting is on', async () => {
       const r = await withPhoto();
       await press(r, ANALYZE);
@@ -713,6 +737,16 @@ describe('Photo → AI analysis in the screens', () => {
       expect(log.extraItems[0]).toMatchObject({ name: 'Cơm gà xối mỡ', calories: 550, proteinG: 38.5 });
       expect(log.waterMl).toBe(200);
       expect(useProofStore.getState().photos).toHaveLength(1);
+    });
+
+    it('meal (quest): extra photos of the same meal go to the AI with the first one', async () => {
+      const r = await mount(<ProofCapture variant="quest" dateKey={DATE} taskType="meal" taskRefId="meal1" contextLabel="Bữa 1" />);
+      await openPicker(r);
+      mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///p2.jpg' }] });
+      await press(r, 'Chọn ảnh');
+      await press(r, ANALYZE);
+      expect(mockAnalysis.mock.calls[0][6]).toEqual([{ base64: 'QUJD', mediaType: 'image/png' }]);
+      expect(mockToBase64).toHaveBeenCalledWith('file:///p2.jpg', { maxEdge: 1280 });
     });
 
     it('workout: pre-fills the calories burned, shows activity and duration, and updates the entry', async () => {

@@ -5,6 +5,7 @@ import { useProofStore } from '../store/useProofStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { persistPickedPhoto } from '../utils/photoStorage';
+import { MAX_MEAL_TEXT_PHOTOS, MealTextPhotos } from './quest/MealTextPhotos';
 import { aiNumberText, useAiFields } from '../ai/useAiFields';
 import { adviceLines, cleanAdvice } from '../ai/adviceText';
 import { useAccuracyText, useAiErrorText, usePhotoAnalysis } from '../ai/usePhotoAnalysis';
@@ -40,6 +41,8 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
 
   const [isEditing, setIsEditing] = useState(false);
   const [pendingUri, setPendingUri] = useState<string | null>(null);
+  /** Extra photos of the same meal/session for the AI only; the first photo is the one kept as the proof. */
+  const [morePhotos, setMorePhotos] = useState<string[]>([]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -70,6 +73,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   function resetForm() {
     setIsEditing(false);
     setPendingUri(null);
+    setMorePhotos([]);
     setNote('');
     ai.reset();
     aiFields.clear();
@@ -109,7 +113,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
 
   async function handleAnalyze() {
     if (!pendingUri || ai.analyzing) return;
-    const result = await ai.analyze(pendingUri);
+    const result = await ai.analyze(pendingUri, morePhotos);
     if (!result || !alive.current) return;
     const cur = latest.current;
     const outcomes =
@@ -190,6 +194,21 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
       {pendingUri ? (
         <>
           <Image source={{ uri: pendingUri }} style={styles.thumbnail} />
+          {variant === 'quest' && (
+            <View style={styles.more}>
+              <MealTextPhotos
+                kind="more"
+                max={MAX_MEAL_TEXT_PHOTOS - 1}
+                photos={morePhotos}
+                onChange={(photos) => {
+                  setMorePhotos(photos);
+                  ai.reset();
+                  setAnalysisNote(null);
+                }}
+                disabled={ai.analyzing || busy}
+              />
+            </View>
+          )}
           <TouchableOpacity
             style={styles.analyzeButton}
             onPress={handleAnalyze}
@@ -327,6 +346,7 @@ function makeStyles(p: Palette) {
   proofNote: { fontSize: 12, color: p.text, marginBottom: 4 },
   removeText: { fontSize: 11, color: p.danger },
   editWrap: { marginTop: spacing.sm },
+  more: { marginTop: spacing.sm },
   pickButtons: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm },
   pickButton: { backgroundColor: p.chipBg, borderRadius: radius.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   pickButtonText: { color: p.accent, fontSize: 12, fontWeight: '700' },

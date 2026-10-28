@@ -11,9 +11,12 @@
 // The client also sends a `coach` snapshot (targets, today so far, up to 7 recent days of intake/workouts/weights and
 // this week's boss state). From it the model returns `advice`: how the day stands against the deficit target and what to
 // do for the rest of the day so the daily target, then the weekly one (the boss), is reached. It never replaces a doctor.
+// Optional `images` adds up to MAX_IMAGES - 1 more photos of the same meal/session (other angles, other dishes, the receipt or
+// label); all of them are read together as one meal or one session.
 
 import { ACCURACY_PROPERTY, ADVICE_PROPERTY, describeCoach, describePerson, sanitizeProfile } from '../_shared/coach.ts';
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
+import { imageBlocks, MAX_IMAGES } from '../_shared/images.ts';
 
 const ANALYSIS_TOOL = {
   name: 'report_photo_analysis',
@@ -58,10 +61,11 @@ const ANALYSIS_TOOL = {
 };
 
 serveAi('photo', async (body) => {
-  const { taskType, imageBase64, mediaType, context, profile, coach } = body as {
+  const { taskType, imageBase64, mediaType, images, context, profile, coach } = body as {
     taskType: 'meal' | 'workout';
     imageBase64: string;
     mediaType: string;
+    images?: unknown;
     context?: { label?: string; plannedCalories?: number };
     profile?: unknown;
     coach?: unknown;
@@ -69,6 +73,14 @@ serveAi('photo', async (body) => {
   if (!imageBase64 || (taskType !== 'meal' && taskType !== 'workout')) {
     return jsonResponse({ error: 'Thiếu imageBase64 hoặc taskType không hợp lệ.' }, 400);
   }
+  const photos = imageBlocks([{ base64: imageBase64, mediaType }, ...(Array.isArray(images) ? images : images == null ? [] : [null])]);
+  if (photos === null) {
+    return jsonResponse({ error: `Ảnh không hợp lệ (tối đa ${MAX_IMAGES} ảnh, mỗi ảnh dưới 5 MB).` }, 400);
+  }
+  const several =
+    photos.length > 1
+      ? ` Có ${photos.length} ảnh của CÙNG MỘT ${taskType === 'meal' ? 'bữa (có thể là các góc khác nhau, các món khác nhau, hóa đơn hoặc nhãn)' : 'buổi tập (có thể là các màn hình hoặc góc khác nhau)'}: đọc tất cả ảnh rồi trả về MỘT kết quả chung, món/hoạt động xuất hiện ở nhiều ảnh chỉ tính một lần.`
+      : '';
 
   const person = describePerson(sanitizeProfile(profile));
   const coachText = describeCoach(coach);
@@ -80,10 +92,10 @@ serveAi('photo', async (body) => {
     taskType === 'meal'
       ? `Đây là ảnh món ăn/đồ uống${label ? ` "${label}"` : ''}${
           context?.plannedCalories ? ` (kế hoạch ~${context.plannedCalories} kcal)` : ''
-        }. ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về MỘT mô tả chung của cả bữa ghi rõ khối lượng (g) hoặc thể tích (ml) từng món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Ước tính cả purine (mg), đường tự do (g) và muối (g). Nếu bữa có từ 2 món trở lên thì liệt kê từng món trong components (cộng lại bằng tổng của cả bữa). Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`
+        }.${several} ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về MỘT mô tả chung của cả bữa ghi rõ khối lượng (g) hoặc thể tích (ml) từng món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Ước tính cả purine (mg), đường tự do (g) và muối (g). Nếu bữa có từ 2 món trở lên thì liệt kê từng món trong components (cộng lại bằng tổng của cả bữa). Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`
       : `Đây là ảnh buổi tập${label ? ` "${label}"` : ''}${
           context?.plannedCalories ? ` (kế hoạch đốt ~${context.plannedCalories} kcal)` : ''
-        }. ${person} Đọc những gì thấy được (màn hình máy tập/đồng hồ/ứng dụng: thời gian, quãng đường, nhịp tim, calo hiển thị; hoặc dụng cụ, tư thế). Trả về hoạt động, thời lượng (phút) và lượng calo đã đốt TÍNH CHO NGƯỜI NÀY (theo cân nặng và thể trạng, không chép nguyên số calo của máy nếu số đó rõ ràng không hợp lý). Nếu không chắc, nói rõ ở confidence và reasoning. Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`;
+        }.${several} ${person} Đọc những gì thấy được (màn hình máy tập/đồng hồ/ứng dụng: thời gian, quãng đường, nhịp tim, calo hiển thị; hoặc dụng cụ, tư thế). Trả về hoạt động, thời lượng (phút) và lượng calo đã đốt TÍNH CHO NGƯỜI NÀY (theo cân nặng và thể trạng, không chép nguyên số calo của máy nếu số đó rõ ràng không hợp lý). Nếu không chắc, nói rõ ở confidence và reasoning. Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`;
 
   return {
     responseKey: 'result',
@@ -94,7 +106,7 @@ serveAi('photo', async (body) => {
         {
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
+            ...photos,
             { type: 'text', text: prompt },
           ],
         },

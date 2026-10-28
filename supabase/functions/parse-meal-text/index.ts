@@ -10,30 +10,10 @@
 
 import { ACCURACY_PROPERTY, ADVICE_PROPERTY, describeCoach, describePerson, sanitizeProfile } from '../_shared/coach.ts';
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
+import { imageBlocks, MAX_IMAGES } from '../_shared/images.ts';
 
 const MAX_TEXT_CHARS = 400;
 const MAX_ITEMS = 12;
-const MAX_IMAGES = 3;
-/** Base64 length of a 5 MB image (the API's per-image limit); the client sends ~1280 px JPEGs, far below it. */
-const MAX_IMAGE_BASE64_CHARS = 6_990_000;
-const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-
-type ImageBlock = { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
-
-/** The attached photos as Claude image blocks; null when any of them is not a usable image. */
-function imageBlocks(images: unknown): ImageBlock[] | null {
-  if (images === undefined || images === null) return [];
-  if (!Array.isArray(images) || images.length > MAX_IMAGES) return null;
-  const blocks: ImageBlock[] = [];
-  for (const image of images) {
-    const { base64, mediaType } = (image ?? {}) as { base64?: unknown; mediaType?: unknown };
-    if (typeof base64 !== 'string' || !base64 || base64.length > MAX_IMAGE_BASE64_CHARS || !/^[A-Za-z0-9+/=]+$/.test(base64)) return null;
-    const type = typeof mediaType === 'string' && IMAGE_TYPES.has(mediaType) ? mediaType : 'image/jpeg';
-    blocks.push({ type: 'image', source: { type: 'base64', media_type: type, data: base64 } });
-  }
-  return blocks;
-}
-
 const MEAL_TEXT_TOOL = {
   name: 'report_meal_text',
   description: 'Reports the foods found in the sentence, one entry per food or drink.',

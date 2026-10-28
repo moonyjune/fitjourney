@@ -20,7 +20,7 @@ interface AnalysisContext {
   plannedCalories?: number;
 }
 
-/** Sends one photo to the vision API (together with the user's body data) and keeps the outcome. Shared by every screen
+/** Sends one photo (plus up to 2 more of the same meal/session) to the vision API (together with the user's body data) and keeps the outcome. Shared by every screen
  *  with an "analyze with AI" button. A second call while one is running is ignored. It never throws: a failure is just
  *  `status: 'error'`, and the caller's manual inputs keep working. Nothing is saved here. */
 export function usePhotoAnalysis(taskType: 'meal' | 'workout', context: AnalysisContext = {}) {
@@ -40,22 +40,22 @@ export function usePhotoAnalysis(taskType: 'meal' | 'workout', context: Analysis
   }, []);
 
   const analyze = useCallback(
-    async (uri: string): Promise<PhotoAnalysisResult | null> => {
+    async (uri: string, moreUris: string[] = []): Promise<PhotoAnalysisResult | null> => {
       if (busy.current) return null;
       busy.current = true;
       setStatus('analyzing');
       setError(null);
       try {
-        const { base64, mediaType } = await imageUriToBase64(uri, {
-          maxEdge: useAiPhotoStore.getState().fullHd ? AI_FULL_HD_EDGE_PX : AI_MAX_EDGE_PX,
-        });
+        const maxEdge = useAiPhotoStore.getState().fullHd ? AI_FULL_HD_EDGE_PX : AI_MAX_EDGE_PX;
+        const { base64, mediaType } = await imageUriToBase64(uri, { maxEdge });
+        const more = await Promise.all(moreUris.slice(0, 2).map((u) => imageUriToBase64(u, { maxEdge })));
         let coach: CoachContext | undefined;
         try {
           coach = buildCoachContext();
         } catch {
           coach = undefined; // advice is a bonus: never block the photo analysis on it
         }
-        const outcome = await requestPhotoAnalysis(taskType, base64, mediaType, contextRef.current, buildBodyProfile(), coach);
+        const outcome = await requestPhotoAnalysis(taskType, base64, mediaType, contextRef.current, buildBodyProfile(), coach, more);
         if (!mounted.current) return outcome.ok ? outcome.result : null;
         if (!outcome.ok) {
           setError({ kind: outcome.kind, message: outcome.message });
