@@ -2,7 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Button } from './Button';
 import { FoodThumb } from './quest/FoodPhoto';
-import { extraPhotoRefs } from '../utils/photoOrder';
+import { extraPhotoRefs, slotPhotoRefs, type MealPhotoRef } from '../utils/photoOrder';
+import { addExtraPhoto, addSlotPhoto, removeExtraPhoto } from '../utils/mealPhotos';
+import { MealDetailDialog, type MealDetail } from './quest/MealDetailDialog';
+import { useNutritionStore } from '../store/useNutritionStore';
 import { useTranslation } from '../i18n/useTranslation';
 import { colors, radius, spacing } from '../theme/tokens';
 import { quest, questFonts } from '../theme/quest';
@@ -82,6 +85,43 @@ export function DailyMealBreakdownTable({
   const accentColor = dark ? quest.mana : colors.primary;
   const proofs = useProofStore((st) => st.photos);
   const thumbsOf = (item: ExtraFoodItem) => extraPhotoRefs(proofs, item).map((p) => p.uri);
+  const removeProof = useProofStore((st) => st.removeProof);
+  // Photos are added or removed at once (they are files, not part of the draft): a meal already saved on this day gets a photo button.
+  const storedExtras = useNutritionStore((st) => (dateKey ? st.logs[dateKey]?.extraItems : undefined));
+  const [photoFor, setPhotoFor] = useState<{ kind: 'extra'; id: string } | { kind: 'slot'; slot: MealSlot } | null>(null);
+  const canPhoto = editable && !!dateKey;
+  const slotThumbs = (slot: MealSlot) => (dateKey ? slotPhotoRefs(proofs, dateKey, slot).map((p) => p.uri) : []);
+  let photoDetail: MealDetail | null = null;
+  if (photoFor?.kind === 'extra') {
+    const stored = storedExtras?.find((i) => i.id === photoFor.id);
+    if (stored) {
+      photoDetail = {
+        title: stored.name || t('mealLog.extraSectionLabel'),
+        time: formatTime(stored.loggedAtISO),
+        kcal: stored.calories,
+        proteinG: stored.proteinG,
+        purineMg: stored.purineMg ?? 0,
+        sugarG: stored.sugarG ?? 0,
+        saltG: stored.saltG ?? 0,
+        parts: stored.parts,
+        photos: extraPhotoRefs(proofs, stored),
+      };
+    }
+  } else if (photoFor?.kind === 'slot' && dateKey) {
+    const meal = meals.find((m) => m.slot === photoFor.slot);
+    if (meal) photoDetail = { title: meal.label, time: '', kcal: meal.calories, proteinG: meal.proteinG, purineMg: null, sugarG: null, saltG: null, photos: slotPhotoRefs(proofs, dateKey, meal.slot) };
+  }
+  async function addPhoto(uri: string): Promise<boolean> {
+    if (!dateKey || !photoFor) return false;
+    return photoFor.kind === 'extra' ? addExtraPhoto(dateKey, photoFor.id, uri) : addSlotPhoto(dateKey, photoFor.slot, uri);
+  }
+  async function removePhoto(photo: MealPhotoRef): Promise<boolean> {
+    if (!dateKey || !photoFor) return false;
+    if (photoFor.kind === 'extra') return removeExtraPhoto(dateKey, photoFor.id, photo);
+    if (!photo.proofId) return false;
+    removeProof(photo.proofId);
+    return true;
+  }
   const [draftMealsEaten, setDraftMealsEaten] = useState(mealsEaten);
   const [draftExtraItems, setDraftExtraItems] = useState(extraItems);
   const [draftRemovedSlots, setDraftRemovedSlots] = useState<MealSlot[]>(removedMealSlots ?? []);
@@ -186,7 +226,11 @@ export function DailyMealBreakdownTable({
         const RowWrapper = editable ? TouchableOpacity : View;
         return (
           <RowWrapper key={m.slot} style={styles.row} {...(editable ? { onPress: () => toggleMeal(m.slot) } : {})}>
-            <Text style={[styles.cell, styles.nameCol]}>{m.label}</Text>
+            <View style={[styles.nameCol, styles.extraNameRow]}>
+              <FoodThumb uris={slotThumbs(m.slot)} name={m.label} size={28} />
+              <Text style={[styles.cell, styles.extraNameInput]}>{m.label}</Text>
+              {canPhoto && eaten && <PhotoButton label={t('mealLog.photos', { name: m.label })} color={accentColor} onPress={() => setPhotoFor({ kind: 'slot', slot: m.slot })} />}
+            </View>
             <Text style={[styles.cell, styles.statusCol, { color: eaten ? okColor : mutedColor }]}>
               {eaten ? t('mealLog.statusEaten') : t('mealLog.statusNotEaten')}
             </Text>
@@ -217,6 +261,9 @@ export function DailyMealBreakdownTable({
                 placeholder={t('mealLog.extraSectionLabel')}
                 multiline
               />
+              {canPhoto && storedExtras?.some((i) => i.id === item.id) && (
+                <PhotoButton label={t('mealLog.photos', { name: item.name || t('mealLog.extraSectionLabel') })} color={accentColor} onPress={() => setPhotoFor({ kind: 'extra', id: item.id })} />
+              )}
             </View>
             <Text style={[styles.mealTimeCaption, { color: accentColor }]}>
               {item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : t('mealLog.extraSectionLabel')}
@@ -327,11 +374,21 @@ export function DailyMealBreakdownTable({
           )}
         </View>
       )}
+      <MealDetailDialog detail={photoDetail} onClose={() => setPhotoFor(null)} onAddPhoto={addPhoto} onRemovePhoto={removePhoto} />
     </View>
   );
 }
 
 /** The breakdown of a meal (its parts), shown under it, only while the parts still add up to the meal's calories. */
+/** The camera button next to a meal already saved on the day: opens its photos (add up to 3, view, remove). */
+function PhotoButton({ label, color, onPress }: { label: string; color: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} hitSlop={8} onPress={onPress} style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
+      <QuestIcon name="camera" size={18} color={color} strokeWidth={2.2} />
+    </TouchableOpacity>
+  );
+}
+
 function PartsDetail({ item, styles, title, line, onEditPart }: { item: ExtraFoodItem; styles: ReturnType<typeof makeStyles>; title: string; line: (p: NonNullable<ExtraFoodItem['parts']>[number]) => string; onEditPart?: (index: number, part: MealPart) => void }) {
   const g = useGameText();
   const [editing, setEditing] = useState<number | null>(null);

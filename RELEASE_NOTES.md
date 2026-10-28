@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.16 | no | — |
 | 0.15 | no | — |
 | 0.14 | no | analyze-proof-photo, parse-meal-text |
 | 0.13 | yes | analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-dinner, suggest-swap, weekly-report, coach-digest |
@@ -27,6 +28,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.16
+- History > Nhật ký hằng ngày: every meal already logged on a day (an off-plan food, or a plan meal marked eaten) has a camera button in the day's table. It opens the meal's photos: add up to 3 (camera or library), view them side by side with ‹ ›, or remove the one in view. Photos are saved straight away (no need to press "Lưu"). A plan meal's photo now also shows as a thumbnail in its row.
 
 ## 0.15
 - A meal keeps all its photos (up to 3), not just the first: the extra photos chosen in "Món ngoài kế hoạch", "Nhập bằng chữ" or a meal's photo box are saved and synced with it, and come back on another device.

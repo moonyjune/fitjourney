@@ -429,6 +429,27 @@ describe('Photo on an off-plan food', () => {
       expect(pressable(r, 'Xem 3 ảnh của bữa')).toBeDefined();
     });
 
+    it('the day table (History) has a photo button on each saved meal: add, view and remove photos there', async () => {
+      withThree();
+      const slot = DEFAULT_PLAN.mealTemplates.training[0];
+      const r = await mount(
+        <DailyMealBreakdownTable dark dateKey={DATE} meals={DEFAULT_PLAN.mealTemplates.training} mealsEaten={{ [slot.slot]: true }} extraItems={[item]} editable />
+      );
+      await press(r, 'Ảnh của Bún chả: thêm, xem hoặc xóa');
+      expect(allText(r)).toContain('1/3');
+      await press(r, 'Xóa ảnh này');
+      expect(proofsOf(item.id)).toHaveLength(2);
+      await press(r, 'Đóng');
+
+      // A plan meal that was eaten gets one too; its first photo then shows as a thumbnail in the row.
+      await press(r, `Ảnh của ${slot.label}: thêm, xem hoặc xóa`);
+      await press(r, 'Chọn từ thư viện');
+      const slotPhotos = useProofStore.getState().photos.filter((p) => p.taskRefId === slot.slot);
+      expect(slotPhotos).toHaveLength(1);
+      await press(r, 'Đóng');
+      expect(images(r, `Ảnh ${slot.label}`)).toHaveLength(1);
+    });
+
     it('in the meal detail, removes only the photo in view, then offers to add one again', async () => {
       withThree();
       const r = await mount(<JournalScreen />);
