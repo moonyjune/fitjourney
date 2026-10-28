@@ -35,6 +35,18 @@ import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood, ProofP
 import { PhotoViewer } from '../components/quest/PhotoViewer';
 import { useTabBarClearance } from '../components/quest/QuestTabBar';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
+import { useHistoryViewStore } from '../store/useHistoryViewStore';
+import {
+  formatDeficitShort,
+  groupByMonth,
+  monthGrid,
+  monthKeyOf,
+  monthLabel,
+  parseMonthKey,
+  shiftMonth,
+  shortMonthLabel,
+  type YearMonth,
+} from '../utils/historyCalendar';
 
 interface DaySummary {
   dateKey: string;
@@ -137,7 +149,7 @@ function Meta({ children, color = quest.textSecondary, style }: { children: Reac
 }
 
 export function HistoryView({ client }: { client?: ClientSnapshot }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const g = useGameText();
   const insets = useSafeAreaInsets();
   const tabClearance = useTabBarClearance();
@@ -333,6 +345,25 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
     setExpandedDays((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));
   }
 
+  // The diary below shows either a list grouped by month (only the current month open at first) or a month calendar.
+  const layout = useHistoryViewStore((s) => s.layout);
+  const setLayout = useHistoryViewStore((s) => s.setLayout);
+  const monthGroups = useMemo(() => groupByMonth(daySummaries), [daySummaries]);
+  const dayByKey = useMemo(() => new Map(daySummaries.map((d) => [d.dateKey, d])), [daySummaries]);
+  const todayKey = toDateKey(new Date());
+  const thisMonthKey = monthKeyOf(todayKey);
+  const defaultOpenMonth = monthGroups.some((m) => m.monthKey === thisMonthKey) ? thisMonthKey : monthGroups[0]?.monthKey;
+  const [openMonths, setOpenMonths] = useState<Record<string, boolean>>({});
+  const isMonthOpen = (monthKey: string) => openMonths[monthKey] ?? monthKey === defaultOpenMonth;
+  const [calMonth, setCalMonth] = useState<YearMonth>(() => parseMonthKey(thisMonthKey));
+  const [pickerYear, setPickerYear] = useState<number | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const weekdays = t('history.weekdaysShort').split(',');
+  function openDay(dateKey: string) {
+    setSelectedDay(dateKey);
+    setExpandedDays((prev) => ({ ...prev, [dateKey]: true }));
+  }
+
   // Daily timelines, oldest -> newest, last 14 logged days. Calories in/out get separate charts
   // (not a shared y-axis) since exercise calories burned are naturally an order of magnitude
   // smaller than calories eaten — sharing one axis would flatten the burned-calories line.
@@ -374,6 +405,65 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
       datasets: [{ data: chronological.map((w) => Math.round(w.avgCalories)) }],
     };
   }, [weeklySummaries]);
+
+  /** One day of the diary: totals, deficit, photos and the expandable meal table. Shared by the list and the
+   *  calendar (where the tapped day opens below the month). */
+  function renderDay(d: DaySummary) {
+    const expanded = !!expandedDays[d.dateKey];
+    const toggleLabel = t(expanded ? 'history.collapseButton' : 'history.expandButton');
+    return (
+      <Panel key={d.dateKey}>
+        <HudText size={14}>{formatDateVi(d.dateKey)}</HudText>
+        <Meta>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Meta>
+        <Meta>
+          {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
+          {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}
+        </Meta>
+        {d.deficitKcal == null ? (
+          <Meta>
+            {t('tdee.deficitLabel')}: {t('common.notAvailable')}
+          </Meta>
+        ) : (
+          <Meta color={d.deficitKcal >= 0 ? quest.xp : quest.gold}>
+            {t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: {Math.round(Math.abs(d.deficitKcal))} kcal
+          </Meta>
+        )}
+        {d.proofsCount > 0 && (
+          <Pressable accessibilityRole="link" accessibilityLabel={t('history.proofBadge', { n: d.proofsCount })} onPress={() => setViewing({ dateKey: d.dateKey, photos: d.proofs })} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+            <HudText size={12} color={quest.manaText} style={{ textDecorationLine: 'underline' }}>
+              {t('history.proofBadge', { n: d.proofsCount })}
+            </HudText>
+          </Pressable>
+        )}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${formatDateVi(d.dateKey)}. ${toggleLabel}`}
+          accessibilityState={{ expanded }}
+          onPress={() => toggleDayExpanded(d.dateKey)}
+          style={styles.toggle}
+        >
+          <HudText size={13} color={quest.gold}>
+            {toggleLabel}
+          </HudText>
+        </Pressable>
+        {expanded && (
+          <View>
+            <DailyMealBreakdownTable
+              dark
+              meals={d.meals}
+              mealsEaten={d.mealsEaten}
+              extraItems={d.extraItems}
+              legacyTotals={d.legacyTotals}
+              dateKey={d.dateKey}
+              removedMealSlots={d.removedMealSlots}
+              editable={!client}
+              onSave={(draft) => saveDayLog(d.dateKey, draft)}
+            />
+          </View>
+        )}
+      </Panel>
+    );
+  }
 
   return (
     <>
@@ -560,64 +650,176 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
         </Panel>
       ))}
 
-      <Section>{t('history.dailyTitle')}</Section>
-      {daySummaries.length === 0 && <Meta style={styles.emptyText}>{t('history.emptyData')}</Meta>}
-      {daySummaries.map((d) => {
-        const expanded = !!expandedDays[d.dateKey];
-        const toggleLabel = t(expanded ? 'history.collapseButton' : 'history.expandButton');
-        return (
-          <Panel key={d.dateKey}>
-            <HudText size={14}>{formatDateVi(d.dateKey)}</HudText>
-            <Meta>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Meta>
-            <Meta>
-              {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
-              {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}
-            </Meta>
-            {d.deficitKcal == null ? (
-              <Meta>
-                {t('tdee.deficitLabel')}: {t('common.notAvailable')}
-              </Meta>
-            ) : (
-              <Meta color={d.deficitKcal >= 0 ? quest.xp : quest.gold}>
-                {t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: {Math.round(Math.abs(d.deficitKcal))} kcal
-              </Meta>
-            )}
-            {d.proofsCount > 0 && (
-              <Pressable accessibilityRole="link" accessibilityLabel={t('history.proofBadge', { n: d.proofsCount })} onPress={() => setViewing({ dateKey: d.dateKey, photos: d.proofs })} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
-                <HudText size={12} color={quest.manaText} style={{ textDecorationLine: 'underline' }}>
-                  {t('history.proofBadge', { n: d.proofsCount })}
+      <View style={styles.dailyHeader}>
+        <Section>{t('history.dailyTitle')}</Section>
+        <View style={styles.segment} accessibilityRole="radiogroup" accessibilityLabel={t('history.layoutLabel')}>
+          {(['list', 'calendar'] as const).map((key) => {
+            const on = layout === key;
+            const label = t(key === 'list' ? 'history.layoutList' : 'history.layoutCalendar');
+            return (
+              <Pressable
+                key={key}
+                accessibilityRole="radio"
+                accessibilityLabel={label}
+                accessibilityState={{ selected: on }}
+                onPress={() => setLayout(key)}
+                style={[styles.segmentItem, on && { backgroundColor: quest.gold }]}
+              >
+                <HudText size={13} color={on ? quest.onGold : quest.textSecondary}>
+                  {label}
                 </HudText>
               </Pressable>
-            )}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${formatDateVi(d.dateKey)}. ${toggleLabel}`}
-              accessibilityState={{ expanded }}
-              onPress={() => toggleDayExpanded(d.dateKey)}
-              style={styles.toggle}
-            >
-              <HudText size={13} color={quest.gold}>
-                {toggleLabel}
-              </HudText>
-            </Pressable>
-            {expanded && (
-              <View>
-                <DailyMealBreakdownTable
-                  dark
-                  meals={d.meals}
-                  mealsEaten={d.mealsEaten}
-                  extraItems={d.extraItems}
-                  legacyTotals={d.legacyTotals}
-                  dateKey={d.dateKey}
-                  removedMealSlots={d.removedMealSlots}
-                  editable={!client}
-                  onSave={(draft) => saveDayLog(d.dateKey, draft)}
-                />
+            );
+          })}
+        </View>
+      </View>
+      {layout === 'list' ? (
+        <>
+          {daySummaries.length === 0 && <Meta style={styles.emptyText}>{t('history.emptyData')}</Meta>}
+          {monthGroups.map((m) => {
+            const open = isMonthOpen(m.monthKey);
+            const label = monthLabel(parseMonthKey(m.monthKey), language);
+            return (
+              <View key={m.monthKey}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${label}. ${t('history.monthDays', { n: m.days.length })}`}
+                  accessibilityState={{ expanded: open }}
+                  onPress={() => setOpenMonths((prev) => ({ ...prev, [m.monthKey]: !open }))}
+                  style={styles.monthHeader}
+                >
+                  <HudText size={15} color={quest.gold}>
+                    {open ? '▾' : '▸'} {label}
+                  </HudText>
+                  <Meta style={styles.monthCount}>{t('history.monthDays', { n: m.days.length })}</Meta>
+                </Pressable>
+                {open && m.days.map(renderDay)}
+              </View>
+            );
+          })}
+        </>
+      ) : (
+        <>
+          <Panel>
+            <View style={styles.calNav}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('history.prevMonth')} onPress={() => setCalMonth((c) => shiftMonth(c, -1))} style={styles.calNavButton}>
+                <HudText size={18} color={quest.gold}>
+                  ‹
+                </HudText>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${t('history.pickMonth')}: ${monthLabel(calMonth, language)}`}
+                accessibilityState={{ expanded: pickerYear !== null }}
+                onPress={() => setPickerYear(pickerYear === null ? calMonth.year : null)}
+                style={styles.calTitle}
+              >
+                <HudText size={15}>
+                  {monthLabel(calMonth, language)} {pickerYear === null ? '▾' : '▴'}
+                </HudText>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('history.nextMonth')} onPress={() => setCalMonth((c) => shiftMonth(c, 1))} style={styles.calNavButton}>
+                <HudText size={18} color={quest.gold}>
+                  ›
+                </HudText>
+              </Pressable>
+            </View>
+            {pickerYear !== null && (
+              <View style={styles.picker}>
+                <View style={styles.calNav}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t('history.prevYear')} onPress={() => setPickerYear(pickerYear - 1)} style={styles.calNavButton}>
+                    <HudText size={16} color={quest.gold}>
+                      ‹
+                    </HudText>
+                  </Pressable>
+                  <HudText size={15} style={styles.calTitleText}>
+                    {pickerYear}
+                  </HudText>
+                  <Pressable accessibilityRole="button" accessibilityLabel={t('history.nextYear')} onPress={() => setPickerYear(pickerYear + 1)} style={styles.calNavButton}>
+                    <HudText size={16} color={quest.gold}>
+                      ›
+                    </HudText>
+                  </Pressable>
+                </View>
+                <View style={styles.monthGrid}>
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => {
+                    const on = calMonth.year === pickerYear && calMonth.month === month;
+                    const label = monthLabel({ year: pickerYear, month }, language);
+                    return (
+                      <Pressable
+                        key={month}
+                        accessibilityRole="button"
+                        accessibilityLabel={label}
+                        accessibilityState={{ selected: on }}
+                        onPress={() => {
+                          setCalMonth({ year: pickerYear, month });
+                          setPickerYear(null);
+                        }}
+                        style={[styles.monthCell, on && { backgroundColor: quest.gold }]}
+                      >
+                        <HudText size={13} color={on ? quest.onGold : quest.text}>
+                          {shortMonthLabel(month, language)}
+                        </HudText>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
             )}
+            <View style={styles.calRow}>
+              {weekdays.map((w) => (
+                <View key={w} style={styles.calCell}>
+                  <HudText size={11} color={quest.textSecondary}>
+                    {w}
+                  </HudText>
+                </View>
+              ))}
+            </View>
+            {monthGrid(calMonth).map((week, i) => (
+              <View key={i} style={styles.calRow}>
+                {week.map((dateKey, j) => {
+                  if (!dateKey) return <View key={j} style={styles.calCell} />;
+                  const day = dayByKey.get(dateKey);
+                  const deficit = day?.deficitKcal ?? null;
+                  const selected = selectedDay === dateKey;
+                  const deficitText = deficit == null ? '' : formatDeficitShort(deficit);
+                  const deficitLabel =
+                    deficit == null ? '' : `. ${t(deficit >= 0 ? 'history.deficitShort' : 'history.surplusShort')}: ${Math.round(Math.abs(deficit))} kcal`;
+                  return (
+                    <Pressable
+                      key={dateKey}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${formatDateVi(dateKey)}${deficitLabel}`}
+                      accessibilityState={{ selected }}
+                      onPress={() => openDay(dateKey)}
+                      style={[
+                        styles.calCell,
+                        styles.calDay,
+                        dateKey === todayKey && { borderColor: quest.gold },
+                        selected && { backgroundColor: quest.raised },
+                      ]}
+                    >
+                      <HudText size={13} color={day ? quest.text : quest.textSecondary}>
+                        {Number(dateKey.slice(8))}
+                      </HudText>
+                      <HudText size={10} weight="medium" color={deficit == null ? quest.textSecondary : deficit >= 0 ? quest.xp : quest.gold} numberOfLines={1}>
+                        {deficitText || ' '}
+                      </HudText>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+            <Meta>{t('history.calendarHint')}</Meta>
           </Panel>
-        );
-      })}
+          {selectedDay &&
+            (dayByKey.has(selectedDay) ? (
+              renderDay(dayByKey.get(selectedDay)!)
+            ) : (
+              <Meta style={styles.emptyText}>{t('history.noDataDay', { date: formatDateVi(selectedDay) })}</Meta>
+            ))}
+        </>
+      )}
     </ScrollView>
     <PhotoViewer
       photos={viewing ? viewing.photos.map((p) => ({ uri: p.photoUri, label: p.note || undefined })) : null}
@@ -643,4 +845,20 @@ const styles = StyleSheet.create({
   legendText: { marginTop: 0, fontSize: 11 },
   chartStyle: { borderRadius: questRadius.row },
   toggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  dailyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
+  segment: { flexDirection: 'row', borderRadius: 10, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, padding: 3, gap: 2, marginTop: 12 },
+  segmentItem: { minHeight: 36, minWidth: 44, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  monthHeader: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 },
+  monthCount: { marginTop: 0 },
+  calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  calNavButton: { width: 44, height: 44, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center', justifyContent: 'center' },
+  calTitle: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  calTitleText: { flex: 1, textAlign: 'center' },
+  picker: { borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, padding: 8, marginBottom: 10 },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  monthCell: { width: '23%', minHeight: 40, borderRadius: 8, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
+  calRow: { flexDirection: 'row' },
+  calCell: { flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 4 },
+  calDay: { minHeight: 48, borderRadius: 8, borderWidth: 1.5, borderColor: 'transparent', margin: 1 },
 });
+

@@ -12,16 +12,17 @@ import { useGameText, type GameKey } from '../../src/game/strings';
 import { estimateKcal, EXERCISE_BY_ID, type ExerciseId } from '../../src/game/training/exercises';
 import { exerciseName, formatAmount } from '../../src/game/training/format';
 import { applyRating, progressFor, type Rating } from '../../src/game/training/progress';
-import { speak, stopSpeaking } from '../../src/game/training/speech';
+import { preloadVoices, speak, stopSpeaking, type VoiceGender, type VoicePrefs } from '../../src/game/training/speech';
 import {
   dueEvents,
   repTimeline,
   restScript,
   resumeOffsetMs,
-  SPEECH,
+  SPEECH_TEXT,
   shouldCallHold,
   shouldCallRest,
   workScript,
+  type SpeechLang,
 } from '../../src/game/training/voice';
 import { buildSteps, sessionProgress, sessionReducer, startSession, totalSetsDone } from '../../src/game/training/session';
 import { useNow } from '../../src/game/useGameState';
@@ -119,6 +120,10 @@ export default function SessionScreen() {
   const progress = useTrainingStore((s) => s.progress);
   const voiceOn = useTrainingStore((s) => s.voiceOn);
   const setVoiceOn = useTrainingStore((s) => s.setVoiceOn);
+  const voiceLang = useTrainingStore((s) => s.voiceLang);
+  const voiceGender = useTrainingStore((s) => s.voiceGender);
+  const setVoiceLang = useTrainingStore((s) => s.setVoiceLang);
+  const setVoiceGender = useTrainingStore((s) => s.setVoiceGender);
   const commitRatings = useTrainingStore((s) => s.commitRatings);
   const addEntry = useWorkoutStore((s) => s.addEntry);
   const entries = useWorkoutStore((s) => s.entries);
@@ -148,13 +153,30 @@ export default function SessionScreen() {
   // Read inside effects without re-running them: turning the voice on mid-set must not replay the briefing.
   const voiceRef = useRef(voiceOn);
   voiceRef.current = voiceOn;
+  // The spoken language and gender, read the same way: a change applies from the next sentence on.
+  const prefsRef = useRef<VoicePrefs>({ lang: voiceLang, gender: voiceGender });
+  prefsRef.current = { lang: voiceLang, gender: voiceGender };
   const say = useCallback(
     (text: string, queue = false) => {
-      if (voiceRef.current) speak(text, { queue });
+      if (voiceRef.current) speak(text, { queue, voice: prefsRef.current });
     },
     []
   );
-  useEffect(() => () => stopSpeaking(), []);
+  /** The phrases in the voice's language (not the app's). */
+  const phrase = (key: keyof (typeof SPEECH_TEXT)['en']) => SPEECH_TEXT[prefsRef.current.lang][key];
+  useEffect(() => {
+    void preloadVoices();
+    return () => stopSpeaking();
+  }, []);
+
+  /** Switching language or gender cuts what is being said and introduces the new voice. */
+  function changeVoice(next: Partial<VoicePrefs>) {
+    if (next.lang) setVoiceLang(next.lang);
+    if (next.gender) setVoiceGender(next.gender);
+    prefsRef.current = { ...prefsRef.current, ...next };
+    stopSpeaking();
+    say(phrase('sample'));
+  }
   const [ratings, setRatings] = useState<Partial<Record<ExerciseId, Rating>>>({});
   const logged = useRef(false);
 
@@ -175,7 +197,7 @@ export default function SessionScreen() {
   useEffect(() => {
     if (state.phase !== 'work' || !step || !ex || !voiceRef.current) return;
     stopSpeaking();
-    workScript(step, ex, state.set).forEach((line) => speak(line, { queue: true }));
+    workScript(step, ex, state.set, prefsRef.current.lang).forEach((line) => speak(line, { queue: true, voice: prefsRef.current }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, state.step, state.set]);
 
@@ -183,7 +205,7 @@ export default function SessionScreen() {
   useEffect(() => {
     if (state.phase !== 'rest' || !voiceRef.current) return;
     const next = state.steps[state.step];
-    speak(restScript(state.restSec, next, next ? EXERCISE_BY_ID[next.id] : undefined));
+    speak(restScript(state.restSec, next, next ? EXERCISE_BY_ID[next.id] : undefined, prefsRef.current.lang), { voice: prefsRef.current });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, state.step, state.set, state.restSec]);
 
@@ -222,7 +244,7 @@ export default function SessionScreen() {
         } else if (e.kind === 'switch') {
           side.current = 2;
           dispatch({ type: 'setCount', count: 0 });
-          say(SPEECH.switchSides, true);
+          say(phrase('switchSides'), true);
         } else {
           setAuto(null);
           dispatch({ type: 'finishSet' });
@@ -239,7 +261,7 @@ export default function SessionScreen() {
     const repsDone = side.current === 2 ? step.amount + state.count : state.count;
     const offsetMs = resumeOffsetMs(timeline, repsDone);
     stopSpeaking();
-    if (offsetMs === 0) say(SPEECH.ready);
+    if (offsetMs === 0) say(phrase('ready'));
     setAuto({ startedAt: Date.now(), offsetMs });
   }
 
@@ -266,7 +288,7 @@ export default function SessionScreen() {
         : g('train.title');
     addEntry({ templateId: `home-${group || 'x'}`, label, durationMin, caloriesBurned: kcal });
     setResult({ durationMin, kcal });
-    say(SPEECH.allDone);
+    say(phrase('allDone'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, state.steps, addEntry, latestWeight, startWeightKg, lang, g, group]);
 
@@ -472,6 +494,29 @@ export default function SessionScreen() {
           </HudText>
         </View>
 
+        {voiceOn && (
+          <View style={styles.voiceRow}>
+            <VoiceOptions
+              label={g('train.v.lang')}
+              value={voiceLang}
+              options={[
+                { key: 'vi', label: g('train.v.vi') },
+                { key: 'en', label: g('train.v.en') },
+              ]}
+              onChange={(lang: SpeechLang) => changeVoice({ lang })}
+            />
+            <VoiceOptions
+              label={g('train.v.gender')}
+              value={voiceGender}
+              options={[
+                { key: 'female', label: g('train.v.female') },
+                { key: 'male', label: g('train.v.male') },
+              ]}
+              onChange={(gender: VoiceGender) => changeVoice({ gender })}
+            />
+          </View>
+        )}
+
         <View style={styles.segments} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {state.steps.map((s, i) => (
             <View key={i} style={styles.segGroup}>
@@ -531,7 +576,7 @@ export default function SessionScreen() {
               title={g('train.s.startTimer')}
               onPress={() => {
                 setHoldStartedAt(Date.now());
-                say(SPEECH.go);
+                say(phrase('go'));
               }}
             />
           ) : (
@@ -562,6 +607,43 @@ export default function SessionScreen() {
   );
 }
 
+/** A two-way choice for the voice (language or gender), as a small segmented control. */
+function VoiceOptions<K extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: K;
+  options: { key: K; label: string }[];
+  onChange: (key: K) => void;
+}) {
+  return (
+    <View style={styles.rateButtons} accessibilityRole="radiogroup" accessibilityLabel={label}>
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <Pressable
+            key={o.key}
+            accessibilityRole="radio"
+            accessibilityLabel={`${label}: ${o.label}`}
+            accessibilityState={{ selected: on }}
+            onPress={() => {
+              if (!on) onChange(o.key);
+            }}
+            style={[styles.rate, on && { backgroundColor: quest.gold }]}
+          >
+            <HudText size={13} color={on ? quest.onGold : quest.textSecondary}>
+              {o.label}
+            </HudText>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 function buildPrescription(s: { sets: number; amount: number; unit: 'reps' | 'seconds'; perSide: boolean; id: ExerciseId; level: 1 | 2 | 3 | 4 }) {
   return { ...EXERCISE_BY_ID[s.id].levels[s.level - 1] };
 }
@@ -575,6 +657,7 @@ const styles = StyleSheet.create({
   eyebrow: { letterSpacing: 1.6 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   close: { width: 44, height: 44, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, alignItems: 'center', justifyContent: 'center' },
+  voiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'flex-end' },
   segments: { flexDirection: 'row', gap: 8 },
   segGroup: { flex: 1, flexDirection: 'row', gap: 3 },
   seg: { flex: 1, height: 6, borderRadius: 3, backgroundColor: quest.raised },

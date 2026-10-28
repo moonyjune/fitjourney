@@ -10,6 +10,7 @@ import { buildSteps, sessionReducer, startSession } from '../training/session';
 import {
   LEAD_IN_MS,
   REST_COUNTDOWN_FROM,
+  SPEECH_TEXT,
   SWITCH_PAUSE_MS,
   dueEvents,
   repTimeline,
@@ -91,7 +92,7 @@ describe('hold and rest call-outs', () => {
   });
 });
 
-describe('spoken scripts (always English, whatever the app language is)', () => {
+describe('spoken scripts (English by default, whatever the app language is)', () => {
   const squat = EXERCISE_BY_ID.chairSquat;
   const [step] = buildSteps([{ id: 'chairSquat', level: 1 }]);
 
@@ -129,6 +130,32 @@ describe('spoken scripts (always English, whatever the app language is)', () => 
       const lines = [...workScript(st, EXERCISE_BY_ID[id], 0), ...workScript(st, EXERCISE_BY_ID[id], 1), restScript(30, st, EXERCISE_BY_ID[id])];
       for (const line of lines) expect(line).not.toMatch(vi);
     }
+  });
+});
+
+describe('spoken scripts in Vietnamese (voice language vi)', () => {
+  const squat = EXERCISE_BY_ID.chairSquat;
+  const [step] = buildSteps([{ id: 'chairSquat', level: 1 }]);
+
+  it('briefs in Vietnamese: the Vietnamese name, amount and steps', () => {
+    const lines = workScript(step, squat, 0, 'vi');
+    expect(lines[0]).toBe('Squat ngồi ghế');
+    expect(lines[1]).toBe('3 hiệp, mỗi hiệp 8 lần.');
+    expect(lines.slice(2, 5)).toEqual(squat.steps.map((s) => s.vi));
+    expect(lines[lines.length - 1]).toBe(SPEECH_TEXT.vi.pressStart);
+    expect(workScript(step, squat, 1, 'vi')).toEqual(['Hiệp 2 trên 3.']);
+  });
+
+  it('announces rests and one-sided sets in Vietnamese', () => {
+    const [next] = buildSteps([{ id: 'wallPushup', level: 1 }]);
+    expect(restScript(40, next, EXERCISE_BY_ID.wallPushup, 'vi')).toBe(`Nghỉ 40 giây. Tiếp theo: ${EXERCISE_BY_ID.wallPushup.nameVi}, 3 hiệp, mỗi hiệp 8 lần.`);
+    const [bird] = buildSteps([{ id: 'birdDog', level: 1 }]);
+    expect(workScript(bird, EXERCISE_BY_ID.birdDog, 0, 'vi')).toContain(SPEECH_TEXT.vi.bothSides);
+    expect(spokenAmount(bird, 'vi')).toMatch(/mỗi bên/);
+  });
+
+  it('has every phrase in both languages', () => {
+    expect(Object.keys(SPEECH_TEXT.vi).sort()).toEqual(Object.keys(SPEECH_TEXT.en).sort());
   });
 });
 

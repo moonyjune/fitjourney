@@ -21,6 +21,7 @@ jest.mock('../training/speech', () => ({
   speak: (text: string, o: { queue?: boolean }) => mockSpeak(text, o),
   stopSpeaking: () => mockStop(),
   isSpeechAvailable: () => true,
+  preloadVoices: () => Promise.resolve(),
 }));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -341,7 +342,7 @@ describe('Train tab, exercise detail and session', () => {
     beforeEach(() => {
       mockSpeak.mockClear();
       mockStop.mockClear();
-      useTrainingStore.setState({ voiceOn: true });
+      useTrainingStore.setState({ voiceOn: true, voiceLang: 'en', voiceGender: 'female' });
       mockParams = { ids: 'chairSquat', group: 'A' };
     });
 
@@ -506,6 +507,36 @@ describe('Train tab, exercise detail and session', () => {
       // The on-screen text still follows the app language.
       useSettingsStore.setState({ language: 'vi' });
       expect(allText(render(<SessionScreen />))).toContain('Squat ngồi ghế');
+    });
+
+    it('speaks Vietnamese when the voice language is Vietnamese, with the chosen gender, even if the app is in English', () => {
+      useSettingsStore.setState({ language: 'en' });
+      useTrainingStore.setState({ voiceLang: 'vi', voiceGender: 'male' });
+      render(<SessionScreen />);
+      expect(spoken()[0]).toBe('Squat ngồi ghế');
+      expect(spoken()[1]).toBe('3 hiệp, mỗi hiệp 8 lần.');
+      expect(spoken()).toContain(EXERCISE_BY_ID.chairSquat.steps[0].vi);
+      expect(mockSpeak.mock.calls.every(([, o]) => (o as { voice?: { lang: string; gender: string } }).voice?.lang === 'vi')).toBe(true);
+      expect((mockSpeak.mock.calls[0][1] as { voice: { gender: string } }).voice.gender).toBe('male');
+    });
+
+    it('switches language and gender from the picker: saved, the old speech is cut and the new voice says hello', () => {
+      useSettingsStore.setState({ language: 'vi' });
+      const r = render(<SessionScreen />);
+      mockSpeak.mockClear();
+      mockStop.mockClear();
+      act(() => pressable(r, byLabel('Ngôn ngữ giọng nói: Tiếng Việt')).props.onPress());
+      expect(useTrainingStore.getState().voiceLang).toBe('vi');
+      expect(mockStop).toHaveBeenCalled();
+      expect(spoken()).toEqual(['Xin chào! Mình sẽ hướng dẫn bạn tập.']);
+      act(() => pressable(r, byLabel('Giọng nam hay nữ: Nam')).props.onPress());
+      expect(useTrainingStore.getState().voiceGender).toBe('male');
+      const last = mockSpeak.mock.calls[mockSpeak.mock.calls.length - 1][1] as { voice: { lang: string; gender: string } };
+      expect(last.voice).toEqual({ lang: 'vi', gender: 'male' });
+      // Counting after the switch is in the new voice too.
+      mockSpeak.mockClear();
+      press(r, 'Bắt đầu, tự đếm');
+      expect(spoken()).toEqual(['Chuẩn bị.']);
     });
 
     it('cheers when the workout is complete', () => {
