@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.20 | no | — |
 | 0.19 | no | — |
 | 0.18 | no | — |
 | 0.17 | no | — |
@@ -31,6 +32,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.20
+- "Nhập bằng chữ" is merged into the add-food screen (Món ngoài kế hoạch): one screen with the description ("Bạn đã ăn gì?"), up to 3 photos and "Hỏi AI" (text only, photos only, or both, sent together to the AI). Foods your database knows are still taken from it without the AI. The same screen keeps the food-database lookup, "Đọc nhãn", manual entry ("Thêm món tự nhập"), meal time, exact time, junk switch, live comments and swaps. The old /text-meal link now opens this screen.
+- Every food line (from the AI, the database, a label or typed) has an amount field ("Lượng", unit read from the name: g, ml, quả, bát…). Changing it works out calories, protein, purine, salt and sugar again in proportion, offline. A figure typed by hand still wins, and the next amount change starts from it.
+- History / Journal: a meal saved as one food now shows its detail too (total kcal on top, the food below with the pencil to change its amount); editing it rescales the food's name and figures.
+- Skipping a meal: "Không ăn <bữa>" on the add-food screen (after choosing breakfast, lunch or dinner), and "Bữa chưa ghi: Không ăn …" chips in History's day table for main meals with nothing logged, so a skipped meal is not counted as one missing by mistake.
 
 ## 0.19
 - Quick add (+): a "Ghi cho ngày" row with ‹ › picks the day (today back to 30 days ago, never the future). Meals, off-plan food (including "Nhập bằng chữ" opened from there) and water go to that day; the screens show "Đang ghi cho: …" and the add button names the day. Weight, check-in and workouts still log for today.

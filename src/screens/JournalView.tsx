@@ -12,7 +12,7 @@ import { getDayType } from '../constants/plan';
 import { useGameText, type GameKey } from '../game/strings';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
-import { replacePartPatch } from '../food/partScale';
+import { editListedPartPatch, partsOrSelf } from '../food/singlePart';
 import { useDayEvaluator, useNow } from '../game/useGameState';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 import type { StringKey } from '../i18n/strings';
@@ -354,6 +354,8 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
   }
   let detail: MealDetail | null = null;
   if (openItem?.kind === 'extra') {
+    // A meal saved as one food lists itself as its one part, so it reads (and its amount changes) like a meal of several.
+    const stored = logs[selectedKey]?.extraItems?.find((i) => i.id === rawExtraId(openItem));
     detail = {
       title: openItem.name || g('journal.extra'),
       time: clock(openItem.minutes),
@@ -362,7 +364,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
       purineMg: openItem.purineMg,
       sugarG: openItem.sugarG,
       saltG: openItem.saltG,
-      parts: openItem.parts,
+      parts: stored ? partsOrSelf(stored) : openItem.parts,
       photos: photosOf(openItem),
     };
   } else if (openItem?.kind === 'meal') {
@@ -372,7 +374,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
     if (client || openItem?.kind !== 'extra') return;
     const id = rawExtraId(openItem);
     const stored = logs[selectedKey]?.extraItems?.find((i) => i.id === id);
-    const patch = stored ? replacePartPatch(stored, index, part) : null;
+    const patch = stored ? editListedPartPatch(stored, index, part) : null;
     if (patch) updateExtra(selectedKey, id, patch);
   }
   async function addPhoto(uri: string): Promise<boolean> {

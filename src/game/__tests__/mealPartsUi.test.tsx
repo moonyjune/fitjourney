@@ -62,14 +62,36 @@ describe('Profile > Nutrition: a meal with its parts', () => {
     expect(text.replace(/\s+/g, '')).toContain('(08:00)');
   });
 
-  it('shows no detail block for a meal without parts', () => {
-    const text = allText(mount({ items: [meal({ parts: undefined, name: 'Phở bò' })] }));
-    expect(text).toContain('Phở bò');
+  it('a meal saved as one food shows itself as its one part (same detail block as a meal of several)', () => {
+    const text = allText(mount({ items: [meal({ parts: undefined, name: 'Phở bò 400g', calories: 450, proteinG: 25 })] }));
+    expect(text).toContain('Phở bò 400g');
+    expect(text).toContain('Chi tiết');
+    expect(text).toContain('• Phở bò 400g: 450 kcal · 25 g đạm');
+  });
+
+  it('once the meal\'s calories no longer match its parts, the untrue parts are hidden and the meal is its own part', () => {
+    const text = allText(mount({ items: [meal({ calories: 400 })] }));
+    expect(text).not.toContain('• Yến mạch 30g: 110 kcal');
+    expect(text).toContain(`• ${TITLE}: 400 kcal`);
+  });
+
+  it('a "Không ăn" record has no detail block', () => {
+    const text = allText(mount({ items: [meal({ parts: undefined, name: 'Không ăn', calories: 0, proteinG: 0, purineMg: undefined, saltG: undefined, sugarG: undefined })] }));
+    expect(text).toContain('Không ăn');
     expect(text).not.toContain('Chi tiết');
   });
 
-  it('hides the detail once the meal\'s calories no longer match its parts (the parts would be untrue)', () => {
-    expect(allText(mount({ items: [meal({ calories: 400 })] }))).not.toContain('Chi tiết');
+  it('editable: changing the amount of a single food scales the food itself, and its name follows', () => {
+    const saved: DailyLogDraft[] = [];
+    const r = mount({ editable: true, onSave: (d) => saved.push(d), items: [meal({ parts: undefined, name: 'Cơm trắng 150g', calories: 195, proteinG: 4, purineMg: 30, saltG: undefined, sugarG: undefined })] });
+    act(() => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Sửa lượng Cơm trắng 150g')[0].props.onPress());
+    act(() => input(r, 'Lượng').props.onChangeText('300'));
+    act(() => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Lưu')[0].props.onPress());
+    expect(allText(r)).toContain('• Cơm trắng 300g: 390 kcal · 8 g đạm');
+    act(() => save(r));
+    const item = saved[0].extraItems[0];
+    expect(item).toMatchObject({ name: 'Cơm trắng 300g', calories: 390, proteinG: 8, purineMg: 60 });
+    expect(item.parts).toBeUndefined();
   });
 
   it('editable: the time box shows the meal\'s time, and changing it moves the whole meal (its parts have no time of their own)', () => {

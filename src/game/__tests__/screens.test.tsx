@@ -264,7 +264,7 @@ describe('FitQuest logging screens', () => {
       const r = render(<AddFoodScreen />);
       act(() => pressable(r, (l) => l === 'Thêm vào hôm nay').props.onPress());
       expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
-      expect(allText(r)).toContain('Nhập calo hoặc đạm lớn hơn 0.');
+      expect(allText(r)).toContain('Hãy mô tả món đã ăn, thêm ảnh, hoặc nhập tên món.');
       expect(mockRouter.back).not.toHaveBeenCalled();
     });
 
@@ -453,6 +453,32 @@ describe('FitQuest logging screens', () => {
       expect(allText(r)).toContain('Lượng phải lớn hơn 0');
       const save = r.root.findAll((n) => n.props.accessibilityLabel === 'Lưu' && n.props.accessibilityState)[0];
       expect(save.props.accessibilityState.disabled).toBe(true);
+    });
+
+    it('a meal saved as ONE food shows the total and itself as its one part, and its amount changes the same way', () => {
+      useNutritionStore.getState().addExtra(DATE, 'MỘT-MÓN 150g', 195, 4, 'dinner', { purineMg: 30, fromFoodDb: true });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('MỘT-MÓN 150g')).props.onPress());
+      expect(allText(r)).toContain('Thành phần'.toUpperCase());
+      expect(allText(r)).toContain('MỘT-MÓN 150g · 195 kcal · 4 g đạm');
+      act(() => pressable(r, (l) => l === 'Sửa lượng MỘT-MÓN 150g').props.onPress());
+      const input = r.root.findAll((n) => n.props.accessibilityLabel === 'Lượng' && typeof n.props.onChangeText === 'function')[0];
+      expect(input.props.value).toBe('150');
+      act(() => input.props.onChangeText('300'));
+      act(() => pressable(r, (l) => l === 'Lưu').props.onPress());
+
+      const saved = useNutritionStore.getState().getLog(DATE).extraItems.find((i) => i.name.startsWith('MỘT-MÓN'))!;
+      expect(saved).toMatchObject({ name: 'MỘT-MÓN 300g', calories: 390, proteinG: 8, purineMg: 60 });
+      expect(saved.parts).toBeUndefined();
+      expect(allText(r)).toContain('MỘT-MÓN 300g · 390 kcal · 8 g đạm');
+    });
+
+    it('a "Không ăn" record opens with no part list', () => {
+      useNutritionStore.getState().addExtra(DATE, 'Không ăn', 0, 0, 'dinner', { fromFoodDb: true });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('Không ăn')).props.onPress());
+      expect(allText(r)).not.toContain('Thành phần'.toUpperCase());
+      expect(r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Sửa lượng'))).toHaveLength(0);
     });
 
     it('removes the photo of a logged meal from the dialog, and the meal keeps its figures', async () => {

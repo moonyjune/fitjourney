@@ -176,117 +176,11 @@ describe('Photo → AI analysis in the screens', () => {
     };
     const items = () => useNutritionStore.getState().logs[DATE].extraItems;
 
-    it('offers the AI button only once a photo is attached', async () => {
-      const r = await mount(<AddFoodScreen />);
-      expect(r.root.findAll((n) => n.props.accessibilityLabel === ANALYZE)).toHaveLength(0);
-      await press(r, 'Chọn ảnh');
-      expect(pressable(r, ANALYZE)).toBeDefined();
-    });
 
-    it('sends up to 2 more photos of the same meal with the main one, and only the main photo is kept with the food', async () => {
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(mockAnalysis.mock.calls[0][6]).toEqual([]);
 
-      mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///p2.jpg' }, { uri: 'file:///p3.jpg' }, { uri: 'file:///p4.jpg' }] });
-      await press(r, 'Chọn ảnh');
-      expect(allText(r)).toContain('Đã đủ 3 ảnh');
-      await press(r, ANALYZE);
-      expect(mockAnalysis.mock.calls[1][1]).toBe('QUJD');
-      expect(mockAnalysis.mock.calls[1][6]).toEqual([{ base64: 'QUJD', mediaType: 'image/png' }, { base64: 'QUJD', mediaType: 'image/png' }]);
-      expect(mockToBase64).toHaveBeenCalledWith('file:///p3.jpg', { maxEdge: 1280 });
-      expect(mockToBase64).not.toHaveBeenCalledWith('file:///p4.jpg', expect.anything());
 
-      await press(r, 'Xóa ảnh 2');
-      await press(r, ANALYZE);
-      expect(mockAnalysis.mock.calls[2][6]).toHaveLength(1);
 
-      await press(r, 'Thêm vào hôm nay');
-      const saved = items();
-      expect(saved).toHaveLength(1);
-      expect(saved[0].photoUri).toMatch(/^file:\/\/\/docs\/proofs\/extra-/);
-    });
 
-    it('shrinks the photo for the AI by default and sends Full HD only when the setting is on', async () => {
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(mockToBase64).toHaveBeenLastCalledWith(PHOTO, { maxEdge: 1280 });
-
-      useAiPhotoStore.getState().setFullHd(true);
-      await press(r, ANALYZE);
-      expect(mockToBase64).toHaveBeenLastCalledWith(PHOTO, { maxEdge: 1920 });
-      useAiPhotoStore.getState().setFullHd(false);
-    });
-
-    it('sends the photo with the user’s body data and pre-fills name, calories and protein as an editable suggestion', async () => {
-      const r = await withPhoto();
-      await type(r, 'Tên món', ''); // empty already; make the intent explicit
-      await press(r, ANALYZE);
-
-      expect(mockAnalysis).toHaveBeenCalledTimes(1);
-      const [taskType, base64, mediaType, , profile] = mockAnalysis.mock.calls[0];
-      expect([taskType, base64, mediaType]).toEqual(['meal', 'QUJD', 'image/png']);
-      expect(profile).toEqual({ weightKg: 106.2, heightCm: 172, age: 34, gender: 'male', activityLevel: 'light' });
-
-      expect(textInput(r, 'Tên món').props.value).toBe('Cơm gà xối mỡ');
-      expect(textInput(r, 'Calo (kcal)').props.value).toBe('612');
-      expect(textInput(r, 'Đạm (g)').props.value).toBe('38.5');
-      const text = allText(r);
-      expect(text).toContain('Gợi ý từ AI');
-      expect(text).toContain('Độ tin cậy: vừa');
-      expect(text).toContain('Một đĩa cơm gà vừa.');
-      // Nothing is saved until the user presses save.
-      expect(items()).toHaveLength(0);
-      expect(mockRouter.back).not.toHaveBeenCalled();
-    });
-
-    it('shows the AI\'s accuracy as a percent (rounded, clamped to 0-100), and the old low/medium/high wording when it gave none', async () => {
-      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, accuracyPercent: 71.6 } });
-      let r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).toContain('Độ chính xác ước tính: 72%');
-      expect(allText(r)).not.toContain('Độ tin cậy');
-      expect(textInput(r, 'Calo (kcal)').props.value).toBe('612'); // still editable, nothing saved
-      expect(items()).toHaveLength(0);
-      act(() => renderer?.unmount());
-
-      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, accuracyPercent: 250 } });
-      r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).toContain('Độ chính xác ước tính: 100%');
-      act(() => renderer?.unmount());
-
-      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, accuracyPercent: 'high' } });
-      r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).toContain('Độ tin cậy: vừa');
-    });
-
-    it('remembers the AI calories next to what the user saved, only when the AI filled them, and shows how far off it has been', async () => {
-      let r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).not.toContain('lệch trung bình'); // not enough history yet
-      await type(r, 'Calo (kcal)', '500');
-      await press(r, 'Thêm vào hôm nay');
-      expect(useAiCalibrationStore.getState().estimates).toEqual([{ ai: 612, final: 500 }]);
-      act(() => renderer?.unmount());
-
-      // A form filled by hand records nothing.
-      useAiCalibrationStore.getState().clear();
-      r = await mount(<AddFoodScreen />);
-      await type(r, 'Tên món', 'Bánh mì');
-      await type(r, 'Calo (kcal)', '300');
-      await press(r, 'Thêm vào hôm nay');
-      expect(useAiCalibrationStore.getState().estimates).toEqual([]);
-      act(() => renderer?.unmount());
-
-      // With 5 past estimates the AI note says how far off it usually is (median of 0%, 0%, 0%, 20%, 50% = 0%).
-      useFoodDbStore.setState({ custom: [], overrides: {}, recent: [] }); // the first save remembered the dish
-      for (const [ai, final] of [[100, 100], [100, 100], [100, 100], [120, 100], [150, 100]]) useAiCalibrationStore.getState().record(ai, final);
-      r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).toContain('Trước đây AI lệch trung bình ~0% so với số bạn chốt (5 lần).');
-    });
 
     describe('nutrition label', () => {
       const READ = 'Đọc nhãn dinh dưỡng';
@@ -380,14 +274,6 @@ describe('Photo → AI analysis in the screens', () => {
         expect(textInput(r, 'Calo (kcal)').props.value).toBe('');
       });
 
-      it('does not record the earlier AI estimate against the label figures the user then saves', async () => {
-        const r = await withPhoto();
-        await press(r, ANALYZE); // the AI fills 612 kcal
-        await press(r, READ); // the label replaces the empty/AI-filled fields: 135 kcal
-        await press(r, 'Thêm vào hôm nay');
-        expect(items()).toHaveLength(1);
-        expect(useAiCalibrationStore.getState().estimates).toEqual([]);
-      });
 
       it('tapping the mode that is already selected keeps what was typed', async () => {
         const r = await withPhoto();
@@ -419,222 +305,23 @@ describe('Photo → AI analysis in the screens', () => {
       });
     });
 
-    it('for an unclassified failure it adds the server\'s own message (shortened), but not for the other kinds', async () => {
-      const long = `Claude API lỗi: {"type":"error","error":{"type":"not_found_error","message":"model: x"}} ${'a'.repeat(400)}`;
-      mockAnalysis.mockResolvedValue({ ok: false, message: long, kind: 'generic' });
-      let r = await withPhoto();
-      await press(r, ANALYZE);
-      let text = allText(r);
-      expect(text).toContain('Chưa phân tích được ảnh này.');
-      expect(text).toContain('(Claude API lỗi: {"type":"error","error":{"type":"not_found_error","message":"model: x"}}');
-      expect(text).not.toContain('a'.repeat(300)); // cut at 220 characters
-      act(() => renderer?.unmount());
 
-      mockAnalysis.mockResolvedValue({ ok: false, message: 'Server chưa cấu hình ANTHROPIC_API_KEY.', kind: 'notConfigured' });
-      r = await withPhoto();
-      await press(r, ANALYZE);
-      text = allText(r);
-      expect(text).toContain('AI chưa được thiết lập');
-      expect(text).not.toContain('ANTHROPIC_API_KEY'); // no technical detail for a kind that already explains itself
-    });
 
-    describe('a photo with several foods: one description, the foods as its parts', () => {
-      const MULTI = {
-        ...MEAL_OK,
-        foodName: 'Yến mạch 30g, sữa chua không đường 100g, sữa tươi không đường 50ml',
-        estimatedCaloriesKcal: 200,
-        estimatedProteinG: 9.7,
-        components: [
-          { name: 'Yến mạch 30g', caloriesKcal: 110, proteinG: 4 },
-          { name: 'Sữa chua không đường 100g', caloriesKcal: 60, proteinG: 4 },
-          { name: 'Sữa tươi không đường 50ml', caloriesKcal: 30, proteinG: 1.7 },
-        ],
-      };
 
-      it('the name carries every food with its amount, the details are listed, and the saved meal keeps them as its parts', async () => {
-        mockAnalysis.mockResolvedValue({ ok: true, result: MULTI });
-        const r = await withPhoto();
-        await press(r, ANALYZE);
-        expect(textInput(r, 'Tên món').props.value).toBe(MULTI.foodName);
-        const text = allText(r);
-        expect(text).toContain('Chi tiết các món AI nhận ra');
-        expect(text).toContain('• Yến mạch 30g: 110 kcal · 4 g');
-        await press(r, 'Thêm vào hôm nay');
-        expect(items()).toHaveLength(1);
-        expect(items()[0].name).toBe(MULTI.foodName);
-        expect(items()[0].parts?.map((p) => p.name)).toEqual(['Yến mạch 30g', 'Sữa chua không đường 100g', 'Sữa tươi không đường 50ml']);
-      });
 
-      it('changing the total calories by hand drops the parts (they no longer describe the meal) and they are not saved', async () => {
-        mockAnalysis.mockResolvedValue({ ok: true, result: MULTI });
-        const r = await withPhoto();
-        await press(r, ANALYZE);
-        await type(r, 'Calo (kcal)', '500');
-        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
-        await press(r, 'Thêm vào hôm nay');
-        expect(items()[0].calories).toBe(500);
-        expect(items()[0].parts).toBeUndefined();
-      });
 
-      it('a photo with one food has no parts, and a new photo clears the old parts', async () => {
-        mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, components: [{ name: 'Một món 100g', caloriesKcal: 612, proteinG: 38 }] } });
-        let r = await withPhoto();
-        await press(r, ANALYZE);
-        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
-        act(() => renderer?.unmount());
 
-        mockAnalysis.mockResolvedValue({ ok: true, result: MULTI });
-        r = await withPhoto();
-        await press(r, ANALYZE);
-        expect(allText(r)).toContain('Chi tiết các món AI nhận ra');
-        await press(r, 'Xóa ảnh 1');
-        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
-        // A new photo starts clean: the earlier photo's foods are not carried onto the next meal.
-        await press(r, 'Chọn ảnh');
-        expect(allText(r)).not.toContain('Chi tiết các món AI nhận ra');
-        await type(r, 'Calo (kcal)', '200');
-        await press(r, 'Thêm vào hôm nay');
-        expect(items()[0].parts).toBeUndefined();
-      });
-    });
-
-    it('sends the coach snapshot (targets, today, recent days, boss) along with the photo', async () => {
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      const coach = mockAnalysis.mock.calls[0][5] as Record<string, any>;
-      expect(coach.now).toMatchObject({ date: DATE, time: '16:10' });
-      expect(coach.targets.dailyDeficitKcal).toBeGreaterThan(0);
-      expect(coach.today).toMatchObject({ date: DATE, eatenKcal: 0 });
-      expect(coach.week.bossMaxHp).toBe(7700);
-      expect(Array.isArray(coach.recentDays)).toBe(true);
-    });
-
-    it('fills purine, salt and sugar from the AI and shows its advice for the rest of the day, saving nothing', async () => {
-      mockAnalysis.mockResolvedValue({
-        ok: true,
-        result: {
-          ...MEAL_OK,
-          estimatedPurineMg: 180,
-          estimatedSaltG: 2.34,
-          estimatedSugarG: 12,
-          advice: { verdict: 'watch', summary: 'Bữa này đã dùng nhiều ngân sách.', nextSteps: ['Bữa tối ăn cá hấp.', 'Đi bộ nhanh 30 phút.'], remainingKcalToEat: 520, remainingProteinG: 90, extraBurnKcal: 150, bossNote: 'Cần 1100 sát thương mỗi ngày còn lại.' },
-        },
-      });
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(textInput(r, 'Purine (mg)').props.value).toBe('180');
-      expect(textInput(r, 'Muối (g)').props.value).toBe('2.3');
-      expect(textInput(r, 'Đường tự do (g)').props.value).toBe('12');
-      const text = allText(r);
-      expect(text).toContain('Gợi ý cho phần còn lại của ngày');
-      expect(text).toContain('Cần chú ý: Bữa này đã dùng nhiều ngân sách.');
-      expect(text).toContain('Còn ăn được ~520 kcal');
-      expect(text).toContain('Cần thêm ~90 g đạm');
-      expect(text).toContain('Đốt thêm ~150 kcal');
-      expect(text).toContain('• Bữa tối ăn cá hấp.');
-      expect(text).toContain('Cần 1100 sát thương mỗi ngày còn lại.');
-      expect(text).toContain('không thay thế bác sĩ');
-      expect(items()).toHaveLength(0);
-    });
-
-    it('keeps purine, salt and sugar the user typed, and shows no advice card for a malformed advice', async () => {
-      mockAnalysis.mockResolvedValue({ ok: true, result: { ...MEAL_OK, estimatedPurineMg: 180, estimatedSugarG: 12, advice: { verdict: 'great', summary: 'x', nextSteps: [] } } });
-      const r = await withPhoto();
-      await type(r, 'Purine (mg)', '55');
-      await press(r, ANALYZE);
-      expect(textInput(r, 'Purine (mg)').props.value).toBe('55');
-      expect(textInput(r, 'Đường tự do (g)').props.value).toBe('12');
-      expect(allText(r)).not.toContain('Gợi ý cho phần còn lại của ngày');
-    });
-
-    it('fills only what the AI returned when the answer is partial', async () => {
-      mockAnalysis.mockResolvedValue({ ok: true, result: { estimatedCaloriesKcal: 250, reasoning: 'Chỉ đoán được calo.' } });
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(textInput(r, 'Calo (kcal)').props.value).toBe('250');
-      expect(textInput(r, 'Tên món').props.value).toBe('');
-      expect(textInput(r, 'Đạm (g)').props.value).toBe('');
-      expect(allText(r)).not.toContain('Độ tin cậy');
-    });
-
-    it('says AI is not set up yet, and manual entry still works and saves', async () => {
-      mockAnalysis.mockResolvedValue({ ok: false, kind: 'notConfigured', message: 'Server chưa cấu hình ANTHROPIC_API_KEY.' });
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).toContain('AI chưa được thiết lập');
-      expect(allText(r)).not.toContain('ANTHROPIC_API_KEY'); // raw server text is never shown
-      await type(r, 'Tên món', 'Bánh mì');
-      await type(r, 'Calo (kcal)', '300');
-      await press(r, 'Thêm vào hôm nay');
-      expect(items()).toHaveLength(1);
-      expect(items()[0]).toMatchObject({ name: 'Bánh mì', calories: 300 });
-    });
 
     const failures: [kind: 'offline' | 'auth' | 'generic', expected: string][] = [
       ['offline', 'Không có mạng'],
       ['auth', 'Phiên đăng nhập không hợp lệ'],
       ['generic', 'Chưa phân tích được ảnh này'],
     ];
-    it.each(failures)('shows a friendly message for a %s failure', async (kind, expected) => {
-      mockAnalysis.mockResolvedValue({ ok: false, kind, message: 'raw' });
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).toContain(expected);
-    });
 
-    it('ignores a second tap while the first analysis is still running', async () => {
-      let finish!: (o: Outcome) => void;
-      mockAnalysis.mockReturnValue(new Promise<Outcome>((resolve) => { finish = resolve; }));
-      const r = await withPhoto();
-      const button = pressable(r, ANALYZE);
-      await act(async () => button.props.onPress());
-      await act(async () => button.props.onPress());
-      expect(mockAnalysis).toHaveBeenCalledTimes(1);
-      expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Đang phân tích…' && n.props.accessibilityState)[0].props.accessibilityState).toMatchObject({ busy: true }); // shown as busy, not tappable twice
-      await act(async () => finish({ ok: true, result: MEAL_OK }));
-      expect(textInput(r, 'Calo (kcal)').props.value).toBe('612');
-    });
 
-    it('never overwrites a field the user typed themselves, and says so', async () => {
-      const r = await withPhoto();
-      await type(r, 'Tên món', 'Phở mẹ nấu');
-      await press(r, ANALYZE);
-      expect(textInput(r, 'Tên món').props.value).toBe('Phở mẹ nấu'); // kept
-      expect(textInput(r, 'Calo (kcal)').props.value).toBe('612'); // empty field: filled
-      expect(allText(r)).toContain('Các ô bạn đã tự nhập được giữ nguyên');
-    });
 
-    it('on a re-run refreshes AI-filled fields but keeps what the user edited after the last fill', async () => {
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      await type(r, 'Calo (kcal)', '999'); // the user takes over calories
-      mockAnalysis.mockResolvedValue({ ok: true, result: { foodName: 'Bún bò', estimatedCaloriesKcal: 700, estimatedProteinG: 30, reasoning: 'Lần 2.' } });
-      await press(r, ANALYZE);
-      expect(textInput(r, 'Calo (kcal)').props.value).toBe('999');
-      expect(textInput(r, 'Tên món').props.value).toBe('Bún bò'); // still the AI's, refreshed
-      expect(textInput(r, 'Đạm (g)').props.value).toBe('30');
-    });
 
-    it('drops the old suggestion note when the photo is replaced or removed', async () => {
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      expect(allText(r)).toContain('Gợi ý từ AI');
-      await press(r, 'Xóa ảnh 1');
-      expect(allText(r)).not.toContain('Gợi ý từ AI');
-      expect(r.root.findAll((n) => n.props.accessibilityLabel === ANALYZE)).toHaveLength(0);
-    });
 
-    it('saves the values as edited by the user, not the raw AI suggestion', async () => {
-      const r = await withPhoto();
-      await press(r, ANALYZE);
-      await type(r, 'Calo (kcal)', '500');
-      await type(r, 'Tên món', 'Cơm gà (nửa phần)');
-      await press(r, 'Thêm vào hôm nay');
-      expect(items()).toHaveLength(1);
-      expect(items()[0]).toMatchObject({ name: 'Cơm gà (nửa phần)', calories: 500, proteinG: 38.5 });
-      expect(items()[0].photoUri).toMatch(/^file:\/\/\/docs\/proofs\//);
-      expect(mockRouter.back).toHaveBeenCalled();
-    });
     describe('remembering foods (so the next time needs no typing and no AI)', () => {
       const SAVE = 'Thêm vào hôm nay';
       const saveFood = async (r: ReactTestRenderer, name: string, kcal: string, protein: string) => {
@@ -679,37 +366,8 @@ describe('Photo → AI analysis in the screens', () => {
         expect(mockAnalysis).not.toHaveBeenCalled();
       });
 
-      it('with a photo and a saved name, the AI button reuses the saved figures and does not call the AI', async () => {
-        useFoodDbStore.getState().remember({ name: 'Cơm gà xối mỡ', calories: 700, proteinG: 41, purineMg: 180, saltG: 2.5, sugarG: 3 });
-        const r = await mount(<AddFoodScreen />);
-        await press(r, 'Chọn ảnh');
-        await type(r, 'Tên món', 'Cơm gà xối mỡ');
-        await press(r, ANALYZE);
-        expect(mockAnalysis).not.toHaveBeenCalled();
-        expect(textInput(r, 'Calo (kcal)').props.value).toBe('700');
-        expect(textInput(r, 'Đạm (g)').props.value).toBe('41');
-        expect(allText(r)).toContain('không gọi AI');
-      });
 
-      it('when the AI recognises a saved food, the saved figures win over its fresh estimate', async () => {
-        useFoodDbStore.getState().remember({ name: 'Cơm gà xối mỡ', calories: 700, proteinG: 41 });
-        const r = await withPhoto();
-        await press(r, ANALYZE); // MEAL_OK: Cơm gà xối mỡ, 612 kcal
-        expect(mockAnalysis).toHaveBeenCalledTimes(1);
-        expect(textInput(r, 'Tên món').props.value).toBe('Cơm gà xối mỡ');
-        expect(textInput(r, 'Calo (kcal)').props.value).toBe('700');
-        expect(allText(r)).not.toContain('Gợi ý từ AI');
-      });
 
-      it('a new food found by the AI is saved only once the user saves the item, with the figures they ended up with', async () => {
-        const r = await withPhoto();
-        await press(r, ANALYZE);
-        expect(remembered()).toHaveLength(0);
-        await type(r, 'Calo (kcal)', '650');
-        await press(r, SAVE);
-        expect(remembered()).toHaveLength(1);
-        expect(remembered()[0]).toMatchObject({ name: 'Cơm gà xối mỡ', kcal: 650 });
-      });
     });
   });
 

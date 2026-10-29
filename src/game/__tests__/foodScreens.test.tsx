@@ -31,7 +31,9 @@ jest.mock('../../utils/photoStorage', () => ({
   AI_FULL_HD_EDGE_PX: 1920,
   imageUriToBase64: async () => ({ base64: 'QUJD', mediaType: 'image/png' }),
 }));
+const mockMealText = jest.fn(async (..._a: unknown[]) => ({ ok: false, kind: 'offline', message: '' }));
 jest.mock('../../sync/cloudSync', () => ({
+  requestMealText: (...a: unknown[]) => mockMealText(...a),
   pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
@@ -49,7 +51,6 @@ jest.mock('../../sync/cloudSync', () => ({
 
 import AddFoodScreen from '../../../app/add-food';
 import FoodDbScreen from '../../../app/food-db';
-import TextMealScreen from '../../../app/text-meal';
 import { BUILT_IN_FOODS } from '../../food/foodData';
 import { useFoodDbStore } from '../../store/useFoodDbStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
@@ -329,29 +330,31 @@ describe('Add food with only a name: the food database answers', () => {
     expect(mockRouter.back).toHaveBeenCalled();
   });
 
-  it('several foods are not guessed: a message points to "Nhập bằng chữ"', async () => {
+  it('several foods are not guessed: a message offers the AI right here', async () => {
     const r = await mount(<AddFoodScreen />);
     await type(r, 'Tên món', 'phở bò, trứng gà');
     await tap(r, 'Thêm vào hôm nay');
     expect(items()).toHaveLength(0);
     expect(allText(r)).toContain('có vẻ gồm nhiều món');
-    await tap(r, 'Phân tích bằng AI trong "Nhập bằng chữ"');
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/text-meal', params: { text: 'phở bò, trứng gà' } });
+    await tap(r, 'Nhờ AI phân tích món này');
+    expect(mockMealText.mock.calls[0][0]).toBe('phở bò, trứng gà');
+    expect(mockRouter.push).not.toHaveBeenCalled(); // no other screen: the AI answers on this one
   });
 
-  it('an unknown food shows a message and opens "Nhập bằng chữ" with the description filled in', async () => {
+  it('an unknown food shows a message; the AI is asked about it on the same screen, the description filled in', async () => {
     const r = await mount(<AddFoodScreen />);
     await type(r, 'Tên món', 'bánh xèo');
     await tap(r, 'Thêm vào hôm nay');
     expect(items()).toHaveLength(0);
-    expect(allText(r)).toContain('Không tìm thấy "bánh xèo" trong cơ sở dữ liệu món ăn. Hãy dùng "Nhập bằng chữ" để AI phân tích.');
+    expect(allText(r)).toContain('Không tìm thấy "bánh xèo" trong cơ sở dữ liệu món ăn. Nhờ AI phân tích để ước tính.');
     expect(allText(r)).not.toContain('Nhập calo hoặc đạm lớn hơn 0.');
-    await tap(r, 'Phân tích bằng AI trong "Nhập bằng chữ"');
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/text-meal', params: { text: 'bánh xèo' } });
+    await tap(r, 'Nhờ AI phân tích món này');
+    expect((input(r, 'Bạn đã ăn gì?').props as { value: string }).value).toBe('bánh xèo');
+    expect(mockMealText.mock.calls[0][0]).toBe('bánh xèo');
 
     act(() => renderer?.unmount());
     mockParams = { text: 'bánh xèo' };
-    const t = await mount(<TextMealScreen />);
+    const t = await mount(<AddFoodScreen />);
     expect((input(t, 'Bạn đã ăn gì?').props as { value: string }).value).toBe('bánh xèo');
   });
 });

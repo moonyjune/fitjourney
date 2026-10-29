@@ -12,12 +12,14 @@ import { quest, questFonts } from '../theme/quest';
 import type { StringKey } from '../i18n/strings';
 import type { ExtraFoodItem, ExtraMealTime, MealPart, MealSlot, MealTemplate } from '../types';
 import type { ExtraPatch } from '../store/useNutritionStore';
-import { replacePartPatch } from '../food/partScale';
+import { editListedPartPatch, partsOrSelf } from '../food/singlePart';
+import { isSkippedMealItem, skippedMealItem } from '../food/skipMeal';
+import { MAIN_MEALS, PLAN_SLOT_MEAL, type MainMeal } from '../insights/days';
+import { newExtraId } from '../utils/extraIds';
 import { useGameText } from '../game/strings';
 import { useProofStore } from '../store/useProofStore';
 import { PartEditForm } from './quest/PartEditForm';
 import { QuestIcon } from './quest/QuestIcon';
-import { partsMatchTotals } from '../food/mealParts';
 import { parseClock, timeTextInvalid } from '../utils/mealClock';
 import { toDateKey } from '../utils/date';
 
@@ -103,7 +105,7 @@ export function DailyMealBreakdownTable({
         purineMg: stored.purineMg ?? 0,
         sugarG: stored.sugarG ?? 0,
         saltG: stored.saltG ?? 0,
-        parts: stored.parts,
+        parts: partsOrSelf(stored),
         photos: extraPhotoRefs(proofs, stored),
       };
     }
@@ -200,6 +202,19 @@ export function DailyMealBreakdownTable({
     setDirty(true);
   }
 
+  /** A main meal recorded as not eaten on this day: a "Không ăn" item at that meal, kept like any food on Save (and removed with its ✕). */
+  function skipMeal(meal: MainMeal) {
+    if (!dateKey) return;
+    setDraftExtraItems((prev) => [...prev, skippedMealItem(dateKey, meal, newExtraId(prev.map((i) => i.id)))]);
+    setDirty(true);
+  }
+
+  // The main meals with nothing on record this day (no food at that meal, its plan meal not eaten): each can be marked as not eaten.
+  const coveredMeals = new Set<MainMeal>();
+  for (const i of draftExtraItems) if (i.mealTime && (MAIN_MEALS as string[]).includes(i.mealTime)) coveredMeals.add(i.mealTime as MainMeal);
+  for (const m of visibleMeals) if (draftMealsEaten[m.slot]) coveredMeals.add(PLAN_SLOT_MEAL[m.slot]);
+  const unloggedMeals = editable && dateKey ? MAIN_MEALS.filter((m) => !coveredMeals.has(m)) : [];
+
   function restoreMeals() {
     setDraftRemovedSlots([]);
     setDirty(true);
@@ -246,7 +261,22 @@ export function DailyMealBreakdownTable({
       })}
 
       {draftExtraItems.map((item) =>
-        editable ? (
+        isSkippedMealItem(item) ? (
+          // A meal recorded as not eaten: one muted line (no name, time or figures to type), removable like any food.
+          <View key={item.id} style={styles.row} accessible={!editable} accessibilityLabel={`${item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : ''} ${t('mealLog.skippedRow')}`}>
+            <Text style={[styles.cell, styles.nameCol, styles.skippedText]}>{`⊘ ${t('mealLog.skippedRow')}`}</Text>
+            <Text style={[styles.cell, styles.statusCol, styles.skippedText]}>
+              {item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : t('mealLog.extraSectionLabel')}
+            </Text>
+            <Text style={[styles.cell, styles.numCol, styles.skippedText]}>0</Text>
+            <Text style={[styles.cell, styles.numCol, styles.skippedText]}>0</Text>
+            {editable && (
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="✕" onPress={() => removeExtraItem(item.id)} style={styles.deleteCol}>
+                <Text style={styles.deleteText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : editable ? (
           // Editable extras get their own 2-line layout: the free-text name gets a full-width
           // line to itself (a shared single row is too narrow for a long name to wrap in),
           // then meal-time/kcal/protein/delete on the line below.
@@ -304,7 +334,7 @@ export function DailyMealBreakdownTable({
                 <Text style={styles.deleteText}>✕</Text>
               </TouchableOpacity>
             </View>
-            <PartsDetail item={item} styles={styles} title={t('mealLog.partsTitle')} line={(p) => t('mealLog.partLine', { name: p.name, kcal: p.calories, protein: p.proteinG })} onEditPart={(index, part) => { const patch = replacePartPatch(item, index, part); if (patch) updateExtraItem(item.id, patch); }} />
+            <PartsDetail item={item} styles={styles} title={t('mealLog.partsTitle')} line={(p) => t('mealLog.partLine', { name: p.name, kcal: p.calories, protein: p.proteinG })} onEditPart={(index, part) => { const patch = editListedPartPatch(item, index, part); if (patch) updateExtraItem(item.id, patch); }} />
           </View>
         ) : (
           <View key={item.id}>
@@ -347,6 +377,23 @@ export function DailyMealBreakdownTable({
         <Text style={[styles.cell, styles.numCol, styles.totalText]}>{totalProtein}</Text>
       </View>
 
+      {unloggedMeals.length > 0 && (
+        <View style={styles.skipRow}>
+          <Text style={styles.skipTitle}>{t('mealLog.skipTitle')}</Text>
+          {unloggedMeals.map((m) => (
+            <TouchableOpacity
+              key={m}
+              accessibilityRole="button"
+              accessibilityLabel={t('mealLog.skipLabel', { meal: t(`mealLog.skipMeal.${m}`) })}
+              onPress={() => skipMeal(m)}
+              style={styles.skipChip}
+            >
+              <Text style={styles.skipChipText}>{t('mealLog.skipChip', { meal: t(`mealLog.skipMeal.${m}`) })}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {editable && (draftRemovedSlots.length > 0 || dateKey) && (
         <View style={styles.actionsRow}>
           {draftRemovedSlots.length > 0 && (
@@ -379,7 +426,6 @@ export function DailyMealBreakdownTable({
   );
 }
 
-/** The breakdown of a meal (its parts), shown under it, only while the parts still add up to the meal's calories. */
 /** The camera button next to a meal already saved on the day: opens its photos (add up to 3, view, remove). */
 function PhotoButton({ label, color, onPress }: { label: string; color: string; onPress: () => void }) {
   return (
@@ -389,14 +435,17 @@ function PhotoButton({ label, color, onPress }: { label: string; color: string; 
   );
 }
 
+/** The breakdown of a meal (its parts), shown under it while the parts still add up to the meal's calories; a meal saved as one food shows
+ *  itself as its one part, so its amount can be changed the same way. */
 function PartsDetail({ item, styles, title, line, onEditPart }: { item: ExtraFoodItem; styles: ReturnType<typeof makeStyles>; title: string; line: (p: NonNullable<ExtraFoodItem['parts']>[number]) => string; onEditPart?: (index: number, part: MealPart) => void }) {
   const g = useGameText();
   const [editing, setEditing] = useState<number | null>(null);
-  if (!partsMatchTotals(item)) return null;
+  const parts = partsOrSelf(item);
+  if (parts.length === 0) return null;
   return (
     <View style={styles.parts}>
       <Text style={styles.partsTitle}>{title}</Text>
-      {item.parts!.map((p, i) => (
+      {parts.map((p, i) => (
         <View key={i}>
           <View style={styles.partRow}>
             <Text style={[styles.partLine, { flex: 1 }]}>{`• ${line(p)}`}</Text>
@@ -480,6 +529,11 @@ const makeStyles = (dark: boolean) => {
   partsTitle: { fontSize: 10, fontWeight: '800', color: c.muted, textTransform: 'uppercase' },
   partLine: { fontSize: 11, color: c.muted },
   deleteCol: { paddingLeft: spacing.xs },
+  skippedText: { color: c.muted, fontStyle: 'italic' },
+  skipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs + 2, paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
+  skipTitle: { fontSize: 11, fontWeight: '700', color: c.muted },
+  skipChip: { minHeight: 32, paddingHorizontal: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, justifyContent: 'center' },
+  skipChipText: { fontSize: 12, fontWeight: '700', color: c.muted, ...font },
   deleteText: { color: c.danger, fontSize: 12, fontWeight: '700' },
   totalRow: { backgroundColor: c.total, borderTopWidth: 1, borderTopColor: c.saveBorder },
   totalText: { fontWeight: '800', color: c.totalText },
