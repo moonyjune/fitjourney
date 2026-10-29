@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.22 | no | — |
 | 0.21 | no | — |
 | 0.20 | no | — |
 | 0.19 | no | — |
@@ -33,6 +34,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.22
+- Camp's battle log (Nhật ký trận / timeline): a plan meal with nothing logged at its main meal (sáng, trưa, tối) has a "Không ăn bữa này" chip under its card. It records the meal as not eaten, so it is no longer counted as missing. The card then shows "Không ăn" as its status instead of a separate row, and "Bỏ "Không ăn"" undoes it. Shown for today and past days of your own diary, not for future days or a coach's view.
 
 ## 0.21
 - Photos: the larger view now says which meal and when, e.g. "Tối · 19:30". This covers History's "📷 n ảnh minh chứng" (each photo labelled with its meal or workout and time), the thumbnails in Journal and History, and the meal detail dialog (meal and time under the title).

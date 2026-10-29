@@ -20,8 +20,9 @@ import { useTranslation } from '../i18n/useTranslation';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { usePlanStore } from '../store/usePlanStore';
-import type { MealPart } from '../types';
+import type { MealPart, MealSlot } from '../types';
 import { PLAN_SLOT_MEAL } from '../insights/days';
+import { isSkippedMealItem, logSkippedMeal } from '../food/skipMeal';
 import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
 import { useSettingsStore } from '../store/useSettingsStore';
@@ -109,9 +110,11 @@ interface RowProps {
   /** Small photo of the logged meal, when it has one on this device. */
   /** The meal's photos, first one first (shown as one thumbnail with a "several photos" badge). */
   thumbs: string[];
+  /** A plan meal with nothing logged can be marked "Không ăn" (offer), or already is (skipped, can be undone). Off for a coach. */
+  skip?: { state: 'offer' | 'skipped'; onSkip: () => void; onUndo: () => void };
 }
 
-function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen, thumbs }: RowProps) {
+function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen, thumbs, skip }: RowProps) {
   let body: React.ReactNode = null;
   let label = '';
   let onPress: (() => void) | undefined;
@@ -137,7 +140,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
       </View>
     );
   } else if (item.kind === 'meal') {
-    const status = item.eaten ? 'journal.mealDone' : item.past ? 'journal.mealNotLogged' : 'journal.mealPending';
+    const status = item.eaten ? 'journal.mealDone' : skip?.state === 'skipped' ? 'journal.mealSkipped' : item.past ? 'journal.mealNotLogged' : 'journal.mealPending';
     label = `${item.label}. ${g(status)}`;
     if (isToday) onPress = () => router.push(`/meal/${item.slot}`);
     else if (item.eaten) onPress = () => onOpen(item);
@@ -148,7 +151,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
             {item.label}
           </HudText>
           {thumbs.length > 0 ? <FoodThumb uris={thumbs} name={item.label} size={36} caption={`${t(`extraMealTime.${PLAN_SLOT_MEAL[item.slot]}` as StringKey)} · ${clock(item.minutes)}`} /> : item.hasPhoto && <Chip tone="muted" label={g('journal.photo')} />}
-          <Chip tone={item.eaten ? 'ok' : 'muted'} label={g(status)} />
+          <Chip tone={item.eaten ? 'ok' : skip?.state === 'skipped' ? 'hp' : 'muted'} label={g(status)} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {g('journal.mealMeta', { kcal: item.kcal, protein: item.proteinG, n: item.itemCount })}
@@ -230,11 +233,40 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
 
   const dimmed = item.kind === 'water' && !item.reached && item.past;
   const wrapped = <View style={dimmed ? { opacity: 0.6 } : undefined}>{content}</View>;
+  // The "Không ăn" chip sits under the card, outside it: a button inside the tappable card would be a button in a button.
+  const skipChip =
+    skip && item.kind === 'meal' ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={g(skip.state === 'offer' ? 'journal.skipLabel' : 'journal.skipUndoLabel', { meal: item.label })}
+        hitSlop={6}
+        onPress={skip.state === 'offer' ? skip.onSkip : skip.onUndo}
+        style={({ pressed }) => [styles.skipChip, skip.state === 'skipped' && styles.skipUndo, pressed && { opacity: 0.8 }]}
+      >
+        <QuestIcon name={skip.state === 'offer' ? 'x' : 'back'} size={12} color={skip.state === 'offer' ? quest.hpText : quest.textSecondary} strokeWidth={2.4} />
+        <HudText size={11} color={skip.state === 'offer' ? quest.hpText : quest.textSecondary}>
+          {g(skip.state === 'offer' ? 'journal.skip' : 'journal.skipUndo')}
+        </HudText>
+      </Pressable>
+    ) : null;
   if (onPress) {
     return (
-      <Pressable accessibilityRole="button" accessibilityLabel={`${clock(item.minutes)} ${label}`} onPress={onPress}>
-        {wrapped}
-      </Pressable>
+      <View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`${clock(item.minutes)} ${label}`} onPress={onPress}>
+          {wrapped}
+        </Pressable>
+        {skipChip}
+      </View>
+    );
+  }
+  if (skipChip) {
+    return (
+      <View>
+        <View accessible accessibilityLabel={`${clock(item.minutes)} ${label}`}>
+          {wrapped}
+        </View>
+        {skipChip}
+      </View>
     );
   }
   return (
@@ -333,6 +365,22 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
       photoSlots,
     });
   }, [selectedKey, now, logs, mealTemplates, waterSchedule, workoutEntries, feelings, photos, selectedDate]);
+
+  // A plan meal with nothing logged for its main meal can be marked "Không ăn" right on the timeline (own diary, not a future day). The
+  // "Không ăn" item then shows as the plan meal's status instead of a row of its own.
+  const dayExtras = logs[selectedKey]?.extraItems ?? [];
+  const removeExtraItem = useNutritionStore((s) => s.removeExtraItem);
+  const planMeals = new Set(timeline.flatMap((i) => (i.kind === 'meal' ? [PLAN_SLOT_MEAL[i.slot]] : [])));
+  const skippedIds = new Set(dayExtras.filter((i) => isSkippedMealItem(i) && i.mealTime && planMeals.has(i.mealTime as never)).map((i) => i.id));
+  const visibleTimeline = timeline.filter((i) => !(i.kind === 'extra' && skippedIds.has(i.id.slice('extra-'.length))));
+  function skipFor(slot: MealSlot, eaten: boolean): RowProps['skip'] {
+    if (client || eaten || selectedKey > todayKey) return undefined;
+    const meal = PLAN_SLOT_MEAL[slot];
+    const skipped = dayExtras.find((i) => i.mealTime === meal && isSkippedMealItem(i));
+    if (skipped) return { state: 'skipped', onSkip: () => {}, onUndo: () => removeExtraItem(selectedKey, skipped.id) };
+    if (dayExtras.some((i) => i.mealTime === meal)) return undefined; // something was eaten at that meal
+    return { state: 'offer', onSkip: () => logSkippedMeal(selectedKey, meal), onUndo: () => {} };
+  }
 
   // The "+60 XP" chip goes on the first workout of the day, and only when that mission was earned.
   const workoutMissionDone = day.missions.find((m) => m.id === 'workout')?.status === 'done';
@@ -527,8 +575,19 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
         </View>
 
         <View style={styles.timeline}>
-          {timeline.map((item) => (
-            <TimelineRow key={item.id} item={item} g={g} t={t} proteinTargetG={proteinTargetG} workoutXpFor={workoutXpFor} isToday={isToday && !client} onOpen={openDetail} thumbs={photosOf(item).map((p) => p.uri)} />
+          {visibleTimeline.map((item) => (
+            <TimelineRow
+              key={item.id}
+              item={item}
+              g={g}
+              t={t}
+              proteinTargetG={proteinTargetG}
+              workoutXpFor={workoutXpFor}
+              isToday={isToday && !client}
+              onOpen={openDetail}
+              thumbs={photosOf(item).map((p) => p.uri)}
+              skip={item.kind === 'meal' ? skipFor(item.slot, item.eaten) : undefined}
+            />
           ))}
         </View>
 
@@ -566,6 +625,8 @@ const styles = StyleSheet.create({
   cardWorkout: { backgroundColor: quest.bossPanel, borderColor: quest.bossBorder },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  skipChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginLeft: 76, marginTop: -2, marginBottom: 4, paddingHorizontal: 8, minHeight: 28, borderRadius: 6, borderWidth: 1.5, borderColor: quest.bossBorder },
+  skipUndo: { borderColor: quest.border },
   chip: { paddingHorizontal: 8, minHeight: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   nowLine: { borderTopWidth: 1.5, borderTopColor: quest.gold, borderStyle: 'dashed', paddingTop: 4, marginTop: 4 },
   nowText: { letterSpacing: 1.6 },

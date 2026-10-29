@@ -379,6 +379,34 @@ describe('FitQuest logging screens', () => {
       expect(text).toContain('Chờ ăn'); // meal 3 is still ahead of 16:10
     });
 
+    it('a plan meal with nothing logged can be marked "Không ăn" on the timeline, shown as its status, and undone', () => {
+      const r = render(<JournalScreen />);
+      const offers = r.root.findAll((n) => typeof n.props.onPress === 'function' && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Đánh dấu không ăn'));
+      expect(offers).toHaveLength(1); // meals 1 and 2 are eaten: only meal 3 (dinner) is offered
+      act(() => {
+        offers[0].props.onPress();
+      });
+      const items = useNutritionStore.getState().logs[DATE].extraItems;
+      expect(items).toEqual([expect.objectContaining({ name: 'Không ăn', calories: 0, mealTime: 'dinner' })]);
+      const text = allText(r);
+      expect(text).toContain('Không ăn'); // the plan meal's status
+      expect(text).toContain('Bỏ "Không ăn"');
+      expect(text).not.toContain('Không ăn bữa này');
+      expect(r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.includes('Không ăn. 0 kcal'))).toHaveLength(0); // no separate row
+      const undo = r.root.findAll((n) => typeof n.props.onPress === 'function' && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Bỏ đánh dấu không ăn'))[0];
+      act(() => {
+        undo.props.onPress(); // block body: the store's set returns a promise that act must not wait on
+      });
+      expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
+      expect(allText(r)).toContain('Không ăn bữa này');
+    });
+
+    it('offers no "Không ăn" for a meal that already has food logged at that time', () => {
+      useNutritionStore.getState().addExtra(DATE, 'Phở', 450, 25, 'dinner');
+      const r = render(<JournalScreen />);
+      expect(allText(r)).not.toContain('Không ăn bữa này');
+    });
+
     it('shows the whole-day water and follows the nutrition screen', () => {
       const r = render(<JournalScreen />);
       expect(allText(r)).toContain('Nước cả ngày');
@@ -523,7 +551,8 @@ describe('FitQuest logging screens', () => {
       const text = allText(r);
       expect(text).not.toContain('ĐANG Ở ĐÂY');
       expect(text).toContain('—'); // no deficit without any food logged
-      expect(r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').includes('Bữa 3'))).toHaveLength(0);
+      const mealCard = (l: string) => l.includes('Bữa 3') && !l.startsWith('Đánh dấu không ăn'); // the "Không ăn" chip under it is its own button
+      expect(r.root.findAll((n) => typeof n.props.onPress === 'function' && mealCard(String(n.props.accessibilityLabel ?? '')))).toHaveLength(0);
     });
 
     it('locks days that have not happened yet', () => {
