@@ -3,4 +3,4 @@
 export const BUILD_ID: string = process.env.EXPO_PUBLIC_BUILD || 'dev';
 
 /** The release number shown in Profile: A.BC counting up from 0.01 (0.99 is followed by 1.00). Every release has an entry in RELEASE_NOTES.md. */
-export const APP_VERSION = '0.20';
+export const APP_VERSION = '0.21';

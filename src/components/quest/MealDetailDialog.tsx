@@ -15,6 +15,8 @@ export interface MealDetail {
   title: string;
   /** "HH:MM", or empty when the meal has no logged time. */
   time: string;
+  /** Which meal it was ("Sáng", "Tối"…), shown with the time; empty when unknown. */
+  meal?: string;
   kcal: number;
   proteinG: number;
   /** Purine, sugar and salt are only known for foods the user logged; null for plan meals. */
@@ -91,9 +93,9 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
             <HudText size={17} accessibilityRole="header">
               {detail.title}
             </HudText>
-            {detail.time ? (
-              <HudText size={12} weight="medium" color={quest.textSecondary}>
-                {detail.time}
+            {detail.time || detail.meal ? (
+              <HudText size={13} color={quest.goldLight}>
+                {[detail.meal, detail.time].filter(Boolean).join(' · ')}
               </HudText>
             ) : null}
 

@@ -1,5 +1,6 @@
 import type {
   DailyNutritionLog,
+  ExtraMealTime,
   FeelingRecord,
   MealPart,
   MealSlot,
@@ -28,7 +29,7 @@ export type TimelineItem =
       proteinSoFarG: number | null;
       past: boolean;
     }
-  | { kind: 'extra'; id: string; minutes: number; name: string; kcal: number; proteinG: number; purineMg: number; saltG: number; sugarG: number; junk: boolean; photoUri?: string; loggedAtISO: string; parts?: MealPart[] }
+  | { kind: 'extra'; id: string; minutes: number; name: string; kcal: number; proteinG: number; purineMg: number; saltG: number; sugarG: number; junk: boolean; photoUri?: string; loggedAtISO: string; parts?: MealPart[]; mealTime?: ExtraMealTime | null }
   | { kind: 'workout'; id: string; minutes: number; label: string; durationMin: number; kcal: number }
   | { kind: 'feeling'; id: string; minutes: number; mood: Mood; cravingLevel: number; hungerLevel: number }
   | { kind: 'now'; id: string; minutes: number };
@@ -132,6 +133,7 @@ export function buildTimeline(input: TimelineInput): TimelineItem[] {
       junk: !!e.junk,
       photoUri: e.photoUri,
       loggedAtISO: e.loggedAtISO,
+      mealTime: e.mealTime,
       parts: partsMatchTotals(e) ? e.parts : undefined,
     });
   }

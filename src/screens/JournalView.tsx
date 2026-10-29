@@ -21,6 +21,8 @@ import { useFeelingStore } from '../store/useFeelingStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { usePlanStore } from '../store/usePlanStore';
 import type { MealPart } from '../types';
+import { PLAN_SLOT_MEAL } from '../insights/days';
+import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
@@ -145,7 +147,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
           <HudText size={14} style={styles.flex}>
             {item.label}
           </HudText>
-          {thumbs.length > 0 ? <FoodThumb uris={thumbs} name={item.label} size={36} /> : item.hasPhoto && <Chip tone="muted" label={g('journal.photo')} />}
+          {thumbs.length > 0 ? <FoodThumb uris={thumbs} name={item.label} size={36} caption={`${t(`extraMealTime.${PLAN_SLOT_MEAL[item.slot]}` as StringKey)} · ${clock(item.minutes)}`} /> : item.hasPhoto && <Chip tone="muted" label={g('journal.photo')} />}
           <Chip tone={item.eaten ? 'ok' : 'muted'} label={g(status)} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
@@ -169,7 +171,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
             {name}
           </HudText>
           {item.junk && <Chip tone="gold" label={g('journal.junk')} />}
-          <FoodThumb uris={thumbs} name={name} size={36} />
+          <FoodThumb uris={thumbs} name={name} size={36} caption={mealCaption(item.mealTime ? t(`extraMealTime.${item.mealTime}` as StringKey) : null, item.loggedAtISO)} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {item.kcal} kcal · {Math.round(item.proteinG)} g
@@ -359,6 +361,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
     detail = {
       title: openItem.name || g('journal.extra'),
       time: clock(openItem.minutes),
+      meal: openItem.mealTime ? t(`extraMealTime.${openItem.mealTime}` as StringKey) : undefined,
       kcal: openItem.kcal,
       proteinG: openItem.proteinG,
       purineMg: openItem.purineMg,
@@ -368,7 +371,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
       photos: photosOf(openItem),
     };
   } else if (openItem?.kind === 'meal') {
-    detail = { title: openItem.label, time: clock(openItem.minutes), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photos: photosOf(openItem) };
+    detail = { title: openItem.label, time: clock(openItem.minutes), meal: t(`extraMealTime.${PLAN_SLOT_MEAL[openItem.slot]}` as StringKey), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photos: photosOf(openItem) };
   }
   function editPart(index: number, part: MealPart) {
     if (client || openItem?.kind !== 'extra') return;

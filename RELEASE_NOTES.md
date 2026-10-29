@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.21 | no | — |
 | 0.20 | no | — |
 | 0.19 | no | — |
 | 0.18 | no | — |
@@ -32,6 +33,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.21
+- Photos: the larger view now says which meal and when, e.g. "Tối · 19:30". This covers History's "📷 n ảnh minh chứng" (each photo labelled with its meal or workout and time), the thumbnails in Journal and History, and the meal detail dialog (meal and time under the title).
+- Several photos of one meal: the "1/2" counter follows the photo actually in view while you swipe. On the web it used to stay on the previous number after a drag. The view still opens on the first photo.
 
 ## 0.20
 - "Nhập bằng chữ" is merged into the add-food screen (Món ngoài kế hoạch): one screen with the description ("Bạn đã ăn gì?"), up to 3 photos and "Hỏi AI" (text only, photos only, or both, sent together to the AI). Foods your database knows are still taken from it without the AI. The same screen keeps the food-database lookup, "Đọc nhãn", manual entry ("Thêm món tự nhập"), meal time, exact time, junk switch, live comments and swaps. The old /text-meal link now opens this screen.

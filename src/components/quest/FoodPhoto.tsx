@@ -121,12 +121,14 @@ interface FoodThumbProps {
   uris?: string[];
   name: string;
   size?: number;
+  /** Which meal and when ("Tối · 19:30"), shown with the larger photos. */
+  caption?: string;
 }
 
 /** Small photo of a logged food, for lists; tapping it shows the photo larger. Renders nothing without a photo, or if the file can't be loaded
  *  (e.g. an item synced from another device whose local file isn't here). With `uris` (every photo of the meal, first one shown) a badge
  *  says there are several, and the larger view shows them in a row with ‹ ›. */
-export function FoodThumb({ uri, uris, name, size = 40 }: FoodThumbProps) {
+export function FoodThumb({ uri, uris, name, size = 40, caption }: FoodThumbProps) {
   const g = useGameText();
   const [broken, setBroken] = useState(false);
   const [open, setOpen] = useState(false);
@@ -157,7 +159,7 @@ export function FoodThumb({ uri, uris, name, size = 40 }: FoodThumbProps) {
           </View>
         )}
       </Pressable>
-      <PhotoViewer photos={open ? all.map((u) => ({ uri: u, label: name })) : null} title={many ? name : undefined} strip={many} onClose={() => setOpen(false)} />
+      <PhotoViewer photos={open ? all.map((u) => ({ uri: u, label: name })) : null} title={many || caption ? name : undefined} subtitle={caption} strip={many} onClose={() => setOpen(false)} />
     </>
   );
 }

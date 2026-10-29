@@ -100,6 +100,7 @@ export function DailyMealBreakdownTable({
       photoDetail = {
         title: stored.name || t('mealLog.extraSectionLabel'),
         time: formatTime(stored.loggedAtISO),
+        meal: stored.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[stored.mealTime]) : undefined,
         kcal: stored.calories,
         proteinG: stored.proteinG,
         purineMg: stored.purineMg ?? 0,
@@ -111,7 +112,7 @@ export function DailyMealBreakdownTable({
     }
   } else if (photoFor?.kind === 'slot' && dateKey) {
     const meal = meals.find((m) => m.slot === photoFor.slot);
-    if (meal) photoDetail = { title: meal.label, time: '', kcal: meal.calories, proteinG: meal.proteinG, purineMg: null, sugarG: null, saltG: null, photos: slotPhotoRefs(proofs, dateKey, meal.slot) };
+    if (meal) photoDetail = { title: meal.label, time: '', meal: t(EXTRA_MEAL_TIME_LABEL_KEY[PLAN_SLOT_MEAL[meal.slot]]), kcal: meal.calories, proteinG: meal.proteinG, purineMg: null, sugarG: null, saltG: null, photos: slotPhotoRefs(proofs, dateKey, meal.slot) };
   }
   async function addPhoto(uri: string): Promise<boolean> {
     if (!dateKey || !photoFor) return false;
@@ -242,7 +243,7 @@ export function DailyMealBreakdownTable({
         return (
           <RowWrapper key={m.slot} style={styles.row} {...(editable ? { onPress: () => toggleMeal(m.slot) } : {})}>
             <View style={[styles.nameCol, styles.extraNameRow]}>
-              <FoodThumb uris={slotThumbs(m.slot)} name={m.label} size={28} />
+              <FoodThumb uris={slotThumbs(m.slot)} name={m.label} size={28} caption={t(EXTRA_MEAL_TIME_LABEL_KEY[PLAN_SLOT_MEAL[m.slot]])} />
               <Text style={[styles.cell, styles.extraNameInput]}>{m.label}</Text>
               {canPhoto && eaten && <PhotoButton label={t('mealLog.photos', { name: m.label })} color={accentColor} onPress={() => setPhotoFor({ kind: 'slot', slot: m.slot })} />}
             </View>
@@ -282,7 +283,7 @@ export function DailyMealBreakdownTable({
           // then meal-time/kcal/protein/delete on the line below.
           <View key={item.id} style={styles.extraRowEditable}>
             <View style={styles.extraNameRow}>
-              <FoodThumb uris={thumbsOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={40} />
+              <FoodThumb uris={thumbsOf(item)} caption={[item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : '', formatTime(item.loggedAtISO)].filter(Boolean).join(' · ')} name={item.name || t('mealLog.extraSectionLabel')} size={40} />
               <TextInput
                 placeholderTextColor={mutedColor}
                 style={[styles.nameInputFullWidth, styles.extraNameInput]}
@@ -340,7 +341,7 @@ export function DailyMealBreakdownTable({
           <View key={item.id}>
           <View style={styles.row}>
             <View style={[styles.nameCol, styles.extraNameRow]}>
-              <FoodThumb uris={thumbsOf(item)} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
+              <FoodThumb uris={thumbsOf(item)} caption={[item.mealTime ? t(EXTRA_MEAL_TIME_LABEL_KEY[item.mealTime]) : '', formatTime(item.loggedAtISO)].filter(Boolean).join(' · ')} name={item.name || t('mealLog.extraSectionLabel')} size={28} />
               <Text style={[styles.cell, styles.extraNameInput]}>
                 {item.name || t('mealLog.extraSectionLabel')} <Text style={styles.extraTime}>({formatTime(item.loggedAtISO)})</Text>
               </Text>

@@ -8,6 +8,8 @@ import { QuestIcon } from './QuestIcon';
 export interface StripPhoto {
   uri: string;
   label?: string;
+  /** Which meal and when, e.g. "Tối · 19:30", shown under the photo in view. */
+  caption?: string;
 }
 
 interface Props {
@@ -18,7 +20,8 @@ interface Props {
   onIndex?: (index: number) => void;
 }
 
-/** The photos of one meal side by side in a row: swipe, or use ‹ › to move one photo at a time; "2/3" says where you are.
+/** The photos of one meal side by side in a row: swipe, or use ‹ › to move one photo at a time; "2/3" says which photo is in view
+ *  (worked out from the scroll position while swiping, so it always matches the photo shown).
  *  A photo that cannot be loaded (its file is on another device) says so instead of staying blank. */
 export function PhotoStrip({ photos, height = 280, onIndex }: Props) {
   const g = useGameText();
@@ -34,9 +37,11 @@ export function PhotoStrip({ photos, height = 280, onIndex }: Props) {
     onIndex?.(i);
     scroller.current?.scrollTo?.({ x: i * width, animated: true });
   }
-  function onScrollEnd(e: NativeSyntheticEvent<NativeScrollEvent>) {
+  /** The photo whose page covers most of the view. Read on every scroll event, not only when a swipe ends: on the web the end
+   *  events come before the page has snapped (or not at all), which left "1/2" on the second photo. */
+  function track(e: NativeSyntheticEvent<NativeScrollEvent>) {
     if (width <= 0) return;
-    const i = Math.round(e.nativeEvent.contentOffset.x / width);
+    const i = Math.max(0, Math.min(photos.length - 1, Math.round(e.nativeEvent.contentOffset.x / width)));
     if (i !== at) {
       setIndex(i);
       onIndex?.(i);
@@ -51,8 +56,8 @@ export function PhotoStrip({ photos, height = 280, onIndex }: Props) {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onScrollEnd}
-        onScrollEndDrag={onScrollEnd}
+        onScroll={track}
+        onMomentumScrollEnd={track}
         scrollEventThrottle={16}
       >
         {photos.map((p, i) => (
@@ -73,6 +78,11 @@ export function PhotoStrip({ photos, height = 280, onIndex }: Props) {
           </View>
         ))}
       </ScrollView>
+      {photos[at]?.caption ? (
+        <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.caption}>
+          {photos[at].caption}
+        </HudText>
+      ) : null}
       {many && (
         <View style={styles.nav}>
           <Pressable
@@ -113,4 +123,5 @@ const styles = StyleSheet.create({
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
   arrow: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
   off: { opacity: 0.4 },
+  caption: { textAlign: 'center' },
 });

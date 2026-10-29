@@ -33,6 +33,8 @@ import { DailyMealBreakdownTable } from '../components/DailyMealBreakdownTable';
 import { actualDailyDeficitKcal, resolveTdeeKcal } from '../utils/tdee';
 import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood, ProofPhoto } from '../types';
 import { PhotoViewer } from '../components/quest/PhotoViewer';
+import { mealCaption } from '../utils/mealCaption';
+import { EXTRA_PROOF_PREFIX } from '../types';
 import { useTabBarClearance } from '../components/quest/QuestTabBar';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 import { useHistoryViewStore } from '../store/useHistoryViewStore';
@@ -341,6 +343,22 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
 
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
   const [viewing, setViewing] = useState<{ dateKey: string; photos: ProofPhoto[] } | null>(null);
+
+  /** Which meal (or workout) a day's photo belongs to and when it was logged, e.g. "Tối · 19:30". */
+  function proofCaption(p: ProofPhoto, dateKey: string): string {
+    if (p.taskType === 'workout') {
+      const entry = workoutEntries.find((w) => w.id === p.taskRefId);
+      return mealCaption(entry?.label ?? t('history.workoutPhoto'), entry?.dateISO ?? p.createdAtISO);
+    }
+    if (p.taskRefId.startsWith(EXTRA_PROOF_PREFIX)) {
+      const item = nutritionLogs[dateKey]?.extraItems?.find((i) => i.id === p.taskRefId.slice(EXTRA_PROOF_PREFIX.length));
+      if (item) return mealCaption(item.mealTime ? t(`extraMealTime.${item.mealTime}` as StringKey) : null, item.loggedAtISO);
+      return mealCaption(null, p.createdAtISO);
+    }
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const meal = mealTemplates[getDayType(new Date(y, m - 1, d, 12))].find((x) => x.slot === p.taskRefId);
+    return mealCaption(meal?.label ?? null, p.createdAtISO);
+  }
   function toggleDayExpanded(dateKey: string) {
     setExpandedDays((prev) => ({ ...prev, [dateKey]: !prev[dateKey] }));
   }
@@ -822,7 +840,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
       )}
     </ScrollView>
     <PhotoViewer
-      photos={viewing ? viewing.photos.map((p) => ({ uri: p.photoUri, label: p.note || undefined })) : null}
+      photos={viewing ? viewing.photos.map((p) => ({ uri: p.photoUri, label: p.note || undefined, caption: proofCaption(p, viewing.dateKey) })) : null}
       title={viewing ? g('photo.dayTitle', { date: formatDateVi(viewing.dateKey) }) : undefined}
       onClose={() => setViewing(null)}
     />
