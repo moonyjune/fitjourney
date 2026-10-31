@@ -11,6 +11,8 @@ import { QuestButton } from './QuestButton';
 import { QuestSegment } from './QuestSegment';
 import { StageBossArt } from './StageBossArt';
 import { bossName, shortDate } from './StageBossDetail';
+import { BanterChat } from './BattleBanter';
+import type { BanterShown } from '../../banter/days';
 
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
 type LogView = 'days' | 'weight';
@@ -44,12 +46,15 @@ interface DayRowProps {
   cheat: boolean;
   /** Kg that fills a whole bar. */
   scale: number;
+  /** That day's exchange with the boss: the row then opens it on tap. */
+  talk?: BanterShown;
 }
 
 /** One day of the damage log: the deficit (coloured by its level against the target) and its estimated damage against
- *  the real damage of that day's weigh-in, plus any boss that fell. */
-export function DamageDayRow({ day, boss, bosses, targetKcal, cheat, scale }: DayRowProps) {
+ *  the real damage of that day's weigh-in, plus any boss that fell. With a `talk`, a tap opens that day's exchange below. */
+export function DamageDayRow({ day, boss, bosses, targetKcal, cheat, scale, talk }: DayRowProps) {
   const g = useGameText();
+  const [open, setOpen] = useState(false);
   const level = deficitLevel(day.deficitKcal, targetKcal, cheat);
   const estColor = deficitColor(level, quest.gold);
   const realColor = day.realKg != null && day.realKg < 0 ? quest.hp : quest.xp;
@@ -70,8 +75,8 @@ export function DamageDayRow({ day, boss, bosses, targetKcal, cheat, scale }: Da
   ]
     .filter(Boolean)
     .join('. ');
-  return (
-    <View accessible accessibilityLabel={label} style={[styles.row, felled.length > 0 && styles.rowFelled]}>
+  const content = (
+    <>
       {boss && (
         <View style={styles.rowArt}>
           <StageBossArt archetype={boss.archetype} tier={boss.tier} size={30} defeated={felled.includes(boss)} />
@@ -113,6 +118,32 @@ export function DamageDayRow({ day, boss, bosses, targetKcal, cheat, scale }: Da
           </HudText>
         ))}
       </View>
+    </>
+  );
+  if (!talk) {
+    return (
+      <View accessible accessibilityLabel={label} style={[styles.row, felled.length > 0 && styles.rowFelled]}>
+        {content}
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.rowWrap, felled.length > 0 && styles.rowFelled]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityHint={g('dmg.talkHint')}
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((o) => !o)}
+        style={styles.rowInner}
+      >
+        {content}
+      </Pressable>
+      {open && (
+        <View style={styles.rowTalk}>
+          <BanterChat shown={talk} avatar={24} />
+        </View>
+      )}
     </View>
   );
 }
@@ -196,11 +227,13 @@ interface LogProps {
   targetKcal: number;
   cheatDays: string[];
   onOpenBoss: (b: StageBoss) => void;
+  /** Each day's exchange with the boss, by date key. */
+  talks?: ReadonlyMap<string, BanterShown>;
 }
 
 /** The Map's damage log: estimated (deficit) against real (scale) damage per day on the stage bosses, or the weight
  *  log with each boss's weight line and when it fell. Static rows (no motion). */
-export function BossDamageLog({ log, weightRows, bosses, currentKg, targetKcal, cheatDays, onOpenBoss }: LogProps) {
+export function BossDamageLog({ log, weightRows, bosses, currentKg, targetKcal, cheatDays, onOpenBoss, talks }: LogProps) {
   const g = useGameText();
   const [view, setView] = useState<LogView>('days');
   const [shown, setShown] = useState(PAGE);
@@ -263,6 +296,7 @@ export function BossDamageLog({ log, weightRows, bosses, currentKg, targetKcal, 
               targetKcal={targetKcal}
               cheat={cheatDays.includes(d.dateKey)}
               scale={scale}
+              talk={talks?.get(d.dateKey)}
             />
           ))
         ))}
@@ -273,7 +307,23 @@ export function BossDamageLog({ log, weightRows, bosses, currentKg, targetKcal, 
 }
 
 /** Inside a boss's detail: what the days of its fight did to it, estimated against real, and those days. */
-export function BossDamagePanel({ boss, damage, log, bosses, targetKcal, cheatDays }: { boss: StageBoss; damage: BossDamage | undefined; log: DamageLog; bosses: StageBoss[]; targetKcal: number; cheatDays: string[] }) {
+export function BossDamagePanel({
+  boss,
+  damage,
+  log,
+  bosses,
+  targetKcal,
+  cheatDays,
+  talks,
+}: {
+  boss: StageBoss;
+  damage: BossDamage | undefined;
+  log: DamageLog;
+  bosses: StageBoss[];
+  targetKcal: number;
+  cheatDays: string[];
+  talks?: ReadonlyMap<string, BanterShown>;
+}) {
   const g = useGameText();
   const days = listedDays(log.days.filter((d) => d.bossIndex === boss.index)).slice(0, 7);
   const scale = barScale(days);
@@ -288,7 +338,7 @@ export function BossDamagePanel({ boss, damage, log, bosses, targetKcal, cheatDa
             {g('dmg.bossSummary', { est: signedKg(damage.estKg, 1), real: signedKg(damage.realKg, 1), logged: damage.loggedDays, days: damage.days })}
           </HudText>
           {days.map((d) => (
-            <DamageDayRow key={d.dateKey} day={d} bosses={bosses} targetKcal={targetKcal} cheat={cheatDays.includes(d.dateKey)} scale={scale} />
+            <DamageDayRow key={d.dateKey} day={d} bosses={bosses} targetKcal={targetKcal} cheat={cheatDays.includes(d.dateKey)} scale={scale} talk={talks?.get(d.dateKey)} />
           ))}
         </>
       ) : (
@@ -308,6 +358,9 @@ const styles = StyleSheet.create({
   total: { flex: 1, padding: 12, gap: 2, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center' },
   row: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   rowFelled: { borderColor: quest.gold },
+  rowWrap: { borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  rowInner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10 },
+  rowTalk: { paddingHorizontal: 10, paddingBottom: 10 },
   rowArt: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bg },
   rowHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 4 },
   barLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },

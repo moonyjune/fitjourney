@@ -19,8 +19,8 @@ import type { SwapContext, SwapItem } from '../food/swaps';
 import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { sampleTemptation } from '../temptation/sample';
-import { cleanChapterAnswer, type StoryChapterText, type StorySummary } from '../../supabase/functions/_shared/story';
-import { sampleChapter } from '../story/sample';
+import { cleanBanterAnswer, type BanterDaySummary, type BanterText } from '../../supabase/functions/_shared/banter';
+import { templateBanter } from '../banter/templates';
 import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
@@ -1457,25 +1457,26 @@ export async function requestTemptation(body: TemptationRequest): Promise<Tempta
   }
 }
 
-export type StoryChapterOutcome = { ok: true; chapter: StoryChapterText; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+export type BossBanterOutcome = { ok: true; text: BanterText; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
 
-/** Calls the story-chapter edge function: one chapter of the Map story, written from the summary built on the device. The answer is
- *  checked again here (`cleanChapterAnswer`). Same rules as the other AI requests: the device switch, the offline dev account (a
- *  labelled sample built from the same summary), offline fails softly; the caller saves the chapter. */
-export async function requestStoryChapter(summary: StorySummary): Promise<StoryChapterOutcome> {
+/** Calls the boss-banter edge function: one day's exchange between the stage boss and the player, written from the day's summary
+ *  built on the device. The answer is checked again here (`cleanBanterAnswer`). Same rules as the other AI requests: the device
+ *  switch, the offline dev account (the template exchange of the same summary, labelled as a sample), offline fails softly; the
+ *  caller saves the exchange. */
+export async function requestBossBanter(summary: BanterDaySummary): Promise<BossBanterOutcome> {
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
     await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
-    return { ok: true, chapter: sampleChapter(summary), sample: true };
+    return { ok: true, text: templateBanter(summary), sample: true };
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
-    const { data, error } = await supabase.functions.invoke('story-chapter', { body: { summary } });
+    const { data, error } = await supabase.functions.invoke('boss-banter', { body: { summary } });
     if (error) throw error;
     if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
-    const chapter = cleanChapterAnswer(data?.result);
-    return chapter ? { ok: true, chapter } : { ok: false, message: 'Câu trả lời không hợp lệ.', kind: 'generic' };
+    const text = cleanBanterAnswer(data?.result);
+    return text ? { ok: true, text } : { ok: false, message: 'Câu trả lời không hợp lệ.', kind: 'generic' };
   } catch (error) {
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;

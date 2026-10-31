@@ -11,5 +11,5 @@ export const USER_DATA_KEYS = {
   cheatDays: 'cheatDays',
   temptation: 'temptation',
   waterWindow: 'waterWindow',
-  story: 'story',
+  bossTalk: 'bossTalk',
 } as const;

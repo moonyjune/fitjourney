@@ -3,6 +3,9 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { APP_VERSION } from '../../utils/buildInfo';
 
+/** Functions an older release deployed that were removed later (story-chapter: the Map story, replaced by boss-banter). */
+const RETIRED_FUNCTIONS = new Set(['story-chapter']);
+
 describe('release notes', () => {
   const notes = readFileSync(join(__dirname, '../../../RELEASE_NOTES.md'), 'utf8');
   const versions = [...notes.matchAll(/^## (\d+\.\d{2})\s*$/gm)].map((m) => m[1]);
@@ -22,7 +25,7 @@ describe('release notes', () => {
     for (const [, row] of steps) {
       expect(['yes', 'no']).toContain(row.schema);
       if (row.deploy === '—') continue;
-      for (const name of row.deploy.split(', ')) expect(existsSync(join(__dirname, '../../../supabase/functions', name, 'index.ts'))).toBe(true);
+      for (const name of row.deploy.split(', ')) if (!RETIRED_FUNCTIONS.has(name)) expect(existsSync(join(__dirname, '../../../supabase/functions', name, 'index.ts'))).toBe(true);
     }
   });
 });

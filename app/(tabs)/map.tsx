@@ -11,20 +11,25 @@ import { XpBar } from '../../src/components/quest/XpBar';
 import { buildStageJourney, stageAsRegion, type StageBoss, type Zone } from '../../src/game/stageBosses';
 import { BossDamageLog, BossDamagePanel } from '../../src/components/quest/BossDamageLog';
 import { DefaultBossArt, StageBossArt } from '../../src/components/quest/StageBossArt';
-import { StorySection } from '../../src/components/quest/StorySection';
+import { BanterSection, BossBanterPanel, latestBanterFor } from '../../src/components/quest/BattleBanter';
 import { StageBossDetail, bossName, rankName, shortDate, stars, zoneTitle } from '../../src/components/quest/StageBossDetail';
 import { PressScale } from '../../src/components/quest/motion/PressScale';
 import { PulseRing } from '../../src/components/quest/motion/PulseRing';
 import { buildDamageLog, buildWeightLog } from '../../src/game/bossDamage';
-import { useGameText, type GameKey } from '../../src/game/strings';
+import { buildBanterShown } from '../../src/banter/days';
+import { formatGameText, useGameText, type GameKey } from '../../src/game/strings';
 import { useGameState, useNow } from '../../src/game/useGameState';
+import { useBossTalkStore } from '../../src/store/useBossTalkStore';
 import { useCheatDayStore } from '../../src/store/useCheatDayStore';
+import { useNutritionStore } from '../../src/store/useNutritionStore';
+import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { quest, questRadius } from '../../src/theme/quest';
 import { CONTENT_MAX_WIDTH, screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { isoWeekNumber } from '../../src/utils/isoWeek';
+import { toDateKey } from '../../src/utils/date';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type View_ = 'map' | 'chart';
@@ -158,6 +163,10 @@ export default function MapScreen() {
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
   const startDateISO = useSettingsStore((s) => s.startDateISO);
   const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const proteinTargetG = useSettingsStore((s) => s.proteinTargetG);
+  const logs = useNutritionStore((s) => s.logs);
+  const workoutEntries = useWorkoutStore((s) => s.entries);
+  const talks = useBossTalkStore((s) => s.talks);
   const cheatDays = useCheatDayStore((s) => s.days);
   const entries = useWeightStore((s) => s.entries);
   const latest = useWeightStore((s) => s.latest());
@@ -175,6 +184,29 @@ export default function MapScreen() {
     () => buildDamageLog({ days: game.days, entries, startKg: startWeightKg, startDateKey: journeyData.startDateKey, bosses }),
     [game.days, entries, startWeightKg, journeyData.startDateKey, bosses]
   );
+  // Battle banter: one boss/player exchange per day of the last two weeks (the AI's when written, else the template).
+  const todayKey = toDateKey(now);
+  const banter = useMemo(
+    () =>
+      buildBanterShown({
+        days: damageLog.days,
+        bosses,
+        evaluations: new Map(game.days.map((d) => [d.dateKey, d])),
+        logs,
+        workoutEntries,
+        targetKcal: targetDeficitKcal,
+        proteinTargetG,
+        cheatDays,
+        talks,
+        todayKey,
+        // The exchange is written in Vietnamese, so the bosses keep their Vietnamese names whatever the app language.
+        bossName: (b) => formatGameText('vi', `stage.boss.${b.archetype}` as GameKey),
+        skillName: (sk) => formatGameText('vi', `stage.skill.${sk}` as GameKey),
+      }),
+    [damageLog.days, bosses, game.days, logs, workoutEntries, targetDeficitKcal, proteinTargetG, cheatDays, talks, todayKey]
+  );
+  const banterByDay = useMemo(() => new Map(banter.map((d) => [d.date, d])), [banter]);
+  const openBanter = openBoss ? latestBanterFor(banter, openBoss.index) : undefined;
   const weightRows = useMemo(() => buildWeightLog(entries, bosses, startWeightKg, journeyData.startDateKey), [entries, bosses, startWeightKg, journeyData.startDateKey]);
   // Where each boss fell, marked on the weight chart.
   const fallMarks = useMemo(
@@ -370,11 +402,13 @@ export default function MapScreen() {
             targetKcal={targetDeficitKcal}
             cheatDays={cheatDays}
             onOpenBoss={setOpenBoss}
+            talks={banterByDay}
           />
 
-          <StorySection bosses={bosses} startDateKey={journeyData.startDateKey} now={now} />
+          <BanterSection shown={banter} todayKey={todayKey} />
 
           <StageBossDetail boss={openBoss} zone={openBoss ? zones[openBoss.zone] : undefined} currentKg={currentKg} onClose={() => setOpenBoss(null)}>
+            {openBanter && <BossBanterPanel shown={openBanter} />}
             {openBoss && (
               <BossDamagePanel
                 boss={openBoss}
@@ -383,6 +417,7 @@ export default function MapScreen() {
                 bosses={bosses}
                 targetKcal={targetDeficitKcal}
                 cheatDays={cheatDays}
+                talks={banterByDay}
               />
             )}
           </StageBossDetail>

@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.37 | no | boss-banter |
 | 0.36 | no | — |
 | 0.35 | no | — |
 | 0.34 | no | — |
@@ -48,6 +49,14 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.37
+- Map: "Hội thoại chiến đấu" replaces the story chapters. Each day of the last 14 with food logged gets a short chat between the stage boss and you.
+  - A deficit day: you unleash a move named from the real numbers ("Chưởng Thâm Hụt 1,000 kcal", a workout you logged, protein reached, no junk food) and the boss takes the grams of fat; a weigh-in drop is a critical hit; a boss that falls admits defeat.
+  - A surplus day: the boss heals, teases you with a food you really logged and challenges you for tomorrow (lighter on a planned cheat day). Never about your body.
+  - AI writes yesterday's chat once when the Map opens; any day can be written or rewritten with "Nhờ AI viết". Without AI a ready-made chat is shown, so every day has one.
+  - Tapping a day in the damage log opens its chat; a boss's detail shows its latest exchange.
+- Server: the story-chapter function is retired (`npx supabase functions delete story-chapter`).
 
 ## 0.36
 - Profile: settings and links grouped under headings: Diary & progress, Food & health, Daily targets (water, limits, fasting), Reminders & challenges, AI, Account & data (language, coach, import).

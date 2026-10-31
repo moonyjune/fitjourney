@@ -103,6 +103,7 @@ import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useSyncQueueStore } from '../../sync/syncQueue';
 import { useFeelingStore } from '../../store/useFeelingStore';
+import { useBossTalkStore } from '../../store/useBossTalkStore';
 import { flushSyncQueue, pushNutritionLog } from '../../sync/cloudSync';
 
 const signIn = (id = 'user-1') => useAuthStore.setState({ session: { user: { id, email: 'a@b.c' } } as never, devMode: false });
@@ -408,6 +409,24 @@ describe('restore from the cloud', () => {
     expect(useLimitsStore.getState().purineMg).toBe(600);
     expect(useLimitsStore.getState().saltG).not.toBe(99);
     expect(useLimitsStore.getState().sugarG).toBe(35);
+  });
+
+  it('battle banter: AI exchanges of both sides are joined (the later one wins a day); an old `story` key is ignored', async () => {
+    const talk = (date: string, text: string, madeAtISO: string) => ({
+      date, moveName: 'Chưởng', mood: 'hurt', lines: [{ speaker: 'player', text }, { speaker: 'boss', text: 'Áaa!' }], source: 'ai', deficitKcal: 800, madeAtISO,
+    });
+    useBossTalkStore.setState({ talks: [talk('2026-10-20', 'máy', '2026-10-21T08:00:00.000Z') as never], autoTried: '2026-10-20' });
+    mockDb.user_data = [
+      { user_id: 'user-1', key: 'story', value: { chapters: [{ id: 'week:2026-10-19', title: 'Cũ' }] } },
+      { user_id: 'user-1', key: 'bossTalk', value: { talks: [talk('2026-10-20', 'cloud cũ', '2026-10-20T08:00:00.000Z'), talk('2026-10-22', 'cloud', '2026-10-23T08:00:00.000Z')], autoTried: '2026-10-22' } },
+    ];
+    await restoreOwnData();
+    const state = useBossTalkStore.getState();
+    expect(state.talks.map((t) => [t.date, t.lines[0].text])).toEqual([['2026-10-20', 'máy'], ['2026-10-22', 'cloud']]);
+    expect(state.autoTried).toBe('2026-10-22');
+    await whenPushesSettled();
+    expect((mockDb.user_data.find((r) => r.key === 'bossTalk')?.value as { talks: unknown[] }).talks).toHaveLength(2);
+    expect(mockDb.user_data.find((r) => r.key === 'story')?.value).toEqual({ chapters: [{ id: 'week:2026-10-19', title: 'Cũ' }] }); // left as it was
   });
 });
 
