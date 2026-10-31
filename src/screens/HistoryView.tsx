@@ -6,7 +6,7 @@ import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { HudText } from '../components/quest/HudText';
 import { QuestButton } from '../components/quest/QuestButton';
 import { QuestHeader } from '../components/quest/QuestHeader';
-import { useGameText } from '../game/strings';
+import { useGameText, type GameKey } from '../game/strings';
 import { useLightStatusBar } from '../theme/useLightStatusBar';
 import { quest, questRadius } from '../theme/quest';
 import { useNutritionStore } from '../store/useNutritionStore';
@@ -34,6 +34,8 @@ import { actualDailyDeficitKcal, resolveTdeeKcal } from '../utils/tdee';
 import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood, ProofPhoto, WorkoutLogEntry } from '../types';
 import { WorkoutEntries, workoutRange } from '../components/quest/WorkoutDetailDialog';
 import { mealsLogged } from '../food/mealCount';
+import { deficitColor, deficitLevel } from '../game/deficitLevel';
+import { useCheatDayStore } from '../store/useCheatDayStore';
 import { PhotoViewer } from '../components/quest/PhotoViewer';
 import { mealCaption } from '../utils/mealCaption';
 import { EXTRA_PROOF_PREFIX } from '../types';
@@ -349,6 +351,10 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
   // A day's workouts are folded to one summary line; tapping it lists them with each exercise and set.
   const [workoutsOpen, setWorkoutsOpen] = useState<Record<string, boolean>>({});
+  // Deficit colours against the daily target; the user's own cheat days are never "over" (a coach's view has none).
+  const ownCheatDays = useCheatDayStore((s) => s.days);
+  const cheatDays = client ? [] : ownCheatDays;
+  const levelOf = (dateKey: string, deficit: number | null) => deficitLevel(deficit, settings.targetDailyDeficitKcal, cheatDays.includes(dateKey));
   const [viewing, setViewing] = useState<{ dateKey: string; photos: ProofPhoto[] } | null>(null);
 
   /** Which meal (or workout) a day's photo belongs to and when it was logged, e.g. "Tối · 19:30". */
@@ -449,8 +455,9 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
             {t('tdee.deficitLabel')}: {t('common.notAvailable')}
           </Meta>
         ) : (
-          <Meta color={d.deficitKcal >= 0 ? quest.xp : quest.gold}>
-            {t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: {Math.round(Math.abs(d.deficitKcal))} kcal
+          <Meta color={deficitColor(levelOf(d.dateKey, d.deficitKcal), d.deficitKcal >= 0 ? quest.xp : quest.gold)}>
+            {`${t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: ${Math.round(Math.abs(d.deficitKcal))} kcal`}
+            {levelOf(d.dateKey, d.deficitKcal) ? ` · ${g(`deficit.level.${levelOf(d.dateKey, d.deficitKcal)}` as GameKey)}` : ''}
           </Meta>
         )}
         {d.workouts.length > 0 && (
@@ -823,6 +830,9 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
                 </View>
               ))}
             </View>
+            <HudText size={10} weight="medium" color={quest.textSecondary} style={styles.calLegend}>
+              {g('deficit.legend', { target: settings.targetDailyDeficitKcal })}
+            </HudText>
             {monthGrid(calMonth).map((week, i) => (
               <View key={i} style={styles.calRow}>
                 {week.map((dateKey, j) => {
@@ -850,7 +860,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
                       <HudText size={13} color={day ? quest.text : quest.textSecondary}>
                         {Number(dateKey.slice(8))}
                       </HudText>
-                      <HudText size={10} weight="medium" color={deficit == null ? quest.textSecondary : deficit >= 0 ? quest.xp : quest.gold} numberOfLines={1}>
+                      <HudText size={10} weight="medium" color={deficitColor(levelOf(dateKey, deficit), deficit == null ? quest.textSecondary : deficit >= 0 ? quest.xp : quest.gold)} numberOfLines={1}>
                         {deficitText || ' '}
                       </HudText>
                     </Pressable>
@@ -894,6 +904,7 @@ const styles = StyleSheet.create({
   chartStyle: { borderRadius: questRadius.row },
   toggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   workouts: { marginTop: 6, gap: 6 },
+  calLegend: { marginVertical: 4 },
   workoutsHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, minHeight: 32, paddingVertical: 4 },
   flex: { flex: 1, minWidth: 0 },
   dailyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },

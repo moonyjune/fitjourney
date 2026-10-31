@@ -27,6 +27,8 @@ import { isSkippedMealItem, logSkippedMeal } from '../food/skipMeal';
 import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { useCheatDayStore } from '../store/useCheatDayStore';
+import { DEFICIT_LEVEL_COLOR, deficitColor, deficitLevel, type DeficitLevel } from '../game/deficitLevel';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { quest, questRadius } from '../theme/quest';
 import { screenMaxWidthStyle } from '../theme/responsive';
@@ -282,6 +284,44 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
 
 /** The battle log. `embedded`: a section of another screen (Camp) — no own scroll view, back button or safe-area padding;
  *  the title is a section heading instead. */
+/** The selected day's deficit level ("Đạt", "Quá lố"…) in its colour, the colour key, and the cheat-day mark. */
+function DeficitLevelRow({ level, target, cheat, onToggleCheat }: { level: DeficitLevel | null; target: number; cheat: boolean; onToggleCheat?: () => void }) {
+  const g = useGameText();
+  return (
+    <View style={styles.levelRow}>
+      <View style={styles.levelHead}>
+        {level && (
+          <View style={[styles.levelChip, { borderColor: DEFICIT_LEVEL_COLOR[level] }]}>
+            <View style={[styles.levelDot, { backgroundColor: DEFICIT_LEVEL_COLOR[level] }]} />
+            <HudText size={12} color={DEFICIT_LEVEL_COLOR[level]}>
+              {g(`deficit.level.${level}` as GameKey)}
+            </HudText>
+          </View>
+        )}
+        <View style={styles.flex} />
+        {onToggleCheat && (
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityLabel={g('deficit.cheatMarkHint')}
+            accessibilityState={{ checked: cheat }}
+            onPress={() => {
+              onToggleCheat();
+            }}
+            style={[styles.levelChip, { borderColor: cheat ? DEFICIT_LEVEL_COLOR.cheat : quest.border }]}
+          >
+            <HudText size={12} color={cheat ? DEFICIT_LEVEL_COLOR.cheat : quest.textSecondary}>
+              {cheat ? '☑' : '☐'} {g('deficit.cheatMark')}
+            </HudText>
+          </Pressable>
+        )}
+      </View>
+      <HudText size={10} weight="medium" color={quest.textSecondary}>
+        {g('deficit.legend', { target })}
+      </HudText>
+    </View>
+  );
+}
+
 export function JournalView({ client, embedded }: { client?: ClientSnapshot; embedded?: boolean }) {
   const g = useGameText();
   const { t, language } = useTranslation();
@@ -312,6 +352,13 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   const waterSchedule = client?.plan.waterSchedule ?? ownWaterSchedule;
   const proteinTargetG = client?.settings.proteinTargetG ?? ownProteinTargetG;
   const waterTargetMl = client?.settings.waterTargetMl ?? ownWaterTargetMl;
+  const ownDeficitTarget = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const deficitTarget = client?.settings.targetDailyDeficitKcal ?? ownDeficitTarget;
+  // Cheat days are the user's own marks (a coach's view has none).
+  const ownCheatDays = useCheatDayStore((s) => s.days);
+  const toggleCheat = useCheatDayStore((s) => s.toggle);
+  const cheatDays = client ? [] : ownCheatDays;
+  const levelOf = (key: string, deficit: number | null | undefined) => deficitLevel(deficit, deficitTarget, cheatDays.includes(key));
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   const evaluate = useMemo(
     () =>
@@ -485,7 +532,7 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
     {
       label: g('journal.deficit'),
       value: day.deficitKcal == null ? '—' : Math.round(day.deficitKcal).toLocaleString('en-US'),
-      color: quest.gold,
+      color: deficitColor(levelOf(selectedKey, day.deficitKcal), quest.gold),
       accent: true,
     },
     { label: g('journal.xp'), value: `+${day.earnedXp}`, color: quest.xp, accent: false },
@@ -545,9 +592,11 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
                   <HudText size={18} color={selected ? quest.onGold : quest.text}>
                     {d.date.getDate()}
                   </HudText>
-                  <HudText size={10} weight="medium" color={selected ? quest.onGold : quest.hpText}>
+                  <HudText size={10} weight="medium" color={selected ? quest.onGold : deficitColor(levelOf(d.key, d.deficit), quest.hpText)}>
                     {d.future ? '·' : d.deficit == null ? '–' : Math.round(d.deficit).toLocaleString('en-US')}
                   </HudText>
+                  {/* The deficit level as a bar, still readable on the selected (gold) day. */}
+                  <View style={[styles.levelBar, { backgroundColor: d.future ? 'transparent' : deficitColor(levelOf(d.key, d.deficit), 'transparent') }]} />
                 </Pressable>
               );
             })}
@@ -578,6 +627,13 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
             </View>
           ))}
         </View>
+
+        <DeficitLevelRow
+          level={levelOf(selectedKey, day.deficitKcal)}
+          target={deficitTarget}
+          cheat={cheatDays.includes(selectedKey)}
+          onToggleCheat={client || selectedKey > todayKey ? undefined : () => toggleCheat(selectedKey)}
+        />
 
         <View
           accessible
@@ -638,6 +694,11 @@ const styles = StyleSheet.create({
   dayCell: { flex: 1, minHeight: 68, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', gap: 1, paddingVertical: 4 },
   stats: { flexDirection: 'row', gap: 8, marginTop: 12 },
   stat: { flex: 1, minWidth: 0, padding: 10, gap: 2, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center' },
+  levelBar: { width: '60%', height: 3, borderRadius: 2, marginTop: 2 },
+  levelRow: { marginTop: 10, gap: 6 },
+  levelHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1.5 },
+  levelDot: { width: 8, height: 8, borderRadius: 4 },
   waterBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 10, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 20, marginBottom: 8 },
   timeline: { marginTop: 4 },

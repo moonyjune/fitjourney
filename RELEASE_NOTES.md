@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.28 | no | — |
 | 0.27 | no | — |
 | 0.26 | no | suggest-dinner |
 | 0.25 | yes | — |
@@ -39,6 +40,16 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.28
+- Daily calorie deficit in colour, against your daily deficit target (e.g. 1000 kcal):
+  - green "Đạt": ≥ 90 % (900 kcal or more);
+  - yellow "Tạm chấp nhận": 50–90 % (500–900);
+  - orange "Không đạt": 10–50 % (100–500);
+  - red "Quá lố": under 10 %, no deficit, or a surplus.
+
+  Shown in the battle log (week strip, the day's deficit, and a chip with the level and a colour key) and in History (each day's deficit line and the calendar).
+- Cheat day: tick "Cheat day" under the battle log's figures for a day (today or earlier). That day is never "Quá lố" and shows as "Cheat day" in blue. The marks are saved to the cloud.
 
 ## 0.27
 - History, daily diary: a day's workouts fold into one line, e.g. "6 buổi tập · 45 phút · đốt 320 kcal · 06:00–06:05, …". Tapping it lists each workout with its time range and, for a guided session, each exercise with the plan and what every set reached; tap again to fold it.

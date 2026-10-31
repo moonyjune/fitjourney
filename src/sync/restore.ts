@@ -10,6 +10,7 @@ import { LIMIT_DEFAULTS, LIMIT_RANGE, useLimitsStore, type LimitKey } from '../s
 import { cleanMealPrefs, NO_MEAL_PREFS, pick as pickPrefs, useMealPrefStore } from '../store/useMealPrefStore';
 import { useMealModeStore } from '../store/useMealModeStore';
 import { useAnalysisStore } from '../store/useAnalysisStore';
+import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { TARGET_RANGE, useUricStore } from '../store/useUricStore';
 import { useWeightStore } from '../store/useWeightStore';
@@ -339,6 +340,14 @@ function restoreUserData(remote: Map<string, unknown>): void {
   if (useAnalysisStore.getState().mode === 'auto') {
     if (remoteManual) useAnalysisStore.setState({ mode: 'manual' });
   } else if (!remoteManual) void pushUserData(USER_DATA_KEYS.analysisMode, { mode: 'manual' });
+
+  // Cheat days: marks from either side are kept (a day marked on another device is still a cheat day here).
+  const cheat = remote.get(USER_DATA_KEYS.cheatDays);
+  const remoteCheat = cleanCheatDays(isObj(cheat) ? cheat.days : []);
+  const localCheat = useCheatDayStore.getState().days;
+  const mergedCheat = cleanCheatDays([...remoteCheat, ...localCheat]);
+  if (!sameJson(mergedCheat, localCheat)) useCheatDayStore.setState({ days: mergedCheat });
+  if (!sameJson(mergedCheat, remoteCheat)) void pushUserData(USER_DATA_KEYS.cheatDays, { days: mergedCheat });
 
   // Meal preferences (calories / protein wanted per meal): a device with none set takes the cloud's; a device with some pushes them.
   const prefsLocal = pickPrefs(useMealPrefStore.getState());

@@ -15,6 +15,7 @@ const item = (id: string, at: string, patch: Partial<ExtraFoodItem> = {}): Extra
   proteinG: 10,
   loggedAtISO: new Date(`2026-10-31T${at}:00`).toISOString(),
   ...patch,
+  mealTime: patch.mealTime ?? null,
 });
 
 describe('meals counted from what was logged', () => {

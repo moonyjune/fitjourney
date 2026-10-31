@@ -8,4 +8,5 @@ export const USER_DATA_KEYS = {
   mealPrefs: 'mealPrefs',
   cookbook: 'cookbook',
   analysisMode: 'analysisMode',
+  cheatDays: 'cheatDays',
 } as const;

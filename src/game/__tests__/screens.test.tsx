@@ -67,6 +67,7 @@ import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
+import { useCheatDayStore } from '../../store/useCheatDayStore';
 
 const DATE = '2026-10-23';
 
@@ -428,6 +429,18 @@ describe('FitQuest logging screens', () => {
       expect(text).toContain('14:00 Yến mạch 30g'); // filed at the usual time of the picked meal
       expect(text).toContain('purine 25 mg · đường 5.5 g · muối 0.2 g');
       expect(text).not.toContain('CHI-TIẾT');
+    });
+
+    it('colours the day\'s deficit by how it compares with the target, and a cheat day is never "over"', () => {
+      useCheatDayStore.setState({ days: [] });
+      const r = render(<JournalScreen />);
+      const level = () => ['Đạt', 'Tạm chấp nhận', 'Không đạt', 'Quá lố', 'Cheat day'].filter((l) => r.root.findAll((n) => (n.type as unknown) === 'Text' && [n.props.children].flat(5).join('') === l).length > 0);
+      expect(level().length).toBeGreaterThan(0);
+      expect(allText(r)).toContain('Màu thâm hụt so với mục tiêu');
+      act(() => pressable(r, (l) => l.startsWith('Đánh dấu ngày này là cheat day')).props.onPress());
+      expect(useCheatDayStore.getState().days).toEqual([DATE]);
+      act(() => pressable(r, (l) => l.startsWith('Đánh dấu ngày này là cheat day')).props.onPress());
+      expect(useCheatDayStore.getState().days).toEqual([]);
     });
 
     it('shows workouts close together as one row from start to end, and opens their history with each set', () => {
