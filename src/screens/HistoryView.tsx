@@ -16,6 +16,7 @@ import { useWeightStore } from '../store/useWeightStore';
 import { useProofStore } from '../store/useProofStore';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useSettingsStore } from '../store/useSettingsStore';
+import { dayWaterTargetMl } from '../water/schedule';
 import { useAuthStore } from '../store/useAuthStore';
 import { getDayType } from '../constants/plan';
 import { usePlanStore } from '../store/usePlanStore';
@@ -59,6 +60,8 @@ interface DaySummary {
   calories: number;
   proteinG: number;
   waterMl: number;
+  /** The day's own water target (stored on its log), else the current setting. */
+  waterTargetMl: number;
   /** Meal times with food logged (see `mealsLogged`), shown against the plan's 3. */
   mealsEatenCount: number;
   workoutsCount: number;
@@ -242,6 +245,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           calories,
           proteinG,
           waterMl: log?.waterMl ?? 0,
+          waterTargetMl: dayWaterTargetMl(log, settings.waterTargetMl),
           mealsEatenCount: mealsLogged(log),
           workoutsCount: dayWorkouts.length,
           workouts: [...dayWorkouts].sort((a, b) => Date.parse(a.dateISO) - Date.parse(b.dateISO)),
@@ -259,7 +263,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           removedMealSlots: log?.removedMealSlots ?? [],
         };
       });
-  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal]);
+  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal, settings.waterTargetMl]);
 
   const weeklySummaries = useMemo(() => {
     const groups = new Map<string, DaySummary[]>();
@@ -445,7 +449,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
     return (
       <Panel key={d.dateKey}>
         <HudText size={14}>{formatDateVi(d.dateKey)}</HudText>
-        <Meta>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl })}</Meta>
+        <Meta>{t('history.dayMeta1', { kcal: d.calories, protein: d.proteinG, water: d.waterMl, target: d.waterTargetMl })}</Meta>
         <Meta>
           {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
           {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}

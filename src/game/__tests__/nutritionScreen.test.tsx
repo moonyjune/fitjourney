@@ -132,6 +132,20 @@ describe('Nutrition screen (FitQuest)', () => {
     expect(useNutritionStore.getState().getLog(key).mealsEaten[meal.slot]).toBe(false);
   });
 
+  it('shows the water plan generated from the day\'s own target: 500 ml drinks over the day, done and pending', async () => {
+    useSettingsStore.setState({ waterTargetMl: 4500 });
+    useNutritionStore.setState({ logs: { [key]: { dateISO: key, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 1000, waterTargetMl: 3500 } } });
+    const r = await render();
+    const text = allText(r);
+    expect(text).toContain('1000 / 3500 ml');
+    expect(text).not.toContain('Cumulative target: 4000ml');
+    expect(text).toContain('Cumulative target: 3500ml');
+    expect(text.match(/\+500ml · Cumulative/g)).toHaveLength(7);
+    expect(text).toMatch(/06 ?: ?00 \w+ Wake up/);
+    expect(text).toMatch(/21 ?: ?00 \w+ Last glass/);
+    expect(text).toMatch(/Next: \d+ ml at \d\d:\d\d|Catch up now: \d+ ml|Enough water today/);
+  });
+
   it('adds water with the quick buttons, a custom amount, and resets it', async () => {
     const r = await render();
     await press(r, '+250ml');

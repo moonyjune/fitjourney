@@ -34,6 +34,7 @@ import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 import { APP_VERSION, BUILD_ID } from '../../src/utils/buildInfo';
 import { TemptationSettings } from '../../src/components/quest/TemptationSettings';
+import { WaterSettings } from '../../src/components/quest/WaterSettings';
 
 type Lang = 'vi' | 'en';
 
@@ -380,6 +381,8 @@ export default function ProfileScreen() {
           thumbColor={quest.text}
         />
       </View>
+
+      <WaterSettings />
 
       <View style={styles.setting}>
         <View style={styles.settingHead}>

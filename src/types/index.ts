@@ -139,6 +139,10 @@ export interface DailyNutritionLog {
    *  kept in lockstep for any existing consumer that only needs the totals. */
   extraItems: ExtraFoodItem[];
   waterMl: number;
+  /** The daily water target in force on this day (ml), written when the day is first saved and kept for past days, so a
+   *  later change of the setting does not rewrite history. Today's follows the setting. Missing on days saved before it
+   *  existed: those read the current setting. */
+  waterTargetMl?: number;
   /** Default (plan-template) meal slots explicitly deleted from this specific day's diary — e.g.
    *  skipped entirely (distinct from merely "not eaten yet"). Doesn't touch the plan template
    *  itself or any other day. */

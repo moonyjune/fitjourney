@@ -19,6 +19,8 @@ import { quest, questFonts, questRadius } from '../src/theme/quest';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import { toDateKey } from '../src/utils/date';
 import { dateOfKey, oldestLogDateKey, shiftDateKey } from '../src/utils/logDate';
+import { useWaterPlan } from '../src/water/useWaterPlan';
+import { WaterNextDrink } from '../src/components/quest/WaterNextDrink';
 
 const MIN_KG = 20;
 const MAX_KG = 300;
@@ -79,7 +81,8 @@ export default function QuickAddScreen() {
   const input = useTodayInput(now, dateKey);
 
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
-  const waterTargetMl = useSettingsStore((s) => s.waterTargetMl);
+  const water = useWaterPlan(dateKey);
+  const waterTargetMl = water.targetMl;
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
   const latest = useWeightStore((s) => s.latest());
   const addWeight = useWeightStore((s) => s.addEntry);
@@ -244,6 +247,7 @@ export default function QuickAddScreen() {
             </View>
           ))}
         </View>
+        {isToday && <WaterNextDrink schedule={water.schedule} waterMl={waterMl} now={now} />}
         {lastWaterMl != null && (
           <HudText size={12} weight="medium" color={quest.manaText} accessibilityLiveRegion="polite" style={styles.feedback}>
             +{lastWaterMl} ml

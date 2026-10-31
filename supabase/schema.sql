@@ -895,3 +895,8 @@ alter table public.workout_entries add column if not exists details jsonb;
 -- Người dùng tự đánh dấu một thói quen "Đã thành thói quen" (true) hay "Chưa thành" (false); null = theo dữ liệu tích ✔/✘.
 -- App vẫn đẩy được khi cột chưa có (thử lại không kèm cột này).
 alter table public.habits add column if not exists formed_mark boolean;
+
+-- ===== Water target per day =====
+-- Mục tiêu nước (ml) đang áp dụng cho ngày đó, ghi lần đầu ngày được lưu và giữ nguyên cho ngày đã qua: đổi mục tiêu trong
+-- cài đặt không viết lại lịch sử. Null = ngày lưu trước khi có cột (app dùng mục tiêu hiện tại). App vẫn đẩy được khi cột chưa có.
+alter table public.nutrition_logs add column if not exists water_target_ml integer;

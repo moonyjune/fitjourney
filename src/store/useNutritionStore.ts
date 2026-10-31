@@ -15,6 +15,7 @@ import { sortedPhotos } from '../utils/photoOrder';
 import { withCountersAfterEdit, withIntakeCounters } from '../utils/dayIntake';
 import { healLog, newExtraId } from '../utils/extraIds';
 import { setDayReader } from '../sync/syncQueue';
+import { useSettingsStore } from './useSettingsStore';
 
 export type ExtraPatch = Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG' | 'parts'>> & {
   photoUri?: string | null;
@@ -83,6 +84,20 @@ function emptyLog(dateKey: string): DailyNutritionLog {
   return log;
 }
 
+/** Gives a day the water target in force when it is first saved (the current setting); a day that has one keeps it. */
+function withWaterTarget(log: DailyNutritionLog): DailyNutritionLog {
+  if (log.waterTargetMl && log.waterTargetMl > 0) return log;
+  const target = useSettingsStore.getState().waterTargetMl;
+  return target > 0 ? { ...log, waterTargetMl: target } : log;
+}
+
+/** Saves one day (with its water target) and sends it to the cloud. */
+function commit(logs: Record<string, DailyNutritionLog>, dateKey: string, updated: DailyNutritionLog): { logs: Record<string, DailyNutritionLog> } {
+  const day = withWaterTarget(updated);
+  pushNutritionLog(day);
+  return { logs: { ...logs, [dateKey]: day } };
+}
+
 /** Removes the item's first photo only (the one `photoUri` points at), keeping any further photos of the meal. */
 function discardMainPhoto(item: Pick<ExtraFoodItem, 'id' | 'photoUri'>): void {
   const proofs = useProofStore.getState();
@@ -125,23 +140,20 @@ export const useNutritionStore = create<NutritionState>()(
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const mealsEaten = { ...current.mealsEaten, [slot]: !current.mealsEaten[slot] };
           const updated = { ...current, mealsEaten };
-          pushNutritionLog(updated);
-          return { logs: { ...state.logs, [dateKey]: updated } };
+          return commit(state.logs, dateKey, updated);
         }),
       addWater: (dateKey, ml) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const waterMl = Math.max(0, current.waterMl + ml);
           const updated = { ...current, waterMl };
-          pushNutritionLog(updated);
-          return { logs: { ...state.logs, [dateKey]: updated } };
+          return commit(state.logs, dateKey, updated);
         }),
       resetWater: (dateKey) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const updated = { ...current, waterMl: 0 };
-          pushNutritionLog(updated);
-          return { logs: { ...state.logs, [dateKey]: updated } };
+          return commit(state.logs, dateKey, updated);
         }),
       addExtra: (dateKey, name, calories, proteinG, mealTime, extras) => {
         const item: ExtraFoodItem = { id: newExtraId((get().logs[dateKey]?.extraItems ?? []).map((i) => i.id)), name, calories, proteinG, mealTime, loggedAtISO: loggedAtFor(dateKey, mealTime, new Date(), extras?.clock) };
@@ -156,8 +168,7 @@ export const useNutritionStore = create<NutritionState>()(
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const updated = withIntakeCounters({ ...current, extraItems: [...(current.extraItems ?? []), item] });
-          pushNutritionLog(updated);
-          return { logs: { ...state.logs, [dateKey]: updated } };
+          return commit(state.logs, dateKey, updated);
         });
         // A food the database does not know yet is remembered, so next time it needs neither typing nor an AI call.
         // A meal entered as several foods adds each food on its own (the one-line total of a combination is no use later).
@@ -189,8 +200,7 @@ export const useNutritionStore = create<NutritionState>()(
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const updated = withIntakeCounters({ ...current, extraItems: (current.extraItems ?? []).map((i) => (i.id === itemId ? next : i)) });
-          pushNutritionLog(updated);
-          return { logs: { ...state.logs, [dateKey]: updated } };
+          return commit(state.logs, dateKey, updated);
         });
         if (photoUri !== undefined && (photoUri !== old.photoUri || isInlinePhoto(photoUri))) {
           discardMainPhoto(old);
@@ -206,8 +216,7 @@ export const useNutritionStore = create<NutritionState>()(
           if (!item) return state;
           discardExtraPhoto(item);
           const updated = withCountersAfterEdit(current, { ...current, extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId) });
-          pushNutritionLog(updated);
-          return { logs: { ...state.logs, [dateKey]: updated } };
+          return commit(state.logs, dateKey, updated);
         }),
       saveDayLog: (dateKey, patch) =>
         set((state) => {
@@ -220,8 +229,7 @@ export const useNutritionStore = create<NutritionState>()(
             { ...current, mealsEaten: patch.mealsEaten, extraItems: patch.extraItems, removedMealSlots: patch.removedMealSlots },
             patch.clearTotals
           );
-          pushNutritionLog(updated);
-          return { logs: { ...state.logs, [dateKey]: updated } };
+          return commit(state.logs, dateKey, updated);
         }),
     }),
     {
@@ -254,6 +262,30 @@ export const useNutritionStore = create<NutritionState>()(
 );
 
 setDayReader((dateKey) => useNutritionStore.getState().logs[dateKey]);
+
+/**
+ * The daily water target changed from `prev` to `next`. Past days saved without a target of their own are frozen at `prev`
+ * (the target they were lived under; kept on this device, sent with the day's next save), and today's log, if any, takes
+ * `next` and is saved, so today's plan follows the setting while history does not move.
+ */
+export function applyWaterTargetChange(next: number, prev: number, today: string = toDateKey(new Date())): void {
+  const logs = useNutritionStore.getState().logs;
+  let changed: Record<string, DailyNutritionLog> | null = null;
+  for (const [key, log] of Object.entries(logs)) {
+    if (key < today && !(log.waterTargetMl && log.waterTargetMl > 0) && prev > 0) (changed ??= { ...logs })[key] = { ...log, waterTargetMl: prev };
+  }
+  const todayLog = logs[today];
+  if (todayLog && todayLog.waterTargetMl !== next && next > 0) {
+    (changed ??= { ...logs })[today] = { ...todayLog, waterTargetMl: next };
+    pushNutritionLog(changed[today]);
+  }
+  if (changed) useNutritionStore.setState({ logs: changed });
+}
+
+// Only a real change counts: the settings store loading its saved value from the device is not one.
+useSettingsStore.subscribe((s, p) => {
+  if (s.waterTargetMl !== p.waterTargetMl && useSettingsStore.persist?.hasHydrated?.() !== false) applyWaterTargetChange(s.waterTargetMl, p.waterTargetMl);
+});
 
 export function todayKey(): string {
   return toDateKey(new Date());

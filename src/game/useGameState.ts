@@ -6,6 +6,7 @@ import { useWeightStore } from '../store/useWeightStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { computeCurrentStreak, computeLongestStreak } from '../utils/streak';
 import { DEFAULT_WATER_TARGET_ML } from '../constants/plan';
+import { dayWaterTargetMl } from '../water/schedule';
 import { useLimitsStore } from '../store/useLimitsStore';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useProofStore } from '../store/useProofStore';
@@ -146,6 +147,7 @@ export function useAchievements(now: Date): {
   const game = useGameState(now);
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
+  const waterTargetMl = useSettingsStore((s) => s.waterTargetMl);
   const tdeeKcal = useTdeeKcal();
   const logs = useNutritionStore((s) => s.logs);
   const weights = useWeightStore((s) => s.entries);
@@ -156,10 +158,13 @@ export function useAchievements(now: Date): {
   const plan = usePlanStore((s) => s.plan);
 
   return useMemo(() => {
-    const schedule = plan.waterSchedule;
-    const waterGoalMl = schedule.length ? schedule[schedule.length - 1].cumulativeTargetMl : DEFAULT_WATER_TARGET_ML;
+    const waterGoalMl = waterTargetMl > 0 ? waterTargetMl : DEFAULT_WATER_TARGET_ML;
     const waterByDay: Record<string, number> = {};
-    for (const [key, log] of Object.entries(logs)) waterByDay[key] = log.waterMl ?? 0;
+    const waterGoalByDay: Record<string, number> = {};
+    for (const [key, log] of Object.entries(logs)) {
+      waterByDay[key] = log.waterMl ?? 0;
+      waterGoalByDay[key] = dayWaterTargetMl(log, waterGoalMl);
+    }
     const stats = computeAchievementStats({
       game,
       startWeightKg,
@@ -172,7 +177,8 @@ export function useAchievements(now: Date): {
       feelings,
       waterGoalMl,
       waterByDay,
+      waterGoalByDay,
     });
     return { stats, stickers: evaluateAchievements(stats), banners: evaluateBanners(stats) };
-  }, [game, startWeightKg, goalWeightKg, weights, logs, workouts, trainingProgress, photos, feelings, plan, tdeeKcal]);
+  }, [game, startWeightKg, goalWeightKg, weights, logs, workouts, trainingProgress, photos, feelings, plan, tdeeKcal, waterTargetMl]);
 }

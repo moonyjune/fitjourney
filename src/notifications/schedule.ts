@@ -2,6 +2,9 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { TRAINING_WEEKDAYS } from '../constants/plan';
 import type { PlanData } from '../types';
+import { formatGameText } from '../game/strings';
+import { useSettingsStore } from '../store/useSettingsStore';
+import { currentWaterPlan } from '../water/useWaterPlan';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -41,11 +44,15 @@ export async function scheduleAllReminders(plan: PlanData): Promise<void> {
     });
   }
 
-  for (const checkpoint of plan.waterSchedule) {
+  // Water: the plan generated from the daily target (and drinking window) in force today, not the plan's stored schedule.
+  const language = useSettingsStore.getState().language;
+  const water = currentWaterPlan(new Date(), plan).schedule;
+  for (const [i, checkpoint] of water.entries()) {
+    const ml = checkpoint.cumulativeTargetMl - (i > 0 ? water[i - 1].cumulativeTargetMl : 0);
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: 'Nhắc uống nước 💧',
-        body: `${checkpoint.label} — mục tiêu cộng dồn ${checkpoint.cumulativeTargetMl}ml.`,
+        title: formatGameText(language, 'water.notifTitle'),
+        body: formatGameText(language, 'water.notifBody', { ml, label: checkpoint.label, total: checkpoint.cumulativeTargetMl }),
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.DAILY,

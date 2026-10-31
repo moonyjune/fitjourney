@@ -11,6 +11,7 @@ import { ProofCapture } from '../../src/components/ProofCapture';
 import { MealRecipeSuggestion } from '../../src/components/MealRecipeSuggestion';
 import { MealItemRows } from '../../src/components/PlanPreview';
 import { WaterTimeline } from '../../src/components/WaterTimeline';
+import { WaterNextDrink } from '../../src/components/quest/WaterNextDrink';
 import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { TdeeCard } from '../../src/components/TdeeCard';
 import { DailyMealBreakdownTable } from '../../src/components/DailyMealBreakdownTable';
@@ -29,6 +30,7 @@ import { quest, questFonts, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { extraIntake } from '../../src/utils/dayIntake';
+import { useWaterPlan } from '../../src/water/useWaterPlan';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 function isSameDay(a: Date, b: Date): boolean {
@@ -62,7 +64,8 @@ export default function NutritionScreen() {
   const dayType = useMemo(() => getDayType(viewDate), [viewDate]);
   const isToday = isSameDay(viewDate, new Date());
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
-  const waterSchedule = usePlanStore((s) => s.plan.waterSchedule);
+  // Generated from the day's own target (a past day keeps the one it was lived under).
+  const water = useWaterPlan(dateKey);
   const meals = mealTemplates[dayType];
 
   const log = useNutritionStore((s) => s.getLog(dateKey));
@@ -160,7 +163,8 @@ export default function NutritionScreen() {
 
       <View style={styles.card}>
         <HudText size={15}>{t('nutrition.waterTitle')}</HudText>
-        <ProgressBar dark label={t('common.water')} current={log.waterMl} target={settings.waterTargetMl} unit="ml" />
+        <ProgressBar dark label={t('common.water')} current={log.waterMl} target={water.targetMl} unit="ml" />
+        {isToday && <WaterNextDrink schedule={water.schedule} waterMl={log.waterMl} />}
         <View style={styles.chipRow}>
           {WATER_QUICK_ADD_ML.map((ml) => (
             <Pressable
@@ -208,7 +212,7 @@ export default function NutritionScreen() {
       <View style={styles.card}>
         {/* For a backdated day, treat every checkpoint's time as already past — "behind/complete"
             should be judged purely by ml logged, not by comparing to today's clock. */}
-        <WaterTimeline dark schedule={waterSchedule} currentMl={log.waterMl} now={isToday ? new Date() : endOfDay(viewDate)} />
+        <WaterTimeline dark schedule={water.schedule} currentMl={log.waterMl} now={isToday ? new Date() : endOfDay(viewDate)} />
       </View>
 
       {sectionTitle(t('nutrition.mealsTitle'))}

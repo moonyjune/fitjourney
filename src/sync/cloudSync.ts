@@ -400,23 +400,28 @@ function withoutInlinePhotos(items: DailyNutritionLog['extraItems']): DailyNutri
 export async function pushNutritionLog(log: DailyNutritionLog): Promise<void> {
   const userId = currentUserId();
   if (!userId) return;
+  const base = {
+    user_id: userId,
+    entry_date: log.dateISO,
+    meals_eaten: log.mealsEaten,
+    extra_calories: log.extraCalories,
+    extra_protein_g: log.extraProteinG,
+    extra_items: withoutInlinePhotos(log.extraItems),
+    water_ml: log.waterMl,
+    removed_meal_slots: log.removedMealSlots ?? [],
+    updated_at: new Date().toISOString(),
+  };
+  const upsert = (row: Record<string, unknown>) => supabase.from('nutrition_logs').upsert(row, { onConflict: 'user_id,entry_date' });
+  // The day's water target goes only when the day has one (an older day without it must not blank the cloud's).
+  const target = log.waterTargetMl && log.waterTargetMl > 0 ? Math.round(log.waterTargetMl) : null;
   await pushOrQueue(
     { type: 'nutritionLog', payload: log },
-    () =>
-      supabase.from('nutrition_logs').upsert(
-        {
-          user_id: userId,
-          entry_date: log.dateISO,
-          meals_eaten: log.mealsEaten,
-          extra_calories: log.extraCalories,
-          extra_protein_g: log.extraProteinG,
-          extra_items: withoutInlinePhotos(log.extraItems),
-          water_ml: log.waterMl,
-          removed_meal_slots: log.removedMealSlots ?? [],
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,entry_date' }
-      ),
+    async () => {
+      if (target === null) return upsert(base);
+      const full = await upsert({ ...base, water_target_ml: target });
+      // Until schema.sql adds water_target_ml, write what the table has rather than failing the sync.
+      return full.error && isMissingColumn(full.error) ? upsert(base) : full;
+    },
     'pushNutritionLog'
   );
 }

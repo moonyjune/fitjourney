@@ -10,6 +10,7 @@ import { TdeeCard } from '../../src/components/TdeeCard';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
+import { dayWaterTargetMl } from '../../src/water/schedule';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { getDayType } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
@@ -161,7 +162,7 @@ export default function TodayScreen() {
         <Text style={styles.cardTitle}>{t('today.nutritionTitle')}</Text>
         <ProgressBar label={t('common.calories')} current={totalCalories} target={settings.calorieTargetKcal} unit="kcal" />
         <ProgressBar label={t('common.protein')} current={totalProtein} target={settings.proteinTargetG} unit="g" />
-        <ProgressBar label={t('common.water')} current={nutritionLog.waterMl} target={settings.waterTargetMl} unit="ml" />
+        <ProgressBar label={t('common.water')} current={nutritionLog.waterMl} target={dayWaterTargetMl(nutritionLog, settings.waterTargetMl)} unit="ml" />
       </Card>
 
       <TdeeCard

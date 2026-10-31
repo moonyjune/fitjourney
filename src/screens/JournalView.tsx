@@ -40,6 +40,8 @@ import { addExtraPhoto, addSlotPhoto, removeExtraPhoto } from '../utils/mealPhot
 import { extraPhotoRefs, slotPhotoRefs, type MealPhotoRef } from '../utils/photoOrder';
 import { weekShiftFor } from '../utils/swipe';
 import { weekStartKey } from '../utils/weekKey';
+import { DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN, dayWaterTargetMl } from '../water/schedule';
+import { useWaterPlan, waterPlanFor } from '../water/useWaterPlan';
 
 const MOOD_LABEL: Record<string, StringKey> = {
   great: 'feeling.moodGreat',
@@ -341,17 +343,13 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   const ownFeelings = useFeelingStore((s) => s.records);
   const ownPhotos = useProofStore((s) => s.photos);
   const ownMealTemplates = usePlanStore((s) => s.plan.mealTemplates);
-  const ownWaterSchedule = usePlanStore((s) => s.plan.waterSchedule);
   const ownProteinTargetG = useSettingsStore((s) => s.proteinTargetG);
-  const ownWaterTargetMl = useSettingsStore((s) => s.waterTargetMl);
   const logs = client?.logs ?? ownLogs;
   const workoutEntries = client?.workouts ?? ownWorkouts;
   const feelings = client?.feelings ?? ownFeelings;
   const photos = client?.photos ?? ownPhotos;
   const mealTemplates = client?.plan.mealTemplates ?? ownMealTemplates;
-  const waterSchedule = client?.plan.waterSchedule ?? ownWaterSchedule;
   const proteinTargetG = client?.settings.proteinTargetG ?? ownProteinTargetG;
-  const waterTargetMl = client?.settings.waterTargetMl ?? ownWaterTargetMl;
   const ownDeficitTarget = useSettingsStore((s) => s.targetDailyDeficitKcal);
   const deficitTarget = client?.settings.targetDailyDeficitKcal ?? ownDeficitTarget;
   // Cheat days are the user's own marks (a coach's view has none).
@@ -402,6 +400,25 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   const isToday = selectedKey === todayKey;
   const day = evaluate(selectedKey);
   const waterMl = logs[selectedKey]?.waterMl ?? 0;
+  // The water plan of the selected day, from that day's own target (a past day keeps the one it was lived under). A client's
+  // drinking window is not shared, so a coach sees the client's target spread over the default window.
+  const ownWater = useWaterPlan(selectedKey);
+  const clientWater = useMemo(
+    () =>
+      client
+        ? waterPlanFor({
+            targetMl: dayWaterTargetMl(client.logs[selectedKey], client.settings.waterTargetMl),
+            date: selectedDate,
+            plan: client.plan,
+            startMinutes: DEFAULT_WATER_START_MIN,
+            endMinutes: DEFAULT_WATER_END_MIN,
+            fasting: false,
+            language,
+          })
+        : null,
+    [client, selectedKey, selectedDate, language]
+  );
+  const { targetMl: waterTargetMl, schedule: waterSchedule } = clientWater ?? ownWater;
 
   const timeline = useMemo(() => {
     const photoSlots = new Set(

@@ -10,4 +10,5 @@ export const USER_DATA_KEYS = {
   analysisMode: 'analysisMode',
   cheatDays: 'cheatDays',
   temptation: 'temptation',
+  waterWindow: 'waterWindow',
 } as const;

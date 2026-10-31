@@ -31,6 +31,8 @@ import { useShoppingListStore } from './useShoppingListStore';
 import { useUricStore } from './useUricStore';
 import { useWeightStore } from './useWeightStore';
 import { useWorkoutStore } from './useWorkoutStore';
+import { useWaterWindowStore } from './useWaterWindowStore';
+import { DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN } from '../water/schedule';
 import { DEFAULT_TARGET_UMOL } from '../uric/types';
 import { weekStartKey } from '../utils/weekKey';
 import { useSyncQueueStore } from '../sync/syncQueue';
@@ -45,6 +47,8 @@ import { useSyncQueueStore } from '../sync/syncQueue';
  */
 export function resetAllLocalStores() {
   const language = useSettingsStore.getState().language;
+  // Days first: the settings reset below changes the water target, which must not touch the old account's days.
+  useNutritionStore.setState({ logs: {}, waterDefaultDone: false });
   useSettingsStore.setState({
     startWeightKg: DEFAULT_START_WEIGHT_KG,
     goalWeightKg: DEFAULT_START_WEIGHT_KG - 15,
@@ -67,12 +71,12 @@ export function resetAllLocalStores() {
     language,
   });
   useWeightStore.setState({ entries: [] });
-  useNutritionStore.setState({ logs: {}, waterDefaultDone: false });
   useAiReportStore.setState({ weekly: {} });
   resetAnalysisStore();
   useCheatDayStore.setState({ days: [] });
   resetTemptationStore();
   useMealModeStore.setState({ fasting: true });
+  useWaterWindowStore.setState({ startMinutes: DEFAULT_WATER_START_MIN, endMinutes: DEFAULT_WATER_END_MIN });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });
   useCookbookStore.setState({ recipes: [] });
   useMealIdeasStore.setState({ byDay: {} });

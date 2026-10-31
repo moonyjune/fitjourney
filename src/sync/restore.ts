@@ -9,6 +9,8 @@ import { useLearnStore } from '../store/useLearnStore';
 import { LIMIT_DEFAULTS, LIMIT_RANGE, useLimitsStore, type LimitKey } from '../store/useLimitsStore';
 import { cleanMealPrefs, NO_MEAL_PREFS, pick as pickPrefs, useMealPrefStore } from '../store/useMealPrefStore';
 import { useMealModeStore } from '../store/useMealModeStore';
+import { useWaterWindowStore } from '../store/useWaterWindowStore';
+import { clampWaterWindow, DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN } from '../water/schedule';
 import { useAnalysisStore } from '../store/useAnalysisStore';
 import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
 import { useTemptationStore } from '../store/useTemptationStore';
@@ -96,6 +98,7 @@ export function mergeNutrition(local: Record<string, DailyNutritionLog>, rows: R
       extraProteinG: num(r.extra_protein_g),
       extraItems: items,
       waterMl: num(r.water_ml),
+      ...(num(r.water_target_ml) > 0 ? { waterTargetMl: Math.round(num(r.water_target_ml)) } : {}),
       ...(removed.length > 0 ? { removedMealSlots: removed } : {}),
     });
   }
@@ -244,13 +247,15 @@ export function reconcileNutrition(local: Record<string, DailyNutritionLog>, row
     const cloud = mergeNutrition({}, [r])[date];
     if (!cloud) continue;
     const mine = local[date];
-    if (mine && foodShape(mine) === foodShape(cloud) && mine.waterMl === cloud.waterMl) {
+    // A cloud row without a water target (older app, or a column not added yet) keeps the one this device has for the day.
+    const waterTargetMl = cloud.waterTargetMl ?? mine?.waterTargetMl;
+    if (mine && foodShape(mine) === foodShape(cloud) && mine.waterMl === cloud.waterMl && mine.waterTargetMl === waterTargetMl) {
       out[date] = mine;
       continue;
     }
     const photos = new Map((mine?.extraItems ?? []).map((i) => [i.id, i.photoUri]));
     const extraItems = cloud.extraItems.map((i) => (photos.get(i.id) && !i.photoUri ? { ...i, photoUri: photos.get(i.id) } : i));
-    out[date] = withIntakeCounters({ ...cloud, extraItems });
+    out[date] = withIntakeCounters({ ...cloud, extraItems, ...(waterTargetMl ? { waterTargetMl } : {}) });
   }
   for (const [date, log] of Object.entries(local)) if (!out[date] && pending.has(`day:${date}`)) out[date] = log;
   return out;
@@ -335,6 +340,16 @@ function restoreUserData(remote: Map<string, unknown>): void {
   if (localFasting) {
     if (remoteFasting === false) useMealModeStore.setState({ fasting: false });
   } else if (remoteFasting !== false) void pushUserData(USER_DATA_KEYS.mealMode, { fasting: false });
+
+  // Drinking window: a device still on the default takes the cloud's; a device with its own window pushes it.
+  const waterWindow = remote.get(USER_DATA_KEYS.waterWindow);
+  const localWindow = { startMinutes: useWaterWindowStore.getState().startMinutes, endMinutes: useWaterWindowStore.getState().endMinutes };
+  if (localWindow.startMinutes === DEFAULT_WATER_START_MIN && localWindow.endMinutes === DEFAULT_WATER_END_MIN) {
+    if (isObj(waterWindow) && typeof waterWindow.startMinutes === 'number' && typeof waterWindow.endMinutes === 'number') {
+      const { start, end } = clampWaterWindow(waterWindow.startMinutes, waterWindow.endMinutes);
+      useWaterWindowStore.setState({ startMinutes: start, endMinutes: end });
+    }
+  } else if (!sameJson(waterWindow, localWindow)) void pushUserData(USER_DATA_KEYS.waterWindow, localWindow);
 
   // Analysis refresh: automatic by default, so manual is the only choice worth keeping. Same rule as the meal mode.
   const analysis = remote.get(USER_DATA_KEYS.analysisMode);

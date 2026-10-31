@@ -124,9 +124,11 @@ export interface StatsInput {
   trainingProgress: Partial<Record<ExerciseId, ExerciseProgress>>;
   photos: ProofPhoto[];
   feelings: FeelingRecord[];
-  /** Daily water goal in ml (the sum of the plan's schedule). */
+  /** Daily water goal in ml (the current setting), for days without one of their own. */
   waterGoalMl: number;
   waterByDay: Record<string, number>;
+  /** Each day's own water goal (stored on its log), so a later change of the setting does not re-judge past days. */
+  waterGoalByDay?: Record<string, number>;
 }
 
 /** Longest run of consecutive calendar days on which `id` was earned. `days` is the replay: one entry per day, no gaps. */
@@ -178,7 +180,10 @@ export function computeAchievementStats(input: StatsInput): AchievementStats {
   );
 
   const checkinDays = new Set(input.feelings.map((f) => toDateKey(new Date(f.loggedAtISO))));
-  const waterDays = Object.values(input.waterByDay).filter((ml) => input.waterGoalMl > 0 && ml >= input.waterGoalMl).length;
+  const waterDays = Object.entries(input.waterByDay).filter(([key, ml]) => {
+    const goal = input.waterGoalByDay?.[key] ?? input.waterGoalMl;
+    return goal > 0 && ml >= goal;
+  }).length;
 
   return {
     startWeightKg: input.startWeightKg,

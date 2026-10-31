@@ -29,6 +29,7 @@ import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { ACTIVITY_MULTIPLIER, resolveTdeeKcal } from '../../src/utils/tdee';
 import type { ActivityLevel, Gender, PlanData } from '../../src/types';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
+import { useWaterPlan } from '../../src/water/useWaterPlan';
 
 export default function PlanScreen() {
   const { t } = useTranslation();
@@ -40,6 +41,7 @@ export default function PlanScreen() {
   const session = useAuthStore((s) => s.session);
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const plan = usePlanStore((s) => s.plan);
+  const todayWater = useWaterPlan(toDateKey(new Date()));
   const applyPlan = usePlanStore((s) => s.applyPlan);
   const pendingSyncCount = useSyncQueueStore((s) => s.pending.length);
   const { editWorkout } = useLocalSearchParams<{ editWorkout?: string }>();
@@ -48,7 +50,6 @@ export default function PlanScreen() {
   const [calorieTarget, setCalorieTarget] = useState(String(settings.calorieTargetKcal));
   const [targetDeficit, setTargetDeficit] = useState(String(settings.targetDailyDeficitKcal));
   const [proteinTarget, setProteinTarget] = useState(String(settings.proteinTargetG));
-  const [waterTarget, setWaterTarget] = useState(String(settings.waterTargetMl));
   const [goalWeight, setGoalWeight] = useState(String(settings.goalWeightKg));
   const [startDateDraft, setStartDateDraft] = useState(() => new Date(settings.startDateISO));
   const [startWeightText, setStartWeightText] = useState(String(settings.startWeightKg));
@@ -121,10 +122,9 @@ export default function PlanScreen() {
   function saveTargets() {
     const cal = parseFloat(calorieTarget);
     const protein = parseFloat(proteinTarget);
-    const water = parseFloat(waterTarget);
     const goal = parseFloat(goalWeight);
     const deficit = parseFloat(targetDeficit);
-    if (!cal || !protein || !water || !goal || !deficit) {
+    if (!cal || !protein || !goal || !deficit) {
       Alert.alert(t('common.error'), t('plan.invalidValuesMessage'));
       return;
     }
@@ -132,7 +132,6 @@ export default function PlanScreen() {
       calorieTargetKcal: cal,
       targetDailyDeficitKcal: deficit,
       proteinTargetG: protein,
-      waterTargetMl: water,
       goalWeightKg: goal,
     });
     Alert.alert(t('plan.savedTitle'), t('plan.savedMessage'));
@@ -261,7 +260,7 @@ export default function PlanScreen() {
         <QuestField label={t('plan.targetDeficitLabel')} keyboardType="decimal-pad" value={targetDeficit} onChangeText={setTargetDeficit} />
         {hint(t('plan.targetDeficitHint'))}
         <QuestField label={t('plan.proteinTargetLabel')} keyboardType="decimal-pad" value={proteinTarget} onChangeText={setProteinTarget} />
-        <QuestField label={t('plan.waterTargetLabel')} keyboardType="decimal-pad" value={waterTarget} onChangeText={setWaterTarget} />
+        {/* The water target has its own setting (Profile: presets, ± 250 ml, drinking window) that the day's plan is built from. */}
         <QuestButton title={t('plan.saveGoalsButton')} onPress={saveTargets} />
       </View>
 
@@ -305,7 +304,7 @@ export default function PlanScreen() {
       </View>
 
       {sectionTitle(t('plan.currentPlanTitle'))}
-      <QuestPlanPreview plan={plan} hideShoppingList />
+      <QuestPlanPreview plan={plan} hideShoppingList waterSchedule={todayWater.schedule} />
       <QuestShoppingList plan={plan} />
 
       {sectionTitle(t('plan.swapTitle'))}

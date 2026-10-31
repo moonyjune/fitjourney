@@ -109,6 +109,15 @@ describe('History screen (FitQuest)', () => {
     expect(r.root.findAll((n) => n.props.testID === 'LineChart').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('shows each day against its own water target, not today\'s setting', async () => {
+    useSettingsStore.setState({ waterTargetMl: 3500 });
+    useNutritionStore.setState({ logs: { [dayKey(1)]: { ...log(dayKey(1)), waterTargetMl: 4500 }, [dayKey(0)]: log(dayKey(0)) } });
+    const r = await render();
+    const out = text(r);
+    expect(out).toContain('1200ml nước (mục tiêu 4500ml)');
+    expect(out).toContain('1200ml nước (mục tiêu 3500ml)');
+  });
+
   it('counts the meals that were logged (4 meal times = 4/3) and folds the day\'s workouts into one line that opens', async () => {
     const k = dayKey(0);
     const food = (id: string, at: string, mealTime: string | null) => ({ id, name: `Món ${id}`, calories: 200, proteinG: 5, mealTime, loggedAtISO: new Date(`${k}T${at}:00`).toISOString() });

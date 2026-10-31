@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.32 | yes | — |
 | 0.31 | no | tempt-me, suggest-cheat-places, suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
 | 0.30 | no | — |
 | 0.29 | no | suggest-cheat-places, suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
@@ -43,6 +44,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.32
+- Water plan: the day's drinks come from the daily water target, 500 ml each, spread evenly over the drinking window (default 06:00–21:00); 3.5 L = 7 drinks, 4.5 L = 9.
+  - Profile → "Nước mỗi ngày": presets 2.5–4.5 L, ±250 ml, and the start/end of the drinking window. The Plan screen no longer has a water target field.
+  - Nutrition and Quick add show the next drink (or "catch up now" / done); reminders follow the plan.
+- Each day keeps its own water target (saved on that day's log), so past days in Journal, History and achievements are judged against the target they had.
 
 ## 0.31
 - Temptation challenge (Profile, off by default): now and then a Temptation Boss messages you with a food or drink, as a chat with a drawn boss, typing dots, bubbles and two reply buttons.

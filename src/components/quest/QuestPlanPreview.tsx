@@ -1,5 +1,5 @@
 import { StyleSheet, View } from 'react-native';
-import type { MealFoodItem, PlanData, WorkoutStep } from '../../types';
+import type { MealFoodItem, PlanData, WaterCheckpoint, WorkoutStep } from '../../types';
 import { shoppingListTotalVnd } from '../../constants/plan';
 import { useTranslation } from '../../i18n/useTranslation';
 import { quest, questRadius } from '../../theme/quest';
@@ -54,7 +54,8 @@ export function QuestWorkoutSteps({ steps }: { steps: WorkoutStep[] }) {
 }
 
 /** Dark FitQuest twin of PlanPreview: meal menus, water schedule, workouts and (optionally) the shopping list. */
-export function QuestPlanPreview({ plan, hideShoppingList }: { plan: PlanData; hideShoppingList?: boolean }) {
+/** `waterSchedule` replaces the plan's stored one (the user's own plan shows the one generated from their daily target). */
+export function QuestPlanPreview({ plan, hideShoppingList, waterSchedule = plan.waterSchedule }: { plan: PlanData; hideShoppingList?: boolean; waterSchedule?: WaterCheckpoint[] }) {
   const { t } = useTranslation();
   const meals = (list: PlanData['mealTemplates']['training']) =>
     list.map((m) => (
@@ -82,7 +83,7 @@ export function QuestPlanPreview({ plan, hideShoppingList }: { plan: PlanData; h
 
       {title(t('planPreview.waterScheduleTitle'))}
       <View style={styles.panel}>
-        {plan.waterSchedule.map((cp, i) => (
+        {waterSchedule.map((cp, i) => (
           <View key={`${cp.hour}-${cp.minute}-${i}`} style={styles.waterRow}>
             <HudText size={12} color={quest.mana} style={styles.time}>
               {String(cp.hour).padStart(2, '0')}:{String(cp.minute).padStart(2, '0')}
