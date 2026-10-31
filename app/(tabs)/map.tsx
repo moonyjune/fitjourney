@@ -9,13 +9,16 @@ import { TrailMap } from '../../src/components/quest/TrailMap';
 import { WeightChart } from '../../src/components/quest/WeightChart';
 import { XpBar } from '../../src/components/quest/XpBar';
 import { buildStageJourney, stageAsRegion, type StageBoss, type Zone } from '../../src/game/stageBosses';
-import { StageBossArt } from '../../src/components/quest/StageBossArt';
+import { BossDamageLog, BossDamagePanel } from '../../src/components/quest/BossDamageLog';
+import { DefaultBossArt, StageBossArt } from '../../src/components/quest/StageBossArt';
 import { StorySection } from '../../src/components/quest/StorySection';
 import { StageBossDetail, bossName, rankName, shortDate, stars, zoneTitle } from '../../src/components/quest/StageBossDetail';
 import { PressScale } from '../../src/components/quest/motion/PressScale';
 import { PulseRing } from '../../src/components/quest/motion/PulseRing';
+import { buildDamageLog, buildWeightLog } from '../../src/game/bossDamage';
 import { useGameText, type GameKey } from '../../src/game/strings';
 import { useGameState, useNow } from '../../src/game/useGameState';
+import { useCheatDayStore } from '../../src/store/useCheatDayStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { quest, questRadius } from '../../src/theme/quest';
@@ -154,6 +157,8 @@ export default function MapScreen() {
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
   const startDateISO = useSettingsStore((s) => s.startDateISO);
+  const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const cheatDays = useCheatDayStore((s) => s.days);
   const entries = useWeightStore((s) => s.entries);
   const latest = useWeightStore((s) => s.latest());
   const currentKg = latest?.weightKg ?? startWeightKg;
@@ -165,6 +170,17 @@ export default function MapScreen() {
     [startWeightKg, goalWeightKg, currentKg, entries, startDateISO]
   );
   const { bosses, zones, current } = journeyData;
+  // Damage log: each day's deficit (from the game replay) as estimated damage against the weigh-ins.
+  const damageLog = useMemo(
+    () => buildDamageLog({ days: game.days, entries, startKg: startWeightKg, startDateKey: journeyData.startDateKey, bosses }),
+    [game.days, entries, startWeightKg, journeyData.startDateKey, bosses]
+  );
+  const weightRows = useMemo(() => buildWeightLog(entries, bosses, startWeightKg, journeyData.startDateKey), [entries, bosses, startWeightKg, journeyData.startDateKey]);
+  // Where each boss fell, marked on the weight chart.
+  const fallMarks = useMemo(
+    () => bosses.flatMap((b) => (b.defeatedDateKey ? [{ kg: b.toKg, dateKey: b.defeatedDateKey }] : [])),
+    [bosses]
+  );
   const currentZone = current ? zones[current.zone] : zones[zones.length - 1];
   const finalBoss = bosses[bosses.length - 1];
 
@@ -346,9 +362,30 @@ export default function MapScreen() {
             )}
           </View>
 
+          <BossDamageLog
+            log={damageLog}
+            weightRows={weightRows}
+            bosses={bosses}
+            currentKg={currentKg}
+            targetKcal={targetDeficitKcal}
+            cheatDays={cheatDays}
+            onOpenBoss={setOpenBoss}
+          />
+
           <StorySection bosses={bosses} startDateKey={journeyData.startDateKey} now={now} />
 
-          <StageBossDetail boss={openBoss} zone={openBoss ? zones[openBoss.zone] : undefined} currentKg={currentKg} onClose={() => setOpenBoss(null)} />
+          <StageBossDetail boss={openBoss} zone={openBoss ? zones[openBoss.zone] : undefined} currentKg={currentKg} onClose={() => setOpenBoss(null)}>
+            {openBoss && (
+              <BossDamagePanel
+                boss={openBoss}
+                damage={damageLog.perBoss.find((d) => d.index === openBoss.index)}
+                log={damageLog}
+                bosses={bosses}
+                targetKcal={targetDeficitKcal}
+                cheatDays={cheatDays}
+              />
+            )}
+          </StageBossDetail>
         </>
       )}
 
@@ -367,7 +404,13 @@ export default function MapScreen() {
               goalWeightKg={goalWeightKg}
               now={now}
               width={Math.min(columnWidth - 24, 362)}
+              marks={fallMarks}
             />
+            {fallMarks.length > 0 && (
+              <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.noLogs}>
+                {g('dmg.chartMarks')}
+              </HudText>
+            )}
           </View>
 
           <View style={styles.stats}>
@@ -412,6 +455,7 @@ export default function MapScreen() {
                     accessibilityLabel={`${g('chart.bossWeek', { n: week })}. ${g('chart.bossDamage', { dmg })}. ${status}`}
                     style={styles.bossRow}
                   >
+                    <DefaultBossArt size={36} defeated={b.defeated} />
                     <View style={styles.flex}>
                       <HudText size={14}>{g('chart.bossWeek', { n: week })}</HudText>
                       <HudText size={12} weight="medium" color={quest.textSecondary}>

@@ -28,16 +28,23 @@ const MIN_ZONES = 3;
 const MAX_ZONES = 7;
 const MAX_TIER = 5;
 
-export type BossArchetype = 'sugar' | 'beer' | 'bubbleTea' | 'noodle' | 'couch' | 'hotpot';
+/** `blob` is "Quái Một Ký Mỡ", the weekly boss and the default boss everywhere a boss is shown without a stage (Camp,
+ *  the boss screen, check-in, stickers); it never appears as a stage boss on the Map. */
+export type BossArchetype = 'blob' | 'sugar' | 'beer' | 'bubbleTea' | 'noodle' | 'couch' | 'hotpot';
 export type BossSkill = 'sugarLure' | 'coldBeer' | 'milkTea' | 'midnightNoodles' | 'hotpotBuffet' | 'lateNight' | 'couchPotato' | 'snackAttack';
 export type StageStatus = 'defeated' | 'current' | 'locked';
 
 /** The order bosses appear in; the last stage is always the hotpot dragon. */
 export const ARCHETYPE_ORDER: BossArchetype[] = ['sugar', 'beer', 'bubbleTea', 'noodle', 'couch'];
 export const FINAL_ARCHETYPE: BossArchetype = 'hotpot';
+/** The default boss: "Quái Một Ký Mỡ", the weekly boss on Camp and the boss screen. */
+export const DEFAULT_BOSS_ARCHETYPE: BossArchetype = 'blob';
+/** The weekly boss is drawn with horns (tier 2), like the old red face it replaces. */
+export const WEEKLY_BOSS_TIER = 2;
 
 /** Signature skill first, then the one each archetype adds from zone 2 on. */
 export const ARCHETYPE_SKILLS: Record<BossArchetype, [BossSkill, BossSkill]> = {
+  blob: ['snackAttack', 'lateNight'],
   sugar: ['sugarLure', 'snackAttack'],
   beer: ['coldBeer', 'lateNight'],
   bubbleTea: ['milkTea', 'sugarLure'],
@@ -48,6 +55,7 @@ export const ARCHETYPE_SKILLS: Record<BossArchetype, [BossSkill, BossSkill]> = {
 
 /** The third skill a zone 3+ boss combines in: borrowed from a neighbouring archetype. */
 const COMBO_SKILL: Record<BossArchetype, BossSkill> = {
+  blob: 'couchPotato',
   sugar: 'milkTea',
   beer: 'midnightNoodles',
   bubbleTea: 'couchPotato',

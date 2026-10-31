@@ -7,6 +7,7 @@ import { useAiErrorText } from '../src/ai/usePhotoAnalysis';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { DefaultBossArt } from '../src/components/quest/StageBossArt';
 import { useGameText } from '../src/game/strings';
 import { useNow } from '../src/game/useGameState';
 import { useAiReportStore } from '../src/store/useAiReportStore';
@@ -105,9 +106,12 @@ export default function WeeklyReportScreen() {
         <QuestHeader title={g('week.title')} eyebrow={eyebrow} onBack={goBack} backLabel={g('common.back')} />
 
         <View style={styles.card} accessible accessibilityLabel={g('week.statsTitle')}>
-          <HudText size={13} color={quest.gold}>
-            {g(`week.status.${boss.status}` as never)}
-          </HudText>
+          <View style={styles.bossLine}>
+            <DefaultBossArt size={36} defeated={boss.defeated} />
+            <HudText size={13} color={quest.gold} style={styles.flex}>
+              {g(`week.status.${boss.status}` as never)}
+            </HudText>
+          </View>
           <HudText size={13} weight="medium" color={quest.textSecondary}>
             {g('week.boss', { hp: boss.hpLeft, max: boss.maxHp, dealt: boss.damageSoFar })}
           </HudText>
@@ -232,6 +236,8 @@ export default function WeeklyReportScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: quest.bg },
   content: { paddingHorizontal: 16, paddingBottom: 120, gap: 14 },
+  bossLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  flex: { flex: 1, minWidth: 0 },
   card: { gap: 4, padding: 12, marginTop: 14, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   report: { gap: 12, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   block: { gap: 4 },

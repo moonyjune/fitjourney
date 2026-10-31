@@ -25,6 +25,16 @@ export interface WeightSeries {
   maxKg: number;
   /** Date labels under the chart: the plan start and the latest day shown. */
   xLabels: { x: number; label: string }[];
+  /** The input `marks` placed on the chart (those inside the visible range). */
+  marks: SeriesMark[];
+}
+
+/** A point to mark on the chart, e.g. where a stage boss fell: its weight line on the day it fell. */
+export interface SeriesMark {
+  x: number;
+  y: number;
+  kg: number;
+  dateKey: string;
 }
 
 export interface SeriesInput {
@@ -36,6 +46,8 @@ export interface SeriesInput {
   width: number;
   height: number;
   pad?: { left: number; right: number; top: number; bottom: number };
+  /** Optional dated weights to mark (local date keys). */
+  marks?: { kg: number; dateKey: string }[];
 }
 
 const DAY = 86400000;
@@ -86,6 +98,11 @@ export function buildWeightSeries(input: SeriesInput): WeightSeries {
     .filter((b) => b >= lo && b <= hi)
     .map((b) => ({ y: yOf(b), kg: b, kind: b === goalWeightKg ? ('goal' as const) : ('milestone' as const) }));
 
+  const marks: SeriesMark[] = (input.marks ?? [])
+    .map((m) => ({ ...m, time: new Date(`${m.dateKey}T12:00:00`).getTime() }))
+    .filter((m) => Number.isFinite(m.time) && m.time >= t0 && m.time <= t1 && m.kg >= lo && m.kg <= hi)
+    .map((m) => ({ x: xOf(m.time), y: yOf(m.kg), kg: m.kg, dateKey: m.dateKey }));
+
   const label = (time: number) => formatDateVi(toDateKey(new Date(time))).slice(0, 5);
   return {
     points,
@@ -97,5 +114,6 @@ export function buildWeightSeries(input: SeriesInput): WeightSeries {
       { x: xOf(t0), label: label(t0) },
       { x: xOf(t1), label: label(t1) },
     ],
+    marks,
   };
 }

@@ -195,6 +195,33 @@ describe('FitQuest tabs', () => {
       expect(detail).toContain('★★★★☆ · Chúa tể · Boss cuối');
     });
 
+    it('logs the damage on the bosses per day (deficit estimate vs scale) and the weight log with the boss lines', () => {
+      useWeightStore.setState({
+        entries: [
+          { id: 'a', dateISO: '2026-10-21T06:00:00', weightKg: 104.8 },
+          { id: 'b', dateISO: '2026-10-23T06:00:00', weightKg: 103 },
+        ],
+      });
+      const r = render(<MapScreen />);
+      let text = allText(r);
+      expect(text).toContain('Nhật ký sát thương');
+      expect(text).toContain('−7.0'); // real total: 110 -> 103
+      expect(text).toContain('−5.20 kg'); // the 21/10 weigh-in alone
+      expect(text).toContain('Hạ Quỷ Bánh Kem!');
+      expect(text).toContain('chưa ghi bữa'); // 21/10 has a weigh-in but no meals
+      expect(text).toContain('−1.80 kg'); // 104.8 -> 103 on 23/10
+
+      act(() => pressable(r, (l) => l === 'Nhật ký cân').props.onPress());
+      text = allText(r);
+      expect(text).toContain('Vạch 100 kg: Gã Thùng Bia còn chặn · cách 3.0 kg');
+      expect(text).toContain('Vạch 105 kg: Quỷ Bánh Kem gục ngày 21/10');
+
+      act(() => pressable(r, (l) => l.startsWith('Vạch 105 kg')).props.onPress());
+      text = allText(r);
+      expect(text).toContain('Sát thương lên boss này');
+      expect(text).toContain('thực tế −5.0 kg'); // the band's 5 kg
+    });
+
     it('celebrates when every boss is down', () => {
       useWeightStore.setState({ entries: [{ id: 'z', dateISO: '2026-10-23T06:00:00', weightKg: 94.8 }] });
       const text = allText(render(<MapScreen />));

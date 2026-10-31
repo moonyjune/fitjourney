@@ -1,31 +1,12 @@
 import { StyleSheet, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
 import type { BossState } from '../../game/boss';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
+import { DefaultBossArt } from './StageBossArt';
 import { XpBar } from './XpBar';
-import { hiddenSvgProps } from './hiddenSvg';
 import { AnimatedNumber } from './motion/AnimatedNumber';
 import { PressScale } from './motion/PressScale';
-
-export function BossFace({ size = 44, defeated }: { size?: number; defeated: boolean }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 64 64" {...hiddenSvgProps}>
-      <Path d="M16 20 L10 6 L24 15 Z M48 20 L54 6 L40 15 Z" fill={quest.hp} />
-      <Path d="M8 40 C8 22 20 14 32 14 C44 14 56 22 56 40 C56 52 46 58 32 58 C18 58 8 52 8 40 Z" fill={quest.hp} />
-      <Circle cx={24} cy={34} r={4} fill={quest.bg} />
-      <Circle cx={40} cy={34} r={4} fill={quest.bg} />
-      <Path
-        d={defeated ? 'M22 48 Q32 42 42 48' : 'M22 46 Q32 52 42 46'}
-        fill="none"
-        stroke={quest.bg}
-        strokeWidth={3}
-        strokeLinecap="round"
-      />
-    </Svg>
-  );
-}
 
 interface BossCardProps {
   boss: BossState;
@@ -47,7 +28,7 @@ export function BossCard({ boss, todayDamage, onPress }: BossCardProps) {
   const label = `${g('boss.eyebrow')}. ${g('boss.a11y', { name, left: boss.hpLeft, max: boss.maxHp })}. ${sub}`;
   const inner = (
     <>
-      <BossFace defeated={boss.defeated} />
+      <DefaultBossArt size={52} defeated={boss.defeated} />
       <View style={styles.body}>
         <View style={styles.titleRow}>
           <HudText size={15}>{name}</HudText>

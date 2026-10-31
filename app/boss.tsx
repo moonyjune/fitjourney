@@ -2,7 +2,7 @@ import { HitShake } from '../src/components/quest/motion/HitShake';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BossFace } from '../src/components/quest/BossCard';
+import { DefaultBossArt } from '../src/components/quest/StageBossArt';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
@@ -50,7 +50,7 @@ export default function BossScreen() {
 
       <View style={styles.face} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <HitShake play={!!today && today.damage > 0}>
-          <BossFace size={150} defeated={boss.defeated} />
+          <DefaultBossArt size={150} defeated={boss.defeated} idle />
         </HitShake>
         {today && today.damage > 0 && (
           <HudText size={34} color={quest.gold} style={styles.floating}>

@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.34 | no | — |
 | 0.33 | no | story-chapter |
 | 0.32 | yes | — |
 | 0.31 | no | tempt-me, suggest-cheat-places, suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
@@ -45,6 +46,14 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.34
+- Map: a "Nhật ký sát thương" (damage log) under the journey.
+  - By day: estimated damage from the day's deficit (÷ 7700 kcal/kg, coloured by deficit level, cheat days marked; a surplus heals the boss) next to the real damage from weigh-ins, with the boss being fought and any boss that fell.
+  - Weight log: weigh-ins newest first with each boss's weight line where it fell; tapping a line opens that boss.
+  - A boss's detail shows the damage dealt to it (estimated vs real kg, last 7 days). The weight chart marks where each boss fell.
+- "Quái Một Ký Mỡ" is now drawn in the stage-boss style and is the same drawing on Camp, the boss screen, check-in, the weekly review, the Map chart and the first-boss sticker.
+- The temptation bosses are drawn in the same style (cake demon, bubble-tea slime, beer barrel, noodle ninja, a new crispy goblin), with their moods drawn on their faces.
 
 ## 0.33
 - Map: a "Câu chuyện" section tells your journey as an RPG story, one chapter per finished week (Mon–Sun with something logged, the last 8 weeks) and one per stage boss beaten.

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { BossArchetype, StageBoss, Zone } from '../../game/stageBosses';
 import { useGameText, type GameKey } from '../../game/strings';
@@ -5,7 +6,7 @@ import { quest, questRadius } from '../../theme/quest';
 import { formatDateVi } from '../../utils/date';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
-import { StageBossArt } from './StageBossArt';
+import { BOSS_LURE_PINK, StageBossArt } from './StageBossArt';
 import { FadeInUp } from './motion/FadeInUp';
 import { PulseRing } from './motion/PulseRing';
 import { SparkleBurst } from './motion/SparkleBurst';
@@ -25,7 +26,7 @@ export interface ChatLine {
   text: string;
 }
 
-const TEMPT_COLORS = ['#FF5CA8', quest.gold, '#FF8FC8', quest.mana];
+const TEMPT_COLORS = [BOSS_LURE_PINK, quest.gold, '#FF8FC8', quest.mana];
 
 /** The boss "talking": its portrait with a breathing ring on the left and speech bubbles that pop in one after the
  *  other like a chat. Bubbles are plain text for screen readers; the portrait and effects are decorative. Reusable by
@@ -37,7 +38,7 @@ export function BossChat({ archetype, tier, defeated, name, lines }: { archetype
       <View style={styles.avatarCol}>
         <View style={[styles.avatar, defeated && styles.avatarDown]}>
           <StageBossArt archetype={archetype} tier={tier} size={46} defeated={defeated} idle={!defeated} />
-          <PulseRing color={defeated ? quest.border : '#FF5CA8'} borderRadius={28} active={!defeated} />
+          <PulseRing color={defeated ? quest.border : BOSS_LURE_PINK} borderRadius={28} active={!defeated} />
         </View>
       </View>
       <View style={styles.bubbles}>
@@ -66,11 +67,13 @@ interface DetailProps {
   zone: Zone | undefined;
   currentKg: number;
   onClose: () => void;
+  /** Shown under the chat (the Map puts the boss's damage log here). */
+  children?: ReactNode;
 }
 
-/** A stage boss up close: big portrait, tier, band, when it fell (or how many kg are left) and the boss itself speaking
- *  its skills as chat bubbles. */
-export function StageBossDetail({ boss, zone, currentKg, onClose }: DetailProps) {
+/** A stage boss up close: big portrait, tier, band, when it fell (or how many kg are left), the boss itself speaking
+ *  its skills as chat bubbles, then any `children`. */
+export function StageBossDetail({ boss, zone, currentKg, onClose, children }: DetailProps) {
   const g = useGameText();
   if (!boss) return null;
   const name = bossName(boss, g);
@@ -119,6 +122,7 @@ export function StageBossDetail({ boss, zone, currentKg, onClose }: DetailProps)
                 </HudText>
               </View>
               <BossChat archetype={boss.archetype} tier={boss.tier} defeated={defeated} name={name} lines={lines} />
+              {children}
             </ScrollView>
             <QuestButton title={g('stage.close')} variant="ghost" onPress={onClose} />
           </View>

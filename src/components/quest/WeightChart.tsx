@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import type { WeightEntry } from '../../types';
 import { buildWeightSeries } from '../../game/weightSeries';
 import { useGameText } from '../../game/strings';
@@ -13,15 +13,18 @@ interface WeightChartProps {
   now: Date;
   width: number;
   height?: number;
+  /** Stage bosses that fell: a red marker on the boss's weight line on the day it fell. */
+  marks?: { kg: number; dateKey: string }[];
 }
 
 /** Weight over time from the real log only (no predicted or interpolated points), with the 5 kg
- *  checkpoints that fall inside the visible range drawn as dashed lines. */
-export function WeightChart({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height = 190 }: WeightChartProps) {
+ *  checkpoints that fall inside the visible range drawn as dashed lines (each one a stage boss's line) and, when given,
+ *  a marker where each boss fell. */
+export function WeightChart({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height = 190, marks }: WeightChartProps) {
   const g = useGameText();
   const series = useMemo(
-    () => buildWeightSeries({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height }),
-    [entries, startDateISO, startWeightKg, goalWeightKg, now, width, height]
+    () => buildWeightSeries({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height, marks }),
+    [entries, startDateISO, startWeightKg, goalWeightKg, now, width, height, marks]
   );
   const first = series.points[0];
   const last = series.points[series.points.length - 1];
@@ -37,6 +40,12 @@ export function WeightChart({ entries, startDateISO, startWeightKg, goalWeightKg
       {series.points.length > 1 && (
         <Path d={series.path} fill="none" stroke={quest.gold} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
       )}
+      {series.marks.map((m) => (
+        <G key={`${m.dateKey}-${m.kg}`}>
+          <Circle cx={m.x} cy={m.y} r={7} fill={quest.hp} stroke={quest.bg} strokeWidth={2} />
+          <Path d={`M${m.x - 3} ${m.y - 3} L${m.x + 3} ${m.y + 3} M${m.x - 3} ${m.y + 3} L${m.x + 3} ${m.y - 3}`} stroke="#FFFFFF" strokeWidth={2} strokeLinecap="round" />
+        </G>
+      ))}
       {series.points.map((p, i) => (
         <Circle key={i} cx={p.x} cy={p.y} r={i === series.points.length - 1 ? 6 : 3.5} fill={i === series.points.length - 1 ? quest.xp : quest.gold} stroke={quest.bg} strokeWidth={2} />
       ))}

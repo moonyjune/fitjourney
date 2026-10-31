@@ -8,6 +8,7 @@ import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
 import { QuestIcon } from '../src/components/quest/QuestIcon';
 import { QuestSheet } from '../src/components/quest/QuestSheet';
+import { DefaultBossArt } from '../src/components/quest/StageBossArt';
 import { MISSION_ORDER } from '../src/game/constants';
 import { useGameText, type GameKey } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
@@ -103,9 +104,12 @@ export default function CheckinScreen() {
             <HudText size={11} color={quest.hpText} style={styles.eyebrow}>
               {g('checkin.boss').toUpperCase()}
             </HudText>
-            <HudText size={22} color={quest.text}>
-              {`−${todayDamage.toLocaleString('en-US')}`}
-            </HudText>
+            <View style={styles.bossLine}>
+              <DefaultBossArt size={28} defeated={game.boss.defeated} />
+              <HudText size={22} color={quest.text}>
+                {`−${todayDamage.toLocaleString('en-US')}`}
+              </HudText>
+            </View>
             <HudText size={11} weight="medium" color={quest.textSecondary}>
               {g('checkin.bossLeft', { n: game.boss.hpLeft.toLocaleString('en-US') })}
             </HudText>
@@ -203,6 +207,7 @@ const styles = StyleSheet.create({
   close: { width: 44, height: 44, borderRadius: 99, backgroundColor: quest.panel, alignItems: 'center', justifyContent: 'center' },
   summary: { flexDirection: 'row', gap: 10, marginTop: 14 },
   sumTile: { flex: 1, padding: 12, gap: 2, borderRadius: questRadius.panel, borderWidth: 1.5, backgroundColor: quest.panel },
+  bossLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   pips: { flexDirection: 'row', gap: 3, marginTop: 4 },
   pip: { flex: 1, height: 5, borderRadius: 2 },
   block: { marginTop: 18, gap: 8 },
