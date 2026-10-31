@@ -19,6 +19,8 @@ import type { SwapContext, SwapItem } from '../food/swaps';
 import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { sampleTemptation } from '../temptation/sample';
+import { cleanChapterAnswer, type StoryChapterText, type StorySummary } from '../../supabase/functions/_shared/story';
+import { sampleChapter } from '../story/sample';
 import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
@@ -1448,6 +1450,32 @@ export async function requestTemptation(body: TemptationRequest): Promise<Tempta
     if (error) throw error;
     if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
     return { ok: true, result: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+export type StoryChapterOutcome = { ok: true; chapter: StoryChapterText; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the story-chapter edge function: one chapter of the Map story, written from the summary built on the device. The answer is
+ *  checked again here (`cleanChapterAnswer`). Same rules as the other AI requests: the device switch, the offline dev account (a
+ *  labelled sample built from the same summary), offline fails softly; the caller saves the chapter. */
+export async function requestStoryChapter(summary: StorySummary): Promise<StoryChapterOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, chapter: sampleChapter(summary), sample: true };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('story-chapter', { body: { summary } });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
+    const chapter = cleanChapterAnswer(data?.result);
+    return chapter ? { ok: true, chapter } : { ok: false, message: 'Câu trả lời không hợp lệ.', kind: 'generic' };
   } catch (error) {
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;

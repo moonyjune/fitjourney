@@ -1,6 +1,6 @@
 // Pure helpers for the per-user AI quota and the cost estimate (no Deno or network use, so they are unit-tested in jest).
 
-export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt';
+export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'story';
 
 /** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
@@ -16,6 +16,8 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   places: 10,
   /** The temptation challenge (Hard): at most 5 pop-ups a day, plus one spare. Each may search the web. */
   tempt: 6,
+  /** Story chapters (Map): written only when the player taps the button, one chapter per call. */
+  story: 3,
 };
 
 export interface TokenUsage {

@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.33 | no | story-chapter |
 | 0.32 | yes | — |
 | 0.31 | no | tempt-me, suggest-cheat-places, suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
 | 0.30 | no | — |
@@ -44,6 +45,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.33
+- Map: a "Câu chuyện" section tells your journey as an RPG story, one chapter per finished week (Mon–Sun with something logged, the last 8 weeks) and one per stage boss beaten.
+  - A chapter is written by AI from a summary of your real data: deficit days, weight change, workouts, habits, notable foods, limits and boss damage. Nothing is invented.
+  - Writing is manual: one tap writes the oldest pending chapter (3 a day). Chapters are newest first, folded; boss chapters have a gold border.
+  - Chapters sync with your account.
 
 ## 0.32
 - Water plan: the day's drinks come from the daily water target, 500 ml each, spread evenly over the drinking window (default 06:00–21:00); 3.5 L = 7 drinks, 4.5 L = 9.

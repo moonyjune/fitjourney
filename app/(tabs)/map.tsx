@@ -10,6 +10,7 @@ import { WeightChart } from '../../src/components/quest/WeightChart';
 import { XpBar } from '../../src/components/quest/XpBar';
 import { buildStageJourney, stageAsRegion, type StageBoss, type Zone } from '../../src/game/stageBosses';
 import { StageBossArt } from '../../src/components/quest/StageBossArt';
+import { StorySection } from '../../src/components/quest/StorySection';
 import { StageBossDetail, bossName, rankName, shortDate, stars, zoneTitle } from '../../src/components/quest/StageBossDetail';
 import { PressScale } from '../../src/components/quest/motion/PressScale';
 import { PulseRing } from '../../src/components/quest/motion/PulseRing';
@@ -344,6 +345,8 @@ export default function MapScreen() {
               </HudText>
             )}
           </View>
+
+          <StorySection bosses={bosses} startDateKey={journeyData.startDateKey} now={now} />
 
           <StageBossDetail boss={openBoss} zone={openBoss ? zones[openBoss.zone] : undefined} currentKg={currentKg} onClose={() => setOpenBoss(null)} />
         </>

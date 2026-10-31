@@ -17,6 +17,7 @@ const FEATURE_LABEL: Record<AiFeature, GameKey> = {
   digest: 'aiUsage.digest',
   places: 'aiUsage.places',
   tempt: 'aiUsage.tempt',
+  story: 'aiUsage.story',
 };
 
 /** Tokens as "950" or "12.4k". */

@@ -15,6 +15,8 @@ import { useAnalysisStore } from '../store/useAnalysisStore';
 import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
 import { useTemptationStore } from '../store/useTemptationStore';
 import { cleanTemptationData, mergeTemptation } from '../temptation/stats';
+import { useStoryStore } from '../store/useStoryStore';
+import { cleanStoryData, mergeStory } from '../story/chapters';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { TARGET_RANGE, useUricStore } from '../store/useUricStore';
 import { useWeightStore } from '../store/useWeightStore';
@@ -373,6 +375,13 @@ function restoreUserData(remote: Map<string, unknown>): void {
   const temptMerged = mergeTemptation(temptLocal, temptRemote);
   if (!sameJson(temptMerged, temptLocal)) useTemptationStore.setState(temptMerged);
   if (!sameJson(temptMerged, temptRemote)) void pushUserData(USER_DATA_KEYS.temptation, temptMerged);
+
+  // Story chapters: every chapter written on either side is kept (the device's copy when both have one).
+  const storyRemote = cleanStoryData(remote.get(USER_DATA_KEYS.story));
+  const storyLocal = cleanStoryData({ chapters: useStoryStore.getState().chapters });
+  const storyMerged = mergeStory(storyLocal, storyRemote);
+  if (!sameJson(storyMerged, storyLocal)) useStoryStore.setState(storyMerged);
+  if (!sameJson(storyMerged, storyRemote)) void pushUserData(USER_DATA_KEYS.story, storyMerged);
 
   // Meal preferences (calories / protein wanted per meal): a device with none set takes the cloud's; a device with some pushes them.
   const prefsLocal = pickPrefs(useMealPrefStore.getState());
