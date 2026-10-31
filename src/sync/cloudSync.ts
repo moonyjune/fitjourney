@@ -10,9 +10,13 @@ import type { DinnerBrief, DinnerIdea } from '../ai/dinner';
 import { cleanSearch, pickShared, SHARED_COOKBOOK_COLUMNS } from '../cookbook/shared';
 import { rankShared, type CookbookFilters } from '../cookbook/filters';
 import { cookbookRows } from '../../supabase/functions/_shared/cookbook';
+import type { CheatWhere } from '../../supabase/functions/_shared/dinner';
+import type { CheatPlacesAnswer } from '../../supabase/functions/_shared/places';
+import { PLACES_UNAVAILABLE_PREFIX } from '../../supabase/functions/_shared/webSearch';
+import { recheckPlaces } from '../cookbook/cheat';
 import type { ClientRows } from '../ai/coachDigest';
 import type { SwapContext, SwapItem } from '../food/swaps';
-import { DEV_ANALYSIS_DELAY_MS, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
+import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
@@ -1353,12 +1357,12 @@ export type DinnerOutcome = { ok: true; result: unknown } | { ok: false; message
 
 /** Calls the suggest-dinner edge function: dinner ideas for what is left of today (the brief is worked out on the device). The
  *  answer is raw; the caller checks each idea with `cleanAiDinner`. Same rules as the other AI requests. */
-export async function requestDinner(brief: DinnerBrief, favorites: string[], avoidNames: string[] = [], filters?: CookbookFilters): Promise<DinnerOutcome> {
+export async function requestDinner(brief: DinnerBrief, favorites: string[], avoidNames: string[] = [], filters?: CookbookFilters, cheat?: { where: CheatWhere }): Promise<DinnerOutcome> {
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
     await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
-    return { ok: true, result: fakeDinner(brief, filters) };
+    return { ok: true, result: cheat ? fakeCheatDinner(cheat.where) : fakeDinner(brief, filters) };
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
@@ -1366,6 +1370,7 @@ export async function requestDinner(brief: DinnerBrief, favorites: string[], avo
       budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, meal: brief.meal, eatByHour: brief.eatByHour, exact: brief.exact, proteinExact: brief.proteinExact, strictKcal: brief.strictKcal, favorites, avoidNames,
       ...(brief.snack ? { snack: true } : {}),
       ...(filters ? { filters } : {}),
+      ...(cheat ? { cheat } : {}),
     };
     const { data, error } = await supabase.functions.invoke('suggest-dinner', { body });
     if (error) throw error;
@@ -1374,6 +1379,39 @@ export async function requestDinner(brief: DinnerBrief, favorites: string[], avo
   } catch (error) {
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+export type CheatPlacesOutcome = { ok: true; result: CheatPlacesAnswer } | { ok: false; message: string; kind: AiErrorKind | 'unavailable' };
+
+/** Calls the suggest-cheat-places edge function (web search for places to eat the dishes near `location`). The answer is checked
+ *  again here (`recheckPlaces`). `unavailable`: web search is not allowed for the organization (the message says so). The offline
+ *  dev account gets clearly labelled sample places. */
+export async function requestCheatPlaces(dishes: string[], location: string, coords?: { lat: number; lon: number }, now: Date = new Date()): Promise<CheatPlacesOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: fakeCheatPlaces(dishes, location, now) };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const fail = (message: string, status?: number): CheatPlacesOutcome => ({
+    ok: false,
+    message,
+    kind: message.startsWith(PLACES_UNAVAILABLE_PREFIX) ? 'unavailable' : classifyAiError(message, status),
+  });
+  try {
+    const { data, error } = await supabase.functions.invoke('suggest-cheat-places', { body: { dishes, location, today, ...(coords ? { coords } : {}) } });
+    if (error) throw error;
+    if (data?.error) return fail(String(data.error));
+    const result = recheckPlaces(data?.result);
+    return result ? { ok: true, result } : fail('Câu trả lời không hợp lệ.');
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    if (message.includes(PLACES_UNAVAILABLE_PREFIX)) return { ok: false, message: message.slice(message.indexOf(PLACES_UNAVAILABLE_PREFIX)), kind: 'unavailable' };
     return { ok: false, message, kind: classifyReached(message, status) };
   }
 }

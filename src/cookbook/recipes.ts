@@ -38,6 +38,10 @@ export interface CookbookRecipe extends RecipeDetails {
   photoUri?: string;
   cookedCount?: number;
   createdAtISO: string;
+  /** A cheat-day dish: shown under "Cheat day" in the cook book and left out of the everyday suggestions. */
+  cheat?: true;
+  /** Cheat day: cooked at home or eaten out, when known. */
+  where?: 'home' | 'out';
 }
 
 export const recipeKey = (name: string): string => foodKey(name);
@@ -83,6 +87,8 @@ export function recipeFromIdea(idea: DinnerIdea, now: Date = new Date()): Cookbo
   };
   if (idea.amount) r.amount = idea.amount;
   if (idea.how) r.how = idea.how;
+  if (idea.cheat) r.cheat = true;
+  if (idea.where) r.where = idea.where;
   return r;
 }
 
@@ -91,6 +97,8 @@ export function ideaFromRecipe(r: CookbookRecipe): DinnerIdea {
   const idea: DinnerIdea = { name: r.name, calories: r.calories, proteinG: r.proteinG, purineMg: r.purineMg, saltG: r.saltG, sugarG: r.sugarG, source: 'book' };
   if (r.amount) idea.amount = r.amount;
   if (r.how) idea.how = r.how;
+  if (r.cheat) idea.cheat = true;
+  if (r.where) idea.where = r.where;
   const { emoji, minutes, difficulty, ingredients, steps, equipment } = r;
   idea.recipe = { emoji, minutes, difficulty, ingredients, steps, equipment };
   return idea;
@@ -100,8 +108,10 @@ export function ideaFromRecipe(r: CookbookRecipe): DinnerIdea {
  *  details that were missing are taken from the new one. */
 export function mergeRecipe(existing: CookbookRecipe | undefined, incoming: CookbookRecipe): CookbookRecipe {
   if (!existing) return incoming;
+  // An everyday dish stays everyday when the same name comes back as a cheat-day idea (and the other way round).
+  const { cheat: _c, where: _w, ...rest } = incoming;
   return {
-    ...incoming,
+    ...rest,
     ...existing,
     emoji: existing.emoji ?? incoming.emoji,
     minutes: existing.minutes ?? incoming.minutes,
@@ -114,10 +124,11 @@ export function mergeRecipe(existing: CookbookRecipe | undefined, incoming: Cook
   };
 }
 
-/** Dishes of the cook book that fit what is left for a meal (the same rule every idea must pass), the best rated and most cooked first. */
+/** Dishes of the cook book that fit what is left for a meal (the same rule every idea must pass), the best rated and most cooked first.
+ *  Cheat-day dishes are never offered here. */
 export function recipesFitting(book: CookbookRecipe[], brief: DinnerBrief, limit = 3): CookbookRecipe[] {
   return book
-    .filter((r) => acceptDinner(brief, r))
+    .filter((r) => !r.cheat && acceptDinner(brief, r))
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.cookedCount ?? 0) - (a.cookedCount ?? 0) || (a.createdAtISO < b.createdAtISO ? 1 : -1))
     .slice(0, limit);
 }
@@ -154,6 +165,8 @@ export function cleanCookbook(raw: unknown): CookbookRecipe[] {
     if (how) r.how = how;
     if (typeof o.rating === 'number' && o.rating >= 1 && o.rating <= 5) r.rating = Math.round(o.rating);
     if (typeof o.cookedCount === 'number' && o.cookedCount > 0 && o.cookedCount < 100000) r.cookedCount = Math.round(o.cookedCount);
+    if (o.cheat === true) r.cheat = true;
+    if (o.where === 'home' || o.where === 'out') r.where = o.where;
     out.push(r);
     if (out.length === 300) break;
   }

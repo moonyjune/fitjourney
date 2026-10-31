@@ -1,6 +1,6 @@
 // Pure helpers for the per-user AI quota and the cost estimate (no Deno or network use, so they are unit-tested in jest).
 
-export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest';
+export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places';
 
 /** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
@@ -12,12 +12,19 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   swap: 10,
   dinner: 30,
   digest: 5,
+  // Cheat day > where to eat: each call runs several web searches ($0.01 each), so it gets fewer.
+  places: 10,
 };
 
 export interface TokenUsage {
   input_tokens?: number;
   output_tokens?: number;
+  /** Server tools run by Anthropic (only when a call declared one, e.g. web search). */
+  server_tool_use?: { web_search_requests?: number };
 }
+
+/** USD per web search ($10 per 1,000 searches on the Claude API), on top of the tokens. */
+export const WEB_SEARCH_USD = 0.01;
 
 const count = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v) : 0);
 
@@ -59,9 +66,11 @@ export function resolveAiConfig(
   };
 }
 
-/** Estimated dollars for one call from the `usage` block of the API response. Rounded to 1e-6. */
+/** Estimated dollars for one call from the `usage` block of the API response, web searches included. Rounded to 1e-6. */
 export function estimateCostUsd(usage: TokenUsage | undefined, priceInPerMtok: number, priceOutPerMtok: number): number {
-  const cost = (count(usage?.input_tokens) * priceInPerMtok + count(usage?.output_tokens) * priceOutPerMtok) / 1_000_000;
+  const cost =
+    (count(usage?.input_tokens) * priceInPerMtok + count(usage?.output_tokens) * priceOutPerMtok) / 1_000_000 +
+    count(usage?.server_tool_use?.web_search_requests) * WEB_SEARCH_USD;
   return Math.round(cost * 1e6) / 1e6;
 }
 
@@ -86,6 +95,16 @@ export function quotaMessage(feature: AiFeature, limit: number = DAILY_QUOTA[fea
 }
 
 /** Whether an Anthropic HTTP status is worth one retry (rate limit, overloaded, transient server error). */
+/** Usage of several requests of one call (a turn continued after `pause_turn`) added up. */
+export function addUsage(a: TokenUsage | undefined, b: TokenUsage | undefined): TokenUsage {
+  const searches = count(a?.server_tool_use?.web_search_requests) + count(b?.server_tool_use?.web_search_requests);
+  return {
+    input_tokens: count(a?.input_tokens) + count(b?.input_tokens),
+    output_tokens: count(a?.output_tokens) + count(b?.output_tokens),
+    ...(searches > 0 ? { server_tool_use: { web_search_requests: searches } } : {}),
+  };
+}
+
 export function shouldRetry(status: number): boolean {
   return status === 429 || status === 529 || status === 500 || status === 502 || status === 503;
 }

@@ -9,6 +9,8 @@
 // Every answer is also stored in the shared cook book (cookbook_recipes, deduped by name), so users can pick from it without an AI call.
 // The cook book screen also sends `filters` (occasion, craving, kind of dish, ingredients to use / avoid) and `snack` (a snack,
 // drink or dessert rather than a meal); the prompt then follows them (`dinnerPrompt` in _shared/dinner.ts builds it).
+// `cheat` ({ where: home | out | both }) asks for cheat-day dishes: no calorie / limit budget (cheatPrompt in _shared/dinner.ts);
+// those are not put into the shared cook book (it feeds the everyday suggestions of every user).
 // Calls per user per day: app_settings key `ai_quota.dinner` (default 30).
 
 import { ACCURACY_PROPERTY } from '../_shared/coach.ts';
@@ -48,6 +50,7 @@ const DINNER_TOOL = {
             },
             steps: { type: 'array', maxItems: 8, items: { type: 'string' }, description: 'Cooking steps in Vietnamese, one short sentence each (at least 3).' },
             accuracyPercent: ACCURACY_PROPERTY,
+            where: { type: 'string', enum: ['home', 'out'], description: 'Cheat day only: cooked at home or eaten out.' },
           },
           required: ['name', 'calories', 'proteinG', 'accuracyPercent', 'ingredients', 'steps', 'minutes', 'difficulty'],
         },
@@ -71,6 +74,7 @@ serveAi('dinner', async (body) => {
     call: { tool: DINNER_TOOL, system: SYSTEM, maxTokens: 6000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },
     after: async (input, ctx) => {
       // Into the shared cook book (a dish already there is kept as it is). A failure here must not cost the user the answer.
+      if (req.cheat) return;
       const rows = cookbookRows(input.options, req.meal, ctx.userId);
       if (rows.length === 0) return;
       try {

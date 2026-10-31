@@ -190,9 +190,17 @@ export function rankByFilters(items: RankInput[], filters: CookbookFilters, brie
     .map(({ rating: _r, cooked: _c, ...rest }) => rest);
 }
 
-/** The user's cook book ranked by the filters. */
-export const rankCookbook = (book: CookbookRecipe[], filters: CookbookFilters, brief: DinnerBrief | null, limit = RESULTS): RankedIdea[] =>
-  rankByFilters(book.map((r) => ({ idea: ideaFromRecipe(r), rating: r.rating, cooked: r.cookedCount })), filters, brief, limit);
+/** The user's cook book ranked by the filters. Cheat-day dishes only take part on a cheat day (`cheat`), and then come first. */
+export const rankCookbook = (book: CookbookRecipe[], filters: CookbookFilters, brief: DinnerBrief | null, limit = RESULTS, cheat = false): RankedIdea[] =>
+  rankByFilters(
+    [...book]
+      .filter((r) => cheat || !r.cheat)
+      .sort((a, b) => Number(!!b.cheat) - Number(!!a.cheat))
+      .map((r) => ({ idea: ideaFromRecipe(r), rating: r.rating, cooked: r.cookedCount })),
+    filters,
+    brief,
+    limit
+  );
 
 /** Rows of the shared cook book ranked by the filters: only dishes that fit what is left today, none of the names to skip, at most 5. */
 export function rankShared(rows: unknown[], filters: CookbookFilters, brief: DinnerBrief, skipNames: string[], limit = 5): DinnerIdea[] {

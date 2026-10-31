@@ -1,6 +1,7 @@
 // The common path of every AI Edge Function: CORS, kill switch, API key, sign-in, per-user daily quota, one Claude call
 // with a forced tool (structured output), one retry on a transient failure, and usage/cost logging. Each feature function
-// only builds its prompt and tool. Deploy: every function that imports this is deployed with `npx supabase functions deploy <name>`.
+// only builds its prompt and tool. A call with `webSearch` (suggest-cheat-places) instead lets the model search the web first
+// (tool_choice auto, made once, paused turns continued; see callClaudeWithSearch and webSearch.ts). Deploy: every function that imports this is deployed with `npx supabase functions deploy <name>`.
 //
 // Secrets / env:  ANTHROPIC_API_KEY (required)   AI_MODEL (default claude-sonnet-5-5)   AI_DISABLED=1 (kill switch)
 //                 The admin can change the model and prices on the AI & cost screen (table ai_settings); that wins over AI_MODEL / AI_PRICE_*.
@@ -32,7 +33,19 @@ import {
   shouldRetry,
   type AiFeature,
   type TokenUsage,
+  addUsage,
 } from './usage.ts';
+import {
+  collectWebFindings,
+  isWebSearchUnavailable,
+  mergeFindings,
+  PLACES_UNAVAILABLE_PREFIX,
+  webSearchTool,
+  webSearchVariantAfter,
+  type WebFindings,
+  type WebSearchOptions,
+  type WebSearchVariant,
+} from './webSearch.ts';
 
 export type { AiFeature };
 
@@ -98,6 +111,9 @@ export interface AiCall {
   messages: unknown[];
   system?: string;
   maxTokens: number;
+  /** Lets the model search the web (Anthropic's server-side web search tool) before it calls `tool`. The call is then not forced
+   *  (a forced tool call would skip the search), is made once (searches cost money), and its findings go to `shape`. */
+  webSearch?: WebSearchOptions;
 }
 
 export interface AiContext {
@@ -110,7 +126,15 @@ export interface AiContext {
 
 /** What a feature handler returns: the Claude call to make plus how to wrap its tool input in the response, or a ready
  *  response (e.g. a cached report, no AI call and no quota used). */
-export type AiPlan = { call: AiCall; responseKey: string; after?: (input: Record<string, unknown>, ctx: AiContext) => Promise<void> } | Response;
+export type AiPlan =
+  | {
+      call: AiCall;
+      responseKey: string;
+      after?: (input: Record<string, unknown>, ctx: AiContext) => Promise<void>;
+      /** What goes into the response instead of the raw tool input (e.g. the input checked against the web search findings). */
+      shape?: (input: Record<string, unknown>, web: WebFindings | null, usage: TokenUsage | undefined) => unknown;
+    }
+  | Response;
 
 async function usedToday(admin: SupabaseClient, userId: string, feature: AiFeature): Promise<number> {
   // One row per model, so a day on which the model was changed has several.
@@ -207,6 +231,82 @@ async function callClaude(call: AiCall, model: string): Promise<{ input: Record<
   }
 }
 
+/** Time a call with web search may take in all: an Edge Function is cut off at about 150 s. */
+const WEB_SEARCH_BUDGET_MS = 135_000;
+/** A long search turn the API paused (`pause_turn`) is continued at most this many times. */
+const MAX_CONTINUATIONS = 3;
+
+/** One Claude call that may search the web first: tool_choice auto with the web search tool and the feature's tool. A paused turn
+ *  is sent back to continue; a model that ends without calling the tool is asked once more to call it. No retry of a failed
+ *  request (searches already run are paid). A model or platform that refuses the newest tool version gets the next one. */
+async function callClaudeWithSearch(
+  call: AiCall,
+  model: string
+): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; web: WebFindings } | { error: string; status: number }> {
+  const started = Date.now();
+  let variant: WebSearchVariant = 'dynamic';
+  const messages: unknown[] = [...call.messages];
+  const findings: WebFindings[] = [];
+  let usage: TokenUsage | undefined;
+  let continuations = 0;
+  let nudged = false;
+  for (;;) {
+    const left = WEB_SEARCH_BUDGET_MS - (Date.now() - started);
+    if (left < 5_000) return { error: 'Tìm kiếm quá lâu, hãy thử lại.', status: 504 };
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: anthropicHeaders(ANTHROPIC_API_KEY!, Deno.env.get('AI_WORKSPACE_ID')),
+        body: JSON.stringify({
+          model,
+          max_tokens: call.maxTokens,
+          system: systemFor(call.system, call.tool.name, false),
+          tools: [webSearchTool(call.webSearch!, variant), call.tool],
+          tool_choice: { type: 'auto' },
+          messages,
+        }),
+        signal: AbortSignal.timeout(left),
+      });
+    } catch (error) {
+      return { error: `Claude API không phản hồi (${error instanceof Error ? error.message : 'lỗi mạng'}).`, status: 502 };
+    }
+    if (!response.ok) {
+      const text = await response.text();
+      if (isWebSearchUnavailable(response.status, text)) {
+        return { error: `${PLACES_UNAVAILABLE_PREFIX}: ${summarizeUpstreamError(response.status, text)}`, status: 503 };
+      }
+      const next = webSearchVariantAfter(response.status, text, variant);
+      if (next) {
+        console.warn('[ai] web search variant', variant, 'refused; trying', next);
+        variant = next;
+        continue;
+      }
+      console.error('[ai]', summarizeUpstreamError(response.status, text), 'request-id', response.headers.get('request-id'));
+      return { error: summarizeUpstreamError(response.status, text), status: 502 };
+    }
+    const data = await response.json();
+    const blocks: Array<Record<string, unknown>> = data.content ?? [];
+    usage = addUsage(usage, data.usage);
+    findings.push(collectWebFindings(blocks));
+    const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === call.tool.name);
+    if (toolUse) return { input: toolUse.input as Record<string, unknown>, usage, web: mergeFindings(findings) };
+    if (data.stop_reason === 'pause_turn' && continuations < MAX_CONTINUATIONS) {
+      // Send the paused turn back unchanged; the API resumes it.
+      continuations++;
+      messages.push({ role: 'assistant', content: blocks });
+      continue;
+    }
+    if (data.stop_reason === 'end_turn' && !nudged) {
+      nudged = true;
+      messages.push({ role: 'assistant', content: blocks }, { role: 'user', content: `Hãy gọi tool ${call.tool.name} ngay bây giờ với những gì đã tìm thấy (không thấy thì để trống).` });
+      continue;
+    }
+    console.error('[ai] no tool_use in the web search answer', data.stop_reason);
+    const why = data.stop_reason === 'max_tokens' ? 'câu trả lời bị cắt do quá dài, hãy thử lại' : (data.stop_reason ?? 'không rõ lý do');
+    return { error: `AI không trả về kết quả (${why}).`, status: 502 };
+  }
+}
 
 /** Wraps a feature: `plan` receives the parsed JSON body and the context, and returns the Claude call (or a Response). */
 export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>, ctx: AiContext) => Promise<AiPlan>) {
@@ -245,11 +345,12 @@ export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>
       if (GLOBAL_BUDGET > 0 && budgetReached(await globalCostToday(admin), GLOBAL_BUDGET)) return jsonResponse({ error: GLOBAL_BUDGET_MESSAGE }, 503);
 
       const config = await loadConfig(admin);
-      const outcome = await callClaude(planned.call, config.model);
+      const outcome = planned.call.webSearch ? await callClaudeWithSearch(planned.call, config.model) : await callClaude(planned.call, config.model);
       if ('error' in outcome) return jsonResponse({ error: outcome.error }, outcome.status);
       await recordUsage(admin, user.id, feature, outcome.usage, config);
       if (planned.after) await planned.after(outcome.input, ctx);
-      return jsonResponse({ [planned.responseKey]: outcome.input });
+      const web = 'web' in outcome ? outcome.web : null;
+      return jsonResponse({ [planned.responseKey]: planned.shape ? planned.shape(outcome.input, web, outcome.usage) : outcome.input });
     } catch (error) {
       return jsonResponse({ error: error instanceof Error ? error.message : 'Lỗi không xác định.' }, 500);
     }

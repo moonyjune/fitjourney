@@ -216,8 +216,11 @@ describe('Cook book screen: the finder', () => {
     await act(async () => {
       renderer = create(<CookbookScreen />);
     });
+    // The finder lives under the "Gợi ý" tab.
+    await press(renderer!, '✨ Gợi ý');
     return renderer!;
   };
+  const openFilters = (r: ReactTestRenderer) => press(r, 'Bộ lọc');
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -243,6 +246,7 @@ describe('Cook book screen: the finder', () => {
   it('chips and ingredients are remembered; Suggest ranks the cook book and then asks the shared one', async () => {
     const r = await mount();
     expect(allText(r)).toContain('Hôm nay muốn ăn gì?');
+    await openFilters(r);
     await press(r, 'Món nước / súp');
     await press(r, 'Chua cay');
     await press(r, 'Thêm "Cá basa"');
@@ -264,6 +268,7 @@ describe('Cook book screen: the finder', () => {
 
   it('an ingredient can be avoided, which leaves out dishes using it', async () => {
     const r = await mount();
+    await openFilters(r);
     await press(r, 'Thêm vào: Tránh');
     await press(r, 'Thêm "Cá basa"');
     expect(useCookbookFinderStore.getState().filters.avoid).toEqual(['Cá basa']);
@@ -276,6 +281,7 @@ describe('Cook book screen: the finder', () => {
   it('Suggest with AI sends the filters and a snack brief, keeps the new dishes (saved to the cook book) across a reload', async () => {
     mockDinner.mockResolvedValue({ ok: true, result: { options: [{ name: 'Bạc xỉu ít sữa', calories: 90, proteinG: 3, purineMg: 0, saltG: 0, sugarG: 4, accuracyPercent: 70 }, { name: 'Cà phê bia', calories: 100, proteinG: 1 }] } });
     const r = await mount();
+    await openFilters(r);
     await press(r, 'Cà phê');
     await press(r, 'Thêm vào: Tránh');
     await typeIngredient(r, 'sua chua');

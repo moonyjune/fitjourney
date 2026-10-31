@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { acceptDinner, cleanAiDinner, type DinnerBrief, type DinnerIdea } from '../../ai/dinner';
 import { buildMealPlan, dayTotals } from '../../ai/mealSplit';
 import { buildTasteProfile } from '../../ai/tasteProfile';
@@ -19,6 +19,7 @@ import {
   type CookbookFilters,
   type FilterTag,
 } from '../../cookbook/filters';
+import { CHEAT_WHERE, cheatPurineWarning, cleanCheatIdeas, dishesToLocate, type CheatWhere } from '../../cookbook/cheat';
 import { filterBrief } from '../../cookbook/finderBrief';
 import { recipeFromIdea, recipeKey } from '../../cookbook/recipes';
 import { foodKey } from '../../food/remember';
@@ -28,8 +29,10 @@ import { useCookbookStore } from '../../store/useCookbookStore';
 import { useAllFoods } from '../../store/useFoodDbStore';
 import { pick as pickPrefs, useMealPrefStore } from '../../store/useMealPrefStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
-import { requestDinner, searchSharedCookbookFiltered, shareToCookbook, type AiErrorKind } from '../../sync/cloudSync';
+import { requestCheatPlaces, requestDinner, searchSharedCookbookFiltered, shareToCookbook, type AiErrorKind } from '../../sync/cloudSync';
 import { quest, questRadius } from '../../theme/quest';
+import { CheatPlacesList } from './CheatPlacesList';
+import { DishCard } from './DishCard';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { RecipeDialog } from './RecipeDialog';
@@ -45,6 +48,20 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const room = (n: number) => Math.max(0, Math.round(n * 10) / 10);
 const toggle = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
+/** The browser's position (web only; the native app has no location module), rounded to ~100 m; null when refused or unavailable. */
+function browserPosition(): Promise<{ lat: number; lon: number } | null> {
+  const geo = Platform.OS === 'web' && typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
+  if (!geo) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    geo.getCurrentPosition(
+      (pos) => resolve({ lat: Math.round(pos.coords.latitude * 1000) / 1000, lon: Math.round(pos.coords.longitude * 1000) / 1000 }),
+      () => resolve(null),
+      { timeout: 10_000, maximumAge: 600_000 }
+    );
+  });
+}
+const canLocate = (): boolean => Platform.OS === 'web' && typeof navigator !== 'undefined' && !!navigator.geolocation;
+
 /** Cook book > "what do I feel like": chips for the occasion, cravings and kinds of dish, ingredients to use or avoid, then
  *  "Suggest" (the user's own cook book ranked by the filters at once, then the shared cook book; no AI) or "Suggest with AI"
  *  (suggest-dinner with the filters and what is left of today; daily quota). Filters and answers are kept on the device. */
@@ -56,6 +73,14 @@ export function CookbookFinder() {
   const shared = useCookbookFinderStore((s) => s.shared);
   const ai = useCookbookFinderStore((s) => s.ai);
   const aiAtISO = useCookbookFinderStore((s) => s.aiAtISO);
+  const cheat = useCookbookFinderStore((s) => s.cheat);
+  const cheatWhere = useCookbookFinderStore((s) => s.cheatWhere);
+  const location = useCookbookFinderStore((s) => s.location);
+  const coords = useCookbookFinderStore((s) => s.coords);
+  const cheatAi = useCookbookFinderStore((s) => s.cheatAi);
+  const cheatAiAtISO = useCookbookFinderStore((s) => s.cheatAiAtISO);
+  const places = useCookbookFinderStore((s) => s.places);
+  const placesNear = useCookbookFinderStore((s) => s.placesNear);
   const book = useCookbookStore((s) => s.recipes);
   const foods = useAllFoods();
   const logs = useNutritionStore((s) => s.logs);
@@ -65,7 +90,10 @@ export function CookbookFinder() {
   const prefs = useMemo(() => pickPrefs({ kcal: prefKcal, proteinG: prefProtein, strictKcal: prefStrict }), [prefKcal, prefProtein, prefStrict]);
   const [mode, setMode] = useState<'have' | 'avoid'>('have');
   const [query, setQuery] = useState('');
-  const [busy, setBusy] = useState<'ai' | 'shared' | null>(null);
+  const [busy, setBusy] = useState<'ai' | 'shared' | 'places' | 'locate' | null>(null);
+  const [placesError, setPlacesError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [help, setHelp] = useState(false);
   const [failure, setFailure] = useState<AiErrorKind | null>(null);
   const [notice, setNotice] = useState<GameKey | null>(null);
   const [open, setOpen] = useState<{ idea: DinnerIdea; brief: DinnerBrief } | null>(null);
@@ -81,8 +109,13 @@ export function CookbookFinder() {
   const picked = [...filters.have, ...filters.avoid];
   const options = suggestIngredients(pool, query, picked, query.trim() ? 8 : 12);
 
-  const elsewhere = new Set([...ai, ...shared].map((i) => foodKey(i.name)));
-  const local = useMemo(() => (searched ? rankCookbook(book, searched, searchedBrief) : []), [book, searched, searchedBrief]).filter((r) => !elsewhere.has(foodKey(r.idea.name)));
+  const shownAi = cheat ? cheatAi : ai;
+  const elsewhere = new Set([...shownAi, ...(cheat ? [] : shared)].map((i) => foodKey(i.name)));
+  // On a cheat day the cook book's cheat dishes take part too (first), and nothing is checked against what is left today.
+  const local = useMemo(() => (searched ? rankCookbook(book, searched, cheat ? null : searchedBrief, undefined, cheat) : []), [book, searched, searchedBrief, cheat]).filter(
+    (r) => !elsewhere.has(foodKey(r.idea.name))
+  );
+  const store = () => useCookbookFinderStore.getState();
 
   const setFilters = (f: CookbookFilters) => useCookbookFinderStore.getState().setFilters(f);
 
@@ -103,6 +136,7 @@ export function CookbookFinder() {
     useCookbookFinderStore.getState().search(f);
     setFailure(null);
     setNotice(null);
+    if (cheat) return; // the shared cook book holds everyday dishes only
     const own = rankCookbook(book, f, brief).map((r) => r.idea.name);
     setBusy('shared');
     const outcome = await searchSharedCookbookFiltered(brief, f, [...own, ...ai.map((i) => i.name)]);
@@ -115,8 +149,64 @@ export function CookbookFinder() {
     if (outcome.ideas.length === 0) setNotice('cookbook.finder.sharedNone');
   }
 
+  async function askCheat() {
+    const f = filters;
+    const where = cheatWhere;
+    setBusy('ai');
+    setFailure(null);
+    setNotice(null);
+    setPlacesError(null);
+    const recipes = useCookbookStore.getState().recipes;
+    const known = new Set([...recipes.map((r) => r.id), ...cheatAi.map((i) => recipeKey(i.name))]);
+    const avoidNames = [...cheatAi.map((i) => i.name), ...recipes.filter((r) => r.cheat).map((r) => r.name)].slice(0, 40);
+    const outcome = await requestDinner(brief, buildTasteProfile().favorites, avoidNames, filtersEmpty(f) ? undefined : f, { where });
+    setBusy(null);
+    if (!outcome.ok) {
+      setFailure(outcome.kind);
+      return;
+    }
+    const fresh = cleanCheatIdeas(outcome.result, where).filter((i) => !usesAvoided(i, f) && !known.has(recipeKey(i.name)));
+    if (fresh.length === 0) {
+      setNotice('cheat.aiNone');
+      return;
+    }
+    // Into the cook book's Cheat day part (never the shared cook book: that one feeds everyday suggestions).
+    useCookbookStore.getState().saveMany(fresh.map((i) => recipeFromIdea(i)));
+    store().setCheatAi(fresh, new Date().toISOString());
+    // Eating out with an area set: look up places for the new dishes straight away.
+    if (dishesToLocate(fresh, where).length > 0 && (location || coords)) await findPlaces(fresh);
+  }
+
+  async function findPlaces(ideas: DinnerIdea[] = cheatAi) {
+    const dishes = dishesToLocate(ideas, cheatWhere === 'home' ? 'both' : cheatWhere);
+    if (dishes.length === 0) return setNotice('cheat.noOutDishes');
+    if (!location && !coords) return setNotice('cheat.needLocation');
+    const near = location || g('cheat.here');
+    setBusy('places');
+    setPlacesError(null);
+    setNotice(null);
+    const outcome = await requestCheatPlaces(dishes, location, coords ?? undefined);
+    setBusy(null);
+    if (!outcome.ok) {
+      if (outcome.kind === 'unavailable') setPlacesError(g('cheat.unavailable', { why: outcome.message.replace(/^[^:]*:\s*/, '') }));
+      else setFailure(outcome.kind);
+      return;
+    }
+    store().setPlaces(outcome.result, near);
+  }
+
+  async function useMyLocation() {
+    if (busy) return;
+    setBusy('locate');
+    const pos = await browserPosition();
+    setBusy(null);
+    if (!pos) return setNotice('cheat.locationFailed');
+    store().setLocation(location, pos);
+  }
+
   async function askAi() {
     if (busy) return;
+    if (cheat) return askCheat();
     const f = filters;
     const forBrief = brief;
     setBusy('ai');
@@ -146,171 +236,257 @@ export function CookbookFinder() {
 
   const tagText = (t: FilterTag) => (t.group === 'have' ? t.name : g(`${GROUPS.find((x) => x.group === `${t.group}s`)!.prefix}${t.id}` as GameKey));
   const at = aiAtISO ? new Date(aiAtISO) : null;
+  const cheatAt = cheatAiAtISO ? new Date(cheatAiAtISO) : null;
 
   const row = (idea: DinnerIdea, tags: FilterTag[] | null, forBrief: DinnerBrief) => {
-    const fits = acceptDinner(forBrief, idea);
+    const isCheat = cheat || !!idea.cheat;
+    const book1 = book.find((r) => r.id === recipeKey(idea.name));
     return (
-      <Pressable key={`${idea.source}-${idea.name}`} accessibilityRole="button" accessibilityLabel={idea.name} onPress={() => setOpen({ idea, brief: forBrief })} style={styles.result}>
-        <HudText size={14}>{`${idea.recipe?.emoji ?? '🍽️'} ${idea.name}`}</HudText>
-        <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {g('swap.figures', { kcal: idea.calories, p: idea.proteinG, purine: idea.purineMg, salt: idea.saltG, sugar: idea.sugarG })}
-        </HudText>
-        {idea.source === 'ai' ? (
-          <HudText size={11} color={quest.goldLight}>
-            {g('swap.fromAi')}
-            {idea.accuracy !== undefined ? ` · ${g('ai.accuracy', { pct: idea.accuracy })}` : ''}
-          </HudText>
-        ) : null}
-        {tags && tags.length > 0 ? (
-          <HudText size={12} weight="medium" color={quest.manaText}>
-            {g('cookbook.finder.matches', { tags: tags.map(tagText).join(', ') })}
-          </HudText>
-        ) : null}
-        <HudText size={12} weight="medium" color={fits ? quest.manaText : quest.goldLight}>
-          {fits ? g('cookbook.finder.fits') : g('cookbook.finder.notFits')}
-        </HudText>
-        {purineWarning(idea) ? (
-          <HudText size={12} weight="medium" color={quest.hpText}>
-            {g('cookbook.finder.purineWarn')}
-          </HudText>
-        ) : null}
-        {idea.how ? (
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {idea.how}
-          </HudText>
-        ) : null}
-      </Pressable>
+      <DishCard
+        key={`${idea.source}-${idea.name}`}
+        idea={idea}
+        onPress={() => setOpen({ idea, brief: forBrief })}
+        purineHigh={isCheat ? cheatPurineWarning(idea) : purineWarning(idea)}
+        rating={book1?.rating}
+        cooked={book1?.cookedCount}
+        fits={isCheat ? undefined : acceptDinner(forBrief, idea)}
+        sub={tags && tags.length > 0 ? g('cookbook.finder.matches', { tags: tags.map(tagText).join(', ') }) : undefined}
+      />
     );
   };
 
-  return (
-    <View style={styles.card} accessibilityLabel={g('cookbook.finder.title')}>
-      <HudText size={15}>{g('cookbook.finder.title')}</HudText>
-      <HudText size={12} weight="medium" color={quest.textSecondary}>
-        {g('cookbook.finder.hint')}
+  const chip = (key: string, label: string, on: boolean, onPress: () => void, avoid = false) => (
+    <Pressable key={key} accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: on }} onPress={onPress} hitSlop={4} style={[styles.chip, on && (avoid ? styles.chipAvoid : styles.chipOn)]}>
+      <HudText size={12} color={on ? quest.onGold : quest.text}>
+        {label}
       </HudText>
-      {GROUPS.map(({ group, ids, title, prefix }) => (
-        <View key={group} style={styles.section}>
-          <HudText size={13} color={quest.goldLight}>
-            {g(title)}
-          </HudText>
-          <View style={styles.chips}>
-            {ids.map((id) => {
-              const on = (filters[group] as string[]).includes(id);
-              const label = g(`${prefix}${id}` as GameKey);
-              return (
-                <Pressable
-                  key={id}
-                  accessibilityRole="button"
-                  accessibilityLabel={label}
-                  accessibilityState={{ selected: on }}
-                  onPress={() => setFilters({ ...filters, [group]: toggle(filters[group] as string[], id) })}
-                  style={[styles.chip, on && styles.chipOn]}
-                >
-                  <HudText size={12} color={on ? quest.onGold : quest.text}>
-                    {label}
-                  </HudText>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      ))}
+    </Pressable>
+  );
+  /** A row of chips that scrolls sideways instead of wrapping into a wall. */
+  const strip = (children: ReactNode) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.strip} keyboardShouldPersistTaps="handled">
+      {children}
+    </ScrollView>
+  );
+  const activeTags: string[] = [
+    ...filters.occasions.map((id) => g(`cookbook.occ.${id}` as GameKey)),
+    ...filters.cravings.map((id) => g(`cookbook.crave.${id}` as GameKey)),
+    ...filters.types.map((id) => g(`cookbook.type.${id}` as GameKey)),
+    ...filters.have.map((n) => `✓ ${n}`),
+    ...filters.avoid.map((n) => `⊘ ${n}`),
+  ];
+  const what = brief.snack ? g('cookbook.finder.snack') : g(`meals.kind.${brief.meal ?? 'dinner'}` as GameKey);
 
-      <View style={styles.section}>
-        <HudText size={13} color={quest.goldLight}>
-          {g('cookbook.finder.ingredients')}
-        </HudText>
-        <View style={styles.chips}>
-          {(['have', 'avoid'] as const).map((m) => (
-            <Pressable
-              key={m}
-              accessibilityRole="button"
-              accessibilityLabel={`${g('cookbook.finder.addTo')}: ${g(`cookbook.finder.${m}`)}`}
-              accessibilityState={{ selected: mode === m }}
-              onPress={() => setMode(m)}
-              style={[styles.chip, mode === m && (m === 'have' ? styles.chipOn : styles.chipAvoid)]}
-            >
-              <HudText size={12} color={mode === m ? quest.onGold : quest.text}>
-                {g(`cookbook.finder.${m}`)}
+  return (
+    <View style={styles.wrap} accessibilityLabel={g('cookbook.finder.title')}>
+      <View style={styles.card}>
+        <View style={styles.head}>
+          <HudText size={15} style={styles.flex} numberOfLines={1}>
+            {g('cookbook.finder.title')}
+          </HudText>
+          <Pressable accessibilityRole="button" accessibilityLabel={g('cookbook.ui.help')} accessibilityState={{ expanded: help }} onPress={() => setHelp(!help)} hitSlop={8} style={styles.round}>
+            <HudText size={13} color={quest.textSecondary}>
+              ?
+            </HudText>
+          </Pressable>
+        </View>
+        {help ? (
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {`${g('cookbook.finder.hint')} ${g('cheat.toggleHint')}`}
+          </HudText>
+        ) : null}
+
+        {/* Compact bar: cheat day, the filters chosen, and the button that opens them. */}
+        <View style={styles.barRow}>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityLabel={g('cheat.toggle')}
+            accessibilityState={{ checked: cheat }}
+            onPress={() => {
+              store().setCheat(!cheat);
+              setFailure(null);
+              setNotice(null);
+              setPlacesError(null);
+            }}
+            hitSlop={4}
+            style={[styles.chip, cheat && styles.chipOn]}
+          >
+            <HudText size={12} color={cheat ? quest.onGold : quest.text}>{`${cheat ? '☑' : '☐'} 🎉 ${g('cheat.toggle')}`}</HudText>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={activeTags.length ? g('cookbook.ui.filtersCount', { n: activeTags.length }) : g('cookbook.ui.filters')}
+            accessibilityState={{ expanded }}
+            onPress={() => setExpanded(!expanded)}
+            hitSlop={4}
+            style={[styles.chip, activeTags.length > 0 && styles.chipMana]}
+          >
+            <HudText size={12} color={quest.text}>{`⚙ ${activeTags.length ? g('cookbook.ui.filtersCount', { n: activeTags.length }) : g('cookbook.ui.filters')} ${expanded ? '▴' : '▾'}`}</HudText>
+          </Pressable>
+          {!filtersEmpty(filters) && (
+            <Pressable accessibilityRole="button" accessibilityLabel={g('cookbook.finder.clear')} onPress={() => setFilters(EMPTY_FILTERS)} hitSlop={8} style={styles.round}>
+              <HudText size={12} color={quest.textSecondary}>
+                ✕
               </HudText>
             </Pressable>
-          ))}
+          )}
         </View>
-        {picked.length > 0 && (
-          <View style={styles.chips}>
-            {filters.have.map((n) => (
-              <Pressable key={`h-${n}`} accessibilityRole="button" accessibilityLabel={g('cookbook.finder.remove', { name: n })} onPress={() => setFilters({ ...filters, have: filters.have.filter((x) => x !== n) })} style={[styles.chip, styles.chipOn]}>
-                <HudText size={12} color={quest.onGold}>{`✓ ${n} ✕`}</HudText>
-              </Pressable>
+        {!expanded &&
+          (activeTags.length > 0 ? (
+            strip(
+              activeTags.map((t) => (
+                <View key={t} style={styles.tag}>
+                  <HudText size={11} weight="semibold" color={quest.manaText}>
+                    {t}
+                  </HudText>
+                </View>
+              ))
+            )
+          ) : (
+            <HudText size={11} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+              {g('cookbook.ui.noFilters')}
+            </HudText>
+          ))}
+
+        {expanded && (
+          <View style={styles.panel}>
+            {GROUPS.map(({ group, ids, title, prefix }) => (
+              <View key={group} style={styles.group}>
+                <HudText size={12} color={quest.goldLight}>
+                  {g(title)}
+                </HudText>
+                {strip(
+                  ids.map((id) => {
+                    const on = (filters[group] as string[]).includes(id);
+                    return chip(id, g(`${prefix}${id}` as GameKey), on, () => setFilters({ ...filters, [group]: toggle(filters[group] as string[], id) }));
+                  })
+                )}
+              </View>
             ))}
-            {filters.avoid.map((n) => (
-              <Pressable key={`a-${n}`} accessibilityRole="button" accessibilityLabel={g('cookbook.finder.remove', { name: n })} onPress={() => setFilters({ ...filters, avoid: filters.avoid.filter((x) => x !== n) })} style={[styles.chip, styles.chipAvoid]}>
-                <HudText size={12} color={quest.onGold}>{`⊘ ${n} ✕`}</HudText>
-              </Pressable>
-            ))}
+            <View style={styles.group}>
+              <HudText size={12} color={quest.goldLight}>
+                {g('cookbook.finder.ingredients')}
+              </HudText>
+              {strip(
+                <>
+                  {(['have', 'avoid'] as const).map((m) => chip(m, `${g('cookbook.finder.addTo')}: ${g(`cookbook.finder.${m}`)}`, mode === m, () => setMode(m), m === 'avoid'))}
+                  {filters.have.map((n) => chip(`h-${n}`, g('cookbook.finder.remove', { name: n }), true, () => setFilters({ ...filters, have: filters.have.filter((x) => x !== n) })))}
+                  {filters.avoid.map((n) => chip(`a-${n}`, g('cookbook.finder.remove', { name: n }), true, () => setFilters({ ...filters, avoid: filters.avoid.filter((x) => x !== n) }), true))}
+                </>
+              )}
+              <TextInput
+                style={styles.input}
+                value={query}
+                onChangeText={setQuery}
+                onSubmitEditing={() => addIngredient(query)}
+                placeholder={g('cookbook.finder.ingredientInput')}
+                placeholderTextColor={quest.textSecondary}
+                accessibilityLabel={g('cookbook.finder.ingredientInput')}
+                maxLength={40}
+                returnKeyType="done"
+              />
+              {strip(
+                <>
+                  {query.trim() && !options.some((o) => foodKey(o) === foodKey(query)) ? chip('typed', g('cookbook.finder.add', { name: query.trim() }), false, () => addIngredient(query)) : null}
+                  {options.map((n) => chip(n, g('cookbook.finder.add', { name: n }), false, () => addIngredient(n)))}
+                </>
+              )}
+            </View>
           </View>
         )}
-        <TextInput
-          style={styles.input}
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={() => addIngredient(query)}
-          placeholder={g('cookbook.finder.ingredientInput')}
-          placeholderTextColor={quest.textSecondary}
-          accessibilityLabel={g('cookbook.finder.ingredientInput')}
-          maxLength={40}
-          returnKeyType="done"
-        />
-        <View style={styles.chips}>
-          {query.trim() && !options.some((o) => foodKey(o) === foodKey(query)) ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={g('cookbook.finder.add', { name: query.trim() })} onPress={() => addIngredient(query)} style={styles.chip}>
-              <HudText size={12}>{`+ ${query.trim()}`}</HudText>
-            </Pressable>
-          ) : null}
-          {options.map((n) => (
-            <Pressable key={n} accessibilityRole="button" accessibilityLabel={g('cookbook.finder.add', { name: n })} onPress={() => addIngredient(n)} style={styles.chip}>
-              <HudText size={12}>{`+ ${n}`}</HudText>
-            </Pressable>
-          ))}
+
+        {cheat && (
+          <View style={styles.group}>
+            <HudText size={11} weight="medium" color={quest.hpText}>
+              {g('cheat.caution')}
+            </HudText>
+            {strip(CHEAT_WHERE.map((w: CheatWhere) => chip(w, g(`cheat.where.${w}` as GameKey), cheatWhere === w, () => store().setCheatWhere(w))))}
+            {cheatWhere !== 'home' && (
+              <View style={styles.locRow}>
+                <TextInput
+                  style={[styles.input, styles.flex]}
+                  value={location}
+                  onChangeText={(t) => store().setLocation(t, null)}
+                  placeholder={coords && !location ? `📍 ${g('cheat.here')} (${coords.lat}, ${coords.lon})` : g('cheat.locationPlaceholder')}
+                  placeholderTextColor={quest.textSecondary}
+                  accessibilityLabel={g('cheat.location')}
+                  maxLength={80}
+                  returnKeyType="done"
+                />
+                {canLocate() ? (
+                  <Pressable accessibilityRole="button" accessibilityLabel={g('cheat.useLocation')} onPress={() => void useMyLocation()} disabled={!!busy} style={styles.square}>
+                    <HudText size={16}>{busy === 'locate' ? '…' : '📍'}</HudText>
+                  </Pressable>
+                ) : null}
+              </View>
+            )}
+          </View>
+        )}
+
+        <View style={styles.left} accessibilityLabel={cheat ? g('cheat.noBudget') : `${g('cookbook.ui.left', { what })}`}>
+          {cheat ? (
+            <HudText size={11} weight="medium" color={quest.textSecondary} numberOfLines={2}>
+              {g('cheat.noBudget')}
+            </HudText>
+          ) : (
+            <>
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {g('cookbook.ui.left', { what })}
+              </HudText>
+              <HudText size={12} weight="semibold" color={quest.text}>
+                {g('cookbook.ui.leftNums', {
+                  kcal: Math.round(brief.budgetKcal),
+                  protein: Math.round(brief.proteinLeftG),
+                  purine: room(brief.headroom.purine),
+                  salt: room(brief.headroom.salt),
+                  sugar: room(brief.headroom.sugar),
+                })}
+              </HudText>
+            </>
+          )}
         </View>
+        <View style={styles.buttons}>
+          <View style={styles.flex}>
+            <QuestButton variant="gold" icon="list" title={busy === 'shared' ? g('cookbook.searching') : g('cookbook.finder.suggest')} loading={busy === 'shared'} disabled={!!busy && busy !== 'shared'} onPress={() => void suggest()} />
+          </View>
+          <View style={styles.flex}>
+            <QuestButton variant="mana" icon="chart" title={busy === 'ai' ? g('dinner.asking') : g('cookbook.finder.suggestAi')} loading={busy === 'ai'} disabled={!!busy && busy !== 'ai'} onPress={() => void askAi()} />
+          </View>
+        </View>
+        {cheat && cheatWhere !== 'home' && cheatAi.length > 0 && (
+          <QuestButton variant="ghost" icon="map" title={busy === 'places' ? g('cheat.searchingPlaces') : g('cheat.findPlaces')} loading={busy === 'places'} disabled={!!busy && busy !== 'places'} onPress={() => void findPlaces()} />
+        )}
+        {failure && (
+          <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert">
+            {aiErrorText(failure)}
+          </HudText>
+        )}
+        {placesError && (
+          <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert">
+            {placesError}
+          </HudText>
+        )}
+        {notice && (
+          <HudText size={12} weight="medium" color={quest.textSecondary} accessibilityRole="alert">
+            {g(notice)}
+          </HudText>
+        )}
       </View>
 
-      <HudText size={12} weight="medium" color={quest.textSecondary}>
-        {g('cookbook.finder.budget', {
-          what: brief.snack ? g('cookbook.finder.snack') : g(`meals.kind.${brief.meal ?? 'dinner'}` as GameKey),
-          kcal: Math.round(brief.budgetKcal),
-          protein: Math.round(brief.proteinLeftG),
-          purine: room(brief.headroom.purine),
-          salt: room(brief.headroom.salt),
-          sugar: room(brief.headroom.sugar),
-        })}
-      </HudText>
-      <QuestButton variant="gold" icon="list" title={busy === 'shared' ? g('cookbook.searching') : g('cookbook.finder.suggest')} loading={busy === 'shared'} disabled={busy === 'ai'} onPress={() => void suggest()} />
-      <QuestButton variant="mana" icon="chart" title={busy === 'ai' ? g('dinner.asking') : g('cookbook.finder.suggestAi')} loading={busy === 'ai'} disabled={busy === 'shared'} onPress={() => void askAi()} />
-      {!filtersEmpty(filters) && <QuestButton variant="ghost" icon="x" title={g('cookbook.finder.clear')} onPress={() => setFilters(EMPTY_FILTERS)} />}
-      {failure && (
-        <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert">
-          {aiErrorText(failure)}
-        </HudText>
-      )}
-      {notice && (
-        <HudText size={12} weight="medium" color={quest.textSecondary} accessibilityRole="alert">
-          {g(notice)}
-        </HudText>
-      )}
-
-      {ai.length > 0 && (
+      {shownAi.length > 0 && (
         <View style={styles.section}>
           <HudText size={13} color={quest.goldLight}>
-            {g('cookbook.finder.fromAi', { n: ai.length, time: at ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : '' })}
+            {cheat
+              ? g('cheat.fromAi', { n: cheatAi.length, time: cheatAt ? `${pad(cheatAt.getHours())}:${pad(cheatAt.getMinutes())}` : '' })
+              : g('cookbook.finder.fromAi', { n: ai.length, time: at ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : '' })}
           </HudText>
-          {ai.map((idea) => row(idea, null, brief))}
-          <HudText size={11} weight="medium" color={quest.textSecondary}>
-            {`${g('meals.savedToBook')} · ${g('swap.disclaimer')}`}
+          {shownAi.map((idea) => row(idea, null, brief))}
+          <HudText size={11} weight="medium" color={quest.textSecondary} numberOfLines={2}>
+            {`${cheat ? g('cheat.saved') : g('meals.savedToBook')} · ${g('swap.disclaimer')}`}
           </HudText>
         </View>
       )}
+      {cheat && places && <CheatPlacesList answer={places} near={placesNear} />}
       {searched && searchedBrief && (
         <View style={styles.section}>
           <HudText size={13} color={quest.goldLight}>
@@ -325,7 +501,7 @@ export function CookbookFinder() {
           )}
         </View>
       )}
-      {shared.length > 0 && searchedBrief && (
+      {!cheat && shared.length > 0 && searchedBrief && (
         <View style={styles.section}>
           <HudText size={13} color={quest.goldLight}>
             {g('cookbook.finder.fromShared', { n: shared.length })}
@@ -333,18 +509,30 @@ export function CookbookFinder() {
           {shared.map((idea) => row(idea, null, searchedBrief))}
         </View>
       )}
-      <RecipeDialog idea={open?.idea ?? null} brief={open?.brief} mealLabel="" onClose={() => setOpen(null)} />
+      <RecipeDialog idea={open?.idea ?? null} brief={open && !open.idea.cheat && !cheat ? open.brief : undefined} mealLabel="" onClose={() => setOpen(null)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  card: { gap: 8, padding: 12, marginTop: 16, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
-  section: { gap: 6, marginTop: 4 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  wrap: { gap: 12 },
+  card: { gap: 8, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  flex: { flex: 1 },
+  round: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: quest.border },
+  barRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+  panel: { gap: 10, paddingTop: 4 },
+  group: { gap: 6 },
+  section: { gap: 6 },
+  strip: { gap: 6, paddingRight: 8, alignItems: 'center' },
+  chip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   chipOn: { backgroundColor: quest.gold, borderColor: quest.gold },
   chipAvoid: { backgroundColor: quest.hp, borderColor: quest.hp },
-  input: { borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, paddingHorizontal: 10, paddingVertical: 8, color: quest.text, backgroundColor: quest.bg },
-  result: { gap: 3, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg },
+  chipMana: { borderColor: quest.mana },
+  tag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: quest.manaBorder },
+  input: { minHeight: 44, borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, paddingHorizontal: 10, paddingVertical: 8, color: quest.text, backgroundColor: quest.bg },
+  locRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  square: { width: 44, height: 44, borderRadius: questRadius.row, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  left: { gap: 1, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 10, backgroundColor: quest.bg },
+  buttons: { flexDirection: 'row', gap: 8 },
 });

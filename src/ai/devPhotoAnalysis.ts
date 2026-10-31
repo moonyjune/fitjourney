@@ -6,6 +6,8 @@ import type { WeekInput, WeeklyReport } from './weeklyReport';
 import type { SwapContext, SwapItem } from '../food/swaps';
 import type { DinnerBrief } from './dinner';
 import type { CookbookFilters } from '../cookbook/filters';
+import type { CheatWhere } from '../../supabase/functions/_shared/dinner';
+import { cleanPlacesAnswer, type CheatPlacesAnswer } from '../../supabase/functions/_shared/places';
 
 // Offline stand-in for the vision API, used only by the Login Dev account so the photo-analysis UI can be tried without a
 // backend. Deterministic (same input, same output) and always labelled as simulated.
@@ -218,6 +220,58 @@ export function fakeDinner(brief: DinnerBrief, filters?: CookbookFilters): { opt
     accuracyPercent: 50,
   });
   return { options: [make(light ? 'Rau luộc + đạm nạc' : 'Cá hấp + rau luộc', 1), make(light ? 'Canh rau' : 'Ức gà áp chảo + salad', 0.95), make(light ? 'Đậu phụ hấp' : 'Trứng hấp + rau cải', 0.9)] };
+}
+
+/** Offline stand-in for the cheat-day ideas: three hearty dishes (no budget), home-cooked, eaten out or one of each. Labelled as simulated. */
+export function fakeCheatDinner(where: CheatWhere): { options: Record<string, unknown>[] } {
+  const home = [
+    { name: 'Gà rán sốt mật ong', calories: 850, proteinG: 45, purineMg: 220, saltG: 3.5, sugarG: 18, where: 'home', minutes: 40, difficulty: 3 },
+    { name: 'Bánh xèo tôm thịt', calories: 700, proteinG: 25, purineMg: 320, saltG: 3, sugarG: 6, where: 'home', minutes: 50, difficulty: 3 },
+  ];
+  const out = [
+    { name: 'Bún bò Huế', calories: 650, proteinG: 35, purineMg: 380, saltG: 5, sugarG: 4, where: 'out', minutes: 0, difficulty: 1 },
+    { name: 'Pizza phô mai', calories: 900, proteinG: 35, purineMg: 150, saltG: 4, sugarG: 8, where: 'out', minutes: 0, difficulty: 1 },
+    { name: 'Trà sữa trân châu', calories: 450, proteinG: 4, purineMg: 0, saltG: 0.3, sugarG: 45, where: 'out', minutes: 0, difficulty: 1 },
+  ];
+  const picked = where === 'home' ? [...home, { ...out[2], where: 'home', name: 'Chè khúc bạch' }] : where === 'out' ? out : [home[0], out[0], out[2]];
+  return {
+    options: picked.map((d) => ({
+      ...d,
+      name: `${d.name} (giả lập)`,
+      how: `${SIMULATED}: gợi ý mẫu cho cheat day, không phải của AI.${d.purineMg >= 300 ? ' Purine cao: ăn ít, uống nhiều nước.' : ''}`,
+      accuracyPercent: 40,
+      ingredients: [{ name: d.name, quantity: '1 phần' }],
+      steps: d.where === 'out' ? ['Gọi phần nhỏ', 'Ăn chậm', 'Uống nước lọc thay nước ngọt'] : ['Sơ chế', 'Nấu', 'Thưởng thức'],
+    })),
+  };
+}
+
+/** Offline stand-in for suggest-cheat-places: one obviously fake place per dish, with example.com links, marked as sample data
+ *  (`sample`), checked by the same rules as a real answer. Never a real place. */
+export function fakeCheatPlaces(dishes: string[], location: string, now: Date = new Date()): CheatPlacesAnswer {
+  const today = now.toISOString().slice(0, 10);
+  const month = today.slice(0, 7);
+  const raw = {
+    places: dishes.slice(0, 3).map((dish, i) => ({
+      dish,
+      name: `Quán mẫu ${String.fromCharCode(65 + i)} (DỮ LIỆU MẪU)`,
+      address: `Địa chỉ mẫu, ${location || 'khu vực của bạn'}`,
+      priceRange: '50.000–90.000đ (mẫu)',
+      rating: { value: 4.3 - i * 0.4, count: 120 - i * 50, source: 'Nguồn mẫu', url: `https://example.com/sample-place-${i + 1}` },
+      reviews: [
+        { text: `${FAKE_PREFIX}Review mẫu, không phải lời người thật.`, date: month, source: 'Blog mẫu', url: `https://example.org/sample-review-${i + 1}` },
+      ],
+      sources: [{ title: 'Trang mẫu', url: `https://example.com/sample-place-${i + 1}` }],
+      openStatus: null,
+      sponsored: i === 2,
+      reliability: i === 0 ? 'high' : 'medium',
+      reliabilityReasons: ['Dữ liệu mẫu chế độ Dev — không dùng để đi ăn thật'],
+    })),
+    notFound: [],
+    note: `${SIMULATED}: quán, điểm và review đều là mẫu, không có tìm kiếm web nào được chạy.`,
+  };
+  const seenUrls = raw.places.flatMap((p) => [p.rating.url, ...p.reviews.map((r) => r.url)]);
+  return cleanPlacesAnswer(raw, { seenUrls, today, checkedAtISO: now.toISOString(), searches: 0, sample: true });
 }
 
 /** Offline stand-in for the coach digest: one plain line per client built only from their numbers. Labelled as simulated. */

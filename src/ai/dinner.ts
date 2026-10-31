@@ -64,6 +64,10 @@ export interface DinnerIdea {
   recipe?: RecipeDetails;
   how?: string;
   accuracy?: number;
+  /** A cheat-day dish (no budget; kept in its own part of the cook book). */
+  cheat?: true;
+  /** Cheat day: cooked at home or eaten out, when known. */
+  where?: 'home' | 'out';
 }
 
 const EPS = 1e-9;

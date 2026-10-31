@@ -34,6 +34,8 @@ export interface DinnerRequest {
   snack?: boolean;
   /** What the user asked for on the cook book screen (meal, craving, kind of dish, ingredients), when any. */
   filters?: DinnerFilters;
+  /** Cheat day: any kind of dish, no calorie / limit budget (figures still estimated, gout still warned about). */
+  cheat?: { where: CheatWhere };
 }
 
 /** The request as a clean object, or null when it is unusable (no budget figure or hour). */
@@ -61,7 +63,45 @@ export function cleanDinnerRequest(raw: unknown): DinnerRequest | null {
     favorites: (Array.isArray(r.favorites) ? r.favorites : []).map((f: unknown) => cleanName(f, 60)).filter(Boolean).slice(0, 8),
     ...(r.snack === true ? { snack: true } : {}),
     ...(filters ? { filters } : {}),
+    ...(r.cheat && typeof r.cheat === 'object' ? { cheat: { where: CHEAT_WHERE.includes(r.cheat.where) ? (r.cheat.where as CheatWhere) : 'both' } } : {}),
   };
+}
+
+// ===== Cheat day =====
+// A cheat day lifts the calorie and limit budget for the ideas: any cuisine, fried, sweet, street food or restaurant dishes,
+// cooked at home, eaten out or both. The figures are still estimated and high-purine dishes still carry a gout warning.
+
+export const CHEAT_WHERE = ['home', 'out', 'both'] as const;
+export type CheatWhere = (typeof CHEAT_WHERE)[number];
+
+const CHEAT_WHERE_WORDS: Record<CheatWhere, string> = {
+  home: 'món TỰ NẤU ở nhà (ghi đủ nguyên liệu và các bước nấu)',
+  out: 'món ĂN NGOÀI (quán, nhà hàng, đồ ăn đường phố; nguyên liệu = thành phần chính của món, các bước = mẹo gọi món / ăn sao cho đỡ nặng bụng, minutes = 0, difficulty = 1, where = "out")',
+  both: 'cả món tự nấu và món ăn ngoài (ít nhất 1 món mỗi loại; ghi where = "home" hoặc "out" cho từng món; món ăn ngoài thì các bước là mẹo gọi món)',
+};
+
+/** The user message of suggest-dinner on a cheat day. */
+export function cheatPrompt(req: DinnerRequest): string {
+  const where = req.cheat?.where ?? 'both';
+  const f = req.filters;
+  const parts: string[] = [];
+  if (f?.occasions.length) parts.push(`Dịp: ${f.occasions.map((id) => OCCASION_WORDS[id]).join(', ')}.`);
+  if (f?.cravings.length) parts.push(`Đang thèm: ${f.cravings.map((id) => CRAVING_WORDS[id].replace(/ \(.*\)$/, '')).join(', ')}.`);
+  if (f?.types.length) parts.push(`Kiểu món: ${f.types.map((id) => DISH_TYPE_WORDS[id]).join(', ')}.`);
+  if (f?.have.length) parts.push(`Muốn có nguyên liệu: ${f.have.join('; ')}.`);
+  if (f?.avoid.length) parts.push(`KHÔNG dùng: ${f.avoid.join('; ')}.`);
+  return (
+    `Bây giờ là ${req.hour}h. Hôm nay là CHEAT DAY của người dùng (đang giảm cân, có bệnh gout): KHÔNG giới hạn calo, purine, muối hay đường cho món, ` +
+    `có thể là bất kỳ món nào người Việt thèm (món chiên, đồ ngọt, đồ ăn đường phố, lẩu, nướng, món nước ngoài, món nhà hàng...). ` +
+    `Hãy gợi ý đúng 3 ${CHEAT_WHERE_WORDS[where]}, khác nhau, ngon và đáng "cheat". ` +
+    (parts.length ? `Yêu cầu của người dùng (bám sát): ${parts.join(' ')} ` : '') +
+    `Con số cho MỘT phần như khi ăn thật (ước tính trung thực, không giảm bớt cho đẹp): calo, đạm, purine, đường, muối. ` +
+    `Vì người dùng bị gout: món nhiều purine (nội tạng, hải sản, thịt đỏ nhiều, nước dùng xương, bia rượu) vẫn được gợi ý nếu hợp, nhưng phải ghi cảnh báo purine ngắn trong how; ` +
+    `không gợi ý bia rượu làm món chính. ` +
+    (req.favorites.length ? `Món người dùng hay ăn (để hợp khẩu vị): ${req.favorites.join('; ')}. ` : '') +
+    (req.avoid.length ? `Người dùng đã có các món này, hãy đề xuất MÓN KHÁC: ${req.avoid.join('; ')}. ` : '') +
+    `Ghi accuracyPercent cho từng món. Gọi tool report_dinner_ideas.`
+  );
 }
 
 // ===== Cookbook filters =====
@@ -166,6 +206,7 @@ const MEAL_WORD: Record<string, string> = { breakfast: 'bữa sáng', lunch: 'b�
 
 /** The user message of suggest-dinner, from a clean request. */
 export function dinnerPrompt(req: DinnerRequest): string {
+  if (req.cheat) return cheatPrompt(req);
   const light = req.budgetKcal < 150;
   const occasions = req.filters?.occasions ?? [];
   const word = req.snack ? (occasions.length ? occasions.map((id) => OCCASION_WORDS[id]).join(' / ') : 'món ăn vặt / đồ uống') : MEAL_WORD[req.meal];

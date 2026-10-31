@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.29 | no | suggest-cheat-places (new), suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
 | 0.28 | no | — |
 | 0.27 | no | — |
 | 0.26 | no | suggest-dinner |
@@ -40,6 +41,21 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.29
+- Cook book, redesigned:
+  - tabs "Của tôi" / "🎉 Cheat day" / "✨ Gợi ý", one at a time;
+  - a search box over dish names and ingredients (accents ignored);
+  - sorting (newest, most cooked, most stars, fewest kcal) and quick filters (fits the next meal, low purine, ≤ 20 min, rated);
+  - compact dish cards with kcal / protein / purine badges; notes, ingredients and steps only in the recipe dialog;
+  - the finder folded into a filter bar with the active filters as small chips; help behind "?".
+- Cheat day in the finder: tick "🎉 Cheat day" and choose Tự nấu / Ăn ngoài / Cả hai.
+  - Any dish goes, with no calorie budget, but kcal, purine, salt and sugar are still shown, with a gout caution and a "⚠ Purine cao" badge.
+  - Saved cheat dishes go to their own "Cheat day" tab. They stay out of everyday suggestions and are never shared to the community cook book.
+- Places to eat: enter an area (or use the current location on the web). For dishes to eat out, the AI searches the web for places: address, price range, rating with the number of reviews and its source, up to 3 recent reviews with date and link, opening status, and whether an article is sponsored.
+  - Each place gets a reliability level, Cao / Trung bình / Thấp, with the reasons.
+  - Only what the search actually found is shown. A rating or review without a source link is dropped ("không tìm thấy").
+  - Limit: 10 searches a day. If web search is not enabled for the API key, the screen says so and dish ideas still work.
 
 ## 0.28
 - Daily calorie deficit in colour, against your daily deficit target (e.g. 1000 kcal):

@@ -15,6 +15,7 @@ const FEATURE_LABEL: Record<AiFeature, GameKey> = {
   swap: 'aiUsage.swap',
   dinner: 'aiUsage.dinner',
   digest: 'aiUsage.digest',
+  places: 'aiUsage.places',
 };
 
 /** Tokens as "950" or "12.4k". */
