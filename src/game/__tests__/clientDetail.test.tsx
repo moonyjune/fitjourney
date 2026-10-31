@@ -145,7 +145,7 @@ describe('Coach client detail', () => {
     await act(async () => {
       byLabel(renderer!, 'Gửi nhận xét').props.onPress();
     });
-    expect(mockPushFeedback).toHaveBeenCalledWith('client-1', 'monthly', expect.stringContaining('10'), 'Giỏi lắm');
+    expect(mockPushFeedback).toHaveBeenCalledWith('client-1', 'monthly', expect.stringContaining(String(new Date().getMonth() + 1)), 'Giỏi lắm');
     expect(allText(renderer)).toContain('Giỏi lắm');
   });
 

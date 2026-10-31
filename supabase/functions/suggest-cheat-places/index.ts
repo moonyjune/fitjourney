@@ -3,15 +3,16 @@
 // Requires secret: ANTHROPIC_API_KEY (the same as the other AI functions). Web search must be allowed for the organization
 // (Claude Console > Settings > Capabilities); when it is not, the answer is 503 "Tìm địa điểm chưa khả dụng: …".
 //
-// Cheat day > where to eat: for up to 3 dishes and the user's area, the model searches the web (Anthropic's web search tool:
+// Cheat day > where to eat: for what the user typed ("lẩu bò", "trà sữa ít ngọt") or up to 3 AI dishes, near the user's address
+// and/or precise position (4 decimals), the model searches the web (Anthropic's web search tool:
 // Google Maps listings, Foody / ShopeeFood / GrabFood, review articles, social posts) and reports places with their rating,
 // recent reviews, sources and its own reliability call. The answer is then checked against what the search really returned
 // (`cleanPlacesAnswer` in _shared/places.ts): anything whose URL the search did not see is dropped, and the reliability is capped
 // by the number of independent sites and how recent the newest review is.
-// Cost: tokens + $0.01 per search (at most 6 searches). Calls per user per day: app_settings key `ai_quota.places` (default 10).
+// Cost: tokens + $0.01 per search (at most 5 searches). Calls per user per day: app_settings key `ai_quota.places` (default 10).
 
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
-import { cleanPlacesAnswer, cleanPlacesRequest, PLACES_TOOL, placesPrompt } from '../_shared/places.ts';
+import { cleanPlacesAnswer, cleanPlacesRequest, PLACES_TOOL, placesPrompt, placesRequestProblem } from '../_shared/places.ts';
 
 const SYSTEM =
   'Bạn là trợ lý tìm quán ăn ở Việt Nam, nói tiếng Việt, ngắn gọn và trung thực. ' +
@@ -20,15 +21,16 @@ const SYSTEM =
 
 serveAi('places', async (body) => {
   const req = cleanPlacesRequest(body);
-  if (!req) return jsonResponse({ error: 'Thiếu tên món hoặc khu vực.' }, 400);
+  if (!req) return jsonResponse({ error: placesRequestProblem(body) }, 400);
   return {
     responseKey: 'result',
     call: {
       tool: PLACES_TOOL,
       system: SYSTEM,
-      maxTokens: 8000,
+      // Room for the model's thinking between searches as well as the report (8000 could end in max_tokens with no report).
+      maxTokens: 16000,
       messages: [{ role: 'user', content: `<request>${placesPrompt(req)}</request>` }],
-      webSearch: { maxUses: 6, userLocation: { country: 'VN', timezone: 'Asia/Ho_Chi_Minh' } },
+      webSearch: { maxUses: 5, userLocation: { country: 'VN', timezone: 'Asia/Ho_Chi_Minh' } },
     },
     // Checked against what the search saw; the answer carries those URLs (seenUrls) so the app can run the same check again.
     shape: (input, { findings: web, usage }) =>

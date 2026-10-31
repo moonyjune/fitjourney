@@ -2,17 +2,14 @@ import { MAX_DINNER_IDEAS, type DinnerIdea } from '../ai/dinner';
 import { foodKey } from '../food/remember';
 import { CHEAT_WHERE, type CheatWhere } from '../../supabase/functions/_shared/dinner';
 import { cleanPlacesAnswer, type CheatPlacesAnswer } from '../../supabase/functions/_shared/places';
-import { purineWarning } from './filters';
 import { cleanRecipeDetails, type CookbookRecipe } from './recipes';
 
-// Cheat day: the cook book finder's checkbox lifts the calorie and limit budget for the ideas (any dish, cooked at home or eaten
-// out), keeps them in their own part of the cook book, and can look up real places to eat them near the user (suggest-cheat-places).
+// Cheat day: the cook book finder's checkbox drops every rule for the ideas (no calorie or limit budget, no gout / purine warning;
+// any dish, cooked at home or eaten out), keeps them in their own part of the cook book, and looks up real places near the user
+// (suggest-cheat-places) for what the user types ("lẩu bò") or for the AI's dishes.
 
 export { CHEAT_WHERE };
 export type { CheatWhere, CheatPlacesAnswer };
-
-/** At or above this much purine in one portion a cheat dish gets the gout warning (the everyday flag is 300 mg). */
-export const CHEAT_HIGH_PURINE_MG = 300;
 
 const num = (v: unknown, max: number): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
 
@@ -57,9 +54,6 @@ export function splitCookbook(book: CookbookRecipe[]): { everyday: CookbookRecip
   return { everyday: book.filter((r) => !r.cheat), cheat: book.filter((r) => r.cheat) };
 }
 
-/** The gout warning of a cheat dish: high purine in one portion or an ingredient known to be high in it. */
-export const cheatPurineWarning = (idea: DinnerIdea): boolean => idea.purineMg >= CHEAT_HIGH_PURINE_MG || purineWarning(idea);
-
 /** Which dishes to look up places for: the ones eaten out (or of unknown kind when the user wants both / eating out), at most 3. */
 export function dishesToLocate(ideas: DinnerIdea[], where: CheatWhere): string[] {
   if (where === 'home') return [];
@@ -69,8 +63,11 @@ export function dishesToLocate(ideas: DinnerIdea[], where: CheatWhere): string[]
     .slice(0, 3);
 }
 
-/** A location as it is remembered and sent: one line, at most 80 characters. */
-export const cleanLocation = (v: unknown): string => (typeof v === 'string' ? v.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) : '');
+/** A location as it is remembered and sent: one line, at most 160 characters (room for a full street address). */
+export const cleanLocation = (v: unknown): string => (typeof v === 'string' ? v.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160) : '');
+
+/** What the user typed in "what do you want to eat": one line, at most 80 characters. */
+export const cleanQuery = (v: unknown): string => (typeof v === 'string' ? v.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) : '');
 
 /** A stored or received places answer, checked again (the same rules as on the server, against the URLs its search saw). */
 export function recheckPlaces(raw: unknown): CheatPlacesAnswer | null {

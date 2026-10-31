@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { acceptDinner, cleanAiDinner, type DinnerBrief, type DinnerIdea } from '../../ai/dinner';
 import { buildMealPlan, dayTotals } from '../../ai/mealSplit';
 import { buildTasteProfile } from '../../ai/tasteProfile';
@@ -19,8 +19,9 @@ import {
   type CookbookFilters,
   type FilterTag,
 } from '../../cookbook/filters';
-import { CHEAT_WHERE, cheatPurineWarning, cleanCheatIdeas, dishesToLocate, type CheatWhere } from '../../cookbook/cheat';
+import { CHEAT_WHERE, cleanCheatIdeas, cleanQuery, dishesToLocate, type CheatWhere } from '../../cookbook/cheat';
 import { filterBrief } from '../../cookbook/finderBrief';
+import { osmUrl, reverseGeocode } from '../../cookbook/geocode';
 import { recipeFromIdea, recipeKey } from '../../cookbook/recipes';
 import { foodKey } from '../../food/remember';
 import { useGameText, type GameKey } from '../../game/strings';
@@ -48,15 +49,30 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const room = (n: number) => Math.max(0, Math.round(n * 10) / 10);
 const toggle = <T,>(list: T[], v: T): T[] => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
-/** The browser's position (web only; the native app has no location module), rounded to ~100 m; null when refused or unavailable. */
-function browserPosition(): Promise<{ lat: number; lon: number } | null> {
+type Position = { lat: number; lon: number; accuracyM: number | null };
+type PositionError = 'denied' | 'timeout' | 'unavailable' | 'unsupported';
+const POSITION_ERROR_TEXT: Record<PositionError, GameKey> = {
+  denied: 'cheat.locationDenied',
+  timeout: 'cheat.locationTimeout',
+  unavailable: 'cheat.locationFailed',
+  unsupported: 'cheat.locationUnsupported',
+};
+
+/** The browser's precise position (web only; the native app has no location module): high accuracy (GPS when there is one), at
+ *  most a minute old, 5 decimals (~1 m); or why it could not be had. */
+function browserPosition(): Promise<Position | { error: PositionError }> {
   const geo = Platform.OS === 'web' && typeof navigator !== 'undefined' ? navigator.geolocation : undefined;
-  if (!geo) return Promise.resolve(null);
+  if (!geo) return Promise.resolve({ error: 'unsupported' });
   return new Promise((resolve) => {
     geo.getCurrentPosition(
-      (pos) => resolve({ lat: Math.round(pos.coords.latitude * 1000) / 1000, lon: Math.round(pos.coords.longitude * 1000) / 1000 }),
-      () => resolve(null),
-      { timeout: 10_000, maximumAge: 600_000 }
+      (pos) =>
+        resolve({
+          lat: Math.round(pos.coords.latitude * 100_000) / 100_000,
+          lon: Math.round(pos.coords.longitude * 100_000) / 100_000,
+          accuracyM: Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null,
+        }),
+      (err) => resolve({ error: err?.code === 1 ? 'denied' : err?.code === 3 ? 'timeout' : 'unavailable' }),
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 }
     );
   });
 }
@@ -77,6 +93,7 @@ export function CookbookFinder() {
   const cheatWhere = useCookbookFinderStore((s) => s.cheatWhere);
   const location = useCookbookFinderStore((s) => s.location);
   const coords = useCookbookFinderStore((s) => s.coords);
+  const want = useCookbookFinderStore((s) => s.query);
   const cheatAi = useCookbookFinderStore((s) => s.cheatAi);
   const cheatAiAtISO = useCookbookFinderStore((s) => s.cheatAiAtISO);
   const places = useCookbookFinderStore((s) => s.places);
@@ -92,6 +109,7 @@ export function CookbookFinder() {
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<'ai' | 'shared' | 'places' | 'locate' | null>(null);
   const [placesError, setPlacesError] = useState<string | null>(null);
+  const [accuracyM, setAccuracyM] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [help, setHelp] = useState(false);
   const [failure, setFailure] = useState<AiErrorKind | null>(null);
@@ -174,34 +192,61 @@ export function CookbookFinder() {
     useCookbookStore.getState().saveMany(fresh.map((i) => recipeFromIdea(i)));
     store().setCheatAi(fresh, new Date().toISOString());
     // Eating out with an area set: look up places for the new dishes straight away.
-    if (dishesToLocate(fresh, where).length > 0 && (location || coords)) await findPlaces(fresh);
+    const out = dishesToLocate(fresh, where);
+    if (out.length > 0 && (location || coords)) await findPlaces(out, false);
   }
 
-  async function findPlaces(ideas: DinnerIdea[] = cheatAi) {
-    const dishes = dishesToLocate(ideas, cheatWhere === 'home' ? 'both' : cheatWhere);
-    if (dishes.length === 0) return setNotice('cheat.noOutDishes');
-    if (!location && !coords) return setNotice('cheat.needLocation');
-    const near = location || g('cheat.here');
-    setBusy('places');
-    setPlacesError(null);
+  /** Places near the address / position for `dishes`: what the user typed (`typed`, one entry) or the AI's eat-out dishes. A
+   *  failure is shown with its real reason (the server's message), never as nothing. */
+  async function findPlaces(dishes: string[], typed: boolean) {
+    if (busy) return;
     setNotice(null);
-    const outcome = await requestCheatPlaces(dishes, location, coords ?? undefined);
+    setPlacesError(null);
+    setFailure(null);
+    if (dishes.length === 0) return setNotice(typed ? 'cheat.needWant' : 'cheat.noOutDishes');
+    const { location: loc, coords: at } = store();
+    if (!loc && !at) return setNotice('cheat.needLocation');
+    const near = loc || (at ? `${at.lat}, ${at.lon}` : g('cheat.here'));
+    setBusy('places');
+    const outcome = await requestCheatPlaces(dishes, loc, at ?? undefined, { typed });
     setBusy(null);
     if (!outcome.ok) {
       if (outcome.kind === 'unavailable') setPlacesError(g('cheat.unavailable', { why: outcome.message.replace(/^[^:]*:\s*/, '') }));
-      else setFailure(outcome.kind);
+      else setPlacesError(g('cheat.placesFailed', { why: aiErrorText(outcome.kind, outcome.message) }));
       return;
     }
     store().setPlaces(outcome.result, near);
   }
 
+  /** "Search" for what was typed in the box. */
+  const searchWant = (text: string = want) => {
+    const q = cleanQuery(text);
+    return findPlaces(q ? [q] : [], true);
+  };
+
+  /** A cheat dish's "find places": into the box, then searched. */
+  function searchDish(name: string) {
+    store().setQuery(name);
+    void searchWant(name);
+  }
+
   async function useMyLocation() {
     if (busy) return;
     setBusy('locate');
+    setNotice(null);
     const pos = await browserPosition();
+    if ('error' in pos) {
+      setBusy(null);
+      return setNotice(POSITION_ERROR_TEXT[pos.error]);
+    }
+    const at = { lat: pos.lat, lon: pos.lon };
+    setAccuracyM(pos.accuracyM);
+    store().setLocation(store().location, at);
+    // The readable address of the spot, so the user can check it and edit it; the coordinates are sent with it either way.
+    const address = await reverseGeocode(at.lat, at.lon);
     setBusy(null);
-    if (!pos) return setNotice('cheat.locationFailed');
-    store().setLocation(location, pos);
+    if (address) store().setLocation(address, at);
+    else setNotice('cheat.addressFailed');
   }
 
   async function askAi() {
@@ -246,7 +291,8 @@ export function CookbookFinder() {
         key={`${idea.source}-${idea.name}`}
         idea={idea}
         onPress={() => setOpen({ idea, brief: forBrief })}
-        purineHigh={isCheat ? cheatPurineWarning(idea) : purineWarning(idea)}
+        purineHigh={!isCheat && purineWarning(idea)}
+        cheat={isCheat}
         rating={book1?.rating}
         cooked={book1?.cookedCount}
         fits={isCheat ? undefined : acceptDinner(forBrief, idea)}
@@ -397,29 +443,72 @@ export function CookbookFinder() {
 
         {cheat && (
           <View style={styles.group}>
-            <HudText size={11} weight="medium" color={quest.hpText}>
-              {g('cheat.caution')}
-            </HudText>
             {strip(CHEAT_WHERE.map((w: CheatWhere) => chip(w, g(`cheat.where.${w}` as GameKey), cheatWhere === w, () => store().setCheatWhere(w))))}
-            {cheatWhere !== 'home' && (
-              <View style={styles.locRow}>
-                <TextInput
-                  style={[styles.input, styles.flex]}
-                  value={location}
-                  onChangeText={(t) => store().setLocation(t, null)}
-                  placeholder={coords && !location ? `📍 ${g('cheat.here')} (${coords.lat}, ${coords.lon})` : g('cheat.locationPlaceholder')}
-                  placeholderTextColor={quest.textSecondary}
-                  accessibilityLabel={g('cheat.location')}
-                  maxLength={80}
-                  returnKeyType="done"
-                />
-                {canLocate() ? (
-                  <Pressable accessibilityRole="button" accessibilityLabel={g('cheat.useLocation')} onPress={() => void useMyLocation()} disabled={!!busy} style={styles.square}>
-                    <HudText size={16}>{busy === 'locate' ? '…' : '📍'}</HudText>
+            {/* Places: what the user wants (works without any AI idea), near the address / precise position. */}
+            <HudText size={12} color={quest.goldLight}>
+              {g('cheat.want')}
+            </HudText>
+            <View style={styles.locRow}>
+              <TextInput
+                style={[styles.input, styles.flex]}
+                value={want}
+                onChangeText={(t) => store().setQuery(t)}
+                onSubmitEditing={() => void searchWant()}
+                placeholder={g('cheat.wantPlaceholder')}
+                placeholderTextColor={quest.textSecondary}
+                accessibilityLabel={g('cheat.want')}
+                maxLength={80}
+                returnKeyType="search"
+              />
+              <QuestButton variant="mana" icon="map" title={g('cheat.searchWant')} loading={busy === 'places'} disabled={!!busy} onPress={() => void searchWant()} />
+            </View>
+            <TextInput
+              style={styles.input}
+              value={location}
+              onChangeText={(t) => store().setLocation(t)}
+              placeholder={g('cheat.locationPlaceholder')}
+              placeholderTextColor={quest.textSecondary}
+              accessibilityLabel={g('cheat.location')}
+              maxLength={160}
+              multiline
+              returnKeyType="done"
+              blurOnSubmit
+            />
+            <View style={styles.barRow}>
+              {canLocate() ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={g('cheat.useLocation')} onPress={() => void useMyLocation()} disabled={!!busy} hitSlop={4} style={styles.chip}>
+                  <HudText size={12} color={quest.text}>
+                    {busy === 'locate' ? g('cheat.locating') : g('cheat.useLocation')}
+                  </HudText>
+                </Pressable>
+              ) : null}
+              {coords ? (
+                <>
+                  <HudText size={11} weight="medium" color={quest.textSecondary}>
+                    {`${g('cheat.coords', { lat: coords.lat, lon: coords.lon })}${accuracyM !== null ? ` (${g('cheat.accuracy', { m: accuracyM })})` : ''}`}
+                  </HudText>
+                  <Pressable accessibilityRole="link" accessibilityLabel={g('cheat.viewMap')} onPress={() => void Linking.openURL(osmUrl(coords.lat, coords.lon)).catch(() => undefined)} hitSlop={6}>
+                    <HudText size={12} weight="medium" color={quest.manaText} style={styles.link}>
+                      {`🗺 ${g('cheat.viewMap')}`}
+                    </HudText>
                   </Pressable>
-                ) : null}
-              </View>
-            )}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={g('cheat.clearCoords')}
+                    onPress={() => {
+                      store().setLocation(store().location, null);
+                      setAccuracyM(null);
+                    }}
+                    hitSlop={8}
+                    style={styles.round}
+                  >
+                    <HudText size={12} color={quest.textSecondary}>
+                      ✕
+                    </HudText>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
           </View>
         )}
 
@@ -453,8 +542,13 @@ export function CookbookFinder() {
             <QuestButton variant="mana" icon="chart" title={busy === 'ai' ? g('dinner.asking') : g('cookbook.finder.suggestAi')} loading={busy === 'ai'} disabled={!!busy && busy !== 'ai'} onPress={() => void askAi()} />
           </View>
         </View>
-        {cheat && cheatWhere !== 'home' && cheatAi.length > 0 && (
-          <QuestButton variant="ghost" icon="map" title={busy === 'places' ? g('cheat.searchingPlaces') : g('cheat.findPlaces')} loading={busy === 'places'} disabled={!!busy && busy !== 'places'} onPress={() => void findPlaces()} />
+        {cheat && cheatWhere !== 'home' && dishesToLocate(cheatAi, cheatWhere).length > 0 && (
+          <QuestButton variant="ghost" icon="map" title={g('cheat.findPlaces')} loading={busy === 'places'} disabled={!!busy} onPress={() => void findPlaces(dishesToLocate(cheatAi, cheatWhere), false)} />
+        )}
+        {busy === 'places' && (
+          <HudText size={12} weight="medium" color={quest.textSecondary} accessibilityRole="alert">
+            {g('cheat.searchingPlaces')}
+          </HudText>
         )}
         {failure && (
           <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert">
@@ -481,6 +575,8 @@ export function CookbookFinder() {
               : g('cookbook.finder.fromAi', { n: ai.length, time: at ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : '' })}
           </HudText>
           {shownAi.map((idea) => row(idea, null, brief))}
+          {cheat &&
+            strip(cheatAi.filter((i) => i.where !== 'home').map((i) => chip(`find-${i.name}`, g('cheat.findForDish', { dish: i.name }), false, () => searchDish(i.name))))}
           <HudText size={11} weight="medium" color={quest.textSecondary} numberOfLines={2}>
             {`${cheat ? g('cheat.saved') : g('meals.savedToBook')} · ${g('swap.disclaimer')}`}
           </HudText>
@@ -532,7 +628,7 @@ const styles = StyleSheet.create({
   tag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: quest.manaBorder },
   input: { minHeight: 44, borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, paddingHorizontal: 10, paddingVertical: 8, color: quest.text, backgroundColor: quest.bg },
   locRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  square: { width: 44, height: 44, borderRadius: questRadius.row, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  link: { textDecorationLine: 'underline' },
   left: { gap: 1, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 10, backgroundColor: quest.bg },
   buttons: { flexDirection: 'row', gap: 8 },
 });

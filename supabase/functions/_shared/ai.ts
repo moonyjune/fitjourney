@@ -42,6 +42,7 @@ import {
   PLACES_UNAVAILABLE_PREFIX,
   webSearchTool,
   webSearchVariantAfter,
+  webSearchVariantFor,
   type WebFindings,
   type WebSearchOptions,
   type WebSearchVariant,
@@ -301,15 +302,21 @@ const WEB_SEARCH_BUDGET_MS = 135_000;
 /** A long search turn the API paused (`pause_turn`) is continued at most this many times. */
 const MAX_CONTINUATIONS = 3;
 
+/** The instruction added to a web search call's system prompt: search first, then report (the plain "answer only with the tool"
+ *  of `systemFor` would talk the model out of searching). */
+const searchThenReport = (toolName: string) =>
+  `Trước hết hãy dùng công cụ web_search để tìm; xong thì gọi tool ${toolName} đúng một lần với những gì đã tìm thấy (không thấy thì để trống).`;
+
 /** One Claude call that may search the web first: tool_choice auto with the web search tool and the feature's tool. A paused turn
  *  is sent back to continue; a model that ends without calling the tool is asked once more to call it. No retry of a failed
- *  request (searches already run are paid). A model or platform that refuses the newest tool version gets the next one. */
+ *  request (searches already run are paid). A model or platform that refuses the tool version (or the code execution behind
+ *  dynamic filtering) gets the next one. Every failure says why (status, the API's message, the stop reason). */
 async function callClaudeWithSearch(
   call: AiCall,
   model: string
 ): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings } | { error: string; status: number }> {
   const started = Date.now();
-  let variant: WebSearchVariant = 'dynamic';
+  let variant: WebSearchVariant = webSearchVariantFor(model);
   const messages: unknown[] = [...call.messages];
   const findings: WebFindings[] = [];
   let usage: TokenUsage | undefined;
@@ -317,7 +324,7 @@ async function callClaudeWithSearch(
   let nudged = false;
   for (;;) {
     const left = WEB_SEARCH_BUDGET_MS - (Date.now() - started);
-    if (left < 5_000) return { error: 'Tìm kiếm quá lâu, hãy thử lại.', status: 504 };
+    if (left < 5_000) return { error: `Tìm kiếm quá lâu (hơn ${Math.round(WEB_SEARCH_BUDGET_MS / 1000)} giây), hãy thử lại.`, status: 504 };
     let response: Response;
     try {
       response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -326,7 +333,7 @@ async function callClaudeWithSearch(
         body: JSON.stringify({
           model,
           max_tokens: call.maxTokens,
-          system: systemFor(call.system, call.tool.name, false),
+          system: call.system ? `${call.system} ${searchThenReport(call.tool.name)}` : searchThenReport(call.tool.name),
           tools: [webSearchTool(call.webSearch!, variant), call.tool],
           tool_choice: { type: 'auto' },
           messages,
@@ -334,7 +341,8 @@ async function callClaudeWithSearch(
         signal: AbortSignal.timeout(left),
       });
     } catch (error) {
-      return { error: `Claude API không phản hồi (${error instanceof Error ? error.message : 'lỗi mạng'}).`, status: 502 };
+      const timedOut = error instanceof Error && /timed? ?out|abort/i.test(`${error.name} ${error.message}`);
+      return { error: timedOut ? `Tìm kiếm quá lâu (hơn ${Math.round(WEB_SEARCH_BUDGET_MS / 1000)} giây), hãy thử lại.` : `Claude API không phản hồi (${error instanceof Error ? error.message : 'lỗi mạng'}).`, status: timedOut ? 504 : 502 };
     }
     if (!response.ok) {
       const text = await response.text();
@@ -367,8 +375,15 @@ async function callClaudeWithSearch(
       messages.push({ role: 'assistant', content: blocks }, { role: 'user', content: `Hãy gọi tool ${call.tool.name} ngay bây giờ với những gì đã tìm thấy (không thấy thì để trống).` });
       continue;
     }
-    console.error('[ai] no tool_use in the web search answer', data.stop_reason);
-    const why = data.stop_reason === 'max_tokens' ? 'câu trả lời bị cắt do quá dài, hãy thử lại' : (data.stop_reason ?? 'không rõ lý do');
+    console.error('[ai] no tool_use in the web search answer', data.stop_reason, 'continuations', continuations);
+    const why =
+      data.stop_reason === 'max_tokens'
+        ? 'câu trả lời bị cắt do quá dài, hãy thử lại'
+        : data.stop_reason === 'pause_turn'
+          ? 'tìm kiếm chưa xong sau nhiều lượt, hãy thử lại'
+          : data.stop_reason === 'refusal'
+            ? 'AI từ chối yêu cầu'
+            : (data.stop_reason ?? 'không rõ lý do');
     return { error: `AI không trả về kết quả (${why}).`, status: 502 };
   }
 }

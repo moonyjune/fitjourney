@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { DinnerIdea } from '../src/ai/dinner';
 import { buildMealPlan, mealBrief } from '../src/ai/mealSplit';
 import { browseCookbook, QUICK_IDS, SORT_IDS, type QuickId, type SortId } from '../src/cookbook/browse';
-import { cheatPurineWarning, splitCookbook } from '../src/cookbook/cheat';
+import { splitCookbook } from '../src/cookbook/cheat';
 import { purineWarning } from '../src/cookbook/filters';
 import { ideaFromRecipe } from '../src/cookbook/recipes';
 import { CookbookFinder } from '../src/components/quest/CookbookFinder';
@@ -149,7 +149,8 @@ export default function CookbookScreen() {
                     key={r.id}
                     idea={idea}
                     onPress={() => setOpen(idea)}
-                    purineHigh={isCheat ? cheatPurineWarning(idea) : purineWarning(idea)}
+                    purineHigh={!isCheat && purineWarning(idea)}
+                    cheat={isCheat}
                     rating={r.rating}
                     cooked={r.cookedCount}
                   />

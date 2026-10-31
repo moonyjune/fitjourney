@@ -9,6 +9,8 @@ export interface DishCardProps {
   onPress: () => void;
   /** Show the gout / purine warning badge. */
   purineHigh: boolean;
+  /** A cheat-day dish: no purine badge or warning at all (cheat day has no rules); kcal and protein stay, as information. */
+  cheat?: boolean;
   rating?: number;
   cooked?: number;
   /** Fits what is left today (true / false), or not judged (undefined). */
@@ -29,7 +31,7 @@ function Badge({ text, color = quest.textTertiary, strong }: { text: string; col
 
 /** One dish as a compact card: emoji, the name on one line, kcal / protein / purine as small badges, stars and times cooked.
  *  Ingredients, steps and notes are in the recipe dialog it opens. */
-export function DishCard({ idea, onPress, purineHigh, rating, cooked, fits, sub }: DishCardProps) {
+export function DishCard({ idea, onPress, purineHigh, cheat, rating, cooked, fits, sub }: DishCardProps) {
   const g = useGameText();
   const minutes = idea.recipe?.minutes;
   return (
@@ -44,7 +46,7 @@ export function DishCard({ idea, onPress, purineHigh, rating, cooked, fits, sub 
         <View style={styles.badges}>
           <Badge text={g('cookbook.ui.kcal', { n: idea.calories })} color={quest.goldLight} />
           <Badge text={g('cookbook.ui.protein', { n: idea.proteinG })} color={quest.manaText} />
-          {purineHigh ? <Badge text={g('cookbook.ui.purineHigh')} color={quest.hpText} strong /> : <Badge text={g('cookbook.ui.purine', { n: idea.purineMg })} />}
+          {cheat ? null : purineHigh ? <Badge text={g('cookbook.ui.purineHigh')} color={quest.hpText} strong /> : <Badge text={g('cookbook.ui.purine', { n: idea.purineMg })} />}
           {minutes ? <Badge text={g('cookbook.ui.minutes', { n: minutes })} /> : null}
           {rating ? <Badge text={`★ ${rating}`} color={quest.gold} /> : null}
           {cooked ? <Badge text={g('cookbook.ui.cooked', { n: cooked })} /> : null}

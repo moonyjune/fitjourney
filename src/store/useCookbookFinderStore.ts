@@ -2,12 +2,13 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { appStorage } from '../lib/appStorage';
 import type { DinnerIdea } from '../ai/dinner';
-import { CHEAT_WHERE, cleanLocation, recheckPlaces, type CheatPlacesAnswer, type CheatWhere } from '../cookbook/cheat';
+import { CHEAT_WHERE, cleanLocation, cleanQuery, recheckPlaces, type CheatPlacesAnswer, type CheatWhere } from '../cookbook/cheat';
 import { cleanFilters, EMPTY_FILTERS, type CookbookFilters } from '../cookbook/filters';
 
 /** The cook book finder, kept on this device only: the filters being edited, the filters of the last "Suggest" (the user's own dishes
  *  are ranked again from them on every visit), and the dishes the shared cook book and the AI returned, so a reload shows them
- *  again without asking (and paying) again. Cheat day keeps its own AI dishes and the places found for them, plus the area typed. */
+ *  again without asking (and paying) again. Cheat day keeps its own AI dishes, what was typed in "what do you want to eat", the
+ *  address / position and the places found. */
 interface CookbookFinderState {
   filters: CookbookFilters;
   /** The filters the last suggestion was made for; null before the first one. */
@@ -19,10 +20,12 @@ interface CookbookFinderState {
   /** The "Cheat day" box is ticked. */
   cheat: boolean;
   cheatWhere: CheatWhere;
-  /** The area typed for places ("Quận 1, TP.HCM"). */
+  /** The address or area for places ("Quận 1, TP.HCM", or the address read from the device position; editable). */
   location: string;
-  /** Device position chosen with "use my location" (rounded), until the area is typed again. */
+  /** Device position chosen with "my location" (5 decimals, ~1 m), kept while the address is edited, until cleared. */
   coords: { lat: number; lon: number } | null;
+  /** "What do you want to eat" as typed ("lẩu bò"). */
+  query: string;
   cheatAi: DinnerIdea[];
   cheatAiAtISO: string | null;
   places: CheatPlacesAnswer | null;
@@ -35,7 +38,9 @@ interface CookbookFinderState {
   setAi: (ideas: DinnerIdea[], atISO: string) => void;
   setCheat: (on: boolean) => void;
   setCheatWhere: (w: CheatWhere) => void;
+  /** The address text; `coords` replaces the position when given (null clears it), otherwise the position stays. */
   setLocation: (text: string, coords?: { lat: number; lon: number } | null) => void;
+  setQuery: (text: string) => void;
   setCheatAi: (ideas: DinnerIdea[], atISO: string) => void;
   setPlaces: (answer: CheatPlacesAnswer, near: string) => void;
   reset: () => void;
@@ -51,6 +56,7 @@ const INITIAL = {
   cheatWhere: 'both' as CheatWhere,
   location: '',
   coords: null,
+  query: '',
   cheatAi: [],
   cheatAiAtISO: null,
   places: null,
@@ -60,7 +66,7 @@ const INITIAL = {
 const cleanCoords = (v: unknown): { lat: number; lon: number } | null => {
   const c = v as { lat?: unknown; lon?: unknown } | null;
   return c && typeof c.lat === 'number' && typeof c.lon === 'number' && Number.isFinite(c.lat) && Number.isFinite(c.lon) && Math.abs(c.lat) <= 90 && Math.abs(c.lon) <= 180
-    ? { lat: Math.round(c.lat * 1000) / 1000, lon: Math.round(c.lon * 1000) / 1000 }
+    ? { lat: Math.round(c.lat * 100_000) / 100_000, lon: Math.round(c.lon * 100_000) / 100_000 }
     : null;
 };
 
@@ -74,7 +80,8 @@ export const useCookbookFinderStore = create<CookbookFinderState>()(
       setAi: (ideas, atISO) => set({ ai: ideas, aiAtISO: atISO }),
       setCheat: (on) => set({ cheat: on }),
       setCheatWhere: (w) => set({ cheatWhere: CHEAT_WHERE.includes(w) ? w : 'both' }),
-      setLocation: (text, coords = null) => set({ location: cleanLocation(text), coords: cleanCoords(coords) }),
+      setLocation: (text, coords) => set(coords === undefined ? { location: cleanLocation(text) } : { location: cleanLocation(text), coords: cleanCoords(coords) }),
+      setQuery: (text) => set({ query: typeof text === 'string' ? text.slice(0, 80) : '' }),
       setCheatAi: (ideas, atISO) => set({ cheatAi: ideas, cheatAiAtISO: atISO }),
       setPlaces: (answer, near) => set({ places: answer, placesNear: cleanLocation(near) }),
       reset: () => set({ ...INITIAL }),
@@ -95,6 +102,7 @@ export const useCookbookFinderStore = create<CookbookFinderState>()(
           cheatWhere: CHEAT_WHERE.includes(p.cheatWhere as CheatWhere) ? (p.cheatWhere as CheatWhere) : 'both',
           location: cleanLocation(p.location),
           coords: cleanCoords(p.coords),
+          query: cleanQuery(p.query),
           cheatAi: Array.isArray(p.cheatAi) ? p.cheatAi.filter((i) => i && i.cheat) : [],
           cheatAiAtISO: typeof p.cheatAiAtISO === 'string' ? p.cheatAiAtISO : null,
           places: recheckPlaces(p.places),

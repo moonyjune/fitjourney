@@ -20,16 +20,33 @@ export function urlHost(raw: unknown): string {
   return m ? m[1].replace(/^www\./, '') : '';
 }
 
+/** A URL as it is matched against what the search saw: http and https alike, "www." or not (the model often writes a URL it saw
+ *  with or without them). Empty when it is not a web URL. */
+export function urlKey(raw: unknown): string {
+  const n = normalizeUrl(raw);
+  return n ? n.replace(/^https?:\/\/(www\.)?/, '') : '';
+}
+
+/** A Google Maps search for a place (its name and address), for the "map" link of a place whose own Maps page the search did not
+ *  show: it is a search, not a claim about the place. */
+export function mapsSearchUrl(name: string, address: string | null, near: string): string {
+  const q = [name, address || near].filter(Boolean).join(', ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
 export interface PlacesRequest {
+  /** What to eat: the user's own words from the search box (one entry, `typed`) or up to 3 AI dish names. */
   dishes: string[];
-  /** The area typed by the user ("Quận 1, TP.HCM"). */
+  /** The area or address: typed by the user ("Quận 1, TP.HCM") or read from the device position ("123 Lê Lợi, Phường Bến Thành..."). */
   location: string;
-  /** Device position, rounded to ~100 m, when the user chose "use my location". */
+  /** Device position (4 decimals, ~10 m) when the user chose "my location". */
   coords?: { lat: number; lon: number };
   /** Today in the user's time (YYYY-MM-DD), to judge how recent a review is. */
   today: string;
+  /** The user typed exactly what they want ("lẩu bò", "trà sữa ít ngọt"): search for that, not for a dish name. */
+  typed?: true;
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -47,22 +64,40 @@ export function cleanPlacesRequest(raw: unknown, now: Date = new Date()): Places
     dishes.push(name);
     if (dishes.length === 3) break;
   }
-  const location = clean(r.location, 80);
+  const typed = r.typed === true;
+  if (typed) dishes.splice(1);
+  const location = clean(r.location, 160);
   const c = r.coords as Record<string, unknown> | undefined;
-  const lat = typeof c?.lat === 'number' && Number.isFinite(c.lat) && Math.abs(c.lat) <= 90 ? Math.round(c.lat * 1000) / 1000 : null;
-  const lon = typeof c?.lon === 'number' && Number.isFinite(c.lon) && Math.abs(c.lon) <= 180 ? Math.round(c.lon * 1000) / 1000 : null;
+  const lat = typeof c?.lat === 'number' && Number.isFinite(c.lat) && Math.abs(c.lat) <= 90 ? Math.round(c.lat * 10_000) / 10_000 : null;
+  const lon = typeof c?.lon === 'number' && Number.isFinite(c.lon) && Math.abs(c.lon) <= 180 ? Math.round(c.lon * 10_000) / 10_000 : null;
   const coords = lat !== null && lon !== null ? { lat, lon } : undefined;
   if (dishes.length === 0 || (!location && !coords)) return null;
   const today = typeof r.today === 'string' && DAY_RE.test(r.today) ? r.today : now.toISOString().slice(0, 10);
-  return { dishes, location, ...(coords ? { coords } : {}), today };
+  return { dishes, location, ...(coords ? { coords } : {}), today, ...(typed ? { typed: true as const } : {}) };
+}
+
+/** Why a request was refused, for the 400 answer (the app shows it). */
+export function placesRequestProblem(raw: unknown): string {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const hasDish = Array.isArray(r.dishes) && r.dishes.some((d) => clean(d, 80));
+  if (!hasDish) return 'Thiếu món muốn tìm.';
+  return 'Thiếu địa chỉ / khu vực hoặc vị trí để tìm quán gần đó.';
 }
 
 /** The user message of suggest-cheat-places. */
 export function placesPrompt(req: PlacesRequest): string {
-  const where = [req.location, req.coords ? `gần tọa độ ${req.coords.lat}, ${req.coords.lon}` : ''].filter(Boolean).join(' — ');
+  const where = [
+    req.location ? `địa chỉ / khu vực: ${req.location}` : '',
+    req.coords ? `tọa độ chính xác: ${req.coords.lat}, ${req.coords.lon} (https://www.google.com/maps?q=${req.coords.lat},${req.coords.lon})` : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
+  const want = req.typed
+    ? `Người dùng muốn tìm đúng thứ này: "${req.dishes[0]}". Tìm quán bán đúng món / đồ uống đó (hiểu theo cách người Việt gọi, kể cả kiểu như "ít ngọt", "ốc" là các quán ốc), tối đa 5 quán; ghi dish = "${req.dishes[0]}".`
+    : `Họ muốn ăn: ${req.dishes.join('; ')}. Tìm tối đa 2 quán mỗi món.`;
   return (
-    `Hôm nay là ${req.today}. Người dùng ở khu vực: ${where}. Họ muốn ăn (cheat day): ${req.dishes.join('; ')}.\n` +
-    'Hãy DÙNG CÔNG CỤ TÌM KIẾM WEB để tìm các quán thật gần khu vực đó bán các món này (tối đa 2 quán mỗi món): tìm trang Google Maps của quán, ' +
+    `Hôm nay là ${req.today}. Người dùng đang ở ${where}. ${want}\n` +
+    'Hãy DÙNG CÔNG CỤ TÌM KIẾM WEB để tìm các quán thật GẦN NHẤT vị trí đó (cùng phường / quận trước, rồi mới xa dần; tìm kèm tên đường, phường, quận): tìm trang Google Maps của quán, ' +
     'trang Foody / ShopeeFood / GrabFood, bài review của báo, blog ẩm thực, reviewer và bài đăng mạng xã hội (Facebook, TikTok, Instagram).\n' +
     'QUY TẮC BẮT BUỘC: chỉ ghi điều bạn thấy trong kết quả tìm kiếm; KHÔNG bịa tên quán, địa chỉ, điểm, số lượt đánh giá hay lời review. ' +
     'Mỗi điểm đánh giá, mỗi review và mỗi nguồn phải kèm đúng URL của trang tìm thấy nó. Không thấy thì để null hoặc bỏ trống, và ghi món đó vào notFound. ' +
@@ -70,6 +105,8 @@ export function placesPrompt(req: PlacesRequest): string {
     'Đánh giá độ tin cậy từng quán: high chỉ khi có từ 2 nguồn độc lập trở lên khớp nhau và có review trong 6 tháng gần đây; low khi chỉ có một nguồn, review cũ, ' +
     'bài có dấu hiệu quảng cáo / PR / được tài trợ, hoặc thông tin có thể đã cũ (quán có thể đã đóng / chuyển địa chỉ). Ghi lý do ngắn gọn. ' +
     'Ghi sponsored = true nếu bài viết có dấu hiệu quảng cáo hoặc hợp tác. Ghi openStatus nếu nguồn có giờ mở cửa / tình trạng hoạt động, không có thì null. ' +
+    'Nếu thấy địa chỉ của quán thì ước tính distanceKm từ vị trí người dùng (đường chim bay, km), không thấy địa chỉ thì null. ' +
+    'Nếu kết quả tìm kiếm có trang Google Maps của quán thì ghi mapsUrl đúng URL đó, không thì null. Xếp quán gần nhất lên trước. ' +
     'Xong thì gọi tool report_cheat_places đúng một lần.'
   );
 }
@@ -89,6 +126,8 @@ export const PLACES_TOOL = {
             dish: { type: 'string', description: 'Which of the requested dishes this place sells.' },
             name: { type: 'string', description: 'The place name exactly as on its listing.' },
             address: { type: ['string', 'null'] },
+            distanceKm: { type: ['number', 'null'], description: 'Straight-line distance from the user, estimated from the address seen; null if no address.' },
+            mapsUrl: { type: ['string', 'null'], description: 'URL of the Google Maps page of the place, only if it was in the search results.' },
             priceRange: { type: ['string', 'null'], description: 'e.g. "40.000–70.000đ / người", as seen; null if not seen.' },
             rating: {
               type: ['object', 'null'],
@@ -157,6 +196,10 @@ export interface CheatPlace {
   dish: string;
   name: string;
   address: string | null;
+  /** Estimated by the model from the address it saw (km, straight line); null when unknown. */
+  distanceKm: number | null;
+  /** The place's Google Maps page, only when the search saw it. */
+  mapsUrl: string | null;
   priceRange: string | null;
   /** Null: no rating with a source the search saw ("không tìm thấy"). */
   rating: PlaceRating | null;
@@ -228,12 +271,12 @@ export function cleanPlacesAnswer(
   opts: { seenUrls: string[] | null; today: string; checkedAtISO: string; searches?: number; searchErrors?: string[]; sample?: boolean }
 ): CheatPlacesAnswer {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const seen = opts.seenUrls ? new Set(opts.seenUrls.map(normalizeUrl).filter(Boolean)) : null;
+  const seen = opts.seenUrls ? new Set(opts.seenUrls.map(urlKey).filter(Boolean)) : null;
   let dropped = 0;
   const verified = (u: unknown): string | null => {
     const n = normalizeUrl(u);
     if (!n) return null;
-    if (seen && !seen.has(n)) return null;
+    if (seen && !seen.has(urlKey(n))) return null;
     return n;
   };
   const places: CheatPlace[] = [];
@@ -292,7 +335,7 @@ export function cleanPlacesAnswer(
       continue;
     }
     const key = `${dish.toLowerCase()}|${name.toLowerCase()}`;
-    if (names.has(key) || (perDish.get(dish.toLowerCase()) ?? 0) >= 3) continue;
+    if (names.has(key) || (perDish.get(dish.toLowerCase()) ?? 0) >= 5) continue;
     names.add(key);
     perDish.set(dish.toLowerCase(), (perDish.get(dish.toLowerCase()) ?? 0) + 1);
     const sites = new Set(allUrls.map(urlHost).filter(Boolean)).size;
@@ -309,6 +352,8 @@ export function cleanPlacesAnswer(
       dish,
       name,
       address: clean(p.address, 160) || null,
+      distanceKm: typeof p.distanceKm === 'number' && Number.isFinite(p.distanceKm) && p.distanceKm >= 0 && p.distanceKm <= 200 ? Math.round(p.distanceKm * 10) / 10 : null,
+      mapsUrl: verified(p.mapsUrl),
       priceRange: clean(p.priceRange, 60) || null,
       rating,
       reviews: reviews.slice(0, 3),
@@ -325,6 +370,8 @@ export function cleanPlacesAnswer(
     });
     if (places.length === 6) break;
   }
+  // Nearest first; a place without a distance keeps its order after the ones with one.
+  places.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
   const found = new Set(places.map((p) => p.dish.toLowerCase()));
   const notFound = [...new Set((Array.isArray(o.notFound) ? o.notFound : []).map((x) => clean(x, 80)).filter((x) => x && !found.has(x.toLowerCase())))].slice(0, 3);
   return {

@@ -34,7 +34,8 @@ export interface DinnerRequest {
   snack?: boolean;
   /** What the user asked for on the cook book screen (meal, craving, kind of dish, ingredients), when any. */
   filters?: DinnerFilters;
-  /** Cheat day: any kind of dish, no calorie / limit budget (figures still estimated, gout still warned about). */
+  /** Cheat day: any kind of dish, no rules at all (no calorie / limit budget, no gout or purine / salt / sugar rule); the figures
+   *  are still estimated, as information. */
   cheat?: { where: CheatWhere };
 }
 
@@ -68,15 +69,16 @@ export function cleanDinnerRequest(raw: unknown): DinnerRequest | null {
 }
 
 // ===== Cheat day =====
-// A cheat day lifts the calorie and limit budget for the ideas: any cuisine, fried, sweet, street food or restaurant dishes,
-// cooked at home, eaten out or both. The figures are still estimated and high-purine dishes still carry a gout warning.
+// A cheat day drops every rule for the ideas: no calorie or limit budget, no gout / purine / salt / sugar rule, just tasty popular
+// dishes (any cuisine, fried, sweet, street food or restaurant dishes), cooked at home, eaten out or both. The figures are still
+// estimated, as information only.
 
 export const CHEAT_WHERE = ['home', 'out', 'both'] as const;
 export type CheatWhere = (typeof CHEAT_WHERE)[number];
 
 const CHEAT_WHERE_WORDS: Record<CheatWhere, string> = {
   home: 'món TỰ NẤU ở nhà (ghi đủ nguyên liệu và các bước nấu)',
-  out: 'món ĂN NGOÀI (quán, nhà hàng, đồ ăn đường phố; nguyên liệu = thành phần chính của món, các bước = mẹo gọi món / ăn sao cho đỡ nặng bụng, minutes = 0, difficulty = 1, where = "out")',
+  out: 'món ĂN NGOÀI (quán, nhà hàng, đồ ăn đường phố; nguyên liệu = thành phần chính của món, các bước = mẹo gọi món / ăn sao cho ngon, minutes = 0, difficulty = 1, where = "out")',
   both: 'cả món tự nấu và món ăn ngoài (ít nhất 1 món mỗi loại; ghi where = "home" hoặc "out" cho từng món; món ăn ngoài thì các bước là mẹo gọi món)',
 };
 
@@ -91,13 +93,13 @@ export function cheatPrompt(req: DinnerRequest): string {
   if (f?.have.length) parts.push(`Muốn có nguyên liệu: ${f.have.join('; ')}.`);
   if (f?.avoid.length) parts.push(`KHÔNG dùng: ${f.avoid.join('; ')}.`);
   return (
-    `Bây giờ là ${req.hour}h. Hôm nay là CHEAT DAY của người dùng (đang giảm cân, có bệnh gout): KHÔNG giới hạn calo, purine, muối hay đường cho món, ` +
-    `có thể là bất kỳ món nào người Việt thèm (món chiên, đồ ngọt, đồ ăn đường phố, lẩu, nướng, món nước ngoài, món nhà hàng...). ` +
-    `Hãy gợi ý đúng 3 ${CHEAT_WHERE_WORDS[where]}, khác nhau, ngon và đáng "cheat". ` +
+    `Bây giờ là ${req.hour}h. Hôm nay là CHEAT DAY của người dùng: KHÔNG có quy tắc nào cả — không giới hạn calo, purine, muối, đường, ` +
+    `không cần quan tâm chế độ ăn hay bệnh gì, không cảnh báo sức khỏe. Chỉ cần món NGON, được nhiều người thích, đáng "cheat": ` +
+    `bất kỳ món nào người Việt thèm (món chiên, đồ ngọt, đồ ăn đường phố, lẩu, nướng, hải sản, món nước ngoài, món nhà hàng...). ` +
+    `Hãy gợi ý đúng 3 ${CHEAT_WHERE_WORDS[where]}, khác nhau. ` +
     (parts.length ? `Yêu cầu của người dùng (bám sát): ${parts.join(' ')} ` : '') +
-    `Con số cho MỘT phần như khi ăn thật (ước tính trung thực, không giảm bớt cho đẹp): calo, đạm, purine, đường, muối. ` +
-    `Vì người dùng bị gout: món nhiều purine (nội tạng, hải sản, thịt đỏ nhiều, nước dùng xương, bia rượu) vẫn được gợi ý nếu hợp, nhưng phải ghi cảnh báo purine ngắn trong how; ` +
-    `không gợi ý bia rượu làm món chính. ` +
+    `Con số cho MỘT phần như khi ăn thật (ước tính trung thực, chỉ để tham khảo): calo, đạm, purine, đường, muối. ` +
+    `Trong how chỉ nói món ngon ở điểm nào / ăn sao cho ngon, không nhắc calo hay sức khỏe. ` +
     (req.favorites.length ? `Món người dùng hay ăn (để hợp khẩu vị): ${req.favorites.join('; ')}. ` : '') +
     (req.avoid.length ? `Người dùng đã có các món này, hãy đề xuất MÓN KHÁC: ${req.avoid.join('; ')}. ` : '') +
     `Ghi accuracyPercent cho từng món. Gọi tool report_dinner_ideas.`

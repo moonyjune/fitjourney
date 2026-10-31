@@ -1393,10 +1393,20 @@ export async function requestDinner(brief: DinnerBrief, favorites: string[], avo
 
 export type CheatPlacesOutcome = { ok: true; result: CheatPlacesAnswer } | { ok: false; message: string; kind: AiErrorKind | 'unavailable' };
 
-/** Calls the suggest-cheat-places edge function (web search for places to eat the dishes near `location`). The answer is checked
- *  again here (`recheckPlaces`). `unavailable`: web search is not allowed for the organization (the message says so). The offline
- *  dev account gets clearly labelled sample places. */
-export async function requestCheatPlaces(dishes: string[], location: string, coords?: { lat: number; lon: number }, now: Date = new Date()): Promise<CheatPlacesOutcome> {
+/** How long the app waits for suggest-cheat-places: the server gives its web search 135 s, the platform cuts a function at ~150 s. */
+const PLACES_TIMEOUT_MS = 170_000;
+
+/** Calls the suggest-cheat-places edge function (web search for places near `location` / `coords`): for what the user typed
+ *  (`typed`, one entry) or for up to 3 AI dishes. The answer is checked again here (`recheckPlaces`). `unavailable`: web search is
+ *  not allowed for the organization. Every failure carries the server's own reason in `message` (shown to the user). The
+ *  offline dev account gets clearly labelled sample places. */
+export async function requestCheatPlaces(
+  dishes: string[],
+  location: string,
+  coords?: { lat: number; lon: number },
+  opts: { typed?: boolean; now?: Date } = {}
+): Promise<CheatPlacesOutcome> {
+  const now = opts.now ?? new Date();
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
@@ -1411,14 +1421,18 @@ export async function requestCheatPlaces(dishes: string[], location: string, coo
     kind: message.startsWith(PLACES_UNAVAILABLE_PREFIX) ? 'unavailable' : classifyAiError(message, status),
   });
   try {
-    const { data, error } = await supabase.functions.invoke('suggest-cheat-places', { body: { dishes, location, today, ...(coords ? { coords } : {}) } });
+    const body = { dishes, location, today, ...(coords ? { coords } : {}), ...(opts.typed ? { typed: true } : {}) };
+    const { data, error } = await supabase.functions.invoke('suggest-cheat-places', { body, timeout: PLACES_TIMEOUT_MS });
     if (error) throw error;
     if (data?.error) return fail(String(data.error));
     const result = recheckPlaces(data?.result);
-    return result ? { ok: true, result } : fail('Câu trả lời không hợp lệ.');
+    return result ? { ok: true, result } : fail(`Máy chủ trả lời không có kết quả (${JSON.stringify(data ?? null).slice(0, 120)}).`);
   } catch (error) {
-    const message = await describeFunctionsError(error);
-    const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;
+    let message = await describeFunctionsError(error);
+    if ((error as { name?: string })?.name === 'AbortError' || /abort/i.test(message)) message = `Hết thời gian chờ (${PLACES_TIMEOUT_MS / 1000} giây) mà máy chủ chưa trả lời.`;
+    // A gateway timeout or crash comes back without the function's JSON: name the status so it is not a bare "non-2xx".
+    else if (status && /non-2xx/i.test(message)) message = `Máy chủ lỗi ${status}${status === 504 || status === 546 ? ' (quá thời gian chạy của hàm)' : ''}.`;
     if (message.includes(PLACES_UNAVAILABLE_PREFIX)) return { ok: false, message: message.slice(message.indexOf(PLACES_UNAVAILABLE_PREFIX)), kind: 'unavailable' };
     return { ok: false, message, kind: classifyReached(message, status) };
   }

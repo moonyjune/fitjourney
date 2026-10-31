@@ -27,7 +27,8 @@ jest.mock('../../sync/cloudSync', () => ({
 import CookbookScreen from '../../../app/cookbook';
 import type { DinnerBrief, DinnerIdea } from '../../ai/dinner';
 import { fakeCheatDinner, fakeCheatPlaces } from '../../ai/devPhotoAnalysis';
-import { cheatPurineWarning, cleanCheatIdeas, dishesToLocate, recheckPlaces, splitCookbook } from '../../cookbook/cheat';
+import { cleanCheatIdeas, dishesToLocate, recheckPlaces, splitCookbook } from '../../cookbook/cheat';
+import { formatAddress, osmUrl, reverseGeocode } from '../../cookbook/geocode';
 import { EMPTY_FILTERS, rankCookbook } from '../../cookbook/filters';
 import { cleanCookbook, mergeRecipe, recipeFromIdea, recipesFitting } from '../../cookbook/recipes';
 import { useCookbookFinderStore } from '../../store/useCookbookFinderStore';
@@ -37,9 +38,9 @@ import { useLimitsStore } from '../../store/useLimitsStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { cleanDinnerRequest, dinnerPrompt } from '../../../supabase/functions/_shared/dinner';
-import { cleanPlacesAnswer, cleanPlacesRequest, cleanReviewDate, placesPrompt, reliabilityCap } from '../../../supabase/functions/_shared/places';
+import { cleanPlacesAnswer, cleanPlacesRequest, cleanReviewDate, mapsSearchUrl, placesPrompt, placesRequestProblem, reliabilityCap } from '../../../supabase/functions/_shared/places';
 import { addUsage, DAILY_QUOTA, estimateCostUsd } from '../../../supabase/functions/_shared/usage';
-import { collectWebFindings, isWebSearchUnavailable, mergeFindings, normalizeUrl, webSearchTool, webSearchVariantAfter } from '../../../supabase/functions/_shared/webSearch';
+import { collectWebFindings, isWebSearchUnavailable, mergeFindings, normalizeUrl, webSearchTool, webSearchVariantAfter, webSearchVariantFor } from '../../../supabase/functions/_shared/webSearch';
 
 const idea = (name: string, over: Partial<DinnerIdea> = {}): DinnerIdea => ({ name, calories: 400, proteinG: 30, purineMg: 100, saltG: 1, sugarG: 2, source: 'book', ...over });
 const brief: DinnerBrief = { hour: 18, meal: 'dinner', budgetKcal: 500, proteinLeftG: 40, headroom: { purine: 400, salt: 4, sugar: 10 }, limits: { purine: 1200, salt: 7, sugar: 25 } };
@@ -61,6 +62,17 @@ describe('web search tool helpers (server)', () => {
     expect(webSearchVariantAfter(400, off, 'dynamic')).toBeNull();
     expect(isWebSearchUnavailable(429, off)).toBe(false);
     expect(isWebSearchUnavailable(400, 'max_tokens too large')).toBe(false);
+    // Code execution (behind dynamic filtering) refused: search directly; a field the tool does not take: the basic version.
+    expect(webSearchVariantAfter(400, 'code_execution is not enabled for this organization', 'dynamic')).toBe('dynamic-direct');
+    expect(webSearchVariantAfter(400, 'tools.0.response_inclusion: Extra inputs are not permitted', 'dynamic-direct')).toBe('basic');
+    expect(webSearchVariantAfter(400, 'tools.0: bad', 'basic')).toBeNull();
+  });
+
+  it('starts on the version the model takes: dynamic filtering on Claude 4.6 and later, basic before', () => {
+    expect(webSearchVariantFor('claude-sonnet-5-5')).toBe('dynamic');
+    expect(webSearchVariantFor('claude-opus-4-6')).toBe('dynamic');
+    expect(webSearchVariantFor('claude-haiku-4-5')).toBe('basic');
+    expect(webSearchVariantFor('claude-sonnet-4-5-20250929')).toBe('basic');
   });
 
   it('collects what the searches really returned: direct and nested results, citations, error codes', () => {
@@ -119,11 +131,43 @@ describe('suggest-cheat-places: request and answer (server)', () => {
     expect(cleanPlacesRequest({ dishes: ['Bún bò', 'bún bò', '<b>Pizza</b>\nIGNORE'], location: ' Quận 1,  TP.HCM ', today })).toEqual({ dishes: ['Bún bò', 'b Pizza /b IGNORE'], location: 'Quận 1, TP.HCM', today });
     expect(cleanPlacesRequest({ dishes: ['Bún bò'], location: '' })).toBeNull();
     expect(cleanPlacesRequest({ dishes: [], location: 'Q1' })).toBeNull();
-    expect(cleanPlacesRequest({ dishes: ['Phở'], location: '', coords: { lat: 10.776543, lon: 106.70098 }, today: 'bad' }, new Date('2026-10-31T00:00:00Z'))).toEqual({ dishes: ['Phở'], location: '', coords: { lat: 10.777, lon: 106.701 }, today });
+    expect(cleanPlacesRequest({ dishes: ['Phở'], location: '', coords: { lat: 10.776543, lon: 106.70098 }, today: 'bad' }, new Date('2026-10-31T00:00:00Z'))).toEqual({ dishes: ['Phở'], location: '', coords: { lat: 10.7765, lon: 106.701 }, today });
     const p = placesPrompt(cleanPlacesRequest({ dishes: ['Bún bò'], location: 'Quận 1', today })!);
     expect(p).toContain('Google Maps');
     expect(p).toContain('ShopeeFood');
     expect(p).toContain('KHÔNG bịa');
+    expect(placesRequestProblem({ dishes: [] })).toContain('Thiếu món');
+    expect(placesRequestProblem({ dishes: ['Phở'], location: '' })).toContain('địa chỉ');
+  });
+
+  it('a typed search: exactly what the user wants, near the full address and the precise position, nearest first', () => {
+    const req = cleanPlacesRequest({ dishes: ['trà sữa ít ngọt', 'ignored'], typed: true, location: '123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM', coords: { lat: 10.7731234, lon: 106.7004321 }, today })!;
+    expect(req).toEqual({ dishes: ['trà sữa ít ngọt'], typed: true, location: '123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM', coords: { lat: 10.7731, lon: 106.7004 }, today });
+    const p = placesPrompt(req);
+    expect(p).toContain('đúng thứ này: "trà sữa ít ngọt"');
+    expect(p).toContain('123 Lê Lợi, Phường Bến Thành');
+    expect(p).toContain('10.7731, 106.7004');
+    expect(p).toContain('GẦN NHẤT');
+    expect(p).toContain('distanceKm');
+    expect(p).toContain('mapsUrl');
+    expect(p).not.toMatch(/gout|purine/i);
+  });
+
+  it('places come nearest first, with a distance and a Maps page only when the search saw it (www / https alike)', () => {
+    const a = cleanPlacesAnswer(
+      {
+        places: [
+          { ...placeA, name: 'Xa', distanceKm: 3.27, mapsUrl: 'https://maps.example/invented' },
+          { ...placeA, name: 'Gần', distanceKm: 0.4, mapsUrl: 'http://google.com/maps/place/quan-a' },
+          { ...placeA, name: 'Không rõ', distanceKm: -1 },
+        ],
+      },
+      opts
+    );
+    expect(a.places.map((p) => [p.name, p.distanceKm])).toEqual([['Gần', 0.4], ['Xa', 3.3], ['Không rõ', null]]);
+    expect(a.places[0].mapsUrl).toBe('http://google.com/maps/place/quan-a');
+    expect(a.places[1].mapsUrl).toBeNull();
+    expect(mapsSearchUrl('Quán A', null, 'Quận 1')).toBe('https://www.google.com/maps/search/?api=1&query=Qu%C3%A1n%20A%2C%20Qu%E1%BA%ADn%201');
   });
 
   it('keeps only what the search saw: unknown review / source URLs are dropped, reviews newest first', () => {
@@ -193,19 +237,55 @@ describe('suggest-cheat-places: request and answer (server)', () => {
   });
 });
 
+describe('my location: reverse geocoding (OpenStreetMap Nominatim)', () => {
+  const answer = {
+    display_name: '123, Lê Lợi, Phường Bến Thành, Quận 1, Thành phố Hồ Chí Minh, 700000, Việt Nam',
+    address: { house_number: '123', road: 'Lê Lợi', quarter: 'Phường Bến Thành', suburb: 'Quận 1', city: 'Thành phố Hồ Chí Minh', postcode: '700000', country: 'Việt Nam' },
+  };
+
+  it('formats the address the Vietnamese way: number and street, ward, district, city', () => {
+    expect(formatAddress(answer)).toBe('123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM');
+    expect(formatAddress({ address: { road: 'Phố Huế', suburb: 'Quận Hai Bà Trưng', city: 'Thành phố Hà Nội' } })).toBe('Phố Huế, Quận Hai Bà Trưng, Hà Nội');
+    expect(formatAddress({ display_name: 'Chợ Bến Thành, Lê Lợi, Quận 1, 700000, Việt Nam' })).toBe('Chợ Bến Thành, Lê Lợi, Quận 1');
+    expect(formatAddress(null)).toBe('');
+    expect(osmUrl(10.77312, 106.70043)).toBe('https://www.openstreetmap.org/?mlat=10.77312&mlon=106.70043#map=18/10.77312/106.70043');
+  });
+
+  it('asks Nominatim in Vietnamese for the precise position, and gives null on any failure', async () => {
+    const ok = jest.fn(async () => ({ ok: true, json: async () => answer }) as unknown as Response);
+    expect(await reverseGeocode(10.77312, 106.70043, ok as unknown as typeof fetch)).toBe('123 Lê Lợi, Phường Bến Thành, Quận 1, TP.HCM');
+    const [url, init] = ok.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=vi&lat=10.77312&lon=106.70043');
+    expect(init.headers).toMatchObject({ 'Accept-Language': 'vi' });
+    expect(JSON.stringify(init.headers)).not.toContain('@');
+    const bad = jest.fn(async () => ({ ok: false, json: async () => ({}) }) as unknown as Response);
+    expect(await reverseGeocode(1, 2, bad as unknown as typeof fetch)).toBeNull();
+    const down = jest.fn(async () => {
+      throw new Error('network');
+    });
+    expect(await reverseGeocode(1, 2, down as unknown as typeof fetch)).toBeNull();
+    const empty = jest.fn(async () => ({ ok: true, json: async () => ({ error: 'Unable to geocode' }) }) as unknown as Response);
+    expect(await reverseGeocode(1, 2, empty as unknown as typeof fetch)).toBeNull();
+  });
+});
+
 describe('cheat-day dishes', () => {
   const ok = { budgetKcal: 300, proteinLeftG: 40, headroom: { purine: 100, salt: 1, sugar: 2 }, limits: { purine: 1200, salt: 7, sugar: 25 }, hour: 19 };
 
-  it('suggest-dinner takes a cheat flag: no budget in the prompt, any dish, a gout caution', () => {
+  it('suggest-dinner takes a cheat flag: no rules in the prompt (no budget, no gout / purine / salt / sugar rule), any dish', () => {
     const req = cleanDinnerRequest({ ...ok, cheat: { where: 'out' }, filters: { cravings: ['crunchy'] } })!;
     expect(req.cheat).toEqual({ where: 'out' });
     expect(cleanDinnerRequest({ ...ok, cheat: { where: 'moon' } })!.cheat).toEqual({ where: 'both' });
     expect(cleanDinnerRequest({ ...ok }))!.not.toHaveProperty('cheat');
     const p = dinnerPrompt(req);
     expect(p).toContain('CHEAT DAY');
-    expect(p).toContain('KHÔNG giới hạn calo');
+    expect(p).toContain('KHÔNG có quy tắc nào');
+    expect(p).toContain('không giới hạn calo');
     expect(p).toContain('ĂN NGOÀI');
-    expect(p).toContain('gout');
+    expect(p).toContain('không cảnh báo sức khỏe');
+    expect(p).not.toContain('bệnh gout');
+    expect(p).not.toContain('cảnh báo purine');
+    expect(p).not.toContain('purine thấp');
     expect(p).toContain('giòn');
     expect(p).not.toContain('300 kcal');
     // The everyday prompt is unchanged.
@@ -223,8 +303,7 @@ describe('cheat-day dishes', () => {
     ]);
     expect(dishesToLocate(ideas, 'both')).toEqual([ideas[1].name, ideas[2].name]);
     expect(dishesToLocate(ideas, 'home')).toEqual([]);
-    expect(cheatPurineWarning(ideas[1])).toBe(true); // bún bò, 380 mg
-    expect(cheatPurineWarning(ideas[2])).toBe(false);
+    expect(ideas.every((i) => !/purine/i.test(i.how ?? ''))).toBe(true);
   });
 
   it('cheat dishes live apart: kept out of everyday suggestions and ranking unless it is a cheat day', () => {
@@ -303,20 +382,25 @@ describe('Cook book screen: cheat day', () => {
   it('ticking cheat day + eat out + an area: dishes without a budget, then places with reliability, all kept after a reload', async () => {
     const r = await mount();
     await press(r, 'Cheat day');
-    expect(allText(r)).toContain('Cheat day vẫn phải nhớ gout');
+    expect(allText(r)).not.toMatch(/gout/i);
     await press(r, 'Ăn ngoài');
-    await type(r, 'Khu vực (phường / quận, thành phố)', 'Quận 1, TP.HCM');
+    await type(r, 'Địa chỉ / khu vực của bạn', 'Quận 1, TP.HCM');
     await press(r, 'Gợi ý bằng AI');
     expect(mockDinner).toHaveBeenCalledTimes(1);
     expect(mockDinner.mock.calls[0][4]).toEqual({ where: 'out' });
     const text = allText(r);
     expect(text).toContain('AI gợi ý cheat day (3)');
     expect(text).toContain('Pizza phô mai (giả lập)');
-    expect(text).toContain('⚠ Purine cao');
+    // Cheat day has no rules: no purine warning or badge, no limit check; kcal stays as information.
+    expect(text).not.toContain('⚠ Purine cao');
+    expect(text).not.toContain('Purine');
     expect(text).not.toContain('✗ Vượt');
     // Places were looked up at once for the eat-out dishes, near the area typed.
     expect(mockPlaces).toHaveBeenCalledTimes(1);
     expect(mockPlaces.mock.calls[0][1]).toBe('Quận 1, TP.HCM');
+    expect(mockPlaces.mock.calls[0][3]).toEqual({ typed: false });
+    expect(text).toContain('~0.4 km');
+    expect(text).toContain('Tìm trên Google Maps');
     expect(text).toContain('DỮ LIỆU MẪU (chế độ Dev)');
     expect(text).toContain('Độ tin cậy: Cao');
     expect(text).toContain('Nguồn mẫu 4.3★ / 120 đánh giá');
@@ -337,7 +421,7 @@ describe('Cook book screen: cheat day', () => {
     const r = await mount();
     await press(r, 'Cheat day');
     await press(r, 'Ăn ngoài');
-    await type(r, 'Khu vực (phường / quận, thành phố)', 'Hà Đông, Hà Nội');
+    await type(r, 'Địa chỉ / khu vực của bạn', 'Hà Đông, Hà Nội');
     await press(r, 'Gợi ý bằng AI');
     const text = allText(r);
     expect(text).toContain('Tìm địa điểm chưa khả dụng: Claude API lỗi (400): web search is not enabled');
@@ -350,10 +434,60 @@ describe('Cook book screen: cheat day', () => {
     await press(r, 'Ăn ngoài');
     await press(r, 'Gợi ý bằng AI');
     expect(mockPlaces).not.toHaveBeenCalled();
-    await press(r, 'Tìm quán gần đây');
-    expect(allText(r)).toContain('Nhập khu vực trước để tìm quán.');
+    await press(r, 'Tìm quán cho các món AI gợi ý');
+    expect(allText(r)).toContain('Nhập địa chỉ / khu vực hoặc bấm 📍 Vị trí của tôi trước để tìm quán.');
+    expect(mockPlaces).not.toHaveBeenCalled();
     await press(r, 'Tự nấu');
-    expect(() => byLabel(r, 'Tìm quán gần đây')).toThrow();
+    expect(() => byLabel(r, 'Tìm quán cho các món AI gợi ý')).toThrow();
+    // The search box still works when cooking at home (it is about eating out).
+    expect(() => byLabel(r, 'Bạn muốn ăn gì?', 'onChangeText')).not.toThrow();
+  });
+
+  it('the search box finds places for exactly what was typed, with no AI idea at all', async () => {
+    const r = await mount();
+    await press(r, 'Cheat day');
+    await press(r, 'Tìm quán');
+    expect(allText(r)).toContain('Gõ món bạn muốn ăn trước.');
+    await type(r, 'Bạn muốn ăn gì?', '  lẩu bò ');
+    await press(r, 'Tìm quán');
+    expect(allText(r)).toContain('Nhập địa chỉ / khu vực');
+    expect(mockPlaces).not.toHaveBeenCalled();
+    await type(r, 'Địa chỉ / khu vực của bạn', 'Quận 3, TP.HCM');
+    await press(r, 'Tìm quán');
+    expect(mockDinner).not.toHaveBeenCalled();
+    expect(mockPlaces).toHaveBeenCalledTimes(1);
+    expect(mockPlaces.mock.calls[0]).toEqual([['lẩu bò'], 'Quận 3, TP.HCM', undefined, { typed: true }]);
+    expect(allText(r)).toContain('Món: lẩu bò');
+    expect(useCookbookFinderStore.getState().query).toBe('  lẩu bò ');
+  });
+
+  it('a cheat dish\'s "find places" fills the box and searches for it; the precise position goes with the address', async () => {
+    useCookbookFinderStore.getState().setLocation('123 Lê Lợi, Quận 1, TP.HCM', { lat: 10.7731234, lon: 106.7004321 });
+    const r = await mount();
+    await press(r, 'Cheat day');
+    await press(r, 'Ăn ngoài');
+    await press(r, 'Gợi ý bằng AI');
+    mockPlaces.mockClear();
+    expect(allText(r)).toContain('Tọa độ: 10.77312, 106.70043');
+    await press(r, '🔎 Tìm quán: Pizza phô mai (giả lập)');
+    expect(useCookbookFinderStore.getState().query).toBe('Pizza phô mai (giả lập)');
+    expect(mockPlaces.mock.calls[0]).toEqual([['Pizza phô mai (giả lập)'], '123 Lê Lợi, Quận 1, TP.HCM', { lat: 10.77312, lon: 106.70043 }, { typed: true }]);
+    // Editing the address keeps the position; "clear" drops it.
+    await type(r, 'Địa chỉ / khu vực của bạn', '125 Lê Lợi, Quận 1, TP.HCM');
+    expect(useCookbookFinderStore.getState().coords).toEqual({ lat: 10.77312, lon: 106.70043 });
+    await press(r, 'Bỏ tọa độ');
+    expect(useCookbookFinderStore.getState().coords).toBeNull();
+  });
+
+  it('a failed search shows its real reason, never nothing', async () => {
+    mockPlaces.mockResolvedValue({ ok: false, message: 'Tìm kiếm quá lâu (hơn 135 giây), hãy thử lại.', kind: 'generic' });
+    useCookbookFinderStore.getState().setLocation('Quận 1', null);
+    useCookbookFinderStore.getState().setQuery('ốc');
+    const r = await mount();
+    await press(r, 'Cheat day');
+    await press(r, 'Tìm quán');
+    expect(allText(r)).toContain('Tìm quán lỗi:');
+    expect(allText(r)).toContain('Tìm kiếm quá lâu (hơn 135 giây), hãy thử lại.');
   });
 
   it('the cook book shows cheat dishes under their own tab only', async () => {

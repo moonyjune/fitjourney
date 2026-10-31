@@ -113,6 +113,12 @@ describe('History screen (FitQuest)', () => {
     useSettingsStore.setState({ waterTargetMl: 3500 });
     useNutritionStore.setState({ logs: { [dayKey(1)]: { ...log(dayKey(1)), waterTargetMl: 4500 }, [dayKey(0)]: log(dayKey(0)) } });
     const r = await render();
+    // On the 1st of a month yesterday sits in last month's group, which starts folded.
+    for (const header of r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && /ngày/.test(String(n.props.accessibilityLabel)))) {
+      await act(async () => {
+        header.props.onPress();
+      });
+    }
     const out = text(r);
     expect(out).toContain('1200ml nước (mục tiêu 4500ml)');
     expect(out).toContain('1200ml nước (mục tiêu 3500ml)');

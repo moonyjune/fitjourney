@@ -1,6 +1,6 @@
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import type { CheatPlace, CheatPlacesAnswer } from '../../../supabase/functions/_shared/places';
-import { urlHost } from '../../../supabase/functions/_shared/places';
+import { mapsSearchUrl, urlHost } from '../../../supabase/functions/_shared/places';
 import { useGameText, type GameKey } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
@@ -24,7 +24,7 @@ function Link({ url, label }: { url: string; label: string }) {
   );
 }
 
-function PlaceCard({ p, checked }: { p: CheatPlace; checked: string }) {
+function PlaceCard({ p, checked, near }: { p: CheatPlace; checked: string; near: string }) {
   const g = useGameText();
   const r = p.reliability;
   const why = [
@@ -36,11 +36,13 @@ function PlaceCard({ p, checked }: { p: CheatPlace; checked: string }) {
   ];
   return (
     <View style={styles.place} accessibilityLabel={p.name}>
-      <HudText size={14}>{`📍 ${p.name}`}</HudText>
+      <HudText size={14}>{`📍 ${p.name}${p.distanceKm !== null ? ` · ${g('cheat.distance', { km: p.distanceKm })}` : ''}`}</HudText>
       <HudText size={12} weight="medium" color={quest.textSecondary}>
         {g('cheat.dish', { dish: p.dish })}
         {p.address ? ` · ${p.address}` : ''}
       </HudText>
+      {/* The place's own Maps page when the search saw it, else a Maps search for its name and address (not a claim). */}
+      <Link url={p.mapsUrl ?? mapsSearchUrl(p.name, p.address, near)} label={p.mapsUrl ? g('cheat.mapsPage') : g('cheat.mapsSearch')} />
       {p.priceRange ? (
         <HudText size={12} weight="medium" color={quest.textSecondary}>
           {g('cheat.price', { price: p.priceRange })}
@@ -94,7 +96,7 @@ function PlaceCard({ p, checked }: { p: CheatPlace; checked: string }) {
   );
 }
 
-/** The places found for the cheat-day dishes: rating with its source, recent reviews with date and link, sources, when it was
+/** The places found for the cheat-day dishes, nearest first: distance and a Google Maps link, rating with its source, recent reviews with date and link, sources, when it was
  *  checked and how reliable it is (and why). Sample data of the dev account is labelled as such. */
 export function CheatPlacesList({ answer, near }: { answer: CheatPlacesAnswer; near: string }) {
   const g = useGameText();
@@ -121,7 +123,7 @@ export function CheatPlacesList({ answer, near }: { answer: CheatPlacesAnswer; n
           {g('cheat.placesNone')}
         </HudText>
       ) : (
-        answer.places.map((p) => <PlaceCard key={`${p.dish}-${p.name}`} p={p} checked={checked} />)
+        answer.places.map((p) => <PlaceCard key={`${p.dish}-${p.name}`} p={p} checked={checked} near={near} />)
       )}
       {answer.notFound.length > 0 ? (
         <HudText size={12} weight="medium" color={quest.textSecondary}>

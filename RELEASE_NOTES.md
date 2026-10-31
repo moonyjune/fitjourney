@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.38 | no | suggest-cheat-places, suggest-dinner |
 | 0.37 | no | boss-banter |
 | 0.36 | no | — |
 | 0.35 | no | — |
@@ -49,6 +50,14 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.38
+- Cook book, Cheat day: place search fixed and reworked.
+  - A "Bạn muốn ăn gì?" box with "Tìm quán" searches places for exactly what you type, with or without AI ideas; each eat-out AI dish has a "🔎 Tìm quán" chip.
+  - "📍 Vị trí của tôi" takes your precise position, turns it into an address (street, ward, district) you can edit, shows its accuracy and a "Xem trên bản đồ" link; "Bỏ tọa độ" clears it.
+  - Places come nearest first with the distance and a Google Maps link.
+  - A failed search now says why (timeout, web search not allowed, no answer…) instead of a generic AI error.
+- Cheat day ignores the rules: no gout / purine warnings or limits on cheat dishes, and AI cheat ideas are just tasty popular dishes (kcal still shown).
 
 ## 0.37
 - Map: "Hội thoại chiến đấu" replaces the story chapters. Each day of the last 14 with food logged gets a short chat between the stage boss and you.

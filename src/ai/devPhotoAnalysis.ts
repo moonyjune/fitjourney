@@ -238,10 +238,10 @@ export function fakeCheatDinner(where: CheatWhere): { options: Record<string, un
     options: picked.map((d) => ({
       ...d,
       name: `${d.name} (giả lập)`,
-      how: `${SIMULATED}: gợi ý mẫu cho cheat day, không phải của AI.${d.purineMg >= 300 ? ' Purine cao: ăn ít, uống nhiều nước.' : ''}`,
+      how: `${SIMULATED}: gợi ý mẫu cho cheat day, không phải của AI.`,
       accuracyPercent: 40,
       ingredients: [{ name: d.name, quantity: '1 phần' }],
-      steps: d.where === 'out' ? ['Gọi phần nhỏ', 'Ăn chậm', 'Uống nước lọc thay nước ngọt'] : ['Sơ chế', 'Nấu', 'Thưởng thức'],
+      steps: d.where === 'out' ? ['Chọn quán đông khách', 'Gọi món đặc trưng', 'Thưởng thức'] : ['Sơ chế', 'Nấu', 'Thưởng thức'],
     })),
   };
 }
@@ -256,6 +256,7 @@ export function fakeCheatPlaces(dishes: string[], location: string, now: Date = 
       dish,
       name: `Quán mẫu ${String.fromCharCode(65 + i)} (DỮ LIỆU MẪU)`,
       address: `Địa chỉ mẫu, ${location || 'khu vực của bạn'}`,
+      distanceKm: Math.round((0.4 + i * 0.7) * 10) / 10,
       priceRange: '50.000–90.000đ (mẫu)',
       rating: { value: 4.3 - i * 0.4, count: 120 - i * 50, source: 'Nguồn mẫu', url: `https://example.com/sample-place-${i + 1}` },
       reviews: [

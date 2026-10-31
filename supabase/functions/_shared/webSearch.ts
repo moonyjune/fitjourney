@@ -6,7 +6,8 @@
 // Tool versions (Claude API docs, checked 2026-10-31): `web_search_20260318` (dynamic filtering + response_inclusion; Claude 4.6
 // and later), `web_search_20260209` (dynamic filtering), `web_search_20250305` (basic, every model that has web search).
 // Dynamic filtering runs the search from code execution (allowed_callers defaults to code execution); a model without
-// programmatic tool calling needs `allowed_callers: ["direct"]` (the API answers 400 naming allowed_callers).
+// programmatic tool calling needs `allowed_callers: ["direct"]` (the API answers 400 naming allowed_callers). Dynamic filtering is
+// for Claude 4.6 and later; an older model starts on the basic version, so the first request is not spent on a refusal.
 // Price: $10 per 1,000 searches (usage.server_tool_use.web_search_requests, priced in usage.ts), plus the tokens of the results;
 // a failed search is not billed.
 
@@ -34,12 +35,19 @@ export function webSearchTool(opts: WebSearchOptions, variant: WebSearchVariant 
   return tool;
 }
 
-/** The next variant to try after a 400 that names the tool (a model without programmatic tool calling, or without the newest
- *  version); null when the error is about something else or there is nothing left to try. */
+/** Models that take the dynamic-filtering versions (Claude 4.6 and later); any other model starts on the basic one. */
+const DYNAMIC_MODELS = /^claude-(opus-(4-[678]|5)|sonnet-(4-6|5)|haiku-5|fable|mythos)/;
+
+/** The variant to start with for `model`. */
+export const webSearchVariantFor = (model: string): WebSearchVariant => (DYNAMIC_MODELS.test(model) ? 'dynamic' : 'basic');
+
+/** The next variant to try after a 400 that is about the tool (a model without programmatic tool calling or code execution, or
+ *  without the newest version, or a field of the tool it does not take); null when the error is about something else, says web
+ *  search is off for the organization, or there is nothing left to try. */
 export function webSearchVariantAfter(status: number, body: string, current: WebSearchVariant): WebSearchVariant | null {
-  if (status !== 400) return null;
-  if (current === 'dynamic' && /allowed_callers|programmatic/i.test(body)) return 'dynamic-direct';
-  if (current !== 'basic' && /web_search/i.test(body) && /not supported|unsupported|unknown|does not support|invalid|not available for/i.test(body) && !isWebSearchUnavailable(status, body)) return 'basic';
+  if (status !== 400 || current === 'basic' || isWebSearchUnavailable(status, body)) return null;
+  if (current === 'dynamic' && /allowed_callers|programmatic|code[ _-]?execution/i.test(body)) return 'dynamic-direct';
+  if (/web_search|allowed_callers|response_inclusion|code[ _-]?execution|tools\.\d/i.test(body)) return 'basic';
   return null;
 }
 

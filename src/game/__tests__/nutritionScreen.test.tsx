@@ -142,7 +142,7 @@ describe('Nutrition screen (FitQuest)', () => {
     expect(text).toContain('Cumulative target: 3500ml');
     expect(text.match(/\+500ml · Cumulative/g)).toHaveLength(7);
     expect(text).toMatch(/06 ?: ?00 \w+ Wake up/);
-    expect(text).toMatch(/21 ?: ?00 \w+ Last glass/);
+    expect(text).toMatch(/21 ?: ?00 [\w ]+ Last glass/);
     expect(text).toMatch(/Next: \d+ ml at \d\d:\d\d|Catch up now: \d+ ml|Enough water today/);
   });
 
