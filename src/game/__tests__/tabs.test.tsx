@@ -137,20 +137,70 @@ describe('FitQuest tabs', () => {
   });
 
   describe('Map', () => {
-    it('shows the current region with the player and the two locked regions above it', () => {
-      const text = allText(render(<MapScreen />));
+    it('shows the zones, the current boss with the player and the locked bosses with their skills', () => {
+      const r = render(<MapScreen />);
+      const text = allText(r);
       expect(text).toContain('Vùng 1 · Đồng Khởi Hành');
       expect(text).toContain('Vùng 2 · Rừng Kỷ Luật');
       expect(text).toContain('Vùng 3 · Đỉnh Chiến Thắng');
-      expect(text).toContain('mở khi đạt 105 kg');
+      expect(text).toContain('Mở khi đạt 105 kg');
       expect(text).toContain('106.2 kg · Vùng 1');
       expect(text).toContain('còn 1.2 kg'); // to the 105 kg gate
+      expect(text).toContain('Quỷ Bánh Kem'); // the current boss
+      expect(text).toContain('HP 1.2 / 5 kg');
+      expect(text).toContain('Bạn ở đây · 106.2 kg');
+      expect(text).toContain('0/3'); // bosses down
+      expect(text).toContain('Xuất phát · 110 kg');
+      expect(text).toContain('Đích · 95 kg');
+      const locked = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel).startsWith('Rồng Lẩu Buffet'))[0];
+      expect(locked.props.accessibilityLabel).toBe(
+        'Rồng Lẩu Buffet. Vùng 3 · Đỉnh Chiến Thắng. 100 → 95 kg. Mở khi đạt 95 kg. Buffet lẩu · Bia lạnh cuối tuần · Dụ dỗ đồ ngọt'
+      );
     });
 
     it('describes the trail for screen readers with the real numbers', () => {
       const r = render(<MapScreen />);
-      const trail = r.root.findAll((n) => n.props.accessibilityRole === 'image' && String(n.props.accessibilityLabel).startsWith('Đường đi vùng 1'))[0];
-      expect(trail.props.accessibilityLabel).toBe('Đường đi vùng 1: xuất phát 110 kg, bạn đang ở 106.2 kg, cổng ở 105 kg, đã đi 76 phần trăm');
+      const trail = r.root.findAll((n) => n.props.accessibilityRole === 'image' && String(n.props.accessibilityLabel).startsWith('Đường đi chặng 1'))[0];
+      expect(trail.props.accessibilityLabel).toBe('Đường đi chặng 1: xuất phát 110 kg, bạn đang ở 106.2 kg, cổng ở 105 kg, đã đi 76 phần trăm');
+    });
+
+    it('dates each defeated boss from the weight history and opens a boss that talks', () => {
+      useWeightStore.setState({
+        entries: [
+          { id: 'a', dateISO: '2026-10-21T06:00:00', weightKg: 104.8 },
+          { id: 'b', dateISO: '2026-10-23T06:00:00', weightKg: 103 },
+        ],
+      });
+      const r = render(<MapScreen />);
+      const text = allText(r);
+      expect(text).toContain('Hạ ngày 21/10 · 2 ngày'); // 19/10 start -> 21/10
+      expect(text).toContain('1/3');
+      expect(text).toContain('Gã Thùng Bia'); // zone 2 boss is now the current one
+      expect(text).toContain('103.0 kg · Vùng 2');
+
+      act(() => pressable(r, (l) => l.startsWith('Quỷ Bánh Kem.')).props.onPress());
+      let detail = allText(r);
+      expect(detail).toContain('Đã hạ ngày 21/10/2026 · sau 2 ngày');
+      expect(detail).toContain('Quỷ Bánh Kem nói');
+      expect(detail).toContain('Hừ... lần này ngươi thắng.');
+      act(() => pressable(r, (l) => l === 'Đóng').props.onPress());
+      expect(allText(r)).not.toContain('Quỷ Bánh Kem nói');
+
+      act(() => pressable(r, (l) => l.startsWith('Rồng Lẩu Buffet.')).props.onPress());
+      detail = allText(r);
+      expect(detail).toContain('Còn 8.0 kg nữa để hạ boss này');
+      expect(detail).toContain('Ta đang chờ ngươi ở 95 kg.');
+      expect(detail).toContain('Buffet lẩu');
+      expect(detail).toContain('Phun hơi lẩu nóng: "ăn cho đáng tiền".');
+      expect(detail).toContain('★★★★☆ · Chúa tể · Boss cuối');
+    });
+
+    it('celebrates when every boss is down', () => {
+      useWeightStore.setState({ entries: [{ id: 'z', dateISO: '2026-10-23T06:00:00', weightKg: 94.8 }] });
+      const text = allText(render(<MapScreen />));
+      expect(text).toContain('Đã hạ mọi boss. Bạn đã tới đích!');
+      expect(text).toContain('3/3');
+      expect(text).toContain('94.8 kg · Đỉnh cuối');
     });
 
     it('switches to the chart: real stats, the weight chart and the weekly bosses', () => {

@@ -8,7 +8,11 @@ import { QuestSegment } from '../../src/components/quest/QuestSegment';
 import { TrailMap } from '../../src/components/quest/TrailMap';
 import { WeightChart } from '../../src/components/quest/WeightChart';
 import { XpBar } from '../../src/components/quest/XpBar';
-import { buildRegions, currentRegion, type Region } from '../../src/game/map';
+import { buildStageJourney, stageAsRegion, type StageBoss, type Zone } from '../../src/game/stageBosses';
+import { StageBossArt } from '../../src/components/quest/StageBossArt';
+import { StageBossDetail, bossName, rankName, shortDate, stars, zoneTitle } from '../../src/components/quest/StageBossDetail';
+import { PressScale } from '../../src/components/quest/motion/PressScale';
+import { PulseRing } from '../../src/components/quest/motion/PulseRing';
 import { useGameText, type GameKey } from '../../src/game/strings';
 import { useGameState, useNow } from '../../src/game/useGameState';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
@@ -22,26 +26,116 @@ import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 type View_ = 'map' | 'chart';
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
 
-function regionTitle(r: Region, g: Translate): string {
-  const name = g(`region.${r.nameKey}` as GameKey);
-  return g(r.isSummit ? 'region.nameSummit' : 'region.name', { n: r.index + 1, name });
+function nodeStatus(b: StageBoss, currentKg: number, g: Translate): string {
+  if (b.status === 'defeated') {
+    if (!b.defeatedDateKey) return g('stage.defeatedNoDate');
+    const on = g('stage.defeatedOn', { date: shortDate(b.defeatedDateKey) });
+    return b.daysTaken != null ? `${on} · ${g('stage.daysTaken', { n: b.daysTaken })}` : on;
+  }
+  if (b.status === 'current') return g('stage.fighting', { kg: Math.max(0, currentKg - b.toKg).toFixed(1) });
+  return g('stage.locked', { kg: b.toKg });
 }
 
-function LockedRegion({ region, g }: { region: Region; g: Translate }) {
+/** One boss on the journey: portrait on the path, name and rank, its band and when it fell / how far it is. */
+function BossNode({ boss, zone, currentKg, onOpen, g }: { boss: StageBoss; zone: Zone; currentKg: number; onOpen: (b: StageBoss) => void; g: Translate }) {
+  const name = bossName(boss, g);
+  const status = nodeStatus(boss, currentKg, g);
+  const range = g('region.range', { from: boss.fromKg, to: boss.toKg });
+  const current = boss.status === 'current';
+  const locked = boss.status === 'locked';
+  const defeated = boss.status === 'defeated';
+  const skills = boss.skills.map((s) => g(`stage.skill.${s}` as GameKey)).join(' · ');
   return (
-    <View
+    <PressScale
+      scaleTo={0.98}
       accessible
-      accessibilityLabel={`${regionTitle(region, g)}. ${g('region.range', { from: region.fromKg, to: region.toKg })}. ${g('region.locked', { kg: region.fromKg })}`}
-      style={styles.locked}
+      accessibilityRole="button"
+      accessibilityLabel={`${name}. ${zoneTitle(zone, g)}. ${range}. ${status}${locked ? `. ${skills}` : ''}`}
+      accessibilityHint={g('stage.open')}
+      onPress={() => onOpen(boss)}
+      style={[styles.node, current && styles.nodeCurrent, locked && styles.nodeLocked]}
     >
-      <QuestIcon name="lock" size={22} color={quest.textSecondary} />
+      <View style={[styles.nodeArt, defeated && styles.nodeArtDone, current && styles.nodeArtCurrent]}>
+        <StageBossArt archetype={boss.archetype} tier={boss.tier} size={48} defeated={defeated} />
+        {defeated && (
+          <View style={styles.nodeCheck}>
+            <QuestIcon name="check" size={12} color={quest.onGold} />
+          </View>
+        )}
+        {locked && (
+          <View style={styles.nodeLock}>
+            <QuestIcon name="lock" size={11} color={quest.textSecondary} />
+          </View>
+        )}
+      </View>
       <View style={styles.flex}>
-        <HudText size={16} color={quest.textSecondary}>
-          {regionTitle(region, g)}
-        </HudText>
+        <View style={styles.nodeHead}>
+          <HudText size={15} color={locked ? quest.textTertiary : quest.text} style={styles.flex} numberOfLines={1}>
+            {name}
+          </HudText>
+          <HudText size={11} color={locked ? quest.textSecondary : quest.gold}>
+            {stars(boss.tier)}
+          </HudText>
+        </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {g('region.range', { from: region.fromKg, to: region.toKg })} · {g('region.locked', { kg: region.fromKg })}
+          {`${range} · ${rankName(boss.tier, g)}${boss.isFinal ? ` · ${g('stage.final')}` : ''}`}
         </HudText>
+        <HudText size={12} color={defeated ? quest.xp : current ? quest.hpText : quest.textSecondary}>
+          {status}
+        </HudText>
+        {locked && (
+          <HudText size={11} weight="medium" color={quest.textTertiary} numberOfLines={2}>
+            {skills}
+          </HudText>
+        )}
+        {current && (
+          <View style={styles.youChip}>
+            <HudText size={11} color={quest.onGold}>
+              {g('stage.you', { kg: currentKg.toFixed(1) })}
+            </HudText>
+          </View>
+        )}
+      </View>
+    </PressScale>
+  );
+}
+
+/** A zone: banner with its name, difficulty, range and progress, then its bosses from the far one down. */
+function ZoneSection({ zone, currentKg, onOpen, g }: { zone: Zone; currentKg: number; onOpen: (b: StageBoss) => void; g: Translate }) {
+  const pct = Math.round(zone.progress * 100);
+  const locked = zone.status === 'locked';
+  const borderColor = zone.status === 'current' ? quest.gold : zone.status === 'defeated' ? quest.xp : quest.border;
+  return (
+    <View style={styles.zone}>
+      <View
+        accessible
+        accessibilityRole="header"
+        accessibilityLabel={`${zoneTitle(zone, g)}. ${g('stage.tier', { n: zone.tier })}. ${g('region.range', { from: zone.fromKg, to: zone.toKg })}. ${locked ? g('stage.zoneLocked', { kg: zone.fromKg }) : g('stage.zoneProgress', { done: zone.defeatedCount, total: zone.bosses.length, pct })}`}
+        style={[styles.zoneBanner, { borderColor }, locked && styles.zoneBannerLocked]}
+      >
+        <View style={styles.zoneHead}>
+          {locked ? <QuestIcon name="lock" size={16} color={quest.textSecondary} /> : <QuestIcon name="map" size={16} color={borderColor} />}
+          <HudText size={16} color={locked ? quest.textSecondary : quest.text} style={styles.flex} numberOfLines={1}>
+            {zoneTitle(zone, g)}
+          </HudText>
+          <HudText size={12} color={locked ? quest.textSecondary : quest.gold}>
+            {stars(zone.tier)}
+          </HudText>
+        </View>
+        <HudText size={12} weight="medium" color={quest.textSecondary}>
+          {`${g('region.range', { from: zone.fromKg, to: zone.toKg })} · ${
+            locked ? g('stage.zoneLocked', { kg: zone.fromKg }) : g('stage.zoneProgress', { done: zone.defeatedCount, total: zone.bosses.length, pct })
+          }`}
+        </HudText>
+        <View style={styles.zoneBar}>
+          <XpBar ratio={zone.progress} color={zone.status === 'defeated' ? quest.xp : quest.gold} trackColor={quest.bg} height={6} />
+        </View>
+      </View>
+      <View style={styles.zoneNodes}>
+        <View style={styles.pathLine} />
+        {[...zone.bosses].reverse().map((b) => (
+          <BossNode key={b.index} boss={b} zone={zone} currentKg={currentKg} onOpen={onOpen} g={g} />
+        ))}
       </View>
     </View>
   );
@@ -64,18 +158,23 @@ export default function MapScreen() {
   const currentKg = latest?.weightKg ?? startWeightKg;
 
   const [view, setView] = useState<View_>('map');
-  const regions = useMemo(() => buildRegions(startWeightKg, goalWeightKg, currentKg), [startWeightKg, goalWeightKg, currentKg]);
-  const active = currentRegion(regions);
+  const [openBoss, setOpenBoss] = useState<StageBoss | null>(null);
+  const journeyData = useMemo(
+    () => buildStageJourney({ startKg: startWeightKg, goalKg: goalWeightKg, currentKg, entries, startDateISO }),
+    [startWeightKg, goalWeightKg, currentKg, entries, startDateISO]
+  );
+  const { bosses, zones, current } = journeyData;
+  const currentZone = current ? zones[current.zone] : zones[zones.length - 1];
+  const finalBoss = bosses[bosses.length - 1];
 
   // Content column = window width (capped) minus the 16 px gutters and the card padding.
   const columnWidth = Math.min(windowWidth, CONTENT_MAX_WIDTH) - 32;
   const lost = startWeightKg - currentKg;
   const totalToLose = Math.max(0, startWeightKg - goalWeightKg);
   const journey = totalToLose > 0 ? Math.max(0, Math.min(1, lost / totalToLose)) : 1;
-  const nextRegion = regions.find((r) => r.status === 'current' || r.status === 'locked');
 
-  const header = active
-    ? g(active.isSummit ? 'map.headerSummit' : 'map.header', { kg: currentKg.toFixed(1), n: active.index + 1 })
+  const header = currentZone
+    ? g(currentZone.isSummit ? 'map.headerSummit' : 'map.header', { kg: currentKg.toFixed(1), n: currentZone.index + 1 })
     : `${currentKg.toFixed(1)} kg`;
 
   return (
@@ -99,40 +198,154 @@ export default function MapScreen() {
         </HudText>
       </View>
 
-      {view === 'map' && active && (
-        <>
-          <View style={styles.stack}>
-            {[...regions]
-              .reverse()
-              .filter((r) => r.status === 'locked')
-              .map((r) => (
-                <LockedRegion key={r.index} region={r} g={g} />
-              ))}
-          </View>
+      {view === 'map' && bosses.length === 0 && (
+        <HudText size={14} weight="medium" color={quest.textSecondary} style={styles.noJourney}>
+          {g('stage.noJourney')}
+        </HudText>
+      )}
 
-          <View style={styles.activePanel}>
-            <View style={styles.activeHead}>
-              <HudText size={17} color={quest.gold} style={styles.flex}>
-                {regionTitle(active, g)}
+      {view === 'map' && bosses.length > 0 && (
+        <>
+          <View style={styles.stats}>
+            <View accessible accessibilityLabel={`${lost >= 0 ? g('chart.stats.lost') : g('chart.stats.up')} ${Math.abs(lost).toFixed(1)} kg`} style={styles.stat}>
+              <HudText size={22} color={lost >= 0 ? quest.xp : quest.hpText}>
+                {`${lost >= 0 ? '−' : '+'}${Math.abs(lost).toFixed(1)}`}
               </HudText>
-              <HudText size={13} weight="medium" color={quest.textSecondary}>
-                {g('region.range', { from: active.fromKg, to: active.toKg })}
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {lost >= 0 ? g('chart.stats.lost') : g('chart.stats.up')} (kg)
               </HudText>
             </View>
-            <TrailMap region={active} currentKg={currentKg} width={Math.min(columnWidth - 24, 362)} />
+            <View accessible accessibilityLabel={`${journeyData.defeatedCount}/${bosses.length} ${g('stage.bossesDown')}`} style={styles.stat}>
+              <HudText size={22} color={quest.gold}>{`${journeyData.defeatedCount}/${bosses.length}`}</HudText>
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {g('stage.bossesDown')}
+              </HudText>
+            </View>
+            <View accessible accessibilityLabel={`${g('chart.stats.left')} ${journeyData.leftKg.toFixed(1)} kg`} style={styles.stat}>
+              <HudText size={22}>{journeyData.leftKg.toFixed(1)}</HudText>
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {g('chart.stats.left')} (kg)
+              </HudText>
+            </View>
           </View>
 
-          {nextRegion && nextRegion.status === 'current' && (
+          {current ? (
+            <PressScale
+              scaleTo={0.98}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={`${g('stage.current')}. ${bossName(current, g)}. ${g('stage.tier', { n: current.tier })}. ${g('stage.hp', { left: current.hpLeftKg.toFixed(1), max: current.hpKg })}`}
+              accessibilityHint={g('stage.open')}
+              onPress={() => setOpenBoss(current)}
+              style={styles.hero}
+            >
+              <PulseRing color={quest.hp} borderRadius={20} />
+              <View style={styles.heroArt}>
+                <StageBossArt archetype={current.archetype} tier={current.tier} size={96} idle />
+              </View>
+              <View style={styles.flex}>
+                <HudText size={11} color={quest.hpText} style={styles.eyebrow}>
+                  {g('stage.current').toUpperCase()}
+                </HudText>
+                <HudText size={19} numberOfLines={1}>
+                  {bossName(current, g)}
+                </HudText>
+                <HudText size={12} color={quest.gold}>
+                  {`${stars(current.tier)} · ${rankName(current.tier, g)}`}
+                </HudText>
+                <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+                  {zoneTitle(zones[current.zone], g)}
+                </HudText>
+                <View style={styles.heroBar}>
+                  <XpBar ratio={current.hpKg > 0 ? current.hpLeftKg / current.hpKg : 0} color={quest.hp} trackColor={quest.bg} height={8} from={1} delay={300} />
+                </View>
+                <HudText size={12} color={quest.hpText}>
+                  {g('stage.hp', { left: current.hpLeftKg.toFixed(1), max: current.hpKg })}
+                </HudText>
+                <View style={styles.chips}>
+                  {current.skills.map((sk) => (
+                    <View key={sk} style={styles.chip}>
+                      <HudText size={11} color={quest.textTertiary}>
+                        {g(`stage.skill.${sk}` as GameKey)}
+                      </HudText>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </PressScale>
+          ) : (
+            <View accessible style={styles.victory}>
+              <QuestIcon name="check" size={22} color={quest.xp} />
+              <HudText size={16} color={quest.xp} style={styles.flex}>
+                {g('stage.victory')}
+              </HudText>
+            </View>
+          )}
+
+          {current && (
+            <View style={styles.activePanel}>
+              <View style={styles.activeHead}>
+                <HudText size={17} color={quest.gold} style={styles.flex}>
+                  {zoneTitle(zones[current.zone], g)}
+                </HudText>
+                <HudText size={13} weight="medium" color={quest.textSecondary}>
+                  {g('region.range', { from: current.fromKg, to: current.toKg })}
+                </HudText>
+              </View>
+              <TrailMap region={stageAsRegion(current)} currentKg={currentKg} width={Math.min(columnWidth - 24, 362)} />
+            </View>
+          )}
+
+          {current && (
             <View style={styles.next}>
               <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
                 {g('chart.next').toUpperCase()}
               </HudText>
-              <HudText size={16}>{g('chart.nextValue', { kg: nextRegion.toKg, left: Math.max(0, currentKg - nextRegion.toKg).toFixed(1) })}</HudText>
+              <HudText size={16}>{g('chart.nextValue', { kg: current.toKg, left: Math.max(0, currentKg - current.toKg).toFixed(1) })}</HudText>
               <View style={styles.nextBar}>
-                <XpBar ratio={nextRegion.progress} color={quest.gold} trackColor={quest.bg} height={8} />
+                <XpBar ratio={current.progress} color={quest.gold} trackColor={quest.bg} height={8} />
               </View>
             </View>
           )}
+
+          <View style={styles.journeyHead}>
+            <HudText size={18} accessibilityRole="header">
+              {g('stage.journey')}
+            </HudText>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {g('stage.journeyHint')}
+            </HudText>
+          </View>
+
+          <View style={[styles.endpoint, finalBoss?.status === 'defeated' && styles.endpointDone]}>
+            <QuestIcon name="flame" size={16} color={quest.gold} />
+            <HudText size={13} color={quest.gold} style={styles.flex}>
+              {g('stage.goal', { kg: goalWeightKg })}
+            </HudText>
+            {finalBoss?.defeatedDateKey && (
+              <HudText size={12} color={quest.xp}>
+                {shortDate(finalBoss.defeatedDateKey)}
+              </HudText>
+            )}
+          </View>
+
+          {[...zones].reverse().map((z) => (
+            <ZoneSection key={z.index} zone={z} currentKg={currentKg} onOpen={setOpenBoss} g={g} />
+          ))}
+
+          <View style={[styles.endpoint, styles.endpointDone]}>
+            <QuestIcon name="camp" size={16} color={quest.xp} />
+            <HudText size={13} style={styles.flex}>
+              {g('stage.start', { kg: startWeightKg })}
+            </HudText>
+            {journeyData.startDateKey && (
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {shortDate(journeyData.startDateKey)}
+              </HudText>
+            )}
+          </View>
+
+          <StageBossDetail boss={openBoss} zone={openBoss ? zones[openBoss.zone] : undefined} currentKg={currentKg} onClose={() => setOpenBoss(null)} />
         </>
       )}
 
@@ -224,20 +437,33 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 120 },
   flex: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 16, gap: 8 },
-  stack: { gap: 10, marginTop: 12 },
-  locked: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 64,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: quest.border,
-    backgroundColor: quest.panel,
-    opacity: 0.85,
-  },
+  noJourney: { marginTop: 16 },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, padding: 14, borderRadius: 20, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel },
+  heroArt: { width: 104, height: 104, borderRadius: 52, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bg },
+  heroBar: { marginTop: 6, marginBottom: 2 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99, backgroundColor: quest.raised2, borderWidth: 1, borderColor: quest.border },
+  victory: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.xp, backgroundColor: quest.panel },
+  journeyHead: { marginTop: 24, gap: 2 },
+  endpoint: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 99, borderWidth: 1.5, borderStyle: 'dashed', borderColor: quest.border, backgroundColor: quest.panel },
+  endpointDone: { borderStyle: 'solid' },
+  zone: { marginTop: 12 },
+  zoneBanner: { gap: 4, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, backgroundColor: quest.raised },
+  zoneBannerLocked: { backgroundColor: quest.panel, borderStyle: 'dashed' },
+  zoneHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  zoneBar: { marginTop: 4 },
+  zoneNodes: { gap: 8, marginTop: 8, paddingLeft: 12 },
+  pathLine: { position: 'absolute', left: 50, top: 0, bottom: 0, width: 3, borderRadius: 2, backgroundColor: quest.border },
+  node: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  nodeCurrent: { borderColor: quest.hp, backgroundColor: quest.bossPanel },
+  nodeLocked: { borderStyle: 'dashed', opacity: 0.85 },
+  nodeArt: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bg, borderWidth: 2, borderColor: quest.border },
+  nodeArtDone: { borderColor: quest.xp },
+  nodeArtCurrent: { borderColor: quest.hp },
+  nodeCheck: { position: 'absolute', right: -4, bottom: -4, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.xp },
+  nodeLock: { position: 'absolute', right: -4, bottom: -4, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.raised2 },
+  nodeHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  youChip: { alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, backgroundColor: quest.xp },
   activePanel: { marginTop: 12, padding: 12, borderRadius: 20, backgroundColor: '#16122C', borderWidth: 1.5, borderColor: quest.gold, alignItems: 'center' },
   activeHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8, alignSelf: 'stretch', marginBottom: 4 },
   next: { marginTop: 12, padding: 14, gap: 4, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.gold, backgroundColor: quest.raised },

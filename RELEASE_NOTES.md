@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.30 | no | — |
 | 0.29 | no | suggest-cheat-places, suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
 | 0.28 | no | — |
 | 0.27 | no | — |
@@ -41,6 +42,18 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.30
+- Map: stage bosses along your weight path, one per 5 kg from your start weight to your goal (e.g. 110→105→100→95), grouped into zones (at least 3, about 3 bosses each).
+  - A later zone means a stronger boss: more stars, a higher rank (Thường → Huyền thoại) and more skills.
+  - The six drawn bosses each carry a weapon: Quỷ Bánh Kem, Gã Thùng Bia, Slime Trà Sữa, Ninja Mì Gói, Golem Sofa, and the final boss Rồng Lẩu Buffet.
+  - Their skills include "Dụ dỗ đồ ngọt", "Bia lạnh cuối tuần", "Mì gói nửa đêm", "Ngủ muộn"…
+- Map: a "Hành trình diệt boss" journey from start to goal.
+  - Each zone has a banner and its progress.
+  - A beaten boss shows the date it fell ("Hạ ngày 21/10 · 2 ngày", from the first weigh-in at or below its weight).
+  - The current boss shows the kg left and "Bạn ở đây". Locked bosses show their skills.
+  - A summary shows kg lost, bosses down and kg to go.
+- Map: the current boss bobs with a pulsing ring. Tapping any boss opens a detail where it talks to you in chat bubbles, taunting or admitting defeat. Animations stop with the phone's reduced-motion setting.
 
 ## 0.29
 - Cook book, redesigned:
