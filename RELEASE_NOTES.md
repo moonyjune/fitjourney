@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.31 | no | tempt-me, suggest-cheat-places, suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
 | 0.30 | no | — |
 | 0.29 | no | suggest-cheat-places, suggest-dinner, analyze-proof-photo, parse-meal-text, read-nutrition-label, generate-meal-recipe, suggest-swap, weekly-report, coach-digest |
 | 0.28 | no | — |
@@ -42,6 +43,13 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.31
+- Temptation challenge (Profile, off by default): now and then a Temptation Boss messages you with a food or drink, as a chat with a drawn boss, typing dots, bubbles and two reply buttons.
+  - Easy picks from 40+ bundled Vietnamese treats by time of day; Hard asks AI for one item that fits the date, time, weather and city, maybe found on the web (a picture only from a page really seen).
+  - 1, 3 or 5 a day, never in quiet hours (22–07) or outside the eating window while fasting.
+  - Resisting gives +15 XP and keeps a streak; giving in offers to log the food.
+- AI usage lists the temptation challenge (6 a day).
 
 ## 0.30
 - Map: stage bosses along your weight path, one per 5 kg from your start weight to your goal (e.g. 110→105→100→95), grouped into zones (at least 3, about 3 bosses each).

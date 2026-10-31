@@ -25,6 +25,8 @@ import { buildDayEvaluator } from './dayEvaluator';
 import { evaluateDay, type DayEvaluation, type DayInput } from './missions';
 import type { WorkoutLogEntry } from '../types';
 import { computeGameState, type GameState } from './state';
+import { useTemptationStore } from '../store/useTemptationStore';
+import { temptationXp } from '../temptation/stats';
 
 /** A `Date` that refreshes every `intervalMs` so countdowns and the eating-window cut-off stay live. */
 export function useNow(intervalMs = 30_000): Date {
@@ -113,6 +115,7 @@ export function useGameState(now: Date): GameView {
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
   const limits = useLimits();
+  const bonusXp = useTemptationStore((s) => temptationXp(s.stats));
 
   // Re-evaluate once per minute rather than on every 30 s tick: nothing in the rules changes
   // faster than the eating-window cut-off, and the replay walks every day since the start date.
@@ -128,9 +131,10 @@ export function useGameState(now: Date): GameView {
       tdeeKcal,
       proteinTargetG,
       limits,
+      bonusXp,
     });
     return { ...state, streak: computeCurrentStreak(logs, mealTemplates, workoutEntries, tdeeKcal, at) };
-  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits]);
+  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, bonusXp]);
 }
 
 /** Stickers and banners for the signed-in user, derived from every log store. */

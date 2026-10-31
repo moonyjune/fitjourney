@@ -17,6 +17,8 @@ export interface GameInputs {
   tdeeKcal: number;
   proteinTargetG: number;
   limits?: Partial<Limits>;
+  /** XP earned outside the replayed logs (the temptation challenge's resisted pop-ups). */
+  bonusXp?: number;
 }
 
 export interface GameState {
@@ -107,6 +109,7 @@ export function computeGameState(input: GameInputs): GameState {
   }
   bossHistory.sort((a, b) => (a.weekKey < b.weekKey ? 1 : -1));
   totalXp += bossesDefeated * BOSS_DEFEAT_XP;
+  totalXp += Math.max(0, Math.round(input.bonusXp ?? 0));
 
   const boss = bossForWeek(now, deficitFor);
   return {

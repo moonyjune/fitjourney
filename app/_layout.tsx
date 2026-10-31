@@ -20,6 +20,7 @@ import { pullProfile, flushSyncQueue } from '../src/sync/cloudSync';
 import { restoreOwnData } from '../src/sync/restore';
 import { AppIntro } from '../src/components/AppIntro';
 import { WeeklyReportAutoRefresh } from '../src/ai/useWeeklyReportAutoRefresh';
+import { TemptationHost } from '../src/temptation/TemptationHost';
 
 // Minimum time the branded intro stays on screen, so it isn't just a 1-frame flash on warm starts.
 const MIN_INTRO_MS = 1200;
@@ -145,6 +146,8 @@ export default function RootLayout() {
       <StatusBar style={ready ? 'dark' : 'light'} />
       {/* Analysis set to automatic: this week's AI review is rewritten (debounced) when the week's data changes. */}
       <WeeklyReportAutoRefresh enabled={ready && !!session && roleChosen && role === 'client'} />
+      {/* Temptation challenge (off unless switched on in Profile): the pop-up schedule and the boss chat. */}
+      {ready && <TemptationHost enabled={!!session && roleChosen && role === 'client'} />}
       {!ready ? (
         <AppIntro durationMs={MIN_INTRO_MS} />
       ) : (

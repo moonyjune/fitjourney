@@ -1,6 +1,6 @@
 // Pure helpers for the per-user AI quota and the cost estimate (no Deno or network use, so they are unit-tested in jest).
 
-export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places';
+export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt';
 
 /** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
@@ -14,13 +14,15 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   digest: 5,
   // Cheat day > where to eat: each call runs several web searches ($0.01 each), so it gets fewer.
   places: 10,
+  /** The temptation challenge (Hard): at most 5 pop-ups a day, plus one spare. Each may search the web. */
+  tempt: 6,
 };
 
 export interface TokenUsage {
   input_tokens?: number;
   output_tokens?: number;
-  /** Server tools run by Anthropic (only when a call declared one, e.g. web search). */
-  server_tool_use?: { web_search_requests?: number };
+  /** Server tools used in the call (web search is billed per request, see webtools.ts). */
+  server_tool_use?: { web_search_requests?: number; web_fetch_requests?: number };
 }
 
 /** USD per web search ($10 per 1,000 searches on the Claude API), on top of the tokens. */

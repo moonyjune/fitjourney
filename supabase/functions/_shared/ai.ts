@@ -46,6 +46,7 @@ import {
   type WebSearchOptions,
   type WebSearchVariant,
 } from './webSearch.ts';
+import { collectWebEvidence, emptyEvidence, isServerToolUnavailable, type WebEvidence } from './webtools.ts';
 
 export type { AiFeature };
 
@@ -114,6 +115,26 @@ export interface AiCall {
   /** Lets the model search the web (Anthropic's server-side web search tool) before it calls `tool`. The call is then not forced
    *  (a forced tool call would skip the search), is made once (searches cost money), and its findings go to `shape`. */
   webSearch?: WebSearchOptions;
+  /** Anthropic server tools (web search / fetch) offered next to the feature's tool, for the model in force. With them the model
+   *  chooses when to call the feature's tool (a forced call would skip the searches); without them nothing changes. */
+  serverTools?: (model: string) => Record<string, unknown>[];
+}
+
+/** What the web tools gave a call: whether they were offered and accepted by the API, and what the answer showed of the web. */
+export interface WebOutcome {
+  offered: boolean;
+  /** False when the API refused the tools (e.g. not enabled for the key) and the call went ahead without them. */
+  available: boolean;
+  searches: number;
+  evidence: WebEvidence;
+}
+
+/** What `shape` gets besides the tool input. */
+export interface ShapeInfo {
+  ctx: AiContext;
+  usage?: TokenUsage;
+  findings: WebFindings | null;
+  web?: WebOutcome;
 }
 
 export interface AiContext {
@@ -131,8 +152,9 @@ export type AiPlan =
       call: AiCall;
       responseKey: string;
       after?: (input: Record<string, unknown>, ctx: AiContext) => Promise<void>;
-      /** What goes into the response instead of the raw tool input (e.g. the input checked against the web search findings). */
-      shape?: (input: Record<string, unknown>, web: WebFindings | null, usage: TokenUsage | undefined) => unknown;
+      /** What goes into the response instead of the raw tool input (e.g. the input checked against what the web search or the web
+       *  tools showed). `findings`: a `webSearch` call's; `web`: a `serverTools` call's. */
+      shape?: (input: Record<string, unknown>, info: ShapeInfo) => unknown;
     }
   | Response;
 
@@ -173,16 +195,37 @@ async function recordUsage(admin: SupabaseClient, userId: string, feature: AiFea
 /** Models that have refused a forced tool call, so later calls with them in this instance go straight to the working mode. */
 const noForcedTool = new Set<string>();
 
-async function callClaude(call: AiCall, model: string): Promise<{ input: Record<string, unknown>; usage?: TokenUsage } | { error: string; status: number }> {
+/** How many times a call that paused in its server-tool loop (`pause_turn`), or searched and then stopped without the feature's tool,
+ *  is continued. */
+const MAX_TOOL_CONTINUATIONS = 2;
+
+async function callClaude(
+  call: AiCall,
+  model: string
+): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; web: WebOutcome } | { error: string; status: number }> {
+  let serverTools = call.serverTools ? call.serverTools(model) : [];
+  const web: WebOutcome = { offered: serverTools.length > 0, available: serverTools.length > 0, searches: 0, evidence: emptyEvidence() };
+  let messages = call.messages;
+  let continuations = 0;
+  let inTokens = 0;
+  let outTokens = 0;
+  let searches = 0;
+  const addUsage = (u: TokenUsage | undefined) => {
+    inTokens += Number(u?.input_tokens ?? 0) || 0;
+    outTokens += Number(u?.output_tokens ?? 0) || 0;
+    searches += Number(u?.server_tool_use?.web_search_requests ?? 0) || 0;
+  };
   const bodyFor = (forced: boolean) => {
-    const system = systemFor(call.system, call.tool.name, forced);
+    // With server tools the model must be free to search first, so the feature's tool is never forced then.
+    const force = forced && serverTools.length === 0;
+    const system = systemFor(call.system, call.tool.name, force);
     return JSON.stringify({
       model,
       max_tokens: call.maxTokens,
       ...(system ? { system } : {}),
-      tools: [call.tool],
-      tool_choice: toolChoiceFor(call.tool.name, forced),
-      messages: call.messages,
+      tools: [...serverTools, call.tool],
+      tool_choice: toolChoiceFor(call.tool.name, force),
+      messages,
     });
   };
   const started = Date.now();
@@ -202,18 +245,40 @@ async function callClaude(call: AiCall, model: string): Promise<{ input: Record<
     }
     if (response?.ok) {
       const data = await response.json();
+      addUsage(data.usage);
       const blocks: Array<Record<string, unknown>> = data.content ?? [];
+      if (serverTools.length > 0) collectWebEvidence(blocks, web.evidence);
       const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === call.tool.name);
+      if (!toolUse && serverTools.length > 0 && continuations < MAX_TOOL_CONTINUATIONS && (data.stop_reason === 'pause_turn' || data.stop_reason === 'end_turn')) {
+        // The server-side search loop paused (resumed by sending the turn back as it is), or the model searched and then answered in
+        // text (asked once more for the tool call). Not a failed attempt.
+        continuations += 1;
+        messages = [...messages, { role: 'assistant', content: blocks }];
+        if (data.stop_reason === 'end_turn') messages = [...messages, { role: 'user', content: `Gọi tool ${call.tool.name} ngay bây giờ với những gì bạn đã có.` }];
+        attempt -= 1;
+        continue;
+      }
       if (!toolUse) {
         console.error('[ai] no tool_use in the answer', data.stop_reason);
         const why = data.stop_reason === 'max_tokens' ? 'câu trả lời bị cắt do quá dài, hãy thử lại' : (data.stop_reason ?? 'không rõ lý do');
         return { error: `AI không trả về kết quả phân tích (${why}).`, status: 502 };
       }
-      return { input: toolUse.input as Record<string, unknown>, usage: data.usage };
+      web.searches = searches;
+      const usage: TokenUsage = { input_tokens: inTokens, output_tokens: outTokens, ...(searches > 0 ? { server_tool_use: { web_search_requests: searches } } : {}) };
+      return { input: toolUse.input as Record<string, unknown>, usage, web };
     }
     const retryable = response === null || shouldRetry(response.status);
     if (response) {
       const text = await response.text();
+      if (serverTools.length > 0 && isServerToolUnavailable(response.status, text)) {
+        // The key may not use the web tools: go on without them (the feature tells the user). Not a failed attempt.
+        console.warn('[ai] web tools refused, continuing without them:', summarizeUpstreamError(response.status, text));
+        serverTools = [];
+        web.available = false;
+        messages = call.messages;
+        attempt -= 1;
+        continue;
+      }
       if (!noForcedTool.has(model) && isToolChoiceUnsupported(response.status, text)) {
         // This model does not take a forced tool call: switch to letting it choose, and go again at once (not a failed attempt).
         console.warn('[ai] model refuses a forced tool call; switching to tool_choice auto');
@@ -242,7 +307,7 @@ const MAX_CONTINUATIONS = 3;
 async function callClaudeWithSearch(
   call: AiCall,
   model: string
-): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; web: WebFindings } | { error: string; status: number }> {
+): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings } | { error: string; status: number }> {
   const started = Date.now();
   let variant: WebSearchVariant = 'dynamic';
   const messages: unknown[] = [...call.messages];
@@ -290,7 +355,7 @@ async function callClaudeWithSearch(
     usage = addUsage(usage, data.usage);
     findings.push(collectWebFindings(blocks));
     const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === call.tool.name);
-    if (toolUse) return { input: toolUse.input as Record<string, unknown>, usage, web: mergeFindings(findings) };
+    if (toolUse) return { input: toolUse.input as Record<string, unknown>, usage, findings: mergeFindings(findings) };
     if (data.stop_reason === 'pause_turn' && continuations < MAX_CONTINUATIONS) {
       // Send the paused turn back unchanged; the API resumes it.
       continuations++;
@@ -349,8 +414,8 @@ export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>
       if ('error' in outcome) return jsonResponse({ error: outcome.error }, outcome.status);
       await recordUsage(admin, user.id, feature, outcome.usage, config);
       if (planned.after) await planned.after(outcome.input, ctx);
-      const web = 'web' in outcome ? outcome.web : null;
-      return jsonResponse({ [planned.responseKey]: planned.shape ? planned.shape(outcome.input, web, outcome.usage) : outcome.input });
+      const info: ShapeInfo = { ctx, usage: outcome.usage, findings: 'findings' in outcome ? outcome.findings : null, web: 'web' in outcome ? outcome.web : undefined };
+      return jsonResponse({ [planned.responseKey]: planned.shape ? await planned.shape(outcome.input, info) : outcome.input });
     } catch (error) {
       return jsonResponse({ error: error instanceof Error ? error.message : 'Lỗi không xác định.' }, 500);
     }

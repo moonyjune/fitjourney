@@ -33,6 +33,7 @@ import { useIsAiAdmin } from '../../src/ai/useIsAiAdmin';
 import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 import { APP_VERSION, BUILD_ID } from '../../src/utils/buildInfo';
+import { TemptationSettings } from '../../src/components/quest/TemptationSettings';
 
 type Lang = 'vi' | 'en';
 
@@ -343,6 +344,8 @@ export default function ProfileScreen() {
           thumbColor={quest.text}
         />
       </View>
+
+      <TemptationSettings />
 
       <View style={styles.settingRow}>
         <QuestIcon name="chart" size={20} color={quest.mana} />

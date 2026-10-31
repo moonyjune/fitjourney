@@ -31,7 +31,7 @@ serveAi('places', async (body) => {
       webSearch: { maxUses: 6, userLocation: { country: 'VN', timezone: 'Asia/Ho_Chi_Minh' } },
     },
     // Checked against what the search saw; the answer carries those URLs (seenUrls) so the app can run the same check again.
-    shape: (input, web, usage) =>
+    shape: (input, { findings: web, usage }) =>
       cleanPlacesAnswer(input, {
         seenUrls: web?.urls ?? [],
         today: req.today,

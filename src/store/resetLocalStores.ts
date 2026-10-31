@@ -20,6 +20,7 @@ import { useAiDigestStore } from './useAiDigestStore';
 import { useAiReportStore } from './useAiReportStore';
 import { resetAnalysisStore } from './useAnalysisStore';
 import { useCheatDayStore } from './useCheatDayStore';
+import { resetTemptationStore } from './useTemptationStore';
 import { useMealModeStore } from './useMealModeStore';
 import { NO_MEAL_PREFS, useMealPrefStore } from './useMealPrefStore';
 import { useNutritionStore } from './useNutritionStore';
@@ -70,6 +71,7 @@ export function resetAllLocalStores() {
   useAiReportStore.setState({ weekly: {} });
   resetAnalysisStore();
   useCheatDayStore.setState({ days: [] });
+  resetTemptationStore();
   useMealModeStore.setState({ fasting: true });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });
   useCookbookStore.setState({ recipes: [] });

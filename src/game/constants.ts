@@ -44,3 +44,7 @@ export const LIMITS = {
 } as const;
 
 export type Limits = { [K in keyof typeof LIMITS]: number };
+
+/** The temptation challenge (optional, Profile): XP for each pop-up temptation resisted. Modest next to the daily missions; the
+ *  schedule shows at most 5 a day, so it adds at most 75 XP a day. Giving in costs nothing but the resist streak. */
+export const TEMPTATION_RESIST_XP = 15;

@@ -18,6 +18,7 @@ import type { ClientRows } from '../ai/coachDigest';
 import type { SwapContext, SwapItem } from '../food/swaps';
 import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
+import { sampleTemptation } from '../temptation/sample';
 import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
@@ -1412,6 +1413,39 @@ export async function requestCheatPlaces(dishes: string[], location: string, coo
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
     if (message.includes(PLACES_UNAVAILABLE_PREFIX)) return { ok: false, message: message.slice(message.indexOf(PLACES_UNAVAILABLE_PREFIX)), kind: 'unavailable' };
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+export interface TemptationRequest {
+  date: string;
+  time: string;
+  weekday: number;
+  city: string;
+  weather: { tempC: number; summary: string } | null;
+  avoid: string[];
+}
+
+export type TemptationOutcome = { ok: true; result: unknown; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the tempt-me edge function (temptation challenge, Hard): one tempting item for right now, maybe found on the web. Same rules
+ *  as the other AI requests: the device switch, the offline dev account (a labelled sample), offline fails softly. */
+export async function requestTemptation(body: TemptationRequest): Promise<TemptationOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: sampleTemptation(new Date()), sample: true };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('tempt-me', { body });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
+    return { ok: true, result: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;
     return { ok: false, message, kind: classifyReached(message, status) };
   }
 }

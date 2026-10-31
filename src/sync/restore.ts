@@ -11,6 +11,8 @@ import { cleanMealPrefs, NO_MEAL_PREFS, pick as pickPrefs, useMealPrefStore } fr
 import { useMealModeStore } from '../store/useMealModeStore';
 import { useAnalysisStore } from '../store/useAnalysisStore';
 import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
+import { useTemptationStore } from '../store/useTemptationStore';
+import { cleanTemptationData, mergeTemptation } from '../temptation/stats';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { TARGET_RANGE, useUricStore } from '../store/useUricStore';
 import { useWeightStore } from '../store/useWeightStore';
@@ -348,6 +350,14 @@ function restoreUserData(remote: Map<string, unknown>): void {
   const mergedCheat = cleanCheatDays([...remoteCheat, ...localCheat]);
   if (!sameJson(mergedCheat, localCheat)) useCheatDayStore.setState({ days: mergedCheat });
   if (!sameJson(mergedCheat, remoteCheat)) void pushUserData(USER_DATA_KEYS.cheatDays, { days: mergedCheat });
+
+  // Temptation challenge: the record with more answers wins, histories are joined, the device's settings win once changed.
+  const temptRemote = cleanTemptationData(remote.get(USER_DATA_KEYS.temptation));
+  const temptState = useTemptationStore.getState();
+  const temptLocal = cleanTemptationData({ settings: temptState.settings, stats: temptState.stats, history: temptState.history });
+  const temptMerged = mergeTemptation(temptLocal, temptRemote);
+  if (!sameJson(temptMerged, temptLocal)) useTemptationStore.setState(temptMerged);
+  if (!sameJson(temptMerged, temptRemote)) void pushUserData(USER_DATA_KEYS.temptation, temptMerged);
 
   // Meal preferences (calories / protein wanted per meal): a device with none set takes the cloud's; a device with some pushes them.
   const prefsLocal = pickPrefs(useMealPrefStore.getState());
