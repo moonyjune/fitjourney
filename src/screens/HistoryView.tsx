@@ -31,7 +31,9 @@ import type { StringKey } from '../i18n/strings';
 import { chartWidthFor, screenMaxWidthStyle } from '../theme/responsive';
 import { DailyMealBreakdownTable } from '../components/DailyMealBreakdownTable';
 import { actualDailyDeficitKcal, resolveTdeeKcal } from '../utils/tdee';
-import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood, ProofPhoto } from '../types';
+import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood, ProofPhoto, WorkoutLogEntry } from '../types';
+import { WorkoutEntries, workoutRange } from '../components/quest/WorkoutDetailDialog';
+import { mealsLogged } from '../food/mealCount';
 import { PhotoViewer } from '../components/quest/PhotoViewer';
 import { mealCaption } from '../utils/mealCaption';
 import { EXTRA_PROOF_PREFIX } from '../types';
@@ -55,8 +57,10 @@ interface DaySummary {
   calories: number;
   proteinG: number;
   waterMl: number;
+  /** Meal times with food logged (see `mealsLogged`), shown against the plan's 3. */
   mealsEatenCount: number;
   workoutsCount: number;
+  workouts: WorkoutLogEntry[];
   caloriesBurned: number;
   proofsCount: number;
   proofs: ProofPhoto[];
@@ -236,8 +240,9 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           calories,
           proteinG,
           waterMl: log?.waterMl ?? 0,
-          mealsEatenCount: eatenMeals.length,
+          mealsEatenCount: mealsLogged(log),
           workoutsCount: dayWorkouts.length,
+          workouts: [...dayWorkouts].sort((a, b) => Date.parse(a.dateISO) - Date.parse(b.dateISO)),
           caloriesBurned: dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0),
           proofsCount: dayProofs.length,
           proofs: dayProofs,
@@ -342,6 +347,8 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   const badges = unlockedStreakBadges(streak);
 
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
+  // A day's workouts are folded to one summary line; tapping it lists them with each exercise and set.
+  const [workoutsOpen, setWorkoutsOpen] = useState<Record<string, boolean>>({});
   const [viewing, setViewing] = useState<{ dateKey: string; photos: ProofPhoto[] } | null>(null);
 
   /** Which meal (or workout) a day's photo belongs to and when it was logged, e.g. "Tối · 19:30". */
@@ -445,6 +452,29 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           <Meta color={d.deficitKcal >= 0 ? quest.xp : quest.gold}>
             {t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: {Math.round(Math.abs(d.deficitKcal))} kcal
           </Meta>
+        )}
+        {d.workouts.length > 0 && (
+          <View style={styles.workouts}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${formatDateVi(d.dateKey)}. ${g(workoutsOpen[d.dateKey] ? 'journal.wo.hide' : 'journal.wo.show')}`}
+              accessibilityState={{ expanded: !!workoutsOpen[d.dateKey] }}
+              onPress={() => setWorkoutsOpen((o) => ({ ...o, [d.dateKey]: !o[d.dateKey] }))}
+              style={styles.workoutsHead}
+            >
+              <HudText size={12} color={quest.hpText}>
+                {workoutsOpen[d.dateKey] ? '▾' : '▸'}
+              </HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.flex}>
+                {`${g('journal.wo.summary', {
+                  n: d.workouts.length,
+                  min: Math.round(d.workouts.reduce((sum, w) => sum + w.durationMin, 0)),
+                  kcal: Math.round(d.caloriesBurned),
+                })} · ${d.workouts.map((w) => workoutRange(w)).join(', ')}`}
+              </HudText>
+            </Pressable>
+            {workoutsOpen[d.dateKey] && <WorkoutEntries entries={d.workouts} lang={language === 'en' ? 'en' : 'vi'} />}
+          </View>
         )}
         {d.proofsCount > 0 && (
           <Pressable accessibilityRole="link" accessibilityLabel={t('history.proofBadge', { n: d.proofsCount })} onPress={() => setViewing({ dateKey: d.dateKey, photos: d.proofs })} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
@@ -863,6 +893,9 @@ const styles = StyleSheet.create({
   legendText: { marginTop: 0, fontSize: 11 },
   chartStyle: { borderRadius: questRadius.row },
   toggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  workouts: { marginTop: 6, gap: 6 },
+  workoutsHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, minHeight: 32, paddingVertical: 4 },
+  flex: { flex: 1, minWidth: 0 },
   dailyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 },
   segment: { flexDirection: 'row', borderRadius: 10, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, padding: 3, gap: 2, marginTop: 12 },
   segmentItem: { minHeight: 36, minWidth: 44, paddingHorizontal: 12, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

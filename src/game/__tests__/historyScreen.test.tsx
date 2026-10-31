@@ -109,6 +109,29 @@ describe('History screen (FitQuest)', () => {
     expect(r.root.findAll((n) => n.props.testID === 'LineChart').length).toBeGreaterThanOrEqual(2);
   });
 
+  it('counts the meals that were logged (4 meal times = 4/3) and folds the day\'s workouts into one line that opens', async () => {
+    const k = dayKey(0);
+    const food = (id: string, at: string, mealTime: string | null) => ({ id, name: `Món ${id}`, calories: 200, proteinG: 5, mealTime, loggedAtISO: new Date(`${k}T${at}:00`).toISOString() });
+    useNutritionStore.setState({
+      logs: { [k]: { ...log(k), mealsEaten: {}, extraItems: [food('a', '07:00', 'breakfast'), food('b', '10:00', 'morning_snack'), food('c', '12:30', null), food('d', '19:00', 'dinner')] } },
+    } as never);
+    useWorkoutStore.setState({
+      entries: [
+        { id: 'w1', dateISO: new Date(`${k}T06:00:00`).toISOString(), templateId: 'home-A', label: 'Squat ngồi ghế', durationMin: 5, caloriesBurned: 30, details: { exercises: [{ id: 'chairSquat', level: 1, sets: 3, amount: 8, unit: 'reps', restSec: 40, results: [8, 8, 7] }] } },
+        { id: 'w2', dateISO: new Date(`${k}T06:10:00`).toISOString(), templateId: null, label: 'Đi bộ', durationMin: 20, caloriesBurned: 90 },
+      ],
+    });
+    const r = await render();
+    expect(text(r)).toContain('4/3 bữa');
+    expect(text(r)).toContain('2 buổi tập · 25 phút · đốt 120 kcal · 06:00–06:05, 06:10–06:30');
+    expect(text(r)).not.toContain('Đạt từng set');
+    await act(async () => byLabel(r, /Xem buổi tập/).props.onPress());
+    expect(text(r)).toContain('Đạt từng set: 1: 8 · 2: 8 · 3: 7 lần');
+    expect(text(r)).toContain('Đi bộ');
+    await act(async () => byLabel(r, /Thu gọn buổi tập/).props.onPress());
+    expect(text(r)).not.toContain('Đạt từng set');
+  });
+
   it('expands and collapses a day to show its editable meal table', async () => {
     useNutritionStore.setState({ logs: { [dayKey(0)]: log(dayKey(0)) } });
     const r = await render();

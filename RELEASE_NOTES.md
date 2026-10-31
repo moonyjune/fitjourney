@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.27 | no | — |
 | 0.26 | no | suggest-dinner |
 | 0.25 | yes | — |
 | 0.24 | yes | — |
@@ -38,6 +39,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.27
+- History, daily diary: a day's workouts fold into one line, e.g. "6 buổi tập · 45 phút · đốt 320 kcal · 06:00–06:05, …". Tapping it lists each workout with its time range and, for a guided session, each exercise with the plan and what every set reached; tap again to fold it.
+- History: the meal count ("x/3 bữa") now counts the meals you logged, not the plan's meals you ticked. Every meal time with food counts as one (breakfast, a snack, lunch…), so a day of 4 meals shows 4/3. A food logged without a meal counts by its time, and a "Không ăn" mark is not a meal.
 
 ## 0.26
 - Cook book: a "Hôm nay muốn ăn gì?" panel with chips you can tick several of:

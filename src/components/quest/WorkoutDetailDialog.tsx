@@ -55,6 +55,39 @@ function ExerciseResult({ x, lang }: { x: WorkoutExerciseResult; lang: 'vi' | 'e
   );
 }
 
+/** Workouts one under the other: each with its time range, length and calories and, for a guided session, each
+ *  exercise with its plan and what every set reached. Used by the journal dialog and History's day cards. */
+export function WorkoutEntries({ entries, lang }: { entries: WorkoutLogEntry[]; lang: 'vi' | 'en' }) {
+  const g = useGameText();
+  return (
+    <>
+      {entries.map((e) => (
+        <View key={e.id} style={styles.entry}>
+          <View style={styles.row}>
+            <QuestIcon name="dumbbell" size={16} color={quest.hpText} />
+            <HudText size={15} style={styles.flex}>
+              {e.label}
+            </HudText>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {workoutRange(e)}
+            </HudText>
+          </View>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('journal.workoutMeta', { min: e.durationMin, kcal: Math.round(e.caloriesBurned) })}
+          </HudText>
+          {e.details?.exercises.length ? (
+            e.details.exercises.map((x) => <ExerciseResult key={x.id} x={x} lang={lang} />)
+          ) : (
+            <HudText size={12} weight="medium" color={quest.textTertiary}>
+              {g('journal.wo.noDetails')}
+            </HudText>
+          )}
+        </View>
+      ))}
+    </>
+  );
+}
+
 /** Every workout of a journal row: its time range, length and calories and, for a guided session, each exercise with
  *  the planned sets and what every set reached. */
 export function WorkoutDetailDialog({ entries, lang, onClose }: Props) {
@@ -76,29 +109,7 @@ export function WorkoutDetailDialog({ entries, lang, onClose }: Props) {
             <HudText size={13} color={quest.goldLight}>
               {`${clock(new Date(first.dateISO))}–${clock(new Date(endMs))} · ${g('journal.workoutMeta', { min: totalMin, kcal: totalKcal })}`}
             </HudText>
-            {entries.map((e) => (
-              <View key={e.id} style={styles.entry}>
-                <View style={styles.row}>
-                  <QuestIcon name="dumbbell" size={16} color={quest.hpText} />
-                  <HudText size={15} style={styles.flex}>
-                    {e.label}
-                  </HudText>
-                  <HudText size={12} weight="medium" color={quest.textSecondary}>
-                    {workoutRange(e)}
-                  </HudText>
-                </View>
-                <HudText size={12} weight="medium" color={quest.textSecondary}>
-                  {g('journal.workoutMeta', { min: e.durationMin, kcal: Math.round(e.caloriesBurned) })}
-                </HudText>
-                {e.details?.exercises.length ? (
-                  e.details.exercises.map((x) => <ExerciseResult key={x.id} x={x} lang={lang} />)
-                ) : (
-                  <HudText size={12} weight="medium" color={quest.textTertiary}>
-                    {g('journal.wo.noDetails')}
-                  </HudText>
-                )}
-              </View>
-            ))}
+            <WorkoutEntries entries={entries} lang={lang} />
           </ScrollView>
           <QuestButton title={g('journal.detailClose')} variant="ghost" onPress={onClose} />
         </View>
