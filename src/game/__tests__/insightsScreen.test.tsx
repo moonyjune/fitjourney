@@ -25,7 +25,9 @@ jest.mock('../../sync/cloudSync', () => ({
   pushNutritionLog: jest.fn(),
   pushProfile: jest.fn(),
   pushProofPhoto: jest.fn(),
+  pushUserData: (...a: unknown[]) => mockPushUserData(...a),
 }));
+const mockPushUserData = jest.fn();
 // Charts need SVG measurements that do not exist under the test renderer; render a marker that keeps the data.
 jest.mock('react-native-chart-kit', () => {
   const { View } = require('react-native');
@@ -34,6 +36,7 @@ jest.mock('react-native-chart-kit', () => {
 
 import InsightsScreen from '../../../app/insights';
 import { useLimitsStore } from '../../store/useLimitsStore';
+import { resetAnalysisStore, useAnalysisStore } from '../../store/useAnalysisStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
@@ -76,6 +79,7 @@ describe('Analysis screen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetAnalysisStore();
     useSettingsStore.setState({ language: 'vi', startWeightKg: 110, goalWeightKg: 95, calorieTargetKcal: 1520, targetDailyDeficitKcal: 1000, proteinTargetG: 110, gender: null, age: null, heightCm: null, activityLevel: null });
     useLimitsStore.setState({ purineMg: 600, saltG: 5, sugarG: 35 });
     useWorkoutStore.setState({ entries: [] });
@@ -168,9 +172,10 @@ describe('Analysis screen', () => {
   it('week card: "analyse again" fetches the latest data from the cloud and says when', async () => {
     fillLogs(1500, 7);
     const r = await mount();
+    expect(mockRestore).toHaveBeenCalledTimes(1); // auto mode: opening brings in what was logged on other devices
     await tap(r, 'Tuần/tháng');
     await tap(r, 'Phân tích lại Tuần 05/10–11/10');
-    expect(mockRestore).toHaveBeenCalledTimes(1);
+    expect(mockRestore).toHaveBeenCalledTimes(2);
     expect(allText(r)).toMatch(/Đã phân tích lại lúc \d\d:\d\d với dữ liệu mới nhất\./);
     mockRestore.mockResolvedValueOnce({ ok: false, weights: 0, days: 0, workouts: 0, habits: 0, uric: 0 });
     await tap(r, 'Phân tích lại Tuần 05/10–11/10');
@@ -209,6 +214,81 @@ describe('Analysis screen', () => {
     expect(text).toContain('The scale is down 5.0 kg');
     expect(text).toContain('Weight forecast');
     expect(text).not.toContain('Dự báo');
+  });
+
+  it('says when each part was analysed, and defaults to automatic updates', async () => {
+    fillLogs(1500, 7);
+    const r = await mount();
+    const text = allText(r);
+    expect(text).toContain('Cập nhật phân tích');
+    expect(text).toMatch(/Phân tích lúc \d\d\/\d\d \d\d:\d\d/);
+    expect(text).toContain('Mọi tab đã phân tích với dữ liệu mới nhất.');
+    const radio = (name: string) => r.root.findAll((n) => n.props.accessibilityRole === 'radio' && n.props.accessibilityLabel === name)[0];
+    expect(radio('Tự động').props.accessibilityState).toEqual({ checked: true });
+    expect(radio('Thủ công').props.accessibilityState).toEqual({ checked: false });
+    await tap(r, 'Tuần/tháng');
+    expect(allText(r)).toMatch(/Phân tích lúc \d\d\/\d\d \d\d:\d\d/);
+    await tap(r, 'Nhận xét');
+    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Phân tích lại ngày 07/10/2026' && typeof n.props.onPress === 'function')).toHaveLength(1);
+  });
+
+  it('auto: logging the missing breakfast updates the week card and the comments at once', async () => {
+    fillLogs(1500, 7);
+    const logs = useNutritionStore.getState().logs;
+    useNutritionStore.setState({ logs: { ...logs, [dayKey(5)]: { ...logs[dayKey(5)], extraItems: logs[dayKey(5)].extraItems.filter((i) => i.mealTime !== 'breakfast') } } });
+    const r = await mount();
+    await tap(r, 'Tuần/tháng');
+    expect(allText(r)).toContain('06/10: thiếu sáng');
+    // breakfast logged without choosing the meal, at 7:30: it counts as breakfast
+    await act(async () => {
+      useNutritionStore.getState().addExtra(dayKey(5), 'Phở bò', 450, 25, null, { clock: [7, 30], fromFoodDb: true });
+    });
+    expect(allText(r)).not.toContain('06/10: thiếu');
+    expect(allText(r)).not.toContain('Cũ — dữ liệu đã thay đổi');
+  });
+
+  it('manual: keeps the analysis, marks it outdated when data changes, and each button analyses its own part again', async () => {
+    fillLogs(1500, 7);
+    const logs = useNutritionStore.getState().logs;
+    useNutritionStore.setState({ logs: { ...logs, [dayKey(5)]: { ...logs[dayKey(5)], extraItems: logs[dayKey(5)].extraItems.filter((i) => i.mealTime !== 'breakfast') } } });
+    const r = await mount();
+    const radio = r.root.findAll((n) => n.props.accessibilityRole === 'radio' && n.props.accessibilityLabel === 'Thủ công')[0];
+    await act(async () => (radio.props.onPress as () => void)());
+    expect(useAnalysisStore.getState().mode).toBe('manual');
+    expect(mockPushUserData).toHaveBeenCalledWith('analysisMode', { mode: 'manual' });
+    expect(allText(r)).toContain('Phân tích giữ nguyên đến khi bạn bấm');
+    await tap(r, 'Tuần/tháng');
+    await act(async () => {
+      useNutritionStore.getState().addExtra(dayKey(5), 'Phở bò', 450, 25, 'breakfast', { fromFoodDb: true });
+    });
+    let text = allText(r);
+    expect(text).toContain('06/10: thiếu sáng'); // still the analysis made before
+    expect(text).toContain('Cũ — dữ liệu đã thay đổi sau lần phân tích (06/10).');
+    expect(text).toContain('Có dữ liệu mới chưa phân tích ở: Tổng quan, Tuần/tháng, Vận động, Nhận xét.');
+    await tap(r, 'Phân tích lại Tuần 05/10–11/10');
+    text = allText(r);
+    expect(text).not.toContain('06/10: thiếu');
+    expect(text).toContain('Có dữ liệu mới chưa phân tích ở: Tổng quan, Vận động, Nhận xét.');
+    // the comments tab still has the old analysis of that day, with its own button
+    await tap(r, 'Nhận xét');
+    expect(allText(r)).toContain('Bổ sung bữa còn thiếu (1)');
+    await tap(r, 'Phân tích lại ngày 06/10/2026');
+    expect(allText(r)).not.toContain('Bổ sung bữa còn thiếu');
+    // and one button for everything
+    await tap(r, 'Phân tích lại tất cả');
+    expect(allText(r)).toContain('Mọi tab đã phân tích với dữ liệu mới nhất.');
+  });
+
+  it('manual: "not eaten" on a missing meal is analysed at once', async () => {
+    fillLogs(1500, 7);
+    const logs = useNutritionStore.getState().logs;
+    useNutritionStore.setState({ logs: { ...logs, [dayKey(5)]: { ...logs[dayKey(5)], extraItems: logs[dayKey(5)].extraItems.filter((i) => i.mealTime !== 'breakfast') } } });
+    useAnalysisStore.setState({ mode: 'manual' });
+    const r = await mount();
+    await tap(r, 'Tuần/tháng');
+    await tap(r, 'Đánh dấu không ăn bữa sáng ngày 06/10');
+    expect(allText(r)).not.toContain('06/10: thiếu');
+    expect(allText(r)).not.toContain('Cũ — dữ liệu');
   });
 
   it('goes back', async () => {

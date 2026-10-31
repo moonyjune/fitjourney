@@ -45,3 +45,7 @@ yarn-error.*
 supabase/.temp/
 .vercel
 .env*
+
+# secrets: never commit tokens
+.github-token*
+*.token

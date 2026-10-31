@@ -86,6 +86,11 @@ describe('voiceGenderOf', () => {
     expect(voiceGenderOf(v('en-us-x-iom-local', 'en-us-x-iom-local', 'en-US'))).toBe('male');
   });
 
+  it('does not take "Việt Nam" in a voice name for a male name', () => {
+    expect(voiceGenderOf(v('Tiếng Việt Việt Nam', 'Tiếng Việt Việt Nam', 'vi-VN'))).toBeNull();
+    expect(voiceGenderOf(v('x', 'Microsoft NamMinh Online (Natural) - Tiếng Việt (Việt Nam)', 'vi-VN'))).toBe('male');
+  });
+
   it('is null when the name gives no hint', () => {
     expect(voiceGenderOf(v('Google Tiếng Việt', 'Google Tiếng Việt', 'vi-VN'))).toBeNull();
     expect(voiceGenderOf(v('vi-vn-x-vic-local', 'vi-vn-x-vic-local', 'vi-VN'))).toBeNull();

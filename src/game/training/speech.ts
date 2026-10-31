@@ -17,7 +17,7 @@ export const SPEECH_LOCALE: Record<SpeechLang, string> = { vi: 'vi-VN', en: 'en-
 export const SPEECH_LANGUAGE = SPEECH_LOCALE.en;
 
 /** Pitch used when no voice of the wanted gender exists, so female / male still sound different. */
-export const FALLBACK_PITCH: Record<VoiceGender, number> = { female: 1.25, male: 0.8 };
+export const FALLBACK_PITCH: Record<VoiceGender, number> = { female: 1.4, male: 0.6 };
 
 /** The fields of an engine voice the selection needs (expo-speech `Voice`, web voices included). */
 export interface VoiceInfo {
@@ -44,14 +44,17 @@ const MALE_NAMES = new Set([
   'steffan', 'william', 'david', 'mark', 'george', 'james', 'thomas', 'reed', 'rocko', 'eddy', 'grandpa', 'jacques',
   'andrew', 'davis', 'tony', 'liam', 'brandon',
   // Vietnamese
-  'an', 'namminh', 'nam', 'minh', 'khang', 'quang',
+  // ("nam" is left out: "Việt Nam" is in the name of most Vietnamese voices, whatever their gender.)
+  'an', 'namminh', 'minh', 'khang', 'quang',
   // Android / Google codes
   'iol', 'iom', 'tpd', 'gfm',
 ]);
 
 /** The gender a voice is known to have from its name / identifier, or null when the name gives no hint. */
 export function voiceGenderOf(voice: Pick<VoiceInfo, 'name' | 'identifier'>): VoiceGender | null {
-  const words = `${voice.name} ${voice.identifier}`.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+  // Accents are dropped first so "Tiếng Việt" splits into whole words instead of fragments.
+  const plain = `${voice.name} ${voice.identifier}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd');
+  const words = plain.toLowerCase().split(/[^a-z]+/).filter(Boolean);
   // "female" contains "male": test the explicit word first, then the name lists.
   if (words.includes('female')) return 'female';
   if (words.includes('male')) return 'male';
@@ -84,6 +87,21 @@ export function pickVoice(voices: readonly VoiceInfo[], prefs: VoicePrefs): Voic
   const fallback =
     mainLocaleFirst(ofLang.filter((v) => voiceGenderOf(v) === null))[0] ?? mainLocaleFirst(ofLang)[0];
   return { voice: fallback?.identifier, language: fallback?.language || locale, pitch: FALLBACK_PITCH[prefs.gender] };
+}
+
+export interface VoiceInUse {
+  /** The device voice's name, or null when the device has no voice for the language. */
+  name: string | null;
+  /** false: no voice of the chosen gender, the pitch is moved to make up for it. */
+  exact: boolean;
+}
+
+/** Which device voice the current choice uses (for the hint under the picker). Null until the voices are loaded. */
+export function voiceInUse(prefs: VoicePrefs): VoiceInUse | null {
+  if (voices.length === 0) return null;
+  const choice = pickVoice(voices, prefs);
+  const voice = voices.find((v) => v.identifier === choice.voice);
+  return { name: voice ? voice.name : null, exact: choice.pitch === 1 };
 }
 
 /** Speech is a nicety: it must never throw, and silently does nothing where it is unavailable (some browsers and

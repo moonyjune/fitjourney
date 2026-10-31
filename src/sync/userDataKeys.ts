@@ -7,4 +7,5 @@ export const USER_DATA_KEYS = {
   mealMode: 'mealMode',
   mealPrefs: 'mealPrefs',
   cookbook: 'cookbook',
+  analysisMode: 'analysisMode',
 } as const;

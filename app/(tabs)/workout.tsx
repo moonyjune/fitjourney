@@ -34,7 +34,6 @@ import { toDateKey } from '../../src/utils/date';
 import { useNow } from '../../src/game/useGameState';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
-const MAX_PICKS = 3;
 const MIN_PICKS = 2;
 
 export default function TrainScreen() {
@@ -50,7 +49,6 @@ export default function TrainScreen() {
   const suggested = suggestedGroup(now);
   const [group, setGroup] = useState<GroupId>(suggested ?? 'A');
   const [picked, setPicked] = useState<ExerciseId[]>(GROUP_EXERCISES[suggested ?? 'A']);
-  const [limitHint, setLimitHint] = useState(false);
 
   const todayKey = toDateKey(now);
   const todayEntries = useMemo(() => entries.filter((e) => toDateKey(new Date(e.dateISO)) === todayKey), [entries, todayKey]);
@@ -58,18 +56,10 @@ export default function TrainScreen() {
   function chooseGroup(next: GroupId) {
     setGroup(next);
     setPicked(GROUP_EXERCISES[next]);
-    setLimitHint(false);
   }
 
   function toggle(id: ExerciseId) {
-    if (picked.includes(id)) {
-      setPicked(picked.filter((p) => p !== id));
-      setLimitHint(false);
-    } else if (picked.length >= MAX_PICKS) {
-      setLimitHint(true);
-    } else {
-      setPicked([...picked, id]);
-    }
+    setPicked(picked.includes(id) ? picked.filter((p) => p !== id) : [...picked, id]);
   }
 
   const levelOf = (id: ExerciseId) => progressFor(progress, id).level;
@@ -144,15 +134,10 @@ export default function TrainScreen() {
 
         <View style={styles.pickHeader}>
           <HudText size={18}>{g('train.pickTitle')}</HudText>
-          <HudText size={13} color={limitHint ? quest.hpText : quest.gold}>
+          <HudText size={13} color={quest.gold}>
             {g('train.picked', { n: picked.length })}
           </HudText>
         </View>
-        {limitHint && (
-          <HudText size={12} weight="medium" color={quest.hpText} accessibilityLiveRegion="polite">
-            {g('train.pickMax')}
-          </HudText>
-        )}
 
         <View style={styles.grid}>
           {tileIds.map((id) => {

@@ -198,7 +198,8 @@ describe('History screen (FitQuest)', () => {
 
     it('list: groups the days by month, only the current month open, and older months open on tap', async () => {
       const today = dayKey(0);
-      const old = dayKey(40); // always in an earlier month
+      // Always in an earlier month, and never a Monday: a Monday also shows in the weekly summary ("Tuần bắt đầu …").
+      const old = new Date(`${dayKey(40)}T12:00:00`).getDay() === 1 ? dayKey(41) : dayKey(40);
       useNutritionStore.setState({ logs: { [today]: log(today), [old]: log(old) } });
       const r = await render();
       const header = (k: string) => byLabel(r, new RegExp(`^${viMonth(k)}\\. 1 ngày có ghi chép$`));

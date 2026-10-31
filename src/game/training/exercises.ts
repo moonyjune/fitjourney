@@ -35,6 +35,22 @@ interface Localized {
   en: string;
 }
 
+export type Side = 'L' | 'R';
+
+/** Which arm / leg does the work for one side of a one-sided exercise. */
+export interface SideSpec {
+  arm?: Side;
+  leg?: Side;
+}
+
+/** How a one-sided (`perSide`) exercise moves between sides. `block`: every rep on the first side, then every rep
+ *  on the other. `alternate`: one rep per side in turn (right, left, right…). `first` is the side the coach starts
+ *  with; the other side mirrors it. */
+export interface SidePlan {
+  pattern: 'block' | 'alternate';
+  first: SideSpec;
+}
+
 export interface Exercise {
   id: ExerciseId;
   /** Which group rotation the exercise belongs to. The neck exercise belongs to none: it is always added. */
@@ -47,8 +63,10 @@ export interface Exercise {
   caution: Localized;
   /** Index 0 = level 1. */
   levels: [Prescription, Prescription, Prescription, Prescription];
-  /** Seconds of one rep, used only to estimate how long a session takes. */
+  /** Seconds of one rep: paces the auto count and estimates how long a session takes. */
   repSec: number;
+  /** Side order for levels with `perSide`. */
+  sides?: SidePlan;
 }
 
 const L = (vi: string, en: string): Localized => ({ vi, en });
@@ -125,6 +143,7 @@ export const EXERCISES: Exercise[] = [
     areas: [L('Mông', 'Glutes'), L('Đùi sau', 'Hamstrings'), L('Lưng dưới', 'Lower back')],
     restSec: 30,
     repSec: 4,
+    sides: { pattern: 'block', first: { leg: 'R' } },
     steps: [
       L('Nằm ngửa, gối co, bàn chân đặt gần mông.', 'Lie on your back, knees bent, feet close to your hips.'),
       L('Đẩy hông lên tới khi vai, hông, gối thành đường thẳng.', 'Lift your hips until shoulders, hips and knees form a line.'),
@@ -146,10 +165,14 @@ export const EXERCISES: Exercise[] = [
     areas: [L('Bụng dưới', 'Lower abs'), L('Bụng sâu', 'Deep core')],
     restSec: 30,
     repSec: 4,
+    sides: { pattern: 'alternate', first: { arm: 'R', leg: 'L' } },
     steps: [
       L('Nằm ngửa, tay thẳng lên trần, gối co vuông góc.', 'Lie on your back, arms up to the ceiling, knees bent at 90°.'),
       L('Ép lưng dưới sát sàn suốt bài tập.', 'Keep your lower back pressed to the floor throughout.'),
-      L('Duỗi tay và chân đối diện thật chậm, thở ra khi duỗi.', 'Slowly extend the opposite arm and leg, breathe out as you extend.'),
+      L(
+        'Duỗi tay phải và chân trái thật chậm, thở ra khi duỗi, thu về; rồi đổi tay trái và chân phải. Mỗi lượt hai bên tính một lần.',
+        'Slowly extend your right arm and left leg, breathing out, and bring them back; then your left arm and right leg. One rep is both sides.'
+      ),
     ],
     caution: L('Lưng dưới bị nhấc khỏi sàn: duỗi chân ngắn lại.', 'Lower back lifts off the floor: shorten the leg reach.'),
     levels: [
@@ -167,9 +190,13 @@ export const EXERCISES: Exercise[] = [
     areas: [L('Đùi', 'Thighs'), L('Mông', 'Glutes'), L('Thăng bằng', 'Balance')],
     restSec: 40,
     repSec: 4,
+    sides: { pattern: 'block', first: { leg: 'R' } },
     steps: [
       L('Một tay vịn lưng ghế chắc chắn.', 'One hand on a sturdy chair back.'),
-      L('Bước một chân ra sau, hạ gối sau xuống gần sàn.', 'Step one foot back and lower the back knee toward the floor.'),
+      L(
+        'Bước chân phải ra sau, hạ gối phải xuống gần sàn. Làm đủ số lần bên phải rồi đổi sang chân trái.',
+        'Step your right foot back and lower the right knee toward the floor. Do all the reps on the right, then switch to the left leg.'
+      ),
       L('Gối trước không vượt mũi chân, đẩy gót trước để đứng lên.', 'Front knee stays behind the toes; push through the front heel to stand.'),
     ],
     caution: L('Mất thăng bằng hoặc đau gối: bước ngắn hơn, hạ ít hơn.', 'Losing balance or knee pain: take a shorter step and lower less.'),
@@ -230,10 +257,14 @@ export const EXERCISES: Exercise[] = [
     areas: [L('Bụng', 'Core'), L('Lưng', 'Back'), L('Thăng bằng', 'Balance')],
     restSec: 30,
     repSec: 5,
+    sides: { pattern: 'alternate', first: { arm: 'R', leg: 'L' } },
     steps: [
       L('Quỳ bốn điểm: tay dưới vai, gối dưới hông.', 'On all fours: hands under shoulders, knees under hips.'),
       L('Duỗi tay phải và chân trái cùng lúc, song song với sàn.', 'Extend the right arm and left leg together, parallel to the floor.'),
-      L('Giữ 2 giây, hông không xoay, đổi bên.', 'Hold 2 seconds, hips stay square, switch sides.'),
+      L(
+        'Giữ 2 giây, hông không xoay, thu về; rồi đổi tay trái và chân phải. Mỗi lượt hai bên tính một lần.',
+        'Hold 2 seconds, hips stay square, come back; then left arm and right leg. One rep is both sides.'
+      ),
     ],
     caution: L('Đau cổ tay: chống trên nắm tay hoặc đặt khăn gấp dưới tay.', 'Wrist pain: rest on your fists or put a folded towel under your hands.'),
     levels: [

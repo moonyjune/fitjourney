@@ -22,6 +22,7 @@ jest.mock('../training/speech', () => ({
   stopSpeaking: () => mockStop(),
   isSpeechAvailable: () => true,
   preloadVoices: () => Promise.resolve(),
+  voiceInUse: () => null,
 }));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({
@@ -125,17 +126,21 @@ describe('Train tab, exercise detail and session', () => {
       expect(pressable(r, byLabel('Chọn Dead bug')).props.accessibilityState.selected).toBe(false);
     });
 
-    it('allows 2-3 exercises only and blocks a fourth with a visible reason', () => {
+    it('needs at least 2 exercises and has no upper limit', () => {
       const r = render(<TrainScreen />);
       press(r, 'Chọn Squat ngồi ghế'); // a fourth
-      expect(pressable(r, byLabel('Chọn Squat ngồi ghế')).props.accessibilityState.selected).toBe(false);
-      expect(allText(r)).toContain('Tối đa 3 bài mỗi buổi');
-      press(r, 'Chọn Dead bug');
-      press(r, 'Chọn Dip ghế co gối'); // down to one
+      press(r, 'Chọn Cầu mông'); // and a fifth
+      expect(pressable(r, byLabel('Chọn Squat ngồi ghế')).props.accessibilityState.selected).toBe(true);
+      expect(pressable(r, byLabel('Chọn Cầu mông')).props.accessibilityState.selected).toBe(true);
+      expect(allText(r)).toContain('5 đã chọn');
+      press(r, 'Bắt đầu');
+      expect(mockRouter.push).toHaveBeenCalledWith({
+        pathname: '/train/session',
+        params: { ids: 'wallPushup,chairDip,deadBug,chairSquat,glutBridge,chinTuck', group: 'B' },
+      });
+      ['Chọn Dead bug', 'Chọn Dip ghế co gối', 'Chọn Squat ngồi ghế', 'Chọn Cầu mông'].forEach((l) => press(r, l)); // down to one
       expect(allText(r)).toContain('Chọn ít nhất 2 bài');
       expect(isDisabled(r, 'Bắt đầu')).toBe(true);
-      press(r, 'Chọn Squat ngồi ghế');
-      expect(isDisabled(r, 'Bắt đầu')).toBe(false);
     });
 
     it('starts the session with the picked exercises plus the always-on chin tuck', () => {
@@ -550,6 +555,63 @@ describe('Train tab, exercise detail and session', () => {
         if (i < 2) press(r, 'Bỏ qua nghỉ');
       }
       expect(spoken()).toContain('Workout complete. Great job!');
+    });
+
+    it('calls out which side starts and which side comes next, and the list follows', () => {
+      mockParams = { ids: 'chairLunge', group: 'C' };
+      const r = render(<SessionScreen />);
+      const selected = () =>
+        r.root.findAll((n) => n.props.accessibilityState?.selected === true && /^\d\d:\d\d /.test(n.props.accessibilityLabel ?? ''))[0]?.props.accessibilityLabel;
+      expect(selected()).toBe('00:00 Chuẩn bị · chân phải trước');
+      mockSpeak.mockClear();
+      press(r, 'Bắt đầu, tự đếm');
+      expect(spoken()).toEqual(['Get ready. Right leg first.']);
+      act(() => {
+        jest.advanceTimersByTime(2000 + 200);
+      });
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(selected()).toBe('00:02 Bắt đầu · chân phải · 6 lần');
+      act(() => {
+        jest.advanceTimersByTime(6 * 4000);
+      });
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(spoken()).toContain('Switch sides: left leg.');
+      expect(selected()).toBe('00:26 Đổi sang chân trái');
+    });
+
+    it('with "auto start" ticked, the next set starts counting by itself when the rest ends', () => {
+      const r = render(<SessionScreen />);
+      press(r, 'Tự bắt đầu set mới khi hết giờ nghỉ');
+      expect(useTrainingStore.getState().autoNextSet).toBe(true);
+      press(r, 'Xong set');
+      mockSpeak.mockClear();
+      for (let i = 0; i < 41; i++) {
+        act(() => {
+          jest.advanceTimersByTime(1000);
+        });
+      }
+      expect(allText(r)).toContain('Set 2 / 3');
+      expect(spoken()).toEqual(expect.arrayContaining(['Set 2 of 3.', 'Get ready.']));
+      act(() => {
+        jest.advanceTimersByTime(1500 + 2000 + 3000 + 200);
+      });
+      expect(allText(r)).toMatch(/SỐ LẦN\s+1/); // nobody pressed start
+      useTrainingStore.setState({ autoNextSet: false });
+    });
+
+    it('without it, the next set waits for the user', () => {
+      useTrainingStore.setState({ autoNextSet: false });
+      const r = render(<SessionScreen />);
+      press(r, 'Xong set');
+      press(r, 'Bỏ qua nghỉ');
+      act(() => {
+        jest.advanceTimersByTime(10_000);
+      });
+      expect(allText(r)).toMatch(/SỐ LẦN\s+0/);
     });
   });
 });

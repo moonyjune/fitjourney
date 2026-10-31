@@ -17,6 +17,7 @@ import { useLimitsStore } from './useLimitsStore';
 import { useTrainingStore } from './useTrainingStore';
 import { useAiDigestStore } from './useAiDigestStore';
 import { useAiReportStore } from './useAiReportStore';
+import { resetAnalysisStore } from './useAnalysisStore';
 import { useMealModeStore } from './useMealModeStore';
 import { NO_MEAL_PREFS, useMealPrefStore } from './useMealPrefStore';
 import { useNutritionStore } from './useNutritionStore';
@@ -65,6 +66,7 @@ export function resetAllLocalStores() {
   useWeightStore.setState({ entries: [] });
   useNutritionStore.setState({ logs: {}, waterDefaultDone: false });
   useAiReportStore.setState({ weekly: {} });
+  resetAnalysisStore();
   useMealModeStore.setState({ fasting: true });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });
   useCookbookStore.setState({ recipes: [] });

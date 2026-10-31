@@ -180,6 +180,25 @@ const vi = {
   'ins.jointAvoid': 'Tránh khi đau',
   'ins.profileRow': 'Phân tích',
   'ins.profileRowHint': 'Thâm hụt, mỡ so với nước, dự báo, tổng kết tuần/tháng, vận động',
+
+  // Analysis refresh: when each part was analysed, automatic or manual updates, outdated marks.
+  'ins.modeTitle': 'Cập nhật phân tích',
+  'ins.modeAuto': 'Tự động',
+  'ins.modeManual': 'Thủ công',
+  'ins.modeAutoHint': 'Khi bạn thêm hoặc sửa dữ liệu (món ăn, nước, cân nặng, tập luyện), ngày và tuần đó được phân tích lại ngay; nhận xét AI của tuần được viết lại sau vài phút.',
+  'ins.modeManualHint': 'Phân tích giữ nguyên đến khi bạn bấm “Phân tích lại” (tất cả, từng tab, từng tuần/tháng hoặc từng ngày). Phần nào có dữ liệu mới được đánh dấu là cũ.',
+  'ins.refreshAll': 'Phân tích lại tất cả',
+  'ins.refreshTab': 'Phân tích lại tab này',
+  'ins.refreshTabLabel': 'Phân tích lại tab {tab}',
+  'ins.refreshDay': 'Phân tích lại ngày',
+  'ins.refreshDayLabel': 'Phân tích lại ngày {date}',
+  'ins.analysedAt': 'Phân tích lúc {at}',
+  'ins.analysedNever': 'Chưa phân tích',
+  'ins.outdated': 'Cũ — dữ liệu đã thay đổi sau lần phân tích ({dates}).',
+  'ins.outdatedTabs': 'Có dữ liệu mới chưa phân tích ở: {tabs}.',
+  'ins.allFresh': 'Mọi tab đã phân tích với dữ liệu mới nhất.',
+  'ins.aiAutoPending': 'Dữ liệu tuần đã thay đổi sau lần AI nhận xét — AI sẽ tự viết lại sau ít phút.',
+  'ins.aiOutdated': 'Cũ — dữ liệu tuần đã thay đổi sau lần AI nhận xét. Bấm “Làm mới phân tích” để AI viết lại.',
 };
 
 export type InsightsKey = keyof typeof vi;
@@ -360,6 +379,25 @@ const en: Record<InsightsKey, string> = {
   'ins.jointAvoid': 'Avoid when sore',
   'ins.profileRow': 'Analysis',
   'ins.profileRowHint': 'Deficit, fat vs water, forecast, weekly and monthly summaries, exercise',
+
+  // Analysis refresh: when each part was analysed, automatic or manual updates, outdated marks.
+  'ins.modeTitle': 'Analysis updates',
+  'ins.modeAuto': 'Automatic',
+  'ins.modeManual': 'Manual',
+  'ins.modeAutoHint': 'When you add or change data (food, water, weight, workouts), that day and week are analysed again at once; the AI comments on the week are rewritten a few minutes later.',
+  'ins.modeManualHint': 'The analysis stays as it is until you tap “Analyse again” (everything, a tab, a week/month or a day). Parts with new data are marked outdated.',
+  'ins.refreshAll': 'Analyse everything again',
+  'ins.refreshTab': 'Analyse this tab again',
+  'ins.refreshTabLabel': 'Analyse the {tab} tab again',
+  'ins.refreshDay': 'Analyse this day again',
+  'ins.refreshDayLabel': 'Analyse {date} again',
+  'ins.analysedAt': 'Analysed at {at}',
+  'ins.analysedNever': 'Not analysed yet',
+  'ins.outdated': 'Outdated — the data changed after this analysis ({dates}).',
+  'ins.outdatedTabs': 'New data not analysed yet in: {tabs}.',
+  'ins.allFresh': 'Every tab is analysed with the latest data.',
+  'ins.aiAutoPending': 'This week\'s data changed after the AI review — the AI will rewrite it in a few minutes.',
+  'ins.aiOutdated': 'Outdated — this week\'s data changed after the AI review. Tap “Refresh the analysis” to have it rewritten.',
 };
 
 export function formatInsightsText(language: 'vi' | 'en', key: InsightsKey, params?: Record<string, string | number>): string {

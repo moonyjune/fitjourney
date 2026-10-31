@@ -56,7 +56,9 @@ export function adviceFor(row: DayRow, rows: DayRow[], items: DiaryItem[], th: T
 
   if (!row.complete) out.push({ key: 'missing', value: row.missing.length });
   if (row.complete && row.kcal < th.minKcal) out.push({ key: 'lowKcal', value: row.kcal });
-  if (today.some((i) => isSkippedMeal(i.text))) out.push({ key: 'skipped' });
+  // A "Không ăn" mark no longer counts once real food is logged for that same meal (the user marked it, then remembered eating).
+  const ateAt = (meal: DiaryItem['mealTime']) => isMainMeal(meal) && today.some((o) => o.mealTime === meal && !isSkippedMeal(o.text));
+  if (today.some((i) => isSkippedMeal(i.text) && !ateAt(i.mealTime))) out.push({ key: 'skipped' });
   if (mentionsAlcohol(today.map((i) => i.text))) out.push({ key: 'alcohol' });
 
   const sodiumOver = (r: DayRow | undefined) => !!r && r.sodiumMg > th.sodiumMax;

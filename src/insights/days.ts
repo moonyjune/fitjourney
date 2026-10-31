@@ -11,6 +11,22 @@ export const MAIN_MEALS: MainMeal[] = ['breakfast', 'lunch', 'dinner'];
 export const PLAN_SLOT_MEAL: Record<MealSlot, MainMeal> = { meal1: 'breakfast', meal2: 'lunch', meal3: 'dinner' };
 const EXTRA_MAIN: Partial<Record<ExtraMealTime, MainMeal>> = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner' };
 
+/** The main meal an off-plan food stands for. A food filed under breakfast / lunch / dinner is that meal; a snack is none. A food
+ *  logged without a meal time (the meal chip is optional, and the AI does not always name one) counts by the time it was eaten, the
+ *  way the Camp timeline and History already place it: 05:00-10:29 breakfast, 10:30-14:59 lunch, 17:00-21:59 dinner, else a snack.
+ *  Before this, such a breakfast never counted and the day stayed "missing breakfast" however often it was logged. */
+export function mainMealOf(item: { mealTime: ExtraMealTime | null | undefined; loggedAtISO?: string }): MainMeal | null {
+  if (item.mealTime) return EXTRA_MAIN[item.mealTime] ?? null;
+  if (!item.loggedAtISO) return null;
+  const at = new Date(item.loggedAtISO);
+  const minutes = at.getHours() * 60 + at.getMinutes();
+  if (!Number.isFinite(minutes)) return null;
+  if (minutes >= 5 * 60 && minutes < 10 * 60 + 30) return 'breakfast';
+  if (minutes >= 10 * 60 + 30 && minutes < 15 * 60) return 'lunch';
+  if (minutes >= 17 * 60 && minutes < 22 * 60) return 'dinner';
+  return null;
+}
+
 export interface DayRow {
   dateKey: string;
   kcal: number;
@@ -73,7 +89,7 @@ export function buildDayRows(input: DayInput): DayRow[] {
 
     const covered = new Set<MainMeal>();
     for (const e of extras) {
-      const main = e.mealTime ? EXTRA_MAIN[e.mealTime] : undefined;
+      const main = mainMealOf(e);
       if (main) covered.add(main);
     }
     for (const m of meals) covered.add(PLAN_SLOT_MEAL[m.slot]);

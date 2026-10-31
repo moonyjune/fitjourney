@@ -15,6 +15,9 @@ interface TrainingState {
   setVoiceLang: (lang: SpeechLang) => void;
   voiceGender: VoiceGender;
   setVoiceGender: (gender: VoiceGender) => void;
+  /** Start the next set by itself (auto count / hold timer) when a rest ends. Off by default. */
+  autoNextSet: boolean;
+  setAutoNextSet: (on: boolean) => void;
   progress: Partial<Record<ExerciseId, ExerciseProgress>>;
   /** Records how each exercise felt in a session and moves levels per the progression rules.
    *  Returns the exercises that levelled up. Local to this device (not synced to the cloud). */
@@ -30,6 +33,8 @@ export const useTrainingStore = create<TrainingState>()(
       setVoiceLang: (lang) => set({ voiceLang: lang }),
       voiceGender: 'female',
       setVoiceGender: (gender) => set({ voiceGender: gender }),
+      autoNextSet: false,
+      setAutoNextSet: (on) => set({ autoNextSet: on }),
       progress: {},
       commitRatings: (ratings, now = new Date()) => {
         const next = { ...get().progress };

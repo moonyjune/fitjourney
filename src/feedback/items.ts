@@ -1,6 +1,6 @@
 import { getDayType } from '../constants/plan';
 import { sumItemNutrients } from '../game/nutrients';
-import { PLAN_SLOT_MEAL } from '../insights/days';
+import { mainMealOf, PLAN_SLOT_MEAL } from '../insights/days';
 import { SODIUM_MG_PER_SALT_G } from '../insights/thresholds';
 import type { DailyNutritionLog, ExtraMealTime, PlanData } from '../types';
 
@@ -45,7 +45,8 @@ export function buildDiaryItems(logs: Record<string, DailyNutritionLog>, mealTem
         id: e.id,
         dateKey,
         text: e.name,
-        mealTime: e.mealTime,
+        // A food logged without a meal time is placed by when it was eaten, like the day's missing-meal check (see mainMealOf).
+        mealTime: e.mealTime ?? mainMealOf(e),
         kcal: e.calories,
         proteinG: e.proteinG,
         purineMg: e.purineMg ?? 0,

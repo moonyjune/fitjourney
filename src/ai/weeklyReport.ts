@@ -8,6 +8,7 @@ import { addDays } from '../utils/milestones';
 import { KCAL_PER_KG_FAT } from '../utils/tdee';
 import { weekStartKey } from '../utils/weekKey';
 import { evaluatorFor, makeDayEvaluator, type DaySource } from './coachContext';
+import { fingerprint } from '../insights/snapshot';
 
 /** Where the week stands against the boss, decided here in code (the AI is told it, never asked to guess it). */
 export type BossStatus = 'defeated' | 'on_track' | 'behind' | 'far';
@@ -209,6 +210,14 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     weight,
     ...(previousWeek ? { previousWeek } : {}),
   };
+}
+
+/** The fingerprint of what the AI is told about the week's data: it changes when food, water, a weigh-in, a workout or a target
+ *  changes, but not merely because time passed (today's date, days left and the empty days still to come are left out). A stored
+ *  review with another fingerprint was written from older data. */
+export function weekInputFingerprint(input: WeekInput): string {
+  const days = input.days.filter((d) => d.logged || d.workouts > 0 || d.waterMl > 0).map(({ missed: _missed, ...rest }) => rest);
+  return fingerprint({ start: input.week.start, targets: input.targets, days, weight: input.weight, previousWeek: input.previousWeek ?? null });
 }
 
 /** What the AI writes about the week. The numbers and the boss status stay the ones computed above. */

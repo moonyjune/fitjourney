@@ -7,13 +7,19 @@ jest.mock('../../sync/cloudSync', () => ({ pushProfile: jest.fn(), ensureCoachCo
 
 import { EXERCISE_BY_ID } from '../training/exercises';
 import { buildSteps, sessionReducer, startSession } from '../training/session';
+import { activeRow, exercisePlan, formatRowTime } from '../training/plan';
 import {
   LEAD_IN_MS,
   REST_COUNTDOWN_FROM,
   SPEECH_TEXT,
   SWITCH_PAUSE_MS,
   dueEvents,
+  firstSideLine,
+  introScript,
+  mirrorSide,
   repTimeline,
+  sideWords,
+  switchLine,
   restScript,
   resumeOffsetMs,
   shouldCallHold,
@@ -112,7 +118,7 @@ describe('spoken scripts (English by default, whatever the app language is)', ()
     const [bird] = buildSteps([{ id: 'birdDog', level: 1 }]);
     const lines = workScript(bird, EXERCISE_BY_ID.birdDog, 0);
     expect(lines[1]).toMatch(/each side/);
-    expect(lines).toContain('Do both sides in every set.');
+    expect(lines).toContain('Alternate sides: right arm and left leg, then left arm and right leg. One rep is both sides.');
     const [plank] = buildSteps([{ id: 'kneePlank', level: 1 }]);
     expect(spokenAmount(plank)).toMatch(/hold for \d+ seconds/);
   });
@@ -150,7 +156,7 @@ describe('spoken scripts in Vietnamese (voice language vi)', () => {
     const [next] = buildSteps([{ id: 'wallPushup', level: 1 }]);
     expect(restScript(40, next, EXERCISE_BY_ID.wallPushup, 'vi')).toBe(`Nghỉ 40 giây. Tiếp theo: ${EXERCISE_BY_ID.wallPushup.nameVi}, 3 hiệp, mỗi hiệp 8 lần.`);
     const [bird] = buildSteps([{ id: 'birdDog', level: 1 }]);
-    expect(workScript(bird, EXERCISE_BY_ID.birdDog, 0, 'vi')).toContain(SPEECH_TEXT.vi.bothSides);
+    expect(workScript(bird, EXERCISE_BY_ID.birdDog, 0, 'vi')).toContain('Đổi bên xen kẽ: tay phải và chân trái, rồi tay trái và chân phải. Mỗi lượt hai bên tính một lần.');
     expect(spokenAmount(bird, 'vi')).toMatch(/mỗi bên/);
   });
 
@@ -168,5 +174,85 @@ describe('setCount action', () => {
     expect(sessionReducer(s, { type: 'setCount', count: -3 }).count).toBe(0);
     const resting = sessionReducer(s, { type: 'finishSet' });
     expect(sessionReducer(resting, { type: 'setCount', count: 7 })).toBe(resting);
+  });
+});
+
+describe('left / right cues', () => {
+  it('alternates one move per side, says the number after each pair and names the next side after every move', () => {
+    const tl = repTimeline(2, true, 4, 'alternate');
+    expect(tl.map((e) => `${e.kind}${e.kind === 'switch' ? e.side : e.spoken}`)).toEqual(['switch2', 'rep1', 'switch1', 'switch2', 'rep2', 'done2']);
+    expect(tl.filter((e) => e.kind === 'rep').map((e) => e.atMs)).toEqual([LEAD_IN_MS + 8000, LEAD_IN_MS + 16000]);
+    // Resuming after one pair (2 moves) carries on from the third move.
+    expect(resumeOffsetMs(tl, 2)).toBe(LEAD_IN_MS + 8000);
+  });
+
+  it('names the side to start with and the side to switch to, in both voice languages', () => {
+    const lunge = EXERCISE_BY_ID.chairLunge;
+    const [st] = buildSteps([{ id: 'chairLunge', level: 1 }]);
+    expect(firstSideLine(st, lunge)).toBe('Right leg first.');
+    expect(firstSideLine(st, lunge, 'vi')).toBe('Chân phải trước.');
+    expect(switchLine(lunge, 2)).toBe('Switch sides: left leg.');
+    expect(switchLine(lunge, 2, 'vi')).toBe('Đổi bên: chân trái.');
+    expect(workScript(st, lunge, 0)).toContain('Start with the right leg, then switch to the left leg.');
+    expect(switchLine(EXERCISE_BY_ID.deadBug, 2, 'vi')).toBe('Tay trái và chân phải.');
+    expect(sideWords(mirrorSide({ arm: 'R', leg: 'L' }))).toBe('left arm and right leg');
+    const [squat] = buildSteps([{ id: 'chairSquat', level: 1 }]);
+    expect(firstSideLine(squat, EXERCISE_BY_ID.chairSquat)).toBe('');
+  });
+
+  it('an auto-started set gets a short intro; the rest before a new exercise reads its steps', () => {
+    const [st] = buildSteps([{ id: 'chairLunge', level: 1 }]);
+    expect(introScript(st, EXERCISE_BY_ID.chairLunge, 1)).toEqual(['Set 2 of 2.']);
+    expect(introScript(st, EXERCISE_BY_ID.chairLunge, 0)).toEqual([
+      'Supported reverse lunge',
+      '2 sets of 6 reps on each side.',
+      'Start with the right leg, then switch to the left leg.',
+    ]);
+    expect(restScript(40, st, EXERCISE_BY_ID.chairLunge, 'en', true)).toContain(EXERCISE_BY_ID.chairLunge.steps[1].en);
+  });
+});
+
+describe('exercise plan list', () => {
+  it('lists every set with its start, side changes and end, and the rests between sets', () => {
+    const [st] = buildSteps([{ id: 'chairLunge', level: 1 }]); // 2 sets x 6 per side, 4 s a rep, rest 40
+    const rows = exercisePlan(st, EXERCISE_BY_ID.chairLunge, null);
+    expect(rows.map((r) => `${r.set}:${r.kind}${r.side?.leg ?? ''}@${formatRowTime(r.atMs)}`)).toEqual([
+      '0:readyR@00:00',
+      '0:goR@00:02',
+      '0:switchL@00:26',
+      '0:done@00:53',
+      '1:rest@00:00',
+      '1:readyR@00:00',
+      '1:goR@00:02',
+      '1:switchL@00:26',
+      '1:done@00:53',
+    ]);
+    expect(rows[4].restSec).toBe(40);
+    // A later exercise starts with the rest that leads into it.
+    expect(exercisePlan(st, EXERCISE_BY_ID.chairLunge, 30)[0]).toMatchObject({ kind: 'rest', restSec: 30, set: 0 });
+  });
+
+  it('marks the row in progress from the clock, the count by hand, or the rest', () => {
+    const [st] = buildSteps([{ id: 'chairLunge', level: 1 }]);
+    const rows = exercisePlan(st, EXERCISE_BY_ID.chairLunge, null);
+    const at = (pos: Partial<Parameters<typeof activeRow>[1]>) =>
+      rows[activeRow(rows, { phase: 'work', set: 0, elapsedMs: null, moves: 0, ...pos })]?.key;
+    expect(at({})).toBe('0-ready');
+    expect(at({ elapsedMs: 3000 })).toBe('0-go');
+    expect(at({ elapsedMs: 27_000 })).toBe('0-sw6');
+    expect(at({ moves: 3 })).toBe('0-go');
+    expect(at({ moves: 6 })).toBe('0-sw6'); // all reps on the right done by hand: time to switch
+    expect(at({ phase: 'rest', set: 1 })).toBe('1-rest');
+    expect(activeRow(rows, { phase: 'done', set: 0, elapsedMs: null, moves: 0 })).toBe(-1);
+  });
+
+  it('alternating exercises get a row per side change; holds get start and end', () => {
+    const [bug] = buildSteps([{ id: 'deadBug', level: 1 }]); // 5 per side
+    const set0 = exercisePlan(bug, EXERCISE_BY_ID.deadBug, null).filter((r) => r.set === 0 && r.kind === 'switch');
+    expect(set0).toHaveLength(9);
+    expect(set0[0].side).toEqual({ arm: 'L', leg: 'R' });
+    expect(set0[1].side).toEqual({ arm: 'R', leg: 'L' });
+    const [plank] = buildSteps([{ id: 'kneePlank', level: 1 }]);
+    expect(exercisePlan(plank, EXERCISE_BY_ID.kneePlank, null).slice(0, 2).map((r) => `${r.kind}@${r.atMs}`)).toEqual(['go@0', 'done@15000']);
   });
 });

@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.23 | no | — |
 | 0.22 | no | — |
 | 0.21 | no | — |
 | 0.20 | no | — |
@@ -34,6 +35,16 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.23
+- Training: pick as many exercises as you like (2 or more; the old limit of 3 is gone).
+- Training: a "Tự bắt đầu set mới khi hết giờ nghỉ" checkbox. When a rest ends (or is skipped), the next set starts counting by itself after a short intro. Before a new exercise, its steps are read during the rest.
+- Training voice says which side goes first and which side comes next. Lunge and single-leg bridge do every rep on the right leg, then switch to the left. Dead bug and bird-dog alternate: right arm + left leg, then left arm + right leg, and one rep is both sides. The written steps say so too.
+- Training: a "Diễn biến" list under the counter. It shows every set of the current exercise, step by step: get ready, start, switch side, end of set, with times from the start of the set, and the rests in between. The row in progress is highlighted and scrolled into view. Each row has its own drawing, with letters for the working side (L / R) and the direction of the move (↑T up / ↓B down). The large drawing above it follows the current row.
+- Training voice: male and female now sound clearly different. Vietnamese voices whose name contains "Việt Nam" were taken for male voices. When the device has no voice of the chosen gender, the pitch is moved further, and a line under the picker says which device voice is used.
+- Analysis (Phân tích): every tab, week/month card and comment day shows when it was analysed ("Phân tích lúc …"). It is marked as outdated when the data changed afterwards.
+- Analysis: a new "Cập nhật phân tích" setting, Tự động (default) / Thủ công, synced to the cloud. Auto re-analyses a changed day at once and rewrites the current week's AI review after the edits stop, at most once per 30 minutes. Manual keeps everything as analysed until you tap "Phân tích lại tất cả", "Phân tích lại tab này", or the button on a week or day.
+- Analysis: food logged without a meal now counts for the meal its time falls in. Before, a day could still say "missing breakfast" after breakfast was logged.
 
 ## 0.22
 - Camp's battle log (Nhật ký trận / timeline): a plan meal with nothing logged at its main meal (sáng, trưa, tối) has a "Không ăn bữa này" chip under its card. It records the meal as not eaten, so it is no longer counted as missing. The card then shows "Không ăn" as its status instead of a separate row, and "Bỏ "Không ăn"" undoes it. Shown for today and past days of your own diary, not for future days or a coach's view.

@@ -10,6 +10,10 @@ import { quest } from '../../theme/quest';
 import { buildDayFeedback, type Advice, type DayFeedback } from '../day';
 import { useFeedbackText, type FeedbackKey } from '../strings';
 import { FeedbackLines } from './FeedbackLines';
+import { AnalysisStamp } from '../../insights/components/AnalysisStamp';
+import { rangeStatus, type RangeStatus } from '../../insights/snapshot';
+import { useInsightsText } from '../../insights/strings';
+import { useReanalyse } from '../../insights/useAnalysisRefresh';
 
 type Lang = 'vi' | 'en';
 const MAX_DAYS = 14;
@@ -62,9 +66,11 @@ function DayTotals({ row, th, lang }: { row: DayRow; th: Thresholds; lang: Lang 
   );
 }
 
-function DayCard({ day, row, th, lang }: { day: DayFeedback; row: DayRow; th: Thresholds; lang: Lang }) {
+function DayCard({ day, row, th, lang, status }: { day: DayFeedback; row: DayRow; th: Thresholds; lang: Lang; status: RangeStatus }) {
   const kcal = row.kcal;
   const f = useFeedbackText();
+  const t = useInsightsText();
+  const { run, result } = useReanalyse();
   const good = day.advice.filter((a) => a.key === 'veryGood' || a.key === 'goodSaltOnly');
   const todo = day.advice.filter((a) => a.key !== 'veryGood' && a.key !== 'goodSaltOnly');
   const adviceText = (a: Advice) => f(ADVICE_KEY[a.key], { v: a.value === undefined ? '' : fmtInt(a.value, lang) });
@@ -78,6 +84,14 @@ function DayCard({ day, row, th, lang }: { day: DayFeedback; row: DayRow; th: Th
           </HudText>
         )}
       </View>
+      <AnalysisStamp
+        status={status}
+        t={t}
+        title={t('ins.refreshDay')}
+        label={t('ins.refreshDayLabel', { date: dateText(day.dateKey) })}
+        onRefresh={() => run(['feedback'], [day.dateKey])}
+        result={result ?? undefined}
+      />
 
       <DayTotals row={row} th={th} lang={lang} />
 
@@ -147,7 +161,9 @@ export function FeedbackTab({ view, lang }: { view: InsightsView; lang: Lang }) 
     <View style={styles.wrap}>
       {days.map((row) => {
         const day = buildDayFeedback(row.dateKey, items, insights.rows, thresholds);
-        return day ? <DayCard key={row.dateKey} day={day} row={row} th={thresholds} lang={lang} /> : null;
+        return day ? (
+          <DayCard key={row.dateKey} day={day} row={row} th={thresholds} lang={lang} status={rangeStatus(view.live, view.stamps, row.dateKey, row.dateKey)} />
+        ) : null;
       })}
       <Pressable accessibilityRole="link" accessibilityLabel={f('fb.snackLink')} onPress={() => router.push('/learn')} style={styles.link}>
         <HudText size={13} color={quest.manaText}>

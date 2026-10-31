@@ -33,6 +33,9 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import WeeklyReportScreen from '../../../app/weekly-report';
+import { AI_AUTO_DEBOUNCE_MS, AI_AUTO_MIN_GAP_MS, WeeklyReportAutoRefresh } from '../../ai/useWeeklyReportAutoRefresh';
+import { buildWeeklyReportInput, weekInputFingerprint } from '../../ai/weeklyReport';
+import { resetAnalysisStore, useAnalysisStore } from '../../store/useAnalysisStore';
 import { useAiReportStore } from '../../store/useAiReportStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
@@ -85,6 +88,7 @@ describe('Weekly review screen', () => {
     useWeightStore.setState({ entries: [{ id: 'a', dateISO: '2026-10-18T06:00:00', weightKg: 106 }, { id: 'c', dateISO: '2026-10-23T06:00:00', weightKg: 105.2 }] });
     useNutritionStore.setState({ logs: { '2026-10-19': day('2026-10-19', 1500), '2026-10-22': day('2026-10-22', 1800) } });
     useAiReportStore.setState({ weekly: {} });
+    resetAnalysisStore();
     mockFetch.mockResolvedValue(null);
     mockRequest.mockResolvedValue({ ok: true, report: REPORT, cached: false });
   });
@@ -199,5 +203,106 @@ describe('Weekly review screen', () => {
     const r = await mount();
     await act(async () => press(r, 'Phân tích tuần bằng AI').props.onPress());
     expect(useAiReportStore.getState().weekly['2026-10-19'].generatedAtISO).toBe('2026-10-20T03:05:00.000Z');
+  });
+
+  it('a review written now is current; once the week\'s data changes it says it is outdated', async () => {
+    const r = await mount();
+    await act(async () => press(r, 'Phân tích tuần bằng AI').props.onPress());
+    expect(useAiReportStore.getState().weekly['2026-10-19'].dataFp).toBe(weekInputFingerprint(buildWeeklyReportInput(new Date())));
+    expect(allText(r)).not.toContain('Cũ');
+    expect(allText(r)).not.toContain('AI sẽ tự viết lại');
+    await act(async () => {
+      useNutritionStore.getState().addExtra('2026-10-23', 'Phở bò', 450, 25, 'breakfast', { fromFoodDb: true });
+    });
+    expect(allText(r)).toContain('AI sẽ tự viết lại sau ít phút');
+    await act(async () => {
+      useAnalysisStore.setState({ mode: 'manual' });
+    });
+    expect(allText(r)).toContain('Bấm “Làm mới phân tích” để AI viết lại.');
+  });
+
+  it('a review the server already had is not taken as current', async () => {
+    mockRequest.mockResolvedValue({ ok: true, report: REPORT, cached: true });
+    const r = await mount();
+    await act(async () => press(r, 'Phân tích tuần bằng AI').props.onPress());
+    expect(useAiReportStore.getState().weekly['2026-10-19'].dataFp).toBeUndefined();
+    expect(allText(r)).toContain('AI sẽ tự viết lại');
+  });
+});
+
+describe('Automatic rewrite of the weekly review', () => {
+  let renderer: ReactTestRenderer | undefined;
+  const day = (date: string, kcal: number) => ({ dateISO: date, mealsEaten: {}, extraCalories: kcal, extraProteinG: 100, extraItems: [{ id: `i-${date}`, name: 'x', calories: kcal, proteinG: 100, loggedAtISO: `${date}T12:00:00`, mealTime: 'lunch' as const }], waterMl: 3000 });
+  const mountWatcher = async (enabled = true) => {
+    await act(async () => {
+      renderer = create(<WeeklyReportAutoRefresh enabled={enabled} />);
+    });
+  };
+  const saveCurrent = () => useAiReportStore.getState().saveWeekly('2026-10-19', { headline: 'Cũ', causes: [], patterns: ['p'], nextWeek: [] }, '2026-10-22T08:00:00.000Z', weekInputFingerprint(buildWeeklyReportInput(new Date())));
+  const edit = async () =>
+    act(async () => {
+      useNutritionStore.getState().addExtra('2026-10-23', 'Phở bò', 450, 25, 'breakfast', { fromFoodDb: true });
+    });
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') });
+    jest.clearAllMocks();
+    useSettingsStore.setState({ language: 'vi', gender: null, age: null, heightCm: null, activityLevel: null, calorieTargetKcal: 1900, targetDailyDeficitKcal: 1100, proteinTargetG: 200, waterTargetMl: 3000, startWeightKg: 106, startDateISO: '2026-10-01T08:00:00' });
+    useWorkoutStore.setState({ entries: [] });
+    useWeightStore.setState({ entries: [] });
+    useNutritionStore.setState({ logs: { '2026-10-19': day('2026-10-19', 1500) } });
+    useAiReportStore.setState({ weekly: {} });
+    resetAnalysisStore();
+    mockRequest.mockResolvedValue({ ok: true, report: REPORT, cached: false });
+  });
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    jest.useRealTimers();
+  });
+
+  it('auto: rewrites this week\'s review once, after the edits settle', async () => {
+    saveCurrent();
+    await mountWatcher();
+    await edit();
+    await act(async () => jest.advanceTimersByTime(AI_AUTO_DEBOUNCE_MS - 1000));
+    await edit(); // another edit restarts the wait
+    await act(async () => jest.advanceTimersByTime(AI_AUTO_DEBOUNCE_MS - 1000));
+    expect(mockRequest).not.toHaveBeenCalled();
+    await act(async () => jest.advanceTimersByTime(2000));
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0][1]).toBe('2026-10-19');
+    expect(mockRequest.mock.calls[0][2]).toBe(true);
+    const stored = useAiReportStore.getState().weekly['2026-10-19'];
+    expect(stored.report.headline).toBe('Tuần này boss còn nhiều máu.');
+    expect(stored.dataFp).toBe(weekInputFingerprint(buildWeeklyReportInput(new Date())));
+    // a later change waits for the minimum gap between automatic rewrites
+    await edit();
+    await act(async () => jest.advanceTimersByTime(AI_AUTO_DEBOUNCE_MS + 1000));
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    await act(async () => jest.advanceTimersByTime(AI_AUTO_MIN_GAP_MS));
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('never calls the AI by itself in manual mode, without a review, or when nothing changed', async () => {
+    saveCurrent();
+    await mountWatcher();
+    await act(async () => jest.advanceTimersByTime(AI_AUTO_MIN_GAP_MS * 2));
+    expect(mockRequest).not.toHaveBeenCalled(); // nothing changed
+    await act(async () => {
+      useAnalysisStore.setState({ mode: 'manual' });
+    });
+    await edit();
+    await act(async () => jest.advanceTimersByTime(AI_AUTO_MIN_GAP_MS * 2));
+    expect(mockRequest).not.toHaveBeenCalled();
+    await act(async () => {
+      useAiReportStore.setState({ weekly: {} });
+    });
+    await act(async () => {
+      useAnalysisStore.setState({ mode: 'auto' });
+    });
+    await edit();
+    await act(async () => jest.advanceTimersByTime(AI_AUTO_MIN_GAP_MS * 2));
+    expect(mockRequest).not.toHaveBeenCalled(); // no review to rewrite
   });
 });

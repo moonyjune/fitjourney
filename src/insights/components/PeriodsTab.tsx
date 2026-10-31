@@ -6,7 +6,7 @@ import { quest, questRadius } from '../../theme/quest';
 import { useFeedbackText } from '../../feedback/strings';
 import { frequentFoods } from '../../feedback/repeats';
 import { toDateKey } from '../../utils/date';
-import { restoreOwnData } from '../../sync/restore';
+import { useAnalysisStore } from '../../store/useAnalysisStore';
 import type { MainMeal } from '../days';
 import { missingInPeriod } from '../missing';
 import { logSkippedMeal } from '../../food/skipMeal';
@@ -14,6 +14,9 @@ import { fmtDayMonth, fmtDec, fmtInt, fmtSigned } from '../format';
 import { periodIsOpen, type Finding, type Kaizen, type PeriodKind, type PeriodSummary } from '../periods';
 import type { InsightsKey } from '../strings';
 import type { InsightsView } from '../useInsights';
+import { rangeStatus, ANALYSIS_SCOPES } from '../snapshot';
+import { daysBetween, useReanalyse, type RefreshState } from '../useAnalysisRefresh';
+import { AnalysisStamp } from './AnalysisStamp';
 import { WeekControlCard } from './WeekControlCard';
 import { Line, Panel, TONE_COLOR, toneHigh, toneLow, type Tone } from './ui';
 
@@ -39,12 +42,14 @@ function kaizenText(k: Kaizen, t: T, lang: Lang): string {
   return t(keys[k.kind], { v: k.kind === 'data' ? k.value : fmtInt(k.value, lang) });
 }
 
-type Refresh = { key: string; state: 'busy' | 'done' | 'local'; time: string };
+type Refresh = { key: string; result: RefreshState };
 
-const clock = () => {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-};
+/** Logs a main meal as not eaten, and analyses that day again everywhere: the user acted on the analysis itself, so even in manual
+ *  mode it must not keep listing the meal as missing. */
+function markSkipped(dateKey: string, meal: MainMeal) {
+  logSkippedMeal(dateKey, meal);
+  useAnalysisStore.getState().refresh(ANALYSIS_SCOPES, [dateKey]);
+}
 
 /** The days of a week that lack a main meal, each with a "not eaten" button per missing meal, and the days with nothing logged. */
 function MissingMeals({ p, view, t, today }: { p: PeriodSummary; view: InsightsView; t: T; today: string }) {
@@ -65,7 +70,7 @@ function MissingMeals({ p, view, t, today }: { p: PeriodSummary; view: InsightsV
                 key={m}
                 accessibilityRole="button"
                 accessibilityLabel={t('ins.markSkippedLabel', { meal: mealName(m), date: fmtDayMonth(d.dateKey) })}
-                onPress={() => logSkippedMeal(d.dateKey, m)}
+                onPress={() => markSkipped(d.dateKey, m)}
                 style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
               >
                 <HudText size={12} color={quest.manaText}>
@@ -97,10 +102,11 @@ function PeriodCard({
   lang: Lang;
   open: boolean;
   refresh: Refresh | null;
-  onReanalyze: (key: string) => void;
+  onReanalyze: (p: PeriodSummary) => void;
 }) {
   const today = toDateKey(new Date());
-  const mine = refresh?.key === `${p.kind}-${p.key}` ? refresh : null;
+  const mine = refresh?.key === `${p.kind}-${p.key}` ? refresh.result : null;
+  const status = rangeStatus(view.live, view.stamps, p.fromKey, p.toKey);
   const th = view.thresholds;
   const tf = useFeedbackText();
   const frequent = frequentFoods(view.items, p.fromKey, p.toKey);
@@ -126,27 +132,14 @@ function PeriodCard({
         )}
       </View>
       <Line size={12}>{t('ins.pDays', { n: p.days, m: p.missingDays })}</Line>
-      {p.kind === 'week' && (
-        <View style={styles.reanalyzeRow}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${t('ins.reanalyze')} ${label(p, t)}`}
-            accessibilityState={{ busy: refresh?.state === 'busy', disabled: refresh?.state === 'busy' }}
-            disabled={refresh?.state === 'busy'}
-            onPress={() => onReanalyze(`${p.kind}-${p.key}`)}
-            style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
-          >
-            <HudText size={12} color={quest.manaText}>
-              {mine?.state === 'busy' ? t('ins.reanalyzing') : `↻ ${t('ins.reanalyze')}`}
-            </HudText>
-          </Pressable>
-          {mine && mine.state !== 'busy' && (
-            <Line size={11} color={mine.state === 'done' ? quest.xp : quest.gold} style={styles.reanalyzeNote}>
-              {t(mine.state === 'done' ? 'ins.reanalyzed' : 'ins.reanalyzeLocal', { time: mine.time })}
-            </Line>
-          )}
-        </View>
-      )}
+      <AnalysisStamp
+        status={status}
+        t={t}
+        title={t('ins.reanalyze')}
+        label={`${t('ins.reanalyze')} ${label(p, t)}`}
+        onRefresh={() => onReanalyze(p)}
+        result={mine ?? undefined}
+      />
       {p.kind === 'week' && <MissingMeals p={p} view={view} t={t} today={today} />}
       <Line>{t('ins.pKcal', { k: int(p.avgKcal), b: int(p.avgBurn) })}</Line>
       <Line color={TONE_COLOR[toneHigh(p.avgDeficit, th.deficitOk, th.deficitFair)]}>
@@ -217,13 +210,15 @@ function PeriodCard({
 
 export function PeriodsTab({ view, t, lang }: { view: InsightsView; t: T; lang: Lang }) {
   const [kind, setKind] = useState<PeriodKind>('week');
-  const [refresh, setRefresh] = useState<Refresh | null>(null);
-  // The analysis follows the logs as they change; "analyse again" first brings in what was added elsewhere (another device, the coach,
-  // a fix in the cloud), then every figure, missing meal and comment is worked out again from it.
-  const reanalyze = (key: string) => {
-    setRefresh({ key, state: 'busy', time: '' });
-    restoreOwnData().then((r) => setRefresh({ key, state: r.ok ? 'done' : 'local', time: clock() }));
+  const [refreshKey, setRefreshKey] = useState<string | null>(null);
+  const { run, result } = useReanalyse();
+  // "Analyse again" first brings in what was added elsewhere (another device, the coach, a fix in the cloud), then every figure,
+  // missing meal and comment of that week or month is worked out again from it.
+  const reanalyze = (p: PeriodSummary) => {
+    setRefreshKey(`${p.kind}-${p.key}`);
+    run(['periods'], daysBetween(p.fromKey, p.toKey));
   };
+  const refresh: Refresh | null = refreshKey ? { key: refreshKey, result } : null;
   const list = [...(kind === 'week' ? view.insights.weeks : view.insights.months)].reverse();
   const today = toDateKey(new Date());
   return (
@@ -264,8 +259,6 @@ const styles = StyleSheet.create({
   block: { marginTop: 8, gap: 2 },
   kaizen: { marginTop: 10, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised2, gap: 4 },
   kaizenTitle: { letterSpacing: 1.2 },
-  reanalyzeRow: { marginTop: 6, gap: 4, alignItems: 'flex-start' },
-  reanalyzeNote: { alignSelf: 'stretch' },
   missingDay: { gap: 4, marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },

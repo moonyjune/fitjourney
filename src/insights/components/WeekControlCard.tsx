@@ -4,6 +4,8 @@ import { quest } from '../../theme/quest';
 import { fmtDayMonth, fmtInt } from '../format';
 import type { InsightsKey } from '../strings';
 import type { InsightsView } from '../useInsights';
+import { rangeStatus, stampText } from '../snapshot';
+import { changedDates } from './AnalysisStamp';
 import { Line, Panel, TONE_COLOR, type Tone } from './ui';
 
 type T = (key: InsightsKey, params?: Record<string, string | number>) => string;
@@ -17,6 +19,7 @@ export function WeekControlCard({ view, t, lang }: { view: InsightsView; t: T; l
   if (!wc) return null;
   const int = (v: number) => fmtInt(v, lang);
   const th = view.thresholds;
+  const status = rangeStatus(view.live, view.stamps, wc.weekStart, wc.weekEnd);
 
   const deficitTone: Record<typeof wc.deficitStatus, Tone> = { done: 'ok', ended: 'fair', risk: 'bad', push: 'fair', onTrack: 'ok' };
   const needed = int(wc.neededPerDay ?? 0);
@@ -42,6 +45,10 @@ export function WeekControlCard({ view, t, lang }: { view: InsightsView; t: T; l
         {wc.daysLeft > 0
           ? t('ins.wcRange', { from: fmtDayMonth(wc.weekStart), to: fmtDayMonth(wc.weekEnd), n: wc.daysLeft })
           : t('ins.wcRangeEnded', { from: fmtDayMonth(wc.weekStart), to: fmtDayMonth(wc.weekEnd) })}
+      </Line>
+      <Line size={11} color={status.outdated ? quest.gold : quest.textSecondary}>
+        {status.atISO ? t('ins.analysedAt', { at: stampText(status.atISO) }) : t('ins.analysedNever')}
+        {status.outdated ? ` · ${t('ins.outdated', { dates: changedDates(status.changed) })}` : ''}
       </Line>
 
       <View style={styles.bar} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.min(100, Math.max(0, pct(wc.pctTarget))) }}>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { buildWeeklyReportInput, cleanReport, type WeekInput } from '../src/ai/weeklyReport';
+import { buildWeeklyReportInput, cleanReport, weekInputFingerprint, type WeekInput } from '../src/ai/weeklyReport';
 import { useAiErrorText } from '../src/ai/usePhotoAnalysis';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
@@ -10,6 +10,8 @@ import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { useGameText } from '../src/game/strings';
 import { useNow } from '../src/game/useGameState';
 import { useAiReportStore } from '../src/store/useAiReportStore';
+import { useAnalysisStore } from '../src/store/useAnalysisStore';
+import { useInsightsText } from '../src/insights/strings';
 import { useNutritionStore } from '../src/store/useNutritionStore';
 import { useWeightStore } from '../src/store/useWeightStore';
 import { useWorkoutStore } from '../src/store/useWorkoutStore';
@@ -45,6 +47,9 @@ export default function WeeklyReportScreen() {
   const weights = useWeightStore((s) => s.entries);
   const input: WeekInput = useMemo(() => buildWeeklyReportInput(now), [now, logs, workouts, weights]); // eslint-disable-line react-hooks/exhaustive-deps
   const period = input.week.start;
+  const dataFp = useMemo(() => weekInputFingerprint(input), [input]);
+  const mode = useAnalysisStore((s) => s.mode);
+  const ti = useInsightsText();
   const stored = useAiReportStore((s) => s.weekly[period]);
   const saveWeekly = useAiReportStore((s) => s.saveWeekly);
 
@@ -85,11 +90,13 @@ export default function WeeklyReportScreen() {
       setFailure('unusable');
       return;
     }
-    saveWeekly(period, clean, outcome.generatedAtISO);
+    // A review the server already had (not newly written) may come from older data: keep it without a fingerprint, so it shows as outdated.
+    saveWeekly(period, clean, outcome.generatedAtISO, outcome.cached ? undefined : dataFp);
   }
 
   const { boss, patterns, weight, previousWeek, targets } = input;
   const report = stored?.report;
+  const outdated = !!stored && stored.dataFp !== dataFp;
   const eyebrow = `${dd(input.week.start)} – ${dd(input.week.today)}`;
 
   return (
@@ -207,6 +214,11 @@ export default function WeeklyReportScreen() {
             <HudText size={11} weight="medium" color={quest.textSecondary}>
               {g('week.stamp', { at: stamp(stored!.generatedAtISO) })}
             </HudText>
+            {outdated && (
+              <HudText size={11} weight="medium" color={quest.gold}>
+                {ti(mode === 'auto' && hasData ? 'ins.aiAutoPending' : 'ins.aiOutdated')}
+              </HudText>
+            )}
             <HudText size={11} weight="medium" color={quest.textSecondary}>
               {g('ai.advice.disclaimer')}
             </HudText>

@@ -9,6 +9,7 @@ import { useLearnStore } from '../store/useLearnStore';
 import { LIMIT_DEFAULTS, LIMIT_RANGE, useLimitsStore, type LimitKey } from '../store/useLimitsStore';
 import { cleanMealPrefs, NO_MEAL_PREFS, pick as pickPrefs, useMealPrefStore } from '../store/useMealPrefStore';
 import { useMealModeStore } from '../store/useMealModeStore';
+import { useAnalysisStore } from '../store/useAnalysisStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { TARGET_RANGE, useUricStore } from '../store/useUricStore';
 import { useWeightStore } from '../store/useWeightStore';
@@ -301,6 +302,13 @@ function restoreUserData(remote: Map<string, unknown>): void {
   if (localFasting) {
     if (remoteFasting === false) useMealModeStore.setState({ fasting: false });
   } else if (remoteFasting !== false) void pushUserData(USER_DATA_KEYS.mealMode, { fasting: false });
+
+  // Analysis refresh: automatic by default, so manual is the only choice worth keeping. Same rule as the meal mode.
+  const analysis = remote.get(USER_DATA_KEYS.analysisMode);
+  const remoteManual = isObj(analysis) && analysis.mode === 'manual';
+  if (useAnalysisStore.getState().mode === 'auto') {
+    if (remoteManual) useAnalysisStore.setState({ mode: 'manual' });
+  } else if (!remoteManual) void pushUserData(USER_DATA_KEYS.analysisMode, { mode: 'manual' });
 
   // Meal preferences (calories / protein wanted per meal): a device with none set takes the cloud's; a device with some pushes them.
   const prefsLocal = pickPrefs(useMealPrefStore.getState());

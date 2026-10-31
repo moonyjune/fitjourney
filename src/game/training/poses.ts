@@ -14,6 +14,11 @@ export interface Pose {
   head: Pt;
   headR?: number;
   limbs: Limb[];
+  /** Where the side letter (L / R) of the working arm / leg is drawn, for one-sided exercises. */
+  arm?: Pt;
+  leg?: Pt;
+  /** Which way the body moves into this pose: T = up (top), B = down (bottom). */
+  dir?: 'T' | 'B';
 }
 
 /** Furniture and floor lines, drawn dim behind the figure. */
@@ -41,8 +46,8 @@ export const POSES: Record<ExerciseId, ExercisePoses> = {
   chairSquat: {
     props: [FLOOR, ...chair(22)],
     poses: [
-      { head: [66, 12], limbs: [{ pts: [[66, 20], [66, 40]] }, { pts: [[66, 40], [66, 55], [66, 70]], hot: true }, { pts: [[66, 24], [80, 24]] }] },
-      { head: [60, 18], limbs: [{ pts: [[58, 26], [46, 50]] }, { pts: [[46, 50], [66, 52], [66, 70]], hot: true }, { pts: [[58, 28], [74, 30]] }] },
+      { head: [66, 12], dir: 'T', limbs: [{ pts: [[66, 20], [66, 40]] }, { pts: [[66, 40], [66, 55], [66, 70]], hot: true }, { pts: [[66, 24], [80, 24]] }] },
+      { head: [60, 18], dir: 'B', limbs: [{ pts: [[58, 26], [46, 50]] }, { pts: [[46, 50], [66, 52], [66, 70]], hot: true }, { pts: [[58, 28], [74, 30]] }] },
     ],
     labelVi: ['Bắt đầu', 'Chạm nhẹ ghế'],
     labelEn: ['Start', 'Touch the chair'],
@@ -68,8 +73,8 @@ export const POSES: Record<ExerciseId, ExercisePoses> = {
   glutBridge: {
     props: [FLOOR],
     poses: [
-      { head: [20, 64], limbs: [{ pts: [[28, 66], [56, 66]] }, { pts: [[56, 66], [74, 48], [88, 66]], hot: true }] },
-      { head: [20, 64], limbs: [{ pts: [[28, 66], [58, 46]] }, { pts: [[58, 46], [80, 48], [90, 66]], hot: true }] },
+      { head: [20, 64], dir: 'B', leg: [74, 38], limbs: [{ pts: [[28, 66], [56, 66]] }, { pts: [[56, 66], [74, 48], [88, 66]], hot: true }] },
+      { head: [20, 64], dir: 'T', leg: [80, 38], limbs: [{ pts: [[28, 66], [58, 46]] }, { pts: [[58, 46], [80, 48], [90, 66]], hot: true }] },
     ],
     labelVi: ['Nằm, gối co', 'Đẩy hông lên'],
     labelEn: ['Lie, knees bent', 'Lift the hips'],
@@ -77,8 +82,8 @@ export const POSES: Record<ExerciseId, ExercisePoses> = {
   deadBug: {
     props: [FLOOR],
     poses: [
-      { head: [18, 64], limbs: [{ pts: [[26, 66], [62, 66]] }, { pts: [[34, 64], [34, 34]], hot: true }, { pts: [[62, 66], [62, 44], [80, 44]], hot: true }] },
-      { head: [18, 64], limbs: [{ pts: [[26, 66], [62, 66]] }, { pts: [[34, 64], [8, 58]], hot: true }, { pts: [[62, 66], [92, 62]], hot: true }, { pts: [[34, 64], [34, 34]] }, { pts: [[62, 66], [62, 44], [80, 44]] }] },
+      { head: [18, 64], arm: [34, 24], leg: [80, 34], limbs: [{ pts: [[26, 66], [62, 66]] }, { pts: [[34, 64], [34, 34]], hot: true }, { pts: [[62, 66], [62, 44], [80, 44]], hot: true }] },
+      { head: [18, 64], arm: [10, 48], leg: [100, 52], limbs: [{ pts: [[26, 66], [62, 66]] }, { pts: [[34, 64], [8, 58]], hot: true }, { pts: [[62, 66], [92, 62]], hot: true }, { pts: [[34, 64], [34, 34]] }, { pts: [[62, 66], [62, 44], [80, 44]] }] },
     ],
     labelVi: ['Tay giơ, gối co', 'Duỗi tay, chân đối diện'],
     labelEn: ['Arms up, knees bent', 'Extend opposite arm and leg'],
@@ -86,8 +91,8 @@ export const POSES: Record<ExerciseId, ExercisePoses> = {
   chairLunge: {
     props: [FLOOR, { pts: [[90, 38], [90, 70]] }, { pts: [[90, 54], [108, 54]] }],
     poses: [
-      { head: [58, 14], limbs: [{ pts: [[58, 22], [58, 44]] }, { pts: [[58, 44], [58, 70]], hot: true }, { pts: [[58, 26], [90, 38]] }] },
-      { head: [58, 18], limbs: [{ pts: [[58, 26], [58, 48]] }, { pts: [[58, 48], [70, 62], [70, 70]], hot: true }, { pts: [[58, 48], [44, 66], [30, 68]], hot: true }, { pts: [[58, 30], [90, 40]] }] },
+      { head: [58, 14], dir: 'T', leg: [46, 58], limbs: [{ pts: [[58, 22], [58, 44]] }, { pts: [[58, 44], [58, 70]], hot: true }, { pts: [[58, 26], [90, 38]] }] },
+      { head: [58, 18], dir: 'B', leg: [36, 56], limbs: [{ pts: [[58, 26], [58, 48]] }, { pts: [[58, 48], [70, 62], [70, 70]], hot: true }, { pts: [[58, 48], [44, 66], [30, 68]], hot: true }, { pts: [[58, 30], [90, 40]] }] },
     ],
     labelVi: ['Đứng, vịn ghế', 'Bước lùi, hạ gối'],
     labelEn: ['Stand, hold the chair', 'Step back, lower the knee'],
@@ -95,8 +100,8 @@ export const POSES: Record<ExerciseId, ExercisePoses> = {
   chairDip: {
     props: [FLOOR, ...chair(18)],
     poses: [
-      { head: [52, 20], limbs: [{ pts: [[52, 30], [60, 52]] }, { pts: [[52, 30], [38, 54]], hot: true }, { pts: [[60, 52], [82, 50], [84, 70]] }] },
-      { head: [52, 32], limbs: [{ pts: [[52, 42], [60, 62]] }, { pts: [[52, 42], [32, 46], [38, 54]], hot: true }, { pts: [[60, 62], [82, 60], [84, 70]] }] },
+      { head: [52, 20], dir: 'T', limbs: [{ pts: [[52, 30], [60, 52]] }, { pts: [[52, 30], [38, 54]], hot: true }, { pts: [[60, 52], [82, 50], [84, 70]] }] },
+      { head: [52, 32], dir: 'B', limbs: [{ pts: [[52, 42], [60, 62]] }, { pts: [[52, 42], [32, 46], [38, 54]], hot: true }, { pts: [[60, 62], [82, 60], [84, 70]] }] },
     ],
     labelVi: ['Tay thẳng', 'Gập khuỷu 90°'],
     labelEn: ['Arms straight', 'Elbows at 90°'],
@@ -105,7 +110,7 @@ export const POSES: Record<ExerciseId, ExercisePoses> = {
     props: [FLOOR],
     poses: [
       { head: [58, 12], limbs: [{ pts: [[58, 20], [58, 42]] }, { pts: [[58, 42], [58, 70]], hot: true }, { pts: [[58, 24], [64, 36], [64, 44]] }] },
-      { head: [58, 12], limbs: [{ pts: [[58, 20], [58, 42]] }, { pts: [[58, 42], [58, 70]] }, { pts: [[58, 42], [74, 44], [74, 58]], hot: true }, { pts: [[58, 24], [70, 30]] }] },
+      { head: [58, 12], dir: 'T', limbs: [{ pts: [[58, 20], [58, 42]] }, { pts: [[58, 42], [58, 70]] }, { pts: [[58, 42], [74, 44], [74, 58]], hot: true }, { pts: [[58, 24], [70, 30]] }] },
     ],
     labelVi: ['Đứng thẳng', 'Gối ngang hông'],
     labelEn: ['Stand tall', 'Knee to hip height'],
@@ -113,8 +118,8 @@ export const POSES: Record<ExerciseId, ExercisePoses> = {
   birdDog: {
     props: [FLOOR],
     poses: [
-      { head: [90, 36], limbs: [{ pts: [[82, 46], [48, 46]], hot: true }, { pts: [[82, 46], [82, 70]] }, { pts: [[48, 46], [48, 70]] }] },
-      { head: [90, 36], limbs: [{ pts: [[82, 46], [48, 46]] }, { pts: [[82, 46], [112, 42]], hot: true }, { pts: [[48, 46], [10, 46]], hot: true }, { pts: [[82, 46], [82, 70]] }, { pts: [[48, 46], [48, 70]] }] },
+      { head: [90, 36], arm: [92, 60], leg: [38, 60], limbs: [{ pts: [[82, 46], [48, 46]], hot: true }, { pts: [[82, 46], [82, 70]] }, { pts: [[48, 46], [48, 70]] }] },
+      { head: [90, 36], arm: [106, 30], leg: [16, 34], limbs: [{ pts: [[82, 46], [48, 46]] }, { pts: [[82, 46], [112, 42]], hot: true }, { pts: [[48, 46], [10, 46]], hot: true }, { pts: [[82, 46], [82, 70]] }, { pts: [[48, 46], [48, 70]] }] },
     ],
     labelVi: ['Quỳ bốn điểm', 'Duỗi tay, chân đối diện'],
     labelEn: ['On all fours', 'Extend opposite arm and leg'],
