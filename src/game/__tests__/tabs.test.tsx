@@ -424,7 +424,7 @@ describe('FitQuest tabs', () => {
         pressable(r, (l) => l === 'English').props.onPress();
       });
       expect(useSettingsStore.getState().language).toBe('en');
-      expect(allText(r)).toContain('SETTINGS'); // the eyebrow is set in capitals
+      expect(allText(r)).toContain('DAILY TARGETS'); // the eyebrow is set in capitals
     });
 
     it('turns reminders on only when the OS grants permission', async () => {

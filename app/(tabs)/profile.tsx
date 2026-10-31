@@ -265,9 +265,15 @@ export default function ProfileScreen() {
       </View>
 
       <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.menu').toUpperCase()}
+        {g('profile.group.progress').toUpperCase()}
       </HudText>
       <View style={styles.menu}>
+        <MenuRow icon="plan" label={g('profile.plan')} hint={g('profile.planHint')} onPress={() => router.push('/(tabs)/plan')} />
+        <MenuRow icon="chart" label={g('profile.weight')} hint={g('profile.weightHint')} onPress={() => router.push('/(tabs)/weight')} />
+        <MenuRow icon="bowl" label={g('profile.nutrition')} hint={g('profile.nutritionHint')} onPress={() => router.push('/(tabs)/nutrition')} />
+        <MenuRow icon="list" label={g('profile.history')} hint={g('profile.historyHint')} onPress={() => router.push('/(tabs)/history')} />
+        <MenuRow icon="flame" label={g('week.profileRow')} hint={g('week.profileRowHint')} onPress={() => router.push('/weekly-report')} />
+        <MenuRow icon="flame" label={ti('ins.profileRow')} hint={ti('ins.profileRowHint')} onPress={() => router.push('/insights')} />
         <MenuRow
           icon="check"
           label={g('profile.achievements')}
@@ -278,52 +284,53 @@ export default function ProfileScreen() {
           })}
           onPress={() => router.push('/achievements')}
         />
-        <MenuRow icon="plan" label={g('profile.plan')} hint={g('profile.planHint')} onPress={() => router.push('/(tabs)/plan')} />
-        <MenuRow icon="chart" label={g('profile.weight')} hint={g('profile.weightHint')} onPress={() => router.push('/(tabs)/weight')} />
-        <MenuRow icon="bowl" label={g('profile.nutrition')} hint={g('profile.nutritionHint')} onPress={() => router.push('/(tabs)/nutrition')} />
-        <MenuRow icon="list" label={g('profile.history')} hint={g('profile.historyHint')} onPress={() => router.push('/(tabs)/history')} />
-        <MenuRow icon="drop" label={tu('ur.profileRow')} hint={tu('ur.profileRowHint')} onPress={() => router.push('/uric')} />
-        <MenuRow icon="list" label={tl('learn.profileRow')} hint={tl('learn.profileRowHint')} onPress={() => router.push('/learn')} />
-        <MenuRow icon="check" label={tb('hb.profileRow')} hint={tb('hb.profileRowHint')} onPress={() => router.push('/habits')} />
+      </View>
+
+      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+        {g('profile.group.food').toUpperCase()}
+      </HudText>
+      <View style={styles.menu}>
         <MenuRow icon="bowl" label={tf('fdb.profileRow')} hint={tf('fdb.profileRowHint')} onPress={() => router.push('/food-db')} />
         <MenuRow icon="list" label={g('cookbook.title')} hint={g('cookbook.empty')} onPress={() => router.push('/cookbook')} />
-        <MenuRow icon="flame" label={ti('ins.profileRow')} hint={ti('ins.profileRowHint')} onPress={() => router.push('/insights')} />
-        <MenuRow icon="flame" label={g('week.profileRow')} hint={g('week.profileRowHint')} onPress={() => router.push('/weekly-report')} />
-        {isAiAdmin && <MenuRow icon="chart" label={g('aiAdmin.profileRow')} hint={g('aiAdmin.profileRowHint')} onPress={() => router.push('/ai-admin')} />}
-        <MenuRow icon="plus" label={g('profile.import')} hint={g('profile.importHint')} onPress={() => router.push('/import-diary')} />
+        <MenuRow icon="check" label={tb('hb.profileRow')} hint={tb('hb.profileRowHint')} onPress={() => router.push('/habits')} />
+        <MenuRow icon="drop" label={tu('ur.profileRow')} hint={tu('ur.profileRowHint')} onPress={() => router.push('/uric')} />
+        <MenuRow icon="list" label={tl('learn.profileRow')} hint={tl('learn.profileRowHint')} onPress={() => router.push('/learn')} />
       </View>
+
+      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+        {g('profile.group.daily').toUpperCase()}
+      </HudText>
+      <WaterSettings />
 
       <View style={styles.setting}>
         <View style={styles.settingHead}>
-          <QuestIcon name="globe" size={20} color={quest.gold} />
-          <HudText size={15}>{g('profile.language')}</HudText>
+          <QuestIcon name="alert" size={20} color={quest.gold} />
+          <HudText size={15}>{g('limits.title')}</HudText>
         </View>
-        <QuestSegment<Lang>
-          accessibilityLabel={g('profile.language')}
-          value={language}
-          onChange={(value) => updateSettings({ language: value })}
-          options={[
-            { value: 'vi', label: g('profile.languageVi') },
-            { value: 'en', label: g('profile.languageEn') },
-          ]}
-        />
-      </View>
-
-      <View style={styles.settingRow}>
-        <QuestIcon name="bell" size={20} color={quest.gold} />
-        <View style={styles.flex}>
-          <HudText size={15}>{g('profile.reminders')}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('profile.remindersHint')}
+        <HudText size={12} weight="medium" color={quest.textSecondary}>
+          {g('limits.hint')}
+        </HudText>
+        {(
+          [
+            ['purineMg', 'limits.purine', g('limits.unitMg', { n: limits.purineMg })],
+            ['saltG', 'limits.salt', g('limits.unitG', { n: limits.saltG })],
+            ['sugarG', 'limits.sugar', g('limits.unitG', { n: limits.sugarG })],
+          ] as [LimitKey, GameKey, string][]
+        ).map(([key, nameKey, value]) => (
+          <LimitRow
+            key={key}
+            limitKey={key}
+            name={g(nameKey)}
+            value={value}
+            moreLabel={g('limits.more', { name: g(nameKey) })}
+            lessLabel={g('limits.less', { name: g(nameKey) })}
+          />
+        ))}
+        <Pressable accessibilityRole="button" accessibilityLabel={g('limits.reset')} onPress={resetLimits} style={styles.resetLimits}>
+          <HudText size={13} color={quest.textSecondary}>
+            {g('limits.reset')}
           </HudText>
-        </View>
-        <Switch
-          accessibilityLabel={g('profile.reminders')}
-          value={remindersEnabled}
-          onValueChange={toggleReminders}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
+        </Pressable>
       </View>
 
       <View style={styles.settingRow}>
@@ -346,8 +353,31 @@ export default function ProfileScreen() {
         />
       </View>
 
+      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+        {g('profile.group.play').toUpperCase()}
+      </HudText>
+      <View style={styles.settingRow}>
+        <QuestIcon name="bell" size={20} color={quest.gold} />
+        <View style={styles.flex}>
+          <HudText size={15}>{g('profile.reminders')}</HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('profile.remindersHint')}
+          </HudText>
+        </View>
+        <Switch
+          accessibilityLabel={g('profile.reminders')}
+          value={remindersEnabled}
+          onValueChange={toggleReminders}
+          trackColor={{ false: quest.raised2, true: quest.gold }}
+          thumbColor={quest.text}
+        />
+      </View>
+
       <TemptationSettings />
 
+      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+        {g('profile.group.ai').toUpperCase()}
+      </HudText>
       <View style={styles.settingRow}>
         <QuestIcon name="chart" size={20} color={quest.mana} />
         <View style={styles.flex}>
@@ -382,37 +412,23 @@ export default function ProfileScreen() {
         />
       </View>
 
-      <WaterSettings />
-
+      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+        {g('profile.group.account').toUpperCase()}
+      </HudText>
       <View style={styles.setting}>
         <View style={styles.settingHead}>
-          <QuestIcon name="alert" size={20} color={quest.gold} />
-          <HudText size={15}>{g('limits.title')}</HudText>
+          <QuestIcon name="globe" size={20} color={quest.gold} />
+          <HudText size={15}>{g('profile.language')}</HudText>
         </View>
-        <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {g('limits.hint')}
-        </HudText>
-        {(
-          [
-            ['purineMg', 'limits.purine', g('limits.unitMg', { n: limits.purineMg })],
-            ['saltG', 'limits.salt', g('limits.unitG', { n: limits.saltG })],
-            ['sugarG', 'limits.sugar', g('limits.unitG', { n: limits.sugarG })],
-          ] as [LimitKey, GameKey, string][]
-        ).map(([key, nameKey, value]) => (
-          <LimitRow
-            key={key}
-            limitKey={key}
-            name={g(nameKey)}
-            value={value}
-            moreLabel={g('limits.more', { name: g(nameKey) })}
-            lessLabel={g('limits.less', { name: g(nameKey) })}
-          />
-        ))}
-        <Pressable accessibilityRole="button" accessibilityLabel={g('limits.reset')} onPress={resetLimits} style={styles.resetLimits}>
-          <HudText size={13} color={quest.textSecondary}>
-            {g('limits.reset')}
-          </HudText>
-        </Pressable>
+        <QuestSegment<Lang>
+          accessibilityLabel={g('profile.language')}
+          value={language}
+          onChange={(value) => updateSettings({ language: value })}
+          options={[
+            { value: 'vi', label: g('profile.languageVi') },
+            { value: 'en', label: g('profile.languageEn') },
+          ]}
+        />
       </View>
 
       <View style={styles.setting}>
@@ -463,6 +479,11 @@ export default function ProfileScreen() {
           </>
         )}
         <QuestButton variant="ghost" icon="swap" title={g('profile.coachOn')} onPress={switchToCoach} loading={switching} />
+      </View>
+
+      <View style={styles.menu}>
+        <MenuRow icon="plus" label={g('profile.import')} hint={g('profile.importHint')} onPress={() => router.push('/import-diary')} />
+        {isAiAdmin && <MenuRow icon="chart" label={g('aiAdmin.profileRow')} hint={g('aiAdmin.profileRowHint')} onPress={() => router.push('/ai-admin')} />}
       </View>
 
       <View style={styles.signOut}>

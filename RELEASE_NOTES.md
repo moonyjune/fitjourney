@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.36 | no | — |
 | 0.35 | no | — |
 | 0.34 | no | — |
 | 0.33 | no | story-chapter |
@@ -47,6 +48,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.36
+- Profile: settings and links grouped under headings: Diary & progress, Food & health, Daily targets (water, limits, fasting), Reminders & challenges, AI, Account & data (language, coach, import).
 
 ## 0.35
 - Map: a boss's detail dialog scrolls again when its content (chat, damage panel) is taller than the screen.
