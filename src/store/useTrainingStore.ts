@@ -5,6 +5,8 @@ import type { ExerciseId } from '../game/training/exercises';
 import type { VoiceGender } from '../game/training/speech';
 import type { SpeechLang } from '../game/training/voice';
 import { applyRating, progressFor, type ExerciseProgress, type Rating } from '../game/training/progress';
+import type { CustomMap, StepCustom } from '../game/training/session';
+import type { Level } from '../game/training/exercises';
 
 interface TrainingState {
   /** Spoken guidance during a session (steps, counting, rest). On by default. Local to this device. */
@@ -18,6 +20,10 @@ interface TrainingState {
   /** Start the next set by itself (auto count / hold timer) when a rest ends. Off by default. */
   autoNextSet: boolean;
   setAutoNextSet: (on: boolean) => void;
+  /** The user's own sets / amount per set / rest per exercise, for the level they were set at. Local to this device. */
+  custom: CustomMap;
+  setCustom: (id: ExerciseId, level: Level, patch: Omit<StepCustom, 'level'>) => void;
+  resetCustom: (id: ExerciseId) => void;
   progress: Partial<Record<ExerciseId, ExerciseProgress>>;
   /** Records how each exercise felt in a session and moves levels per the progression rules.
    *  Returns the exercises that levelled up. Local to this device (not synced to the cloud). */
@@ -35,6 +41,17 @@ export const useTrainingStore = create<TrainingState>()(
       setVoiceGender: (gender) => set({ voiceGender: gender }),
       autoNextSet: false,
       setAutoNextSet: (on) => set({ autoNextSet: on }),
+      custom: {},
+      setCustom: (id, level, patch) =>
+        set((s) => {
+          const prev = s.custom[id]?.level === level ? s.custom[id] : undefined;
+          return { custom: { ...s.custom, [id]: { ...prev, ...patch, level } } };
+        }),
+      resetCustom: (id) =>
+        set((s) => {
+          const { [id]: _drop, ...rest } = s.custom;
+          return { custom: rest };
+        }),
       progress: {},
       commitRatings: (ratings, now = new Date()) => {
         const next = { ...get().progress };

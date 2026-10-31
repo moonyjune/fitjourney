@@ -3,6 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ExerciseFigure } from '../../src/components/quest/ExerciseFigure';
 import { HudText } from '../../src/components/quest/HudText';
+import { StepTuner } from '../../src/components/quest/StepTuner';
 import { QuestButton } from '../../src/components/quest/QuestButton';
 import { QuestHeader } from '../../src/components/quest/QuestHeader';
 import { QuestIcon } from '../../src/components/quest/QuestIcon';
@@ -18,6 +19,7 @@ import {
 import { exerciseName, formatAmount, formatPerSet } from '../../src/game/training/format';
 import { POSES } from '../../src/game/training/poses';
 import { progressFor } from '../../src/game/training/progress';
+import { buildSteps, clampTune } from '../../src/game/training/session';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useTrainingStore } from '../../src/store/useTrainingStore';
 import { quest, questRadius } from '../../src/theme/quest';
@@ -38,6 +40,9 @@ export default function ExerciseDetailScreen() {
   useLightStatusBar();
   const { id } = useLocalSearchParams<{ id?: string; group?: string }>();
   const progress = useTrainingStore((s) => s.progress);
+  const custom = useTrainingStore((s) => s.custom);
+  const setCustom = useTrainingStore((s) => s.setCustom);
+  const resetCustom = useTrainingStore((s) => s.resetCustom);
 
   const ex = id && id in EXERCISE_BY_ID ? EXERCISE_BY_ID[id as ExerciseId] : undefined;
   if (!ex) {
@@ -50,7 +55,11 @@ export default function ExerciseDetailScreen() {
 
   const lang = language === 'en' ? 'en' : 'vi';
   const level = progressFor(progress, ex.id).level;
-  const today = prescriptionFor(ex.id, level);
+  const base = prescriptionFor(ex.id, level);
+  // The numbers a session will use: the level's, or the user's own for this level.
+  const [mine] = buildSteps([{ id: ex.id, level }], custom);
+  const today = { ...base, sets: mine.sets, amount: mine.amount };
+  const isCustom = custom[ex.id]?.level === level;
   const poses = POSES[ex.id];
   const index = EXERCISES.findIndex((e) => e.id === ex.id) + 1;
 
@@ -123,11 +132,20 @@ export default function ExerciseDetailScreen() {
             {g('train.detail.today', {
               sets: today.sets,
               amount: formatPerSet(today, lang, false),
-              rest: ex.restSec,
-              m: estimateMinutes([{ id: ex.id, level }]),
+              rest: mine.restSec,
+              m: estimateMinutes([{ id: ex.id, level }], custom),
             })}
+            {isCustom ? ` · ${g('train.tune.custom')}` : ''}
           </HudText>
         </View>
+
+        <StepTuner
+          values={{ sets: mine.sets, amount: mine.amount, restSec: mine.restSec }}
+          unit={mine.unit}
+          perSide={mine.perSide}
+          onChange={(key, value) => setCustom(ex.id, level, { [key]: clampTune(key, mine.unit, value) })}
+          onReset={isCustom ? () => resetCustom(ex.id) : undefined}
+        />
 
         <View style={styles.panel}>
           <HudText size={16}>{g('train.detail.how')}</HudText>

@@ -52,11 +52,34 @@ export interface WeightEntry {
 
 export interface WorkoutLogEntry {
   id: string;
+  /** When the workout started (a guided session) or was logged (a manual entry). It ends `durationMin` later. */
   dateISO: string;
   templateId: string | null;
   label: string;
   durationMin: number;
   caloriesBurned: number;
+  /** What was done in a guided session, exercise by exercise. Absent for manual entries and older sessions. */
+  details?: WorkoutDetails;
+}
+
+/** One exercise of a guided session and how it went. */
+export interface WorkoutExerciseResult {
+  /** ExerciseId of the training library. */
+  id: string;
+  level: number;
+  /** Planned sets and the amount of each (reps, per side for one-sided exercises, or seconds). */
+  sets: number;
+  amount: number;
+  unit: 'reps' | 'seconds';
+  perSide?: boolean;
+  restSec: number;
+  /** What each finished set reached (reps or seconds), in order. Its length is the number of sets done. */
+  results: number[];
+  rating?: 'easy' | 'medium' | 'hard';
+}
+
+export interface WorkoutDetails {
+  exercises: WorkoutExerciseResult[];
 }
 
 /** Which meal-time an off-plan item belongs to — finer-grained than the plan's own 3 meal slots,

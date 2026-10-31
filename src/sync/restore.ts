@@ -18,6 +18,7 @@ import { DEFAULT_TARGET_UMOL } from '../uric/types';
 import type { DailyNutritionLog, ExtraFoodItem, FeelingRecord, MealSlot, Mood, WeightEntry, WorkoutCondition, WorkoutLogEntry } from '../types';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { withIntakeCounters } from '../utils/dayIntake';
+import { toDateKey } from '../utils/date';
 import { currentUserId, pushFeelingRecord, pushNutritionLog, pushUserData, whenPushesSettled } from './cloudSync';
 import { pendingKeys } from './syncQueue';
 import { healLog, uniqueExtraIds } from '../utils/extraIds';
@@ -105,6 +106,31 @@ const foodShape = (log: Pick<DailyNutritionLog, 'extraItems' | 'mealsEaten' | 'r
     removed: [...(log.removedMealSlots ?? [])].sort(),
   });
 
+const DAY_MS = 86_400_000;
+
+/** When a workout row started. `started_at` when the row has it; for older rows (only a date was stored) the time the
+ *  row was first written, less the workout's length, as long as that lands on the row's date or the day after (older
+ *  rows stored the UTC date, a day early for early-morning workouts); otherwise midday of the row's date. */
+export function workoutStart(r: Row, date: string): string {
+  const started = str(r.started_at);
+  if (started && !Number.isNaN(Date.parse(started))) return new Date(started).toISOString();
+  const created = str(r.created_at);
+  if (created && !Number.isNaN(Date.parse(created))) {
+    const start = new Date(Date.parse(created) - num(r.duration_min) * 60_000);
+    const day = toDateKey(start);
+    if (day === date || day === toDateKey(new Date(Date.parse(`${date}T12:00:00`) + DAY_MS))) return start.toISOString();
+  }
+  return `${date}${DEFAULT_TIME}`;
+}
+
+/** The per-exercise results of a row, kept only when they have the expected shape. */
+function workoutDetails(v: unknown): WorkoutLogEntry['details'] | undefined {
+  const exercises = (v as { exercises?: unknown } | null)?.exercises;
+  if (!Array.isArray(exercises)) return undefined;
+  const ok = exercises.every((e) => e && typeof e === 'object' && typeof (e as { id?: unknown }).id === 'string' && Array.isArray((e as { results?: unknown }).results));
+  return ok ? (v as WorkoutLogEntry['details']) : undefined;
+}
+
 export function mergeWorkouts(local: WorkoutLogEntry[], rows: Row[]): WorkoutLogEntry[] {
   const have = new Set(local.map((e) => e.id));
   const added: WorkoutLogEntry[] = [];
@@ -114,15 +140,17 @@ export function mergeWorkouts(local: WorkoutLogEntry[], rows: Row[]): WorkoutLog
     const clientId = str(r.client_id);
     const id = clientId || `cloud-${str(r.id)}`;
     if (have.has(id)) continue;
+    const details = workoutDetails(r.details);
     const entry: WorkoutLogEntry = {
       id,
-      dateISO: `${date}${DEFAULT_TIME}`,
+      dateISO: workoutStart(r, date),
       templateId: str(r.template_id) || null,
       label: str(r.label),
       durationMin: num(r.duration_min),
       caloriesBurned: num(r.calories_burned),
+      ...(details ? { details } : {}),
     };
-    const same = (o: WorkoutLogEntry) => o.dateISO.slice(0, 10) === date && o.label === entry.label && o.durationMin === entry.durationMin;
+    const same = (o: WorkoutLogEntry) => (o.dateISO.slice(0, 10) === date || toDateKey(new Date(o.dateISO)) === date) && o.label === entry.label && o.durationMin === entry.durationMin;
     if (!clientId && [...local, ...added].some(same)) continue;
     added.push(entry);
     have.add(id);

@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.24 | yes | — |
 | 0.23 | no | — |
 | 0.22 | no | — |
 | 0.21 | no | — |
@@ -35,6 +36,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.24
+- Training: set the number of sets, the length of each set (reps, or seconds for holds) and the rest between sets. Do it on the exercise screen, or in a session before a set starts or while resting. Lengthening the rest while resting also extends the countdown. The numbers are kept for the next sessions at that level; "Về mặc định" goes back to the level's own.
+- Battle log (Nhật ký trận): workouts showed the wrong time. The cloud kept only the date, so a restored workout got a made-up time, and the date was the UTC one, a day early before 7 am. A workout now keeps its start time, is logged at the time it started, and is filed under the local date.
+- Battle log: workouts close together (less than an hour apart) are one row: "15:00–15:26 · 20 min · burned 460 kcal · 2 workouts". Tapping it opens their history. It lists each workout with its time range and, for a guided session, each exercise with the plan (level, sets × amount, rest), what every set reached, and how it felt.
+- Server: run `supabase/schema.sql` again. It adds `started_at` and `details` to `workout_entries`. Until then, workouts still sync without them.
 
 ## 0.23
 - Training: pick as many exercises as you like (2 or more; the old limit of 3 is gone).

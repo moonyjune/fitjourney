@@ -884,3 +884,9 @@ create policy "cookbook_recipes_select_signed_in" on public.cookbook_recipes for
 drop policy if exists "cookbook_recipes_insert_own" on public.cookbook_recipes;
 create policy "cookbook_recipes_insert_own" on public.cookbook_recipes for insert
   to authenticated with check (created_by = auth.uid());
+
+-- ===== 0.24: workout start time and per-exercise results =====
+-- A workout row only kept its date, so a restored workout had no time of day. started_at is when it began; details holds
+-- a guided session's exercises (sets, reps or seconds reached per set, rating). Safe to run more than once.
+alter table public.workout_entries add column if not exists started_at timestamptz;
+alter table public.workout_entries add column if not exists details jsonb;

@@ -23,6 +23,7 @@ import {
 } from '../../src/game/training/exercises';
 import { exerciseName, formatAmount } from '../../src/game/training/format';
 import { progressFor } from '../../src/game/training/progress';
+import { buildSteps } from '../../src/game/training/session';
 import { useTrainingStore } from '../../src/store/useTrainingStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
@@ -44,6 +45,7 @@ export default function TrainScreen() {
   useLightStatusBar();
   const now = useNow(60_000);
   const progress = useTrainingStore((s) => s.progress);
+  const custom = useTrainingStore((s) => s.custom);
   const entries = useWorkoutStore((s) => s.entries);
 
   const suggested = suggestedGroup(now);
@@ -63,8 +65,13 @@ export default function TrainScreen() {
   }
 
   const levelOf = (id: ExerciseId) => progressFor(progress, id).level;
+  /** The level's sets × amount, or the user's own numbers for that level. */
+  const rxOf = (id: ExerciseId) => {
+    const [mine] = buildSteps([{ id, level: levelOf(id) }], custom);
+    return { ...prescriptionFor(id, mine.level), sets: mine.sets, amount: mine.amount };
+  };
   const sessionIds = [...picked, ALWAYS_EXERCISE];
-  const minutes = estimateMinutes(sessionIds.map((id) => ({ id, level: levelOf(id) })));
+  const minutes = estimateMinutes(sessionIds.map((id) => ({ id, level: levelOf(id) })), custom);
   const canStart = picked.length >= MIN_PICKS;
 
   const dayName = g(`weekday.${now.getDay()}` as GameKey);
@@ -161,7 +168,7 @@ export default function TrainScreen() {
                     {name}
                   </HudText>
                   <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1} style={styles.rx}>
-                    {formatAmount(prescriptionFor(id, level), language, false)} · {g('train.level', { n: level })}
+                    {formatAmount(rxOf(id), language, false)} · {g('train.level', { n: level })}
                   </HudText>
                   {on && (
                     <View style={styles.check}>
@@ -195,7 +202,7 @@ export default function TrainScreen() {
                 {exerciseName(EXERCISE_BY_ID[ALWAYS_EXERCISE], language)}
               </HudText>
               <HudText size={12} weight="medium" color={quest.manaText} numberOfLines={1}>
-                {formatAmount(prescriptionFor(ALWAYS_EXERCISE, levelOf(ALWAYS_EXERCISE)), language, false)} · {g('train.always')}
+                {formatAmount(rxOf(ALWAYS_EXERCISE), language, false)} · {g('train.always')}
               </HudText>
             </Pressable>
           </View>

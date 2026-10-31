@@ -330,12 +330,18 @@ export function setAmountSeconds(exercise: Exercise, p: Prescription): number {
 
 /** Rough minutes for a list of exercises at the given levels: work time plus the rests between
  *  sets and exercises. Rounded to the nearest minute, never below one. */
-export function estimateMinutes(items: { id: ExerciseId; level: Level }[]): number {
+export function estimateMinutes(
+  items: { id: ExerciseId; level: Level }[],
+  /** The user's own sets / amount / rest per exercise (see `StepCustom`), when they apply at that level. */
+  custom: Partial<Record<ExerciseId, { level: Level; sets?: number; amount?: number; restSec?: number }>> = {}
+): number {
   let seconds = 0;
   for (const item of items) {
     const ex = EXERCISE_BY_ID[item.id];
-    const p = prescriptionFor(item.id, item.level);
-    seconds += setAmountSeconds(ex, p) * p.sets + ex.restSec * p.sets;
+    const c = custom[item.id]?.level === item.level ? custom[item.id] : undefined;
+    const base = prescriptionFor(item.id, item.level);
+    const p = { ...base, sets: c?.sets ?? base.sets, amount: c?.amount ?? base.amount };
+    seconds += setAmountSeconds(ex, p) * p.sets + (c?.restSec ?? ex.restSec) * p.sets;
   }
   return Math.max(1, Math.round(seconds / 60));
 }

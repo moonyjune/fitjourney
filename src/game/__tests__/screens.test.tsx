@@ -430,6 +430,38 @@ describe('FitQuest logging screens', () => {
       expect(text).not.toContain('CHI-TIẾT');
     });
 
+    it('shows workouts close together as one row from start to end, and opens their history with each set', () => {
+      useWorkoutStore.setState({
+        entries: [
+          { id: 'x', dateISO: `${DATE}T15:00:00`, templateId: null, label: 'Ngày A', durationMin: 14, caloriesBurned: 420 },
+          {
+            id: 'y',
+            dateISO: `${DATE}T15:20:00`,
+            templateId: 'home-A',
+            label: 'Cầu mông',
+            durationMin: 6,
+            caloriesBurned: 40,
+            details: { exercises: [{ id: 'glutBridge', level: 1, sets: 3, amount: 10, unit: 'reps', restSec: 30, results: [10, 10, 8], rating: 'hard' }] },
+          },
+        ],
+      });
+      const r = render(<JournalScreen />);
+      const text = allText(r);
+      expect(text).toContain('Ngày A + Cầu mông');
+      expect(text).toContain('15:00–15:26');
+      expect(text).toContain('2 lượt tập');
+      act(() => pressable(r, (l) => l.includes('Xem chi tiết buổi tập')).props.onPress());
+      const dialog = allText(r);
+      expect(dialog).toContain('Buổi tập');
+      expect(dialog).toContain('15:20–15:26');
+      expect(dialog).toContain('3/3 set');
+      expect(dialog).toContain('Đạt từng set: 1: 10 · 2: 10 · 3: 8 lần');
+      expect(dialog).toContain('Cảm nhận: Khó');
+      expect(dialog).toContain('Ghi tay hoặc buổi tập cũ');
+      act(() => pressable(r, (l) => l === 'Đóng').props.onPress());
+      expect(allText(r)).not.toContain('Đạt từng set');
+    });
+
     it('opens a dialog with the photo, totals and parts when a logged meal is tapped, and closes it again', () => {
       useNutritionStore.getState().addExtra(DATE, 'Yến mạch 30g, Sữa chua 100g', 170, 8, 'afternoon_snack', {
         photoUri: 'file:///docs/proofs/extra-9.jpg',

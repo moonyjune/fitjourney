@@ -351,24 +351,33 @@ export async function deleteWorkoutEntry(entryId: string): Promise<void> {
   );
 }
 
+/** PostgREST's answer for a column the table does not have (yet). */
+export function isMissingColumn(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  return e?.code === 'PGRST204' || e?.code === '42703' || /column .* (does not exist|not find)|could not find the .* column/i.test(e?.message ?? '');
+}
+
 export async function pushWorkoutEntry(entry: WorkoutLogEntry): Promise<void> {
   const userId = currentUserId();
   if (!userId) return;
+  // The day is the local one (an ISO slice is the UTC day: a 6 am workout in Vietnam landed on the day before).
+  const base = {
+    user_id: userId,
+    client_id: entry.id,
+    entry_date: toDateKey(new Date(entry.dateISO)),
+    template_id: entry.templateId,
+    label: entry.label,
+    duration_min: entry.durationMin,
+    calories_burned: entry.caloriesBurned,
+  };
+  const upsert = (row: Record<string, unknown>) => supabase.from('workout_entries').upsert(row, { onConflict: 'user_id,client_id' });
   await pushOrQueue(
     { type: 'workoutEntry', payload: entry },
-    () =>
-      supabase.from('workout_entries').upsert(
-        {
-          user_id: userId,
-          client_id: entry.id,
-          entry_date: entry.dateISO.slice(0, 10),
-          template_id: entry.templateId,
-          label: entry.label,
-          duration_min: entry.durationMin,
-          calories_burned: entry.caloriesBurned,
-        },
-        { onConflict: 'user_id,client_id' }
-      ),
+    async () => {
+      const full = await upsert({ ...base, started_at: entry.dateISO, details: entry.details ?? null });
+      // Until schema.sql adds started_at / details, write what the table has rather than failing the sync.
+      return full.error && isMissingColumn(full.error) ? upsert(base) : full;
+    },
     'pushWorkoutEntry'
   );
 }

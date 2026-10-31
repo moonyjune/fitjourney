@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FoodThumb } from '../components/quest/FoodPhoto';
 import { HudText } from '../components/quest/HudText';
 import { MealDetailDialog, type MealDetail } from '../components/quest/MealDetailDialog';
+import { WorkoutDetailDialog } from '../components/quest/WorkoutDetailDialog';
 import { MoodFace } from '../components/quest/MoodFace';
 import { QuestHeader } from '../components/quest/QuestHeader';
 import { QuestIcon } from '../components/quest/QuestIcon';
@@ -185,7 +186,8 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
       </View>
     );
   } else if (item.kind === 'workout') {
-    label = `${item.label}. ${g('journal.workoutMeta', { min: item.durationMin, kcal: item.kcal })}`;
+    label = `${clock(item.minutes)}–${clock(item.endMinutes)} ${item.label}. ${g('journal.workoutMeta', { min: item.durationMin, kcal: item.kcal })}. ${g('journal.wo.open')}`;
+    onPress = () => onOpen(item);
     body = (
       <View style={[styles.card, styles.cardWorkout]}>
         <View style={styles.cardHead}>
@@ -196,7 +198,9 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
           {workoutXpFor === item.id && <Chip tone="ok" label="+60 XP" />}
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {g('journal.workoutMeta', { min: item.durationMin, kcal: item.kcal })}
+          {`${clock(item.minutes)}–${clock(item.endMinutes)} · ${g('journal.workoutMeta', { min: item.durationMin, kcal: item.kcal })}${
+            item.entryIds.length > 1 ? ` · ${g('journal.wo.count', { n: item.entryIds.length })}` : ''
+          }`}
         </HudText>
       </View>
     );
@@ -401,7 +405,12 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
   }
   function openDetail(item: TimelineItem) {
     if (item.kind === 'extra' || item.kind === 'meal') setOpenId(item.id);
+    if (item.kind === 'workout') setOpenWorkout(item.entryIds);
   }
+  const [openWorkout, setOpenWorkout] = useState<string[] | null>(null);
+  const openWorkoutEntries = openWorkout
+    ? workoutEntries.filter((w) => openWorkout.includes(w.id)).sort((a, b) => Date.parse(a.dateISO) - Date.parse(b.dateISO))
+    : null;
   let detail: MealDetail | null = null;
   if (openItem?.kind === 'extra') {
     // A meal saved as one food lists itself as its one part, so it reads (and its amount changes) like a meal of several.
@@ -595,6 +604,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
           {g('journal.waterNote')}
         </HudText>
       </ScrollView>
+      <WorkoutDetailDialog entries={openWorkoutEntries} lang={language === 'en' ? 'en' : 'vi'} onClose={() => setOpenWorkout(null)} />
       <MealDetailDialog detail={detail} onClose={() => setOpenId(null)} canEditParts={!client} onEditPart={editPart} onAddPhoto={client ? undefined : addPhoto} onRemovePhoto={client ? undefined : removePhoto} />
     </View>
   );

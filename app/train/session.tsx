@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 import { ExerciseFigure } from '../../src/components/quest/ExerciseFigure';
 import { ExercisePlanList, usePlanRowLabel } from '../../src/components/quest/ExercisePlanList';
+import { StepTuner } from '../../src/components/quest/StepTuner';
 import { HudText } from '../../src/components/quest/HudText';
 import { QuestButton } from '../../src/components/quest/QuestButton';
 import { QuestIcon } from '../../src/components/quest/QuestIcon';
@@ -30,7 +31,8 @@ import {
   type SpeechLang,
 } from '../../src/game/training/voice';
 import { activeRow, exercisePlan } from '../../src/game/training/plan';
-import { buildSteps, sessionProgress, sessionReducer, startSession, totalSetsDone } from '../../src/game/training/session';
+import { buildSteps, clampTune, sessionProgress, sessionReducer, startSession, totalSetsDone, type Tunable } from '../../src/game/training/session';
+import type { WorkoutDetails } from '../../src/types';
 import { useNow } from '../../src/game/useGameState';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useTrainingStore } from '../../src/store/useTrainingStore';
@@ -138,14 +140,21 @@ export default function SessionScreen() {
   const autoNext = useTrainingStore((s) => s.autoNextSet);
   const setAutoNext = useTrainingStore((s) => s.setAutoNextSet);
   const commitRatings = useTrainingStore((s) => s.commitRatings);
+  const custom = useTrainingStore((s) => s.custom);
+  const setCustom = useTrainingStore((s) => s.setCustom);
+  const resetCustom = useTrainingStore((s) => s.resetCustom);
   const addEntry = useWorkoutStore((s) => s.addEntry);
+  const updateEntry = useWorkoutStore((s) => s.updateEntry);
   const entries = useWorkoutStore((s) => s.entries);
   const latestWeight = useWeightStore((s) => s.latest());
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
 
   const steps = useMemo(() => {
     const list = (ids ?? '').split(',').filter((id): id is ExerciseId => id in EXERCISE_BY_ID);
-    return buildSteps(list.map((id) => ({ id, level: progressFor(progress, id).level })));
+    return buildSteps(
+      list.map((id) => ({ id, level: progressFor(progress, id).level })),
+      custom
+    );
     // The levels are frozen when the session starts: ratings are only committed at the end.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids]);
@@ -205,6 +214,7 @@ export default function SessionScreen() {
   }
   const [ratings, setRatings] = useState<Partial<Record<ExerciseId, Rating>>>({});
   const logged = useRef(false);
+  const loggedId = useRef<string | null>(null);
 
   const step = state.steps[state.step];
   const ex = step ? EXERCISE_BY_ID[step.id] : undefined;
@@ -218,7 +228,9 @@ export default function SessionScreen() {
     setAuto(null);
     clearHoldTimer();
     side.current = 1;
-  }, [state.phase, state.step, state.set, state.restSec]);
+    // (Not keyed on restSec: lengthening the rest in progress moves its end, see `tune`.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.phase, state.step, state.set]);
 
   // Spoken briefing when a set is about to start: the full steps on an exercise's first set, just "Set n of N" after.
   // With "auto start", a set that follows a rest gets a short intro and starts counting by itself.
@@ -250,7 +262,7 @@ export default function SessionScreen() {
     const withSteps = autoNextRef.current && state.set === 0;
     speak(restScript(state.restSec, next, next ? EXERCISE_BY_ID[next.id] : undefined, prefsRef.current.lang, withSteps), { voice: prefsRef.current });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.phase, state.step, state.set, state.restSec]);
+  }, [state.phase, state.step, state.set]);
 
   const restLeft = restEndsAt === null ? 0 : Math.ceil((restEndsAt - nowMs) / 1000);
   useEffect(() => {
@@ -263,7 +275,8 @@ export default function SessionScreen() {
 
   const holdLeft = step && step.unit === 'seconds' && holdStartedAt !== null ? Math.ceil(step.amount - (nowMs - holdStartedAt) / 1000) : null;
   useEffect(() => {
-    if (state.phase === 'work' && holdLeft !== null && holdLeft <= 0) dispatch({ type: 'finishSet' });
+    if (state.phase === 'work' && step && holdLeft !== null && holdLeft <= 0) dispatch({ type: 'finishSet', done: step.amount });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.phase, holdLeft]);
   useEffect(() => {
     if (state.phase === 'work' && step && holdLeft !== null && shouldCallHold(holdLeft, step.amount)) say(String(holdLeft));
@@ -344,7 +357,21 @@ export default function SessionScreen() {
       : group === 'A' || group === 'B' || group === 'C'
         ? g(`train.group.${group}` as GameKey)
         : g('train.title');
-    addEntry({ templateId: `home-${group || 'x'}`, label, durationMin, caloriesBurned: kcal });
+    const details: WorkoutDetails = {
+      exercises: state.steps.map((s, i) => ({
+        id: s.id,
+        level: s.level,
+        sets: s.sets,
+        amount: s.amount,
+        unit: s.unit,
+        ...(s.perSide ? { perSide: true } : {}),
+        restSec: s.restSec,
+        results: state.results[i],
+      })),
+    };
+    // Logged at the time the workout started; it ends `durationMin` later.
+    const entry = addEntry({ templateId: `home-${group || 'x'}`, label, durationMin, caloriesBurned: kcal, details }, new Date(startedAt.current).toISOString());
+    loggedId.current = entry.id;
     setResult({ durationMin, kcal });
     say(phrase('allDone'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -370,7 +397,15 @@ export default function SessionScreen() {
 
     function finish() {
       stopSpeaking();
-      if (Object.keys(ratings).length > 0) commitRatings(ratings, new Date());
+      if (Object.keys(ratings).length > 0) {
+        commitRatings(ratings, new Date());
+        const entry = loggedId.current ? useWorkoutStore.getState().entries.find((e) => e.id === loggedId.current) : undefined;
+        if (entry?.details) {
+          updateEntry(entry.id, {
+            details: { exercises: entry.details.exercises.map((x) => (ratings[x.id as ExerciseId] ? { ...x, rating: ratings[x.id as ExerciseId] } : x)) },
+          });
+        }
+      }
       router.replace('/(tabs)');
     }
 
@@ -495,6 +530,26 @@ export default function SessionScreen() {
   }
 
   const name = exerciseName(ex, lang);
+  const isCustom = custom[step.id]?.level === step.level;
+  /** A change from the tuner: the rest of this session, and the exercise's numbers next time. Lengthening the rest
+   *  while resting also moves the end of the rest in progress. */
+  function tune(key: Tunable, value: number) {
+    if (!step) return;
+    const v = clampTune(key, step.unit, value);
+    dispatch({ type: 'adjust', patch: { [key]: v } });
+    setCustom(step.id, step.level, { [key]: v });
+    if (key === 'restSec' && state.phase === 'rest') {
+      const delta = v - step.restSec;
+      dispatch({ type: 'adjustRest', restSec: state.restSec + delta });
+      setRestEndsAt((t) => (t === null ? t : t + delta * 1000));
+    }
+  }
+  function resetTune() {
+    if (!step) return;
+    resetCustom(step.id);
+    const p = EXERCISE_BY_ID[step.id].levels[step.level - 1];
+    dispatch({ type: 'adjust', patch: { sets: p.sets, amount: p.amount, restSec: EXERCISE_BY_ID[step.id].restSec } });
+  }
   const isTimed = step.unit === 'seconds';
   const resting = state.phase === 'rest';
   const nextStep = state.steps[state.step];
@@ -668,6 +723,16 @@ export default function SessionScreen() {
           </View>
         )}
 
+        {(resting || (!auto && holdStartedAt === null && state.count === 0)) && (
+          <StepTuner
+            values={{ sets: step.sets, amount: step.amount, restSec: step.restSec }}
+            unit={step.unit}
+            perSide={step.perSide}
+            onChange={tune}
+            onReset={isCustom ? resetTune : undefined}
+          />
+        )}
+
         <ExercisePlanList ex={ex} step={step} rows={planRows} active={planIndex} lang={lang} />
       </ScrollView>
 
@@ -678,7 +743,11 @@ export default function SessionScreen() {
           holdStartedAt === null ? (
             <QuestButton title={g('train.s.startTimer')} onPress={() => startHold()} />
           ) : (
-            <QuestButton title={g('train.s.finishSet')} icon="check" onPress={() => dispatch({ type: 'finishSet' })} />
+            <QuestButton
+              title={g('train.s.finishSet')}
+              icon="check"
+              onPress={() => dispatch({ type: 'finishSet', done: Math.min(step.amount, Math.round((Date.now() - holdStartedAt) / 1000)) })}
+            />
           )
         ) : (
           <View style={styles.footerCol}>

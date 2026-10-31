@@ -30,7 +30,8 @@ export type TimelineItem =
       past: boolean;
     }
   | { kind: 'extra'; id: string; minutes: number; name: string; kcal: number; proteinG: number; purineMg: number; saltG: number; sugarG: number; junk: boolean; photoUri?: string; loggedAtISO: string; parts?: MealPart[]; mealTime?: ExtraMealTime | null }
-  | { kind: 'workout'; id: string; minutes: number; label: string; durationMin: number; kcal: number }
+  /** One or more workouts close together, shown as one row from the first start to the last end. */
+  | { kind: 'workout'; id: string; minutes: number; endMinutes: number; label: string; durationMin: number; kcal: number; entryIds: string[] }
   | { kind: 'feeling'; id: string; minutes: number; mood: Mood; cravingLevel: number; hungerLevel: number }
   | { kind: 'now'; id: string; minutes: number };
 
@@ -49,6 +50,29 @@ export interface TimelineInput {
 
 // Entries at the same minute list meals first, then food, workouts, check-ins, then water.
 const PRIORITY: Record<TimelineItem['kind'], number> = { meal: 0, extra: 1, workout: 2, feeling: 3, water: 4, now: 5 };
+
+/** Workouts that start within this long after the previous one ended belong to the same row. */
+export const WORKOUT_GROUP_GAP_MIN = 60;
+
+/** A day's workouts in time order, grouped where one starts within `WORKOUT_GROUP_GAP_MIN` of the end of the one before
+ *  (several single exercises in a row read as one workout). */
+export function groupWorkouts(workouts: WorkoutLogEntry[]): WorkoutLogEntry[][] {
+  const sorted = [...workouts].sort((a, b) => Date.parse(a.dateISO) - Date.parse(b.dateISO));
+  const groups: WorkoutLogEntry[][] = [];
+  let endMs = -Infinity;
+  for (const w of sorted) {
+    const start = Date.parse(w.dateISO);
+    const end = start + w.durationMin * 60_000;
+    if (groups.length > 0 && start <= endMs + WORKOUT_GROUP_GAP_MIN * 60_000) {
+      groups[groups.length - 1].push(w);
+      endMs = Math.max(endMs, end);
+    } else {
+      groups.push([w]);
+      endMs = end;
+    }
+  }
+  return groups;
+}
 
 function minutesOfDay(iso: string): number {
   const d = new Date(iso);
@@ -137,8 +161,19 @@ export function buildTimeline(input: TimelineInput): TimelineItem[] {
       parts: partsMatchTotals(e) ? e.parts : undefined,
     });
   }
-  for (const w of workouts) {
-    items.push({ kind: 'workout', id: `workout-${w.id}`, minutes: minutesOfDay(w.dateISO), label: w.label, durationMin: w.durationMin, kcal: w.caloriesBurned });
+  for (const group of groupWorkouts(workouts)) {
+    const first = group[0];
+    const labels = [...new Set(group.map((w) => w.label))];
+    items.push({
+      kind: 'workout',
+      id: `workout-${first.id}`,
+      minutes: minutesOfDay(first.dateISO),
+      endMinutes: Math.max(...group.map((w) => minutesOfDay(w.dateISO) + Math.round(w.durationMin))),
+      label: labels.join(' + '),
+      durationMin: group.reduce((sum, w) => sum + w.durationMin, 0),
+      kcal: Math.round(group.reduce((sum, w) => sum + w.caloriesBurned, 0)),
+      entryIds: group.map((w) => w.id),
+    });
   }
   for (const f of dayFeelings) {
     items.push({ kind: 'feeling', id: `feeling-${f.id}`, minutes: minutesOfDay(f.loggedAtISO), mood: f.mood, cravingLevel: f.cravingLevel, hungerLevel: f.hungerLevel });

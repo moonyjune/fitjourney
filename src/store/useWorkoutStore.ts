@@ -8,7 +8,7 @@ import { useProofStore } from './useProofStore';
 
 /** What can be changed on a logged workout. The id never changes; `templateId` stays so a plan template's step
  *  breakdown keeps showing for an entry whose numbers were corrected. */
-export type WorkoutEntryPatch = Partial<Pick<WorkoutLogEntry, 'label' | 'durationMin' | 'caloriesBurned' | 'dateISO'>>;
+export type WorkoutEntryPatch = Partial<Pick<WorkoutLogEntry, 'label' | 'durationMin' | 'caloriesBurned' | 'dateISO' | 'details'>>;
 
 interface WorkoutState {
   entries: WorkoutLogEntry[];

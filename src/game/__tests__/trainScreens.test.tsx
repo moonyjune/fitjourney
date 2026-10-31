@@ -94,7 +94,7 @@ describe('Train tab, exercise detail and session', () => {
     useSettingsStore.setState({ language: 'vi', startWeightKg: 110 });
     useWeightStore.setState({ entries: [{ id: 'w', dateISO: '2026-10-23T06:00:00', weightKg: 106 }] });
     useWorkoutStore.setState({ entries: [] });
-    useTrainingStore.setState({ progress: {} });
+    useTrainingStore.setState({ progress: {}, custom: {} });
   });
 
   afterEach(() => {
@@ -232,6 +232,51 @@ describe('Train tab, exercise detail and session', () => {
       expect(entries[0].caloriesBurned).toBe(6); // 3.5 MET x 106 kg x 1 min
       expect(allText(r)).toContain('Nhiệm vụ hoàn thành');
       expect(allText(r)).toContain('1 bài × set');
+    });
+
+    it('logs the workout at its start time with each set it reached, and adds the rating', () => {
+      mockParams = { ids: 'chairSquat', group: 'A' };
+      const startedAt = Date.now();
+      const r = render(<SessionScreen />);
+      for (let set = 0; set < 3; set++) {
+        for (let i = 0; i < 8 - set; i++) press(r, '+1 lần');
+        act(() => {
+          jest.advanceTimersByTime(60_000);
+        });
+        press(r, 'Xong set');
+        if (set < 2) press(r, 'Bỏ qua nghỉ');
+      }
+      const [entry] = useWorkoutStore.getState().entries;
+      expect(Date.parse(entry.dateISO)).toBe(startedAt);
+      expect(entry.durationMin).toBe(3);
+      expect(entry.details?.exercises).toEqual([
+        { id: 'chairSquat', level: 1, sets: 3, amount: 8, unit: 'reps', restSec: 40, results: [8, 7, 6] },
+      ]);
+      press(r, 'Squat ngồi ghế: Vừa');
+      press(r, 'Về trại');
+      expect(useWorkoutStore.getState().entries[0].details?.exercises[0].rating).toBe('medium');
+    });
+
+    it('lets the user change sets, set length and rest, for this session and the next', () => {
+      useTrainingStore.setState({ custom: {} });
+      mockParams = { ids: 'chairSquat', group: 'A' };
+      const r = render(<SessionScreen />);
+      press(r, 'Tăng Mỗi set (lần)');
+      press(r, 'Giảm Số set');
+      press(r, 'Tăng Nghỉ giữa set (giây)');
+      expect(allText(r)).toContain('Set 1 / 2');
+      expect(allText(r)).toContain('Bắt đầu · 9 lần');
+      expect(useTrainingStore.getState().custom.chairSquat).toEqual({ level: 1, amount: 9, sets: 2, restSec: 45 });
+      press(r, 'Xong set');
+      expect(allText(r)).toMatch(/NGHỈ\s+45/);
+      press(r, 'Tăng Nghỉ giữa set (giây)'); // while resting: the rest in progress gets 5 s longer too
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(allText(r)).toMatch(/NGHỈ\s+49/);
+      press(r, 'Về mặc định');
+      expect(useTrainingStore.getState().custom.chairSquat).toBeUndefined();
+      useTrainingStore.setState({ custom: {} });
     });
 
     it('pays the workout XP only when the session reaches the 10-minute mission minimum', () => {
