@@ -40,6 +40,13 @@ function allText(renderer: ReactTestRenderer): string {
   return parts.join(' ');
 }
 
+
+/** Missions are folded on Camp by default: open them. */
+function openMissions(r: ReactTestRenderer) {
+  const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
+  if (head) act(() => head.props.onPress());
+}
+
 describe('user-chosen limits reach the missions', () => {
   let renderer: ReactTestRenderer | undefined;
   beforeEach(() => {
@@ -68,6 +75,7 @@ describe('user-chosen limits reach the missions', () => {
       r = create(<CampScreen />);
     });
     renderer = r;
+    openMissions(r);
     return r;
   };
 

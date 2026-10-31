@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.25 | yes | — |
 | 0.24 | yes | — |
 | 0.23 | no | — |
 | 0.22 | no | — |
@@ -36,6 +37,21 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.25
+- Camp: the battle log (Nhật ký trận) is now on Camp itself: the week strip, the day's figures, the timeline and the meal and workout dialogs. You no longer need a button to open it. Today's missions are folded by default; tap their heading to open them.
+- Training count: the last rep was cut off. The set ended in the same instant "8" was said, so the rest announcement drowned it out and 8 reps sounded like 7. The last number now stays on screen and is heard for 1.5 s before the rest starts.
+- Training count: "Go!" is called when the lead-in ends, and "1" comes one rep later. In the browser, a sentence that cuts off the one before it now waits a moment, because browsers sometimes dropped it (the count skipped "1").
+- Habits: each habit shows whether it is formed, worked out from the ✔/✘ ticks over the last 28 days:
+  - "Đã thành thói quen": tracked ≥ 21 days, ≥ 14 ticks and ≥ 80 % done;
+  - "Đang hình thành", with its progress;
+  - "Chưa ổn định": < 50 %, or 3 misses in a row;
+  - "Mới bắt đầu".
+
+  A formed habit that slips is flagged. You can mark a habit yourself ("Đã thành thói quen" / "Chưa thành" / "Theo dữ liệu"), and when your mark and the data disagree, both are shown.
+- Habits: a "Phân tích thói quen" card built only from the ticks, each comment with its numbers: this week against last week, the weekday that fails most, streaks and misses in a row, habits that slip together, and auto-tracked habits checked against the logged data.
+- Habits: a "Gợi ý Kaizen" card. A struggling habit gets a smaller step and an anchor on the day it fails. A formed habit gets its next step up. There are up to 3 new habits to add with one tap, skipping ones you already have.
+- Server: run `supabase/schema.sql` again. It adds `habits.formed_mark`, plus the 0.24 workout columns if not run yet. Until then, a "formed" mark stays on the device only.
 
 ## 0.24
 - Training: set the number of sets, the length of each set (reps, or seconds for holds) and the rest between sets. Do it on the exercise screen, or in a session before a set starts or while resting. Lengthening the rest while resting also extends the countdown. The numbers are kept for the next sessions at that level; "Về mặc định" goes back to the level's own.

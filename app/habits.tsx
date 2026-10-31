@@ -8,14 +8,17 @@ import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { QuestIcon } from '../src/components/quest/QuestIcon';
+import { analyzeHabits, type HabitStats } from '../src/habits/analysis';
 import { autoSignals } from '../src/habits/auto';
+import { formationLabel, habitCandidates, habitInsights, habitToSteadyFirst, kaizenTips, type Tone } from '../src/habits/kaizen';
 import { buildHabitWeeks, dayRatio, FORMED_RATE, streak, trackedHabits } from '../src/habits/rates';
 import { useHabitText, type HabitKey } from '../src/habits/strings';
-import { HABIT_STATUSES, type CheckValue, type Habit, type HabitAuto, type HabitStatus } from '../src/habits/types';
+import { HABIT_STATUSES, type CheckValue, type FormationLevel, type Habit, type HabitAuto, type HabitStatus } from '../src/habits/types';
 import { addDaysToKey } from '../src/insights/dateMath';
 import { fmtDayMonth } from '../src/insights/format';
 import { useHabitStore } from '../src/store/useHabitStore';
 import { useNutritionStore } from '../src/store/useNutritionStore';
+import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useWeightStore } from '../src/store/useWeightStore';
 import { useWorkoutStore } from '../src/store/useWorkoutStore';
 import { quest, questRadius } from '../src/theme/quest';
@@ -24,7 +27,8 @@ import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import { toDateKey } from '../src/utils/date';
 
 const STATUS_KEY: Record<HabitStatus, HabitKey> = { formed: 'hb.s.formed', building: 'hb.s.building', todo: 'hb.s.todo' };
-const STATUS_COLOR: Record<HabitStatus, string> = { formed: quest.xp, building: quest.gold, todo: quest.hpText };
+const LEVEL_COLOR: Record<FormationLevel, string> = { formed: quest.xp, building: quest.gold, unstable: quest.hpText, new: quest.manaText, untracked: quest.textSecondary };
+const TONE_COLOR: Record<Tone, string> = { good: quest.xp, warn: quest.gold, bad: quest.hpText, info: quest.textTertiary };
 const AUTO_WHAT: Record<HabitAuto, HabitKey> = { water: 'hb.autoWater', weigh: 'hb.autoWeigh', walk: 'hb.autoWalk' };
 const DAYS_BACK = 7;
 const pct = (v: number) => Math.round(v * 100);
@@ -65,7 +69,11 @@ function HabitForm({ habit, onDone }: { habit: Habit | null; onDone: () => void 
       setError(true);
       return;
     }
-    if (habit) updateHabit(habit.id, form);
+    if (habit) {
+      const statusChanged = form.status !== habit.status;
+      const formedMark = !statusChanged ? habit.formedMark : form.status === 'formed' ? true : habit.formedMark === true ? null : habit.formedMark;
+      updateHabit(habit.id, { ...form, formedMark });
+    }
     else addHabit({ ...form, auto: null });
     onDone();
   }
@@ -101,6 +109,41 @@ function HabitForm({ habit, onDone }: { habit: Habit | null; onDone: () => void 
   );
 }
 
+/** "Already a habit?" badge: the verdict (manual mark wins), what the data says when they disagree, and a slip warning. */
+function FormationBadge({ s }: { s: HabitStats }) {
+  const h = useHabitText();
+  const language = useSettingsStore((x) => x.language);
+  const setFormedMark = useHabitStore((x) => x.setFormedMark);
+  const mark = s.habit.formedMark ?? (s.manual === true ? true : null);
+  const marks: { value: boolean | null; key: HabitKey }[] = [
+    { value: true, key: 'hb.mark.formed' },
+    { value: false, key: 'hb.mark.notYet' },
+    { value: null, key: 'hb.mark.auto' },
+  ];
+  return (
+    <View style={styles.badgeBox}>
+      <HudText size={12} color={LEVEL_COLOR[s.verdict]}>
+        {formationLabel(language, s) + (s.manual !== null ? ` · ${h('hb.f.byYou')}` : '')}
+      </HudText>
+      {s.disagree && (
+        <HudText size={11} weight="medium" color={quest.textSecondary}>
+          {h('hb.f.dataSays', { what: formationLabel(language, s, s.suggested) })}
+        </HudText>
+      )}
+      {s.slipping && (
+        <HudText size={11} weight="medium" color={quest.hpText}>
+          {h('hb.f.slipping', { d: s.last7.done, t: s.last7.done + s.last7.missed, p: Math.round((s.last7.rate ?? 0) * 100), m: s.missRun })}
+        </HudText>
+      )}
+      <View style={styles.chips}>
+        {marks.map((m) => (
+          <QuestChip key={m.key} label={h(m.key)} selected={mark === m.value} accessibilityLabel={`${h(m.key)}: ${s.habit.name}`} onPress={() => setFormedMark(s.habit.id, m.value)} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /** Profile > Habits: tick the habits day by day, see how steady each one is week by week, and keep the list. */
 export default function HabitsScreen() {
   const h = useHabitText();
@@ -110,6 +153,8 @@ export default function HabitsScreen() {
   const checks = useHabitStore((s) => s.checks);
   const setCheck = useHabitStore((s) => s.setCheck);
   const archiveHabit = useHabitStore((s) => s.archiveHabit);
+  const addHabit = useHabitStore((s) => s.addHabit);
+  const language = useSettingsStore((s) => s.language);
   const nutritionLogs = useNutritionStore((s) => s.logs);
   const weights = useWeightStore((s) => s.entries);
   const workouts = useWorkoutStore((s) => s.entries);
@@ -124,6 +169,15 @@ export default function HabitsScreen() {
   const days = useMemo(() => Array.from({ length: DAYS_BACK }, (_, i) => addDaysToKey(todayKey, -i)), [todayKey]);
   const weeks = useMemo(() => buildHabitWeeks(checks, habits, todayKey), [checks, habits, todayKey]);
   const signals = useMemo(() => autoSignals(day, { waterMl: nutritionLogs[day]?.waterMl ?? 0, weights, workouts }), [day, nutritionLogs, weights, workouts]);
+  const overview = useMemo(
+    () => analyzeHabits(checks, habits, todayKey, (d) => autoSignals(d, { waterMl: nutritionLogs[d]?.waterMl ?? 0, weights, workouts })),
+    [checks, habits, todayKey, nutritionLogs, weights, workouts]
+  );
+  const statsById = useMemo(() => new Map(overview.stats.map((x) => [x.habit.id, x])), [overview]);
+  const insights = useMemo(() => habitInsights(language, overview), [language, overview]);
+  const tips = useMemo(() => kaizenTips(language, overview), [language, overview]);
+  const candidates = useMemo(() => habitCandidates(language, habits), [language, habits]);
+  const steadyFirst = habitToSteadyFirst(overview);
   const dayChecks = checks[day] ?? {};
   const ratio = dayRatio(checks, day, habits);
   const marked = tracked.filter((x) => dayChecks[x.id]).length;
@@ -238,6 +292,69 @@ export default function HabitsScreen() {
             </HudText>
 
             <HudText size={17} accessibilityRole="header" style={styles.section}>
+              {h('hb.an.title')}
+            </HudText>
+            <View style={styles.card}>
+              {insights.length === 0 ? (
+                <HudText size={12} weight="medium" color={quest.textSecondary}>
+                  {h('hb.an.empty')}
+                </HudText>
+              ) : (
+                insights.map((line, i) => (
+                  <HudText key={i} size={12} weight="medium" color={TONE_COLOR[line.tone]}>
+                    {`• ${line.text}`}
+                  </HudText>
+                ))
+              )}
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {h('hb.an.basis')}
+              </HudText>
+            </View>
+
+            <HudText size={17} accessibilityRole="header" style={styles.section}>
+              {h('hb.kz.title')}
+            </HudText>
+            <View style={styles.card}>
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {h('hb.kz.intro')}
+              </HudText>
+              {tips.length === 0 ? (
+                <HudText size={12} weight="medium" color={quest.textSecondary}>
+                  {h('hb.kz.none')}
+                </HudText>
+              ) : (
+                tips.map((line, i) => (
+                  <HudText key={i} size={12} weight="medium" color={TONE_COLOR[line.tone]}>
+                    {`• ${line.text}`}
+                  </HudText>
+                ))
+              )}
+              {candidates.length > 0 && (
+                <>
+                  <HudText size={14} style={styles.subhead}>
+                    {h('hb.kz.newTitle')}
+                  </HudText>
+                  {steadyFirst && (
+                    <HudText size={11} weight="medium" color={quest.gold}>
+                      {h('hb.kz.newWait', { name: steadyFirst.name })}
+                    </HudText>
+                  )}
+                  {candidates.map((c) => (
+                    <View key={c.id} style={styles.candidate}>
+                      <View style={styles.flex}>
+                        <HudText size={13}>{c.name}</HudText>
+                        <HudText size={11} weight="medium" color={quest.textSecondary}>
+                          {c.why}
+                        </HudText>
+                      </View>
+                      <QuestChip label={h('hb.kz.addOne')} accessibilityLabel={`${h('hb.kz.addOne')}: ${c.name}`} tone="mana" onPress={() => addHabit(c.fields)} />
+                    </View>
+                  ))}
+                </>
+              )}
+            </View>
+
+            <HudText size={17} accessibilityRole="header" style={styles.section}>
               {h('hb.listTitle')}
             </HudText>
             {active.length === 0 && (
@@ -251,10 +368,8 @@ export default function HabitsScreen() {
                   <HudText size={14} style={styles.flex}>
                     {habit.name}
                   </HudText>
-                  <HudText size={11} color={STATUS_COLOR[habit.status]}>
-                    {h(STATUS_KEY[habit.status])}
-                  </HudText>
                 </View>
+                {statsById.get(habit.id) && <FormationBadge s={statsById.get(habit.id)!} />}
                 {habit.assessment ? (
                   <HudText size={12} weight="medium" color={quest.textSecondary}>
                     {habit.assessment}
@@ -286,6 +401,9 @@ export default function HabitsScreen() {
                 </View>
               </View>
             ))}
+            <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
+              {h('hb.f.rule')}
+            </HudText>
             <View style={styles.addRow}>
               <QuestButton title={h('hb.add')} icon="plus" variant="ghost" onPress={() => setEditing({ habit: null })} />
             </View>
@@ -309,6 +427,9 @@ const styles = StyleSheet.create({
   autoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   useAuto: { minHeight: 32, justifyContent: 'center' },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  badgeBox: { gap: 4 },
+  subhead: { marginTop: 10 },
+  candidate: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
   addRow: { marginTop: 14 },
   form: { marginTop: 16, gap: 12 },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },

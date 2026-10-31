@@ -20,6 +20,9 @@ export interface Habit {
   sort: number;
   /** A removed habit: hidden everywhere, its past ticks are kept. */
   archived: boolean;
+  /** The user's own verdict on whether it is already a habit: true = formed, false = not yet, null/absent = follow the
+   *  data (see `analysis.ts`). Overrides the suggestion computed from the ticks. */
+  formedMark?: boolean | null;
 }
 
 export type CheckValue = 'done' | 'missed';
@@ -28,3 +31,6 @@ export type CheckValue = 'done' | 'missed';
 export type HabitChecks = Record<string, Record<string, CheckValue>>;
 
 export const HABIT_STATUSES: HabitStatus[] = ['formed', 'building', 'todo'];
+
+/** Whether a habit has become automatic, judged from its ticks (see `FORMATION` in analysis.ts). */
+export type FormationLevel = 'formed' | 'building' | 'unstable' | 'new' | 'untracked';

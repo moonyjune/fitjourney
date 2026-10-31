@@ -18,8 +18,10 @@ import {
   speak,
   stopSpeaking,
   voiceGenderOf,
+  WEB_AFTER_STOP_MS,
   type VoiceInfo,
 } from '../training/speech';
+import { Platform } from 'react-native';
 import { useSettingsStore } from '../../store/useSettingsStore';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
@@ -47,6 +49,25 @@ describe('speech wrapper', () => {
     mockStop.mockClear();
     speak('Next sentence', { queue: true });
     expect(mockStop).not.toHaveBeenCalled();
+  });
+
+  it('on the web, a sentence that cuts speech off waits a moment so the browser does not drop it', () => {
+    jest.useFakeTimers();
+    const os = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'web', configurable: true });
+    try {
+      speak('1');
+      expect(mockStop).toHaveBeenCalled();
+      expect(mockSpeak).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(WEB_AFTER_STOP_MS);
+      expect(mockSpeak).toHaveBeenCalledWith('1', expect.anything());
+      mockSpeak.mockClear();
+      speak('queued', { queue: true });
+      expect(mockSpeak).toHaveBeenCalled(); // nothing was cut: no wait
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: os, configurable: true });
+      jest.useRealTimers();
+    }
   });
 
   it('ignores empty text and stopSpeaking never throws', () => {

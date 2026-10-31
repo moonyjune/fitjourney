@@ -47,6 +47,13 @@ function allText(renderer: ReactTestRenderer): string {
   return parts.join(' ');
 }
 
+
+/** Missions are folded on Camp by default: open them. */
+function openMissions(r: ReactTestRenderer) {
+  const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
+  if (head) act(() => head.props.onPress());
+}
+
 describe('FitQuest Camp screen', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -93,8 +100,25 @@ describe('FitQuest Camp screen', () => {
       r = create(<CampScreen />);
     });
     renderer = r;
+    openMissions(r);
     return r;
   }
+
+  it('shows the battle log on Camp and keeps the missions folded until opened', () => {
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<CampScreen />);
+    });
+    renderer = r;
+    const text = allText(r);
+    expect(text).toContain('Nhật ký trận');
+    expect(text).toContain('Dòng thời gian');
+    const head = r.root.findAll((n) => n.props.accessibilityState?.expanded !== undefined && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
+    expect(head.props.accessibilityState.expanded).toBe(false);
+    expect(text).not.toContain('Tập luyện');
+    openMissions(r);
+    expect(allText(r)).toContain('Tập luyện');
+  });
 
   it('shows the player, the weekly boss and all seven missions', () => {
     const text = allText(render());

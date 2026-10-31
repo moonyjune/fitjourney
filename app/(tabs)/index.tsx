@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BossCard } from '../../src/components/quest/BossCard';
@@ -10,6 +10,7 @@ import { FadeInUp } from '../../src/components/quest/motion/FadeInUp';
 import { PressScale } from '../../src/components/quest/motion/PressScale';
 import { PlayerHeader } from '../../src/components/quest/PlayerHeader';
 import { WindowCard } from '../../src/components/quest/WindowCard';
+import { JournalView } from '../../src/screens/JournalView';
 import { MISSION_XP, PERFECT_DAY_BONUS_XP, WORKOUT_MIN_MINUTES, type MissionId } from '../../src/game/constants';
 import { titleKeyForLevel } from '../../src/game/level';
 import type { DayEvaluation, MissionResult } from '../../src/game/missions';
@@ -116,6 +117,7 @@ export default function CampScreen() {
   const game = useGameState(now);
   const ifStatus = getIfStatus(now);
   const fasting = useMealModeStore((s) => s.fasting);
+  const [missionsOpen, setMissionsOpen] = useState(false);
 
   useLightStatusBar();
 
@@ -165,45 +167,60 @@ export default function CampScreen() {
         </FadeInUp>
 
         <FadeInUp index={3} style={[styles.links, styles.gap]}>
-          <CampLink icon="list" label={g('journal.title')} onPress={() => router.push('/journal')} />
           <CampLink icon="smile" label={g('checkin.title')} onPress={() => router.push('/checkin')} />
         </FadeInUp>
 
-        <FadeInUp index={4} style={[styles.sectionHead, styles.gap]}>
+        {/* The battle log is read many times a day: it lives on Camp instead of behind a button. */}
+        <FadeInUp index={4}>
+          <JournalView embedded />
+        </FadeInUp>
+
+        {/* Missions are read rarely: folded by default, the heading opens them. */}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${g('missions.title')}. ${g('missions.summary', counts)}`}
+          accessibilityState={{ expanded: missionsOpen }}
+          onPress={() => setMissionsOpen((o) => !o)}
+          style={[styles.sectionHead, styles.gap]}
+        >
           <HudText size={17} accessibilityRole="header">
-            {g('missions.title')}
+            {missionsOpen ? '▾' : '▸'} {g('missions.title')}
           </HudText>
           <HudText size={12} weight="medium" color={quest.textSecondary}>
             {g('missions.summary', counts)}
           </HudText>
-        </FadeInUp>
+        </Pressable>
 
-        <View style={styles.list}>
-          {today.missions.map((m, i) => {
-            const copy = describeMission(m, today, g);
-            const target = MISSION_TARGET[m.id];
-            return (
-              <FadeInUp key={m.id} index={5 + i}>
-                <MissionRow
-                  title={copy.title}
-                  subtitle={copy.subtitle}
-                  statusLabel={copy.statusLabel}
-                  status={m.status}
-                  xp={MISSION_XP[m.id]} // the reward on offer; the row styles itself as earned once done
-                  progress={copy.progress}
-                  onPress={target ? () => router.push(target) : undefined}
-                />
-              </FadeInUp>
-            );
-          })}
-        </View>
+        {missionsOpen && (
+          <>
+          <View style={styles.list}>
+            {today.missions.map((m, i) => {
+              const copy = describeMission(m, today, g);
+              const target = MISSION_TARGET[m.id];
+              return (
+                <FadeInUp key={m.id} index={5 + i}>
+                  <MissionRow
+                    title={copy.title}
+                    subtitle={copy.subtitle}
+                    statusLabel={copy.statusLabel}
+                    status={m.status}
+                    xp={MISSION_XP[m.id]} // the reward on offer; the row styles itself as earned once done
+                    progress={copy.progress}
+                    onPress={target ? () => router.push(target) : undefined}
+                  />
+                </FadeInUp>
+              );
+            })}
+          </View>
 
-        <HudText size={12} weight="medium" color={today.perfect ? quest.gold : quest.textSecondary} style={styles.centerNote}>
-          {today.perfect ? g('missions.perfectDone', { n: PERFECT_DAY_BONUS_XP }) : g('missions.perfect', { n: PERFECT_DAY_BONUS_XP })}
-        </HudText>
-        <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.centerNote}>
-          {g('missions.estimateNote')}
-        </HudText>
+          <HudText size={12} weight="medium" color={today.perfect ? quest.gold : quest.textSecondary} style={styles.centerNote}>
+            {today.perfect ? g('missions.perfectDone', { n: PERFECT_DAY_BONUS_XP }) : g('missions.perfect', { n: PERFECT_DAY_BONUS_XP })}
+          </HudText>
+          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.centerNote}>
+            {g('missions.estimateNote')}
+          </HudText>
+          </>
+        )}
       </ScrollView>
     </View>
   );

@@ -9,6 +9,9 @@ import type { SessionStep } from './session';
 export const LEAD_IN_MS = 2000;
 /** Time given to change sides in a one-sided exercise before the second half starts counting. */
 export const SWITCH_PAUSE_MS = 3000;
+/** Time between the last rep being counted and the set ending, so the last number is heard and seen before the rest
+ *  announcement starts (it used to cut the last number off: "8 reps" sounded like 7). */
+export const LAST_REP_HOLD_MS = 1500;
 /** The last seconds of a rest period that are counted out loud. */
 export const REST_COUNTDOWN_FROM = 3;
 
@@ -17,7 +20,8 @@ export type SidePattern = SidePlan['pattern'];
 export interface RepEvent {
   /** Milliseconds after the start of the set (including lead-in) at which this event is due. */
   atMs: number;
-  kind: 'rep' | 'switch' | 'done';
+  /** `go`: the end of the lead-in, said out loud ("Go!") so the first number never comes out of the blue. */
+  kind: 'go' | 'rep' | 'switch' | 'done';
   /** 1-based move number across the whole set (every move on either side counts). */
   index: number;
   /** The number to say and show: restarts at 1 on the second side (`block`), counts pairs (`alternate`). 0 for
@@ -33,7 +37,7 @@ export interface RepEvent {
  *  - `alternate`: one move per side in turn, a "switch" call after every move; a rep (the number said) is a pair. */
 export function repTimeline(amount: number, perSide: boolean, repSec: number, pattern: SidePattern = 'block'): RepEvent[] {
   const total = perSide ? amount * 2 : amount;
-  const events: RepEvent[] = [];
+  const events: RepEvent[] = total > 0 ? [{ atMs: LEAD_IN_MS, kind: 'go', index: 0, spoken: 0 }] : [];
   for (let i = 1; i <= total; i++) {
     if (perSide && pattern === 'alternate') {
       const atMs = LEAD_IN_MS + i * repSec * 1000;
@@ -48,7 +52,7 @@ export function repTimeline(amount: number, perSide: boolean, repSec: number, pa
     if (perSide && i === amount) events.push({ atMs, kind: 'switch', index: i, spoken: 0, side: 2 });
   }
   const last = events[events.length - 1];
-  if (last) events.push({ atMs: last.atMs, kind: 'done', index: last.index, spoken: last.kind === 'rep' ? last.spoken : amount });
+  if (last) events.push({ atMs: last.atMs + LAST_REP_HOLD_MS, kind: 'done', index: last.index, spoken: last.kind === 'rep' ? last.spoken : amount });
   return events;
 }
 

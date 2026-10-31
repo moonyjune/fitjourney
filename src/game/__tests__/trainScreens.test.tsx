@@ -423,6 +423,14 @@ describe('Train tab, exercise detail and session', () => {
         jest.advanceTimersByTime(3000 * 7);
       });
       expect(spoken().filter((t) => /^\d+$/.test(t))).toEqual(['1', '2', '3', '4', '5', '6', '7', '8']);
+      // "Go!" is called out between "Get ready." and the first number.
+      expect(spoken().slice(0, 3)).toEqual(['Get ready.', 'Go!', '1']);
+      // The last rep stays on screen (and is not cut off by the rest announcement) for a moment.
+      expect(allText(r)).toMatch(/SỐ LẦN\s+8/);
+      expect(spoken().some((t) => t.startsWith('Rest for'))).toBe(false);
+      act(() => {
+        jest.advanceTimersByTime(1500);
+      });
       // 8 reps done: nobody tapped "Xong set", the clock did. Now resting before set 2.
       expect(allText(r)).toMatch(/NGHỈ\s+4[01]/); // 40 s rest (a tick of slack)
       expect(spoken().some((t) => t.startsWith('Rest for 40 seconds. Next up: Chair squat'))).toBe(true);

@@ -9,6 +9,7 @@ import { EXERCISE_BY_ID } from '../training/exercises';
 import { buildSteps, sessionReducer, startSession } from '../training/session';
 import { activeRow, exercisePlan, formatRowTime } from '../training/plan';
 import {
+  LAST_REP_HOLD_MS,
   LEAD_IN_MS,
   REST_COUNTDOWN_FROM,
   SPEECH_TEXT,
@@ -36,12 +37,13 @@ describe('repTimeline', () => {
     expect(reps.map((e) => e.atMs)).toEqual([LEAD_IN_MS + 3000, LEAD_IN_MS + 6000, LEAD_IN_MS + 9000]);
     const last = tl[tl.length - 1];
     expect(last.kind).toBe('done');
-    expect(last.atMs).toBe(reps[2].atMs); // time is the source of truth: the set is over the moment the last rep is counted
+    // The set ends shortly after the last rep is counted, so that number is still heard and shown.
+    expect(last.atMs).toBe(reps[2].atMs + LAST_REP_HOLD_MS);
   });
 
   it('counts both sides of a one-sided exercise, with a switch call and a pause between them', () => {
     const tl = repTimeline(2, true, 4);
-    expect(tl.map((e) => `${e.kind}${e.spoken || ''}`)).toEqual(['rep1', 'rep2', 'switch', 'rep1', 'rep2', 'done2']);
+    expect(tl.map((e) => `${e.kind}${e.spoken || ''}`)).toEqual(['go', 'rep1', 'rep2', 'switch', 'rep1', 'rep2', 'done2']);
     const sw = tl.find((e) => e.kind === 'switch')!;
     const secondFirst = tl.filter((e) => e.kind === 'rep')[2];
     expect(sw.atMs).toBe(LEAD_IN_MS + 2 * 4000);
@@ -57,8 +59,10 @@ describe('dueEvents', () => {
   const tl = repTimeline(4, false, 2);
   it('returns only what fell inside the window (exclusive start, inclusive end)', () => {
     const first = LEAD_IN_MS + 2000;
-    expect(dueEvents(tl, 0, first - 1)).toHaveLength(0);
-    expect(dueEvents(tl, 0, first).map((e) => e.spoken)).toEqual([1]);
+    expect(dueEvents(tl, 0, LEAD_IN_MS - 1)).toHaveLength(0);
+    // "Go!" ends the lead-in; the first number follows one rep later.
+    expect(dueEvents(tl, 0, first - 1).map((e) => e.kind)).toEqual(['go']);
+    expect(dueEvents(tl, LEAD_IN_MS, first).map((e) => e.spoken)).toEqual([1]);
     expect(dueEvents(tl, first, first + 2000).map((e) => e.spoken)).toEqual([2]);
   });
 
@@ -69,7 +73,7 @@ describe('dueEvents', () => {
       seen.push(...dueEvents(tl, from, to).map((e) => `${e.kind}${e.spoken}`));
       from = to;
     }
-    expect(seen).toEqual(['rep1', 'rep2', 'rep3', 'rep4', 'done4']);
+    expect(seen).toEqual(['go0', 'rep1', 'rep2', 'rep3', 'rep4', 'done4']);
   });
 });
 
@@ -180,7 +184,7 @@ describe('setCount action', () => {
 describe('left / right cues', () => {
   it('alternates one move per side, says the number after each pair and names the next side after every move', () => {
     const tl = repTimeline(2, true, 4, 'alternate');
-    expect(tl.map((e) => `${e.kind}${e.kind === 'switch' ? e.side : e.spoken}`)).toEqual(['switch2', 'rep1', 'switch1', 'switch2', 'rep2', 'done2']);
+    expect(tl.map((e) => `${e.kind}${e.kind === 'switch' ? e.side : e.spoken}`)).toEqual(['go0', 'switch2', 'rep1', 'switch1', 'switch2', 'rep2', 'done2']);
     expect(tl.filter((e) => e.kind === 'rep').map((e) => e.atMs)).toEqual([LEAD_IN_MS + 8000, LEAD_IN_MS + 16000]);
     // Resuming after one pair (2 moves) carries on from the third move.
     expect(resumeOffsetMs(tl, 2)).toBe(LEAD_IN_MS + 8000);
@@ -220,12 +224,12 @@ describe('exercise plan list', () => {
       '0:readyR@00:00',
       '0:goR@00:02',
       '0:switchL@00:26',
-      '0:done@00:53',
+      '0:done@00:55',
       '1:rest@00:00',
       '1:readyR@00:00',
       '1:goR@00:02',
       '1:switchL@00:26',
-      '1:done@00:53',
+      '1:done@00:55',
     ]);
     expect(rows[4].restSec).toBe(40);
     // A later exercise starts with the rest that leads into it.

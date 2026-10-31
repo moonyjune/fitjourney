@@ -1,4 +1,5 @@
 import * as Speech from 'expo-speech';
+import { Platform } from 'react-native';
 import type { SpeechLang } from './voice';
 
 export type VoiceGender = 'female' | 'male';
@@ -173,13 +174,25 @@ interface SpeakOptions {
   voice?: VoicePrefs;
 }
 
+/** Browsers sometimes drop a sentence spoken in the same instant as a cancel (a count that skipped "1"): after cutting
+ *  speech off, the next sentence waits this long. */
+export const WEB_AFTER_STOP_MS = 80;
+
 export function speak(text: string, { queue = false, voice = DEFAULT_VOICE }: SpeakOptions = {}): void {
   if (!text || !supported()) return;
   try {
     if (!queue) stopSpeaking();
     if (voices.length === 0) void preloadVoices();
     const choice = pickVoice(voices, voice);
-    Speech.speak(text, { language: choice.language, pitch: choice.pitch, rate: 1.0, ...(choice.voice ? { voice: choice.voice } : {}) });
+    const say = () => {
+      try {
+        Speech.speak(text, { language: choice.language, pitch: choice.pitch, rate: 1.0, ...(choice.voice ? { voice: choice.voice } : {}) });
+      } catch {
+        // ignore
+      }
+    };
+    if (!queue && Platform.OS === 'web') setTimeout(say, WEB_AFTER_STOP_MS);
+    else say();
   } catch {
     // ignore
   }

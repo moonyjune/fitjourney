@@ -11,6 +11,9 @@ interface HabitState {
   checks: HabitChecks;
   addHabit: (fields: HabitFields) => Habit;
   updateHabit: (id: string, patch: Partial<HabitFields>) => void;
+  /** The user's own "already a habit?" mark: true = formed, false = not yet, null = follow the ticks. Keeps `status` in
+   *  step (formed only while marked formed), so the diary/form status never contradicts the mark. */
+  setFormedMark: (id: string, mark: boolean | null) => void;
   /** Hides a habit everywhere; the ticks it already has stay on record. */
   archiveHabit: (id: string) => void;
   /** Ticks a habit on a day (`done` or `missed`), or clears the tick with null. */
@@ -42,6 +45,12 @@ export const useHabitStore = create<HabitState>()(
         const updated: Habit = { ...current, ...patch, name: (patch.name ?? current.name).trim() };
         set((s) => ({ habits: s.habits.map((h) => (h.id === id ? updated : h)) }));
         pushHabit(updated);
+      },
+      setFormedMark: (id, mark) => {
+        const current = get().habits.find((h) => h.id === id);
+        if (!current) return;
+        const status = mark === true ? 'formed' : current.status === 'formed' ? 'building' : current.status;
+        get().updateHabit(id, { formedMark: mark, status });
       },
       archiveHabit: (id) => {
         const current = get().habits.find((h) => h.id === id);

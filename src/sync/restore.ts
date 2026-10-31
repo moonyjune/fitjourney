@@ -177,6 +177,8 @@ export function mergeHabits(local: Habit[], rows: Row[]): Habit[] {
       auto,
       sort: num(r.sort),
       archived: r.archived === true,
+      // Only a real mark: no column yet (older cloud) or null both mean "follow the data".
+      ...(typeof r.formed_mark === 'boolean' ? { formedMark: r.formed_mark } : {}),
     });
     have.add(id);
   }

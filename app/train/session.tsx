@@ -295,7 +295,10 @@ export default function SessionScreen() {
       const due = dueEvents(timeline, autoElapsed.current, elapsed);
       autoElapsed.current = elapsed;
       for (const e of due) {
-        if (e.kind === 'rep') {
+        if (e.kind === 'go') {
+          // Queued: it waits for "Get ready…" to finish instead of cutting it off.
+          say(phrase('go'), true);
+        } else if (e.kind === 'rep') {
           dispatch({ type: 'setCount', count: e.spoken });
           say(String(e.spoken));
         } else if (e.kind === 'switch') {

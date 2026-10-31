@@ -52,6 +52,7 @@ function allText(renderer: ReactTestRenderer): string {
   return parts.join(' ');
 }
 const hasText = (r: ReactTestRenderer, value: string) => r.root.findAllByType(Text).some((t) => [t.props.children].flat(5).join('') === value);
+const countText = (r: ReactTestRenderer, value: string) => r.root.findAllByType(Text).filter((t) => [t.props.children].flat(5).join('') === value).length;
 
 let renderer: ReactTestRenderer | undefined;
 async function mount(el: React.ReactElement, reduced = false) {
@@ -96,6 +97,8 @@ describe('motion on the FitQuest screens', () => {
   describe('Camp', () => {
     it('has every card and mission in the tree from the first render, then everything fades in fully', async () => {
       const r = await mount(<CampScreen />);
+      const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false)[0];
+      act(() => head.props.onPress()); // missions are folded by default
       const text = allText(r);
       expect(text).toContain('Quái Một Ký Mỡ'); // boss card
       expect(text).toContain('Nhiệm vụ hôm nay'); // missions
@@ -114,14 +117,17 @@ describe('motion on the FitQuest screens', () => {
 
     it('floats "+60 XP" when logging a workout completes the workout mission', async () => {
       const r = await mount(<CampScreen />);
+      const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false)[0];
+      act(() => head.props.onPress()); // the float sits on the mission row: open the folded missions
       await advance(2000);
-      expect(hasText(r, '+60 XP')).toBe(false);
+      expect(countText(r, '+60 XP')).toBe(0);
       await act(async () => {
         useWorkoutStore.setState({ entries: [{ id: 'x', dateISO: '2026-10-23T15:00:00', templateId: null, label: 'Ngày A', durationMin: 20, caloriesBurned: 300 }] });
       });
-      expect(hasText(r, '+60 XP')).toBe(true);
+      // The float, besides the battle log's "+60 XP" chip on the workout row.
+      expect(countText(r, '+60 XP')).toBe(2);
       await advance(1500);
-      expect(hasText(r, '+60 XP')).toBe(false);
+      expect(countText(r, '+60 XP')).toBe(1);
     });
 
     it('never leaves a looping animation running after the screen is gone', async () => {

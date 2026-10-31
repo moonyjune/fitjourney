@@ -429,29 +429,40 @@ export async function pullPlan(targetUserId?: string): Promise<{ plan: PlanData;
   }
 }
 
+/** True for PostgREST's "no such column" errors (PGRST204 from the schema cache, 42703 from Postgres): the cloud table
+ *  is older than the app, so a write can be retried without the new field. */
+function isMissingHabitColumn(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === 'PGRST204' || code === '42703';
+}
+
 export async function pushHabit(habit: Habit): Promise<void> {
   const userId = currentUserId();
   if (!userId) return;
+  const row = {
+    user_id: userId,
+    client_id: habit.id,
+    name: habit.name,
+    status: habit.status,
+    assessment: habit.assessment,
+    kaizen: habit.kaizen,
+    measured_by: habit.measuredBy,
+    tracked: habit.tracked,
+    auto: habit.auto,
+    sort: habit.sort,
+    archived: habit.archived,
+    formed_mark: habit.formedMark ?? null,
+    updated_at: new Date().toISOString(),
+  };
   await pushOrQueue(
     { type: 'habit', payload: habit },
-    () =>
-      supabase.from('habits').upsert(
-        {
-          user_id: userId,
-          client_id: habit.id,
-          name: habit.name,
-          status: habit.status,
-          assessment: habit.assessment,
-          kaizen: habit.kaizen,
-          measured_by: habit.measuredBy,
-          tracked: habit.tracked,
-          auto: habit.auto,
-          sort: habit.sort,
-          archived: habit.archived,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id,client_id' }
-      ),
+    async () => {
+      const first = await supabase.from('habits').upsert(row, { onConflict: 'user_id,client_id' });
+      if (!first.error || !isMissingHabitColumn(first.error)) return first;
+      // The `formed_mark` column comes from schema.sql ("Habits formed status"); until it is run, save the rest.
+      const { formed_mark: _skip, ...older } = row;
+      return supabase.from('habits').upsert(older, { onConflict: 'user_id,client_id' });
+    },
     'pushHabit'
   );
 }

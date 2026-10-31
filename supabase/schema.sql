@@ -890,3 +890,8 @@ create policy "cookbook_recipes_insert_own" on public.cookbook_recipes for inser
 -- a guided session's exercises (sets, reps or seconds reached per set, rating). Safe to run more than once.
 alter table public.workout_entries add column if not exists started_at timestamptz;
 alter table public.workout_entries add column if not exists details jsonb;
+
+-- ===== Habits formed status =====
+-- Người dùng tự đánh dấu một thói quen "Đã thành thói quen" (true) hay "Chưa thành" (false); null = theo dữ liệu tích ✔/✘.
+-- App vẫn đẩy được khi cột chưa có (thử lại không kèm cột này).
+alter table public.habits add column if not exists formed_mark boolean;

@@ -18,6 +18,7 @@ jest.mock('../../lib/supabase', () => ({
 }));
 
 import { flushSyncQueue, pushHabit, pushHabitCheck, pushUserData, pushWeightEntry, whenPushesSettled } from '../../sync/cloudSync';
+import { mergeHabits } from '../../sync/restore';
 import { useSyncQueueStore } from '../../sync/syncQueue';
 import { useAuthStore } from '../../store/useAuthStore';
 import type { Habit } from '../../habits/types';
@@ -98,6 +99,49 @@ describe('habit sync', () => {
     warn.mockRestore();
     expect(useSyncQueueStore.getState().pending).toHaveLength(1);
     expect(useSyncQueueStore.getState().pending[0]).toMatchObject({ type: 'habit', payload: { id: 'diary-h-07' } });
+  });
+});
+
+describe('habit formed mark sync', () => {
+  it('sends the user\'s formed mark (null = follow the data)', async () => {
+    await pushHabit({ ...habit, formedMark: true });
+    expect(mockUpsert.mock.calls[0][0]).toMatchObject({ formed_mark: true });
+    await pushHabit(habit);
+    expect(mockUpsert.mock.calls[1][0]).toMatchObject({ formed_mark: null });
+  });
+
+  it('retries without formed_mark while the cloud table has no such column yet (PGRST204 / 42703)', async () => {
+    for (const code of ['PGRST204', '42703']) {
+      mockUpsert.mockReset();
+      mockUpsert.mockResolvedValueOnce({ error: { code, message: "Could not find the 'formed_mark' column" } }).mockResolvedValue({ error: null });
+      await pushHabit({ ...habit, formedMark: false });
+      expect(mockUpsert).toHaveBeenCalledTimes(2);
+      const retry = mockUpsert.mock.calls[1][0] as Record<string, unknown>;
+      expect(retry).not.toHaveProperty('formed_mark');
+      expect(retry).toMatchObject({ client_id: 'diary-h-07', name: 'Uống đủ 3 lít nước/ngày' });
+      expect(useSyncQueueStore.getState().pending).toEqual([]);
+    }
+  });
+
+  it('does not retry on other errors (the write is queued instead)', async () => {
+    mockUpsert.mockResolvedValue({ error: { code: '42501', message: 'denied' } });
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await pushHabit(habit);
+    warn.mockRestore();
+    expect(mockUpsert).toHaveBeenCalledTimes(1);
+    expect(useSyncQueueStore.getState().pending).toHaveLength(1);
+  });
+
+  it('restores the mark from the cloud row, and leaves it out when the column is missing or null', () => {
+    const row = { client_id: 'h-a', name: 'A', status: 'building', tracked: true, sort: 1, archived: false };
+    const [a, b, c] = mergeHabits([], [
+      { ...row, formed_mark: true },
+      { ...row, client_id: 'h-b', formed_mark: null },
+      { ...row, client_id: 'h-c', formed_mark: false },
+    ]);
+    expect(a.formedMark).toBe(true);
+    expect(b).not.toHaveProperty('formedMark');
+    expect(c.formedMark).toBe(false);
   });
 });
 

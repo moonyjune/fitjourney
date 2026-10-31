@@ -280,7 +280,9 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
   );
 }
 
-export function JournalView({ client }: { client?: ClientSnapshot }) {
+/** The battle log. `embedded`: a section of another screen (Camp) — no own scroll view, back button or safe-area padding;
+ *  the title is a section heading instead. */
+export function JournalView({ client, embedded }: { client?: ClientSnapshot; embedded?: boolean }) {
   const g = useGameText();
   const { t, language } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -489,10 +491,25 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
     { label: g('journal.xp'), value: `+${day.earnedXp}`, color: quest.xp, accent: false },
   ];
 
+  const header = embedded ? (
+    <View style={styles.embeddedHead}>
+      <HudText size={17} accessibilityRole="header">
+        {g('journal.title')}
+      </HudText>
+      <HudText size={11} color={quest.textSecondary} style={styles.flex} numberOfLines={1}>
+        {eyebrow}
+      </HudText>
+    </View>
+  ) : (
+    <QuestHeader title={client ? `${g('journal.title')} · ${client.displayName}` : g('journal.title')} eyebrow={eyebrow} onBack={goBack} backLabel={g('common.back')} />
+  );
+  const Outer = embedded ? View : ScrollView;
+  const outerProps = embedded ? {} : { contentContainerStyle: [styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }] };
+
   return (
-    <View style={styles.screen}>
-      <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
-        <QuestHeader title={client ? `${g('journal.title')} · ${client.displayName}` : g('journal.title')} eyebrow={eyebrow} onBack={goBack} backLabel={g('common.back')} />
+    <View style={embedded ? undefined : styles.screen}>
+      <Outer {...outerProps}>
+        {header}
 
         <View style={styles.stripWrap} {...swipe.panHandlers}>
           <Pressable accessibilityRole="button" accessibilityLabel={g('journal.prevWeek')} onPress={() => shiftWeek(-1)} style={styles.arrow}>
@@ -603,7 +620,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
         <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
           {g('journal.waterNote')}
         </HudText>
-      </ScrollView>
+      </Outer>
       <WorkoutDetailDialog entries={openWorkoutEntries} lang={language === 'en' ? 'en' : 'vi'} onClose={() => setOpenWorkout(null)} />
       <MealDetailDialog detail={detail} onClose={() => setOpenId(null)} canEditParts={!client} onEditPart={editPart} onAddPhoto={client ? undefined : addPhoto} onRemovePhoto={client ? undefined : removePhoto} />
     </View>
@@ -613,6 +630,7 @@ export function JournalView({ client }: { client?: ClientSnapshot }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: quest.bg },
   content: { paddingHorizontal: 16, paddingBottom: 32 },
+  embeddedHead: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 20 },
   flex: { flex: 1, minWidth: 0 },
   stripWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
   arrow: { width: 32, height: 64, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },

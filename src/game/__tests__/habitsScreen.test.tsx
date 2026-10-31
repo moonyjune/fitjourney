@@ -106,7 +106,7 @@ describe('Habits screen', () => {
     expect(has(r, 'Không húp nước dùng: chưa tích')).toBe(true);
     expect(has(r, 'Cân hàng ngày: chưa tích')).toBe(true);
     expect(has(r, 'Uống giấm táo: chưa tích')).toBe(false); // listed below, but not ticked day by day
-    expect(text).toContain('Đã thành nếp');
+    expect(text).toContain('Đã thành thói quen · bạn đánh dấu'); // diary status "formed" counts as the user's mark
     expect(text).toContain('Nâng cấp tiếp theo: Xin sốt riêng');
     expect(text).toContain('Đo bằng: Natri bữa trưa');
     expect(text).toContain('Không tích hằng ngày');
@@ -215,11 +215,56 @@ describe('Habits screen', () => {
     expect(has(r, 'Cân hàng ngày: chưa tích')).toBe(false);
   });
 
+  it('marks each habit as formed or not yet, shows what the data says when they disagree, and can go back to the data', async () => {
+    const checks: Record<string, Record<string, 'done' | 'missed'>> = {};
+    for (let i = 0; i < 28; i++) checks[addDaysToKey(TODAY, -i)] = { h1: i < 7 && i % 2 === 0 ? 'missed' : 'done', h2: 'done' };
+    useHabitStore.setState({ checks });
+    const r = await mount();
+    let text = allText(r);
+    // h1: diary says formed, last 7 days 3/7 → slipping; h2: 28/28 → formed by the data
+    expect(text).toContain('Đã thành thói quen · bạn đánh dấu');
+    expect(text).toContain('⚠ Đang trượt: 7 ngày qua 3/7 (43%)');
+    expect(text).toContain('Mới bắt đầu · 0/5 lần tích'); // h4, h5: never ticked
+    await tap(r, 'Chưa thành: Cân hàng ngày');
+    expect(useHabitStore.getState().habits.find((x) => x.id === 'h2')).toMatchObject({ formedMark: false, status: 'building' });
+    expect(mockPushHabit).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'h2', formedMark: false }));
+    text = allText(r);
+    expect(text).toContain('Dữ liệu: Đã thành thói quen');
+    await tap(r, 'Theo dữ liệu: Cân hàng ngày');
+    expect(useHabitStore.getState().habits.find((x) => x.id === 'h2')!.formedMark).toBeNull();
+    await tap(r, 'Đã thành thói quen: Đi bộ sau bữa');
+    expect(useHabitStore.getState().habits.find((x) => x.id === 'h5')).toMatchObject({ formedMark: true, status: 'formed' });
+  });
+
+  it('shows the data-based analysis and kaizen cards, and adds a suggested habit in one tap', async () => {
+    const checks: Record<string, Record<string, 'done' | 'missed'>> = {};
+    for (let i = 0; i < 10; i++) checks[addDaysToKey(TODAY, -i)] = { h2: i % 3 === 0 ? 'done' : 'missed' };
+    useHabitStore.setState({ checks });
+    const r = await mount();
+    const text = allText(r);
+    expect(text).toContain('Phân tích thói quen');
+    expect(text).toContain('Tổng 7 ngày qua: 3/7 lần tích là đã làm (43%)');
+    expect(text).toContain('Gợi ý Kaizen');
+    expect(text).toContain('Cân hàng ngày (40%): thu nhỏ bước, để cân cạnh bàn chải');
+    expect(text).toContain('Nên ổn định "Cân hàng ngày" trước');
+    // water, weigh and walk exist already → the first suggestion is no alcohol
+    expect(has(r, 'Thêm thói quen này: Uống đủ 3 lít nước/ngày')).toBe(false);
+    await tap(r, 'Thêm thói quen này: Không bia rượu');
+    expect(useHabitStore.getState().habits.find((x) => x.name === 'Không bia rượu')).toMatchObject({ tracked: true, auto: null, status: 'building' });
+    expect(has(r, 'Thêm thói quen này: Không bia rượu')).toBe(false);
+    expect(has(r, 'Không bia rượu: chưa tích')).toBe(true);
+  });
+
+  it('asks for more ticks before analysing', async () => {
+    const r = await mount();
+    expect(allText(r)).toContain('Chưa đủ dữ liệu: tích ✔/✘ ít nhất 5 ngày để có phân tích.');
+  });
+
   it('speaks English and goes back', async () => {
     useSettingsStore.setState({ language: 'en' });
     const r = await mount();
     expect(allText(r)).toContain('Daily check-in');
-    expect(allText(r)).toContain('Routine');
+    expect(allText(r)).toContain('Habit formed');
     await tap(r, 'Back');
     expect(mockRouter.back).toHaveBeenCalled();
   });
