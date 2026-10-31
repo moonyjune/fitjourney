@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.35 | no | — |
 | 0.34 | no | — |
 | 0.33 | no | story-chapter |
 | 0.32 | yes | — |
@@ -46,6 +47,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.35
+- Map: a boss's detail dialog scrolls again when its content (chat, damage panel) is taller than the screen.
 
 ## 0.34
 - Map: a "Nhật ký sát thương" (damage log) under the journey.

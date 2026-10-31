@@ -98,7 +98,7 @@ export function StageBossDetail({ boss, zone, currentKg, onClose, children }: De
         <Pressable accessibilityRole="button" accessibilityLabel={g('stage.close')} style={StyleSheet.absoluteFill} onPress={onClose} />
         <FadeInUp distance={32} duration={320} style={styles.sheet}>
           <View accessibilityViewIsModal style={styles.sheetInner}>
-            <ScrollView contentContainerStyle={styles.content}>
+            <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
               <View style={styles.hero}>
                 <View style={[styles.portrait, { borderColor: defeated ? quest.border : boss.tier >= 4 ? quest.gold : quest.bossBorder }]}>
                   <StageBossArt archetype={boss.archetype} tier={boss.tier} size={120} defeated={defeated} idle={!defeated} />
@@ -135,7 +135,9 @@ export function StageBossDetail({ boss, zone, currentKg, onClose, children }: De
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: 'rgba(8,6,18,0.78)' },
   sheet: { maxHeight: '92%', maxWidth: 520, width: '100%', alignSelf: 'center' },
-  sheetInner: { gap: 12, padding: 16, borderRadius: 20, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.panel },
+  // Bounded by the sheet, so a long detail (chat, damage panel) scrolls instead of running off the screen.
+  sheetInner: { flexShrink: 1, maxHeight: '100%', gap: 12, padding: 16, borderRadius: 20, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.panel },
+  scroll: { flexGrow: 0, flexShrink: 1 },
   content: { gap: 14 },
   hero: { alignItems: 'center', gap: 4 },
   portrait: { width: 148, height: 148, borderRadius: 74, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bossPanel, marginBottom: 6 },
