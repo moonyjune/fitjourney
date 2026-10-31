@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26 | no | suggest-dinner |
 | 0.25 | yes | — |
 | 0.24 | yes | — |
 | 0.23 | no | — |
@@ -37,6 +38,17 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.26
+- Cook book: a "Hôm nay muốn ăn gì?" panel with chips you can tick several of:
+  - meal or occasion: breakfast, lunch, dinner, snack, drink, coffee, dessert/sweet;
+  - craving: sweet, salty, sour & spicy, crunchy, light, warm, high protein, low calorie;
+  - dish type: soup, rice, noodles, salad, grilled, steamed/boiled, smoothie/juice, tea, cake;
+  - ingredients to use ("Có sẵn") or to avoid ("Tránh"), typed or picked from your cook book and food database.
+
+  A line shows what is left of today's kcal, protein, purine, salt and sugar for that meal or snack. The chips are remembered.
+- "Gợi ý" (no AI, instant) ranks your own cook book by how many choices each dish matches. It drops dishes with an avoided ingredient, puts dishes that still fit today first, and flags high-purine ones. It then adds matching dishes from the shared cook book.
+- "Gợi ý bằng AI" asks for 3 dishes that follow the choices and today's remaining budget, with the gout rules: no organ meat, shellfish, small oily fish, bone broth or beer, and a warning when a chosen ingredient is high in purine. A snack, drink or coffee gets a small snack budget instead of a meal's. It uses the same daily AI limit as the meal ideas, and the results are saved to your cook book.
 
 ## 0.25
 - Camp: the battle log (Nhật ký trận) is now on Camp itself: the week strip, the day's figures, the timeline and the meal and workout dialogs. You no longer need a button to open it. Today's missions are folded by default; tap their heading to open them.

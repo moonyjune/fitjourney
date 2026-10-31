@@ -203,8 +203,15 @@ export function buildMealPlan(now: Date = new Date(), prefs: MealPrefs = NO_MEAL
   const covered = coveredMealIds(fasting, defs, planMeals, logs[dateKey]);
   const left = remainingMeals(defs, covered, now.getHours() * 60 + now.getMinutes());
   if (left.length === 0) return null;
+  const totals = totalsOf(now, today, settings, limits, tdeeKcal);
+  return { fasting, totals, split: splitBudget(left, totals, prefs), prefs };
+}
+
+type Evaluator = ReturnType<typeof makeDayEvaluator>;
+
+function totalsOf(now: Date, today: ReturnType<Evaluator['evaluate']>, settings: Evaluator['settings'], limits: Evaluator['limits'], tdeeKcal: number): DayTotals {
   const n = today.nutrients;
-  const totals: DayTotals = {
+  return {
     hour: now.getHours(),
     dayTargetKcal: Math.max(0, Math.round(tdeeKcal - settings.targetDailyDeficitKcal)),
     budgetKcal: Math.max(0, Math.round(tdeeKcal + today.burnedKcal - settings.targetDailyDeficitKcal - today.eatenKcal)),
@@ -212,7 +219,12 @@ export function buildMealPlan(now: Date = new Date(), prefs: MealPrefs = NO_MEAL
     headroom: { purine: Math.round(limits.purineMg - n.purineMg), salt: r1(limits.saltG - n.saltG), sugar: r1(limits.sugarG - n.sugarG) },
     limits: { purine: limits.purineMg, salt: limits.saltG, sugar: limits.sugarG },
   };
-  return { fasting, totals, split: splitBudget(left, totals, prefs), prefs };
+}
+
+/** What is left of today (calories, protein, room in the limits), whether or not a meal is still to come. */
+export function dayTotals(now: Date = new Date()): DayTotals {
+  const { evaluate, settings, limits, tdeeKcal } = makeDayEvaluator(now);
+  return totalsOf(now, evaluate(toDateKey(now)), settings, limits, tdeeKcal);
 }
 
 /** The card is shown while there is eating left in the day: from an hour before it starts until it ends. */

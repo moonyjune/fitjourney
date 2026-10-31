@@ -8,6 +8,7 @@ import {
 import { useAchievementStore } from './useAchievementStore';
 import { useCookbookStore } from './useCookbookStore';
 import { useMealIdeasStore } from './useMealIdeasStore';
+import { useCookbookFinderStore } from './useCookbookFinderStore';
 import { useCelebrationStore } from './useCelebrationStore';
 import { useFeelingStore } from './useFeelingStore';
 import { useFoodDbStore } from './useFoodDbStore';
@@ -71,6 +72,7 @@ export function resetAllLocalStores() {
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });
   useCookbookStore.setState({ recipes: [] });
   useMealIdeasStore.setState({ byDay: {} });
+  useCookbookFinderStore.getState().reset();
   useAiDigestStore.setState({ weeks: {} });
   useWorkoutStore.setState({ entries: [] });
   // Epoch timestamp guarantees the next syncFromRemote() treats any remote plan as newer.

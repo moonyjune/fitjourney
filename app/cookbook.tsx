@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { acceptDinner, type DinnerIdea } from '../src/ai/dinner';
 import { buildMealPlan, mealBrief } from '../src/ai/mealSplit';
 import { ideaFromRecipe } from '../src/cookbook/recipes';
+import { CookbookFinder } from '../src/components/quest/CookbookFinder';
 import { FlashNotice, useFlash } from '../src/components/quest/FlashNotice';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
@@ -50,6 +51,10 @@ export default function CookbookScreen() {
         <View style={styles.gap}>
           <FlashNotice text={flash} />
         </View>
+        <CookbookFinder />
+        <HudText size={15} style={styles.gap}>
+          {g('cookbook.finder.myBook')}
+        </HudText>
         {brief && book.length > 0 && (
           <View style={styles.chips}>
             {[false, true].map((fit) => (

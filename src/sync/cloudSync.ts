@@ -8,6 +8,7 @@ import type { CoachContext } from '../ai/coachContext';
 import type { WeekInput } from '../ai/weeklyReport';
 import type { DinnerBrief, DinnerIdea } from '../ai/dinner';
 import { cleanSearch, pickShared, SHARED_COOKBOOK_COLUMNS } from '../cookbook/shared';
+import { rankShared, type CookbookFilters } from '../cookbook/filters';
 import { cookbookRows } from '../../supabase/functions/_shared/cookbook';
 import type { ClientRows } from '../ai/coachDigest';
 import type { SwapContext, SwapItem } from '../food/swaps';
@@ -1352,16 +1353,20 @@ export type DinnerOutcome = { ok: true; result: unknown } | { ok: false; message
 
 /** Calls the suggest-dinner edge function: dinner ideas for what is left of today (the brief is worked out on the device). The
  *  answer is raw; the caller checks each idea with `cleanAiDinner`. Same rules as the other AI requests. */
-export async function requestDinner(brief: DinnerBrief, favorites: string[], avoidNames: string[] = []): Promise<DinnerOutcome> {
+export async function requestDinner(brief: DinnerBrief, favorites: string[], avoidNames: string[] = [], filters?: CookbookFilters): Promise<DinnerOutcome> {
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
     await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
-    return { ok: true, result: fakeDinner(brief) };
+    return { ok: true, result: fakeDinner(brief, filters) };
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
-    const body = { budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, meal: brief.meal, eatByHour: brief.eatByHour, exact: brief.exact, proteinExact: brief.proteinExact, strictKcal: brief.strictKcal, favorites, avoidNames };
+    const body = {
+      budgetKcal: brief.budgetKcal, proteinLeftG: brief.proteinLeftG, headroom: brief.headroom, limits: brief.limits, hour: brief.hour, meal: brief.meal, eatByHour: brief.eatByHour, exact: brief.exact, proteinExact: brief.proteinExact, strictKcal: brief.strictKcal, favorites, avoidNames,
+      ...(brief.snack ? { snack: true } : {}),
+      ...(filters ? { filters } : {}),
+    };
     const { data, error } = await supabase.functions.invoke('suggest-dinner', { body });
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };
@@ -1405,6 +1410,25 @@ export async function searchSharedCookbook(brief: DinnerBrief, query: string, sk
     return { ok: true, ideas: pickShared(data ?? [], brief, skipNames) };
   } catch (error) {
     logSyncError('searchSharedCookbook', error);
+    return { ok: false, kind: 'generic' };
+  }
+}
+
+/** Dishes of the shared cook book for the cook book finder (no AI, no quota): rows whose calories can fit, mentioning one of the
+ *  ingredients to use when there are some, newest first; then ranked by the filters on the device (`rankShared`, fitting ones only). */
+export async function searchSharedCookbookFiltered(brief: DinnerBrief, filters: CookbookFilters, skipNames: string[]): Promise<SharedCookbookOutcome> {
+  if (!currentUserId()) return { ok: false, kind: 'auth' };
+  if (!(await isOnline())) return { ok: false, kind: 'offline' };
+  try {
+    const maxKcal = Math.max(200, Math.ceil(brief.budgetKcal * 1.1));
+    let request = supabase.from('cookbook_recipes').select(SHARED_COOKBOOK_COLUMNS).lte('calories', maxKcal);
+    const words = filters.have.map(cleanSearch).filter(Boolean);
+    if (words.length > 0) request = request.or(words.map((w) => `search_text.ilike.%${w}%`).join(','));
+    const { data, error } = await request.order('created_at', { ascending: false }).limit(300);
+    if (error) throw error;
+    return { ok: true, ideas: rankShared(data ?? [], filters, brief, skipNames) };
+  } catch (error) {
+    logSyncError('searchSharedCookbookFiltered', error);
     return { ok: false, kind: 'generic' };
   }
 }

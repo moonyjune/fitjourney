@@ -5,6 +5,7 @@ import type { NutritionLabel } from './nutritionLabel';
 import type { WeekInput, WeeklyReport } from './weeklyReport';
 import type { SwapContext, SwapItem } from '../food/swaps';
 import type { DinnerBrief } from './dinner';
+import type { CookbookFilters } from '../cookbook/filters';
 
 // Offline stand-in for the vision API, used only by the Login Dev account so the photo-analysis UI can be tried without a
 // backend. Deterministic (same input, same output) and always labelled as simulated.
@@ -178,7 +179,31 @@ export function fakeSwaps(item: SwapItem, ctx: SwapContext): { swaps: Record<str
 
 /** Offline stand-in for the dinner ideas: two dinners of about 80% of the calories left and the protein still missing, with
  *  almost no purine, salt or sugar, so they hold up to the same checks the real answer goes through. Labelled as simulated. */
-export function fakeDinner(brief: DinnerBrief): { options: Record<string, unknown>[] } {
+export function fakeDinner(brief: DinnerBrief, filters?: CookbookFilters): { options: Record<string, unknown>[] } {
+  if (brief.snack) {
+    // Cook book finder, snacks / drinks only: small portions within the snack's calories, no protein asked.
+    const occ = filters?.occasions ?? [];
+    const names = occ.includes('coffee')
+      ? ['Cà phê đen ít đường', 'Bạc xỉu ít sữa', 'Cà phê sữa hạt không đường']
+      : occ.includes('drink')
+        ? ['Trà gừng ấm', 'Nước chanh không đường', 'Sinh tố dưa leo táo']
+        : occ.includes('dessert')
+          ? ['Sữa chua không đường + trái cây', 'Chè hạt chia ít đường', 'Thạch rau câu dừa']
+          : ['Hạt điều rang 20 g', 'Sữa chua Hy Lạp', 'Táo + bơ đậu phộng'];
+    const cap = Math.max(brief.budgetKcal, 60) * 0.8;
+    return {
+      options: names.map((name, i) => {
+        const kcal = Math.round(cap * (1 - i * 0.1));
+        return { name: `${name} (giả lập)`, calories: kcal, proteinG: Math.round(kcal * 0.05 * 10) / 10, purineMg: 0, saltG: 0, sugarG: 0, how: `${SIMULATED}: gợi ý mẫu theo bộ lọc, không phải của AI.`, accuracyPercent: 50, ingredients: [{ name, quantity: '1 phần' }], steps: ['Chuẩn bị', 'Pha / bày ra', 'Thưởng thức'] };
+      }),
+    };
+  }
+  const have = filters?.have[0];
+  if (have) {
+    const base = fakeDinner(brief);
+    const names = [`${have} hấp gừng + rau luộc`, `${have} áp chảo + salad`, `Canh ${have.toLowerCase()} rau củ`];
+    return { options: base.options.map((o, i) => ({ ...o, name: `${names[i]} (giả lập)`, ingredients: [{ name: have, quantity: '150g' }, { name: 'Rau xanh', quantity: '150g' }] })) };
+  }
   const light = brief.budgetKcal < 150;
   const kcal = light ? 120 : Math.round(brief.budgetKcal * (brief.exact ? 0.97 : 0.8));
   const protein = brief.proteinExact ? brief.proteinLeftG : Math.round(Math.min(brief.proteinLeftG, light ? 12 : 45) * 10) / 10;
