@@ -60,6 +60,7 @@ import { DailyMealBreakdownTable } from '../../components/DailyMealBreakdownTabl
 import { DEFAULT_PLAN } from '../../constants/plan';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
+import { useSelectedDayStore } from '../../store/useSelectedDayStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -108,6 +109,7 @@ describe('Photo on an off-plan food', () => {
   };
 
   beforeEach(() => {
+    useSelectedDayStore.setState({ selectedKey: null });
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') });
     jest.clearAllMocks();
     mockRouter.canGoBack.mockReturnValue(true);

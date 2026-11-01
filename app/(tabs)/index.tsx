@@ -17,6 +17,9 @@ import type { DayEvaluation, MissionResult } from '../../src/game/missions';
 import { useGameText, type GameKey } from '../../src/game/strings';
 import { useGameState, useNow } from '../../src/game/useGameState';
 import { useCelebrationStore } from '../../src/store/useCelebrationStore';
+import { useSelectedDayStore, workingDayKey } from '../../src/store/useSelectedDayStore';
+import { logDayLabel } from '../../src/game/useLogDate';
+import { toDateKey } from '../../src/utils/date';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { quest } from '../../src/theme/quest';
@@ -118,6 +121,9 @@ export default function CampScreen() {
   const ifStatus = getIfStatus(now);
   const fasting = useMealModeStore((s) => s.fasting);
   const [missionsOpen, setMissionsOpen] = useState(false);
+  // The check-in is written for the day selected in the battle log below; the link says which when it is not today.
+  const checkinDay = workingDayKey(useSelectedDayStore((s) => s.selectedKey), now);
+  const checkinLabel = checkinDay === toDateKey(now) ? g('checkin.title') : `${g('checkin.title')} · ${logDayLabel(checkinDay, now, g)}`;
 
   useLightStatusBar();
 
@@ -167,7 +173,7 @@ export default function CampScreen() {
         </FadeInUp>
 
         <FadeInUp index={3} style={[styles.links, styles.gap]}>
-          <CampLink icon="smile" label={g('checkin.title')} onPress={() => router.push('/checkin')} />
+          <CampLink icon="smile" label={checkinLabel} onPress={() => router.push('/checkin')} />
         </FadeInUp>
 
         {/* The battle log is read many times a day: it lives on Camp instead of behind a button. */}

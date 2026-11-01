@@ -203,6 +203,8 @@ export const DEFAULT_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
 ];
 
 export const WATER_QUICK_ADD_ML = [250, 500, 1000];
+/** Steps for taking water back off a day in the quick-add sheet (a wrong tap fixed). */
+export const WATER_QUICK_REMOVE_ML = [250, 500];
 
 export const CARB_SWAP_OPTIONS = [
   '150g khoai lang luộc',

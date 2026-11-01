@@ -8,22 +8,25 @@ interface QuestChipProps {
   onPress: () => void;
   tone?: 'gold' | 'mana';
   accessibilityLabel?: string;
+  disabled?: boolean;
 }
 
 /** Pill toggle / quick action. 40 px tall plus a hit slop so the touch target is still 44 px. */
-export function QuestChip({ label, selected, onPress, tone = 'gold', accessibilityLabel }: QuestChipProps) {
+export function QuestChip({ label, selected, onPress, tone = 'gold', accessibilityLabel, disabled }: QuestChipProps) {
   const accent = tone === 'gold' ? quest.gold : quest.mana;
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ selected: !!selected }}
+      accessibilityState={{ selected: !!selected, disabled: !!disabled }}
       hitSlop={{ top: 2, bottom: 2 }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.chip,
         selected ? { backgroundColor: accent, borderColor: accent } : { backgroundColor: quest.panel, borderColor: quest.border },
         pressed && { opacity: 0.85 },
+        disabled && { opacity: 0.4 },
       ]}
     >
       <HudText size={13} color={selected ? quest.onGold : quest.text}>

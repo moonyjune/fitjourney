@@ -26,6 +26,7 @@ import { PLAN_SLOT_MEAL } from '../insights/days';
 import { isSkippedMealItem, logSkippedMeal } from '../food/skipMeal';
 import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
+import { selectedDayKey, useSelectedDayStore } from '../store/useSelectedDayStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useCheatDayStore } from '../store/useCheatDayStore';
 import { DEFICIT_LEVEL_COLOR, deficitColor, deficitLevel, type DeficitLevel } from '../game/deficitLevel';
@@ -334,8 +335,14 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   const todayKey = toDateKey(now);
   const locale = language === 'en' ? 'en-US' : 'vi-VN';
 
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [selectedKey, setSelectedKey] = useState(todayKey);
+  // The user's own selected day is shared (the quick-add sheet and the check-in start on it); a coach's view of a client keeps its own.
+  const [clientSelectedKey, setClientSelectedKey] = useState(todayKey);
+  const storedSelectedKey = useSelectedDayStore((s) => s.selectedKey);
+  const selectStored = useSelectedDayStore((s) => s.select);
+  const selectedKey = client ? (clientSelectedKey > todayKey ? todayKey : clientSelectedKey) : selectedDayKey(storedSelectedKey, now);
+  const setSelectedKey = (key: string) => (client ? setClientSelectedKey(key) : selectStored(key, now));
+  // The strip always shows the week of the selected day (weeks back from this one: 0, -1, …).
+  const weekOffset = Math.round((dateOf(weekStartKey(dateOf(selectedKey))).getTime() - dateOf(weekStartKey(now)).getTime()) / (7 * 86_400_000));
 
   // A coach looking at a client reads the client's records; otherwise the signed-in user's own.
   const ownLogs = useNutritionStore((s) => s.logs);
@@ -398,7 +405,6 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
     if (nextOffset === weekOffset) return;
     const nextMonday = dateOf(weekStartKey(addDays(now, nextOffset * 7)));
     const sameWeekday = toDateKey(addDays(nextMonday, (dateOf(selectedKey).getDay() + 6) % 7));
-    setWeekOffset(nextOffset);
     setSelectedKey(sameWeekday > todayKey ? todayKey : sameWeekday);
   }
 

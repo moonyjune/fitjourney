@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.21.0 | no | — |
 | 0.20.3 | no | — |
 | 0.20.2 | no | — |
 | 0.20.1 | no | — |
@@ -66,6 +67,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.21.0
+- Camp: the day picked in the week strip becomes the working day. The (+) quick add opens on it, and "Nghỉ ở lửa trại" records for it (the button names the day when it is not today); both keep a ‹ › picker (today back to 30 days).
+  - A past day that already has a check-in opens it for editing instead of adding a second one.
+- Quick add (+): water can be lowered ("−250 ml", "−500 ml", never below 0) to fix a mistake; the day's total shows in ml.
 
 ## 0.20.3
 - Boss battle log: each day's deficit is split into its two sources — "🍽 ăn dưới TDEE …" (or "ăn vượt TDEE …"; marked when above the 1,500 that eating can count for) and "🏃 tập luyện …".

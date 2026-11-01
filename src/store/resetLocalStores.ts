@@ -28,6 +28,7 @@ import { NO_MEAL_PREFS, useMealPrefStore } from './useMealPrefStore';
 import { useNutritionStore } from './useNutritionStore';
 import { usePlanStore } from './usePlanStore';
 import { useProofStore } from './useProofStore';
+import { useSelectedDayStore } from './useSelectedDayStore';
 import { useSettingsStore } from './useSettingsStore';
 import { useShoppingListStore } from './useShoppingListStore';
 import { useUricStore } from './useUricStore';
@@ -77,6 +78,7 @@ export function resetAllLocalStores() {
   useAiReportStore.setState({ weekly: {} });
   resetAnalysisStore();
   useCheatDayStore.setState({ days: [] });
+  useSelectedDayStore.setState({ selectedKey: null });
   resetTemptationStore();
   resetDishPhotoStore();
   useBossTalkStore.setState({ talks: [], autoTried: null });

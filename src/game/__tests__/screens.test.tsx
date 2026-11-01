@@ -47,6 +47,7 @@ jest.mock('../../sync/cloudSync', () => ({
   pushProofPhoto: jest.fn(),
   deleteProofPhoto: jest.fn(async () => undefined),
   pushFeelingRecord: jest.fn(),
+  deleteFeelingRecord: jest.fn(),
   pushProfile: jest.fn(),
   pushPlan: jest.fn(),
   pullPlan: jest.fn(),
@@ -64,10 +65,12 @@ import QuickAddScreen from '../../../app/quick-add';
 import { useFeelingStore } from '../../store/useFeelingStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
+import { useSelectedDayStore } from '../../store/useSelectedDayStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useCheatDayStore } from '../../store/useCheatDayStore';
+import { deleteFeelingRecord, pushFeelingRecord, pushNutritionLog } from '../../sync/cloudSync';
 
 const DATE = '2026-10-23';
 
@@ -114,6 +117,7 @@ describe('FitQuest logging screens', () => {
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') }); // Friday, eating window open
     Object.values(mockRouter).forEach((fn) => fn.mockClear());
     useProofStore.setState({ photos: [] });
+    useSelectedDayStore.setState({ selectedKey: null });
     mockRouter.canGoBack.mockReturnValue(true);
     mockParams = { slot: 'meal3' };
     useSettingsStore.setState({
@@ -149,7 +153,7 @@ describe('FitQuest logging screens', () => {
       expect(text).toContain('Ghi nhanh');
       expect(text).toContain('Bữa kế · 19:15');
       expect(text).toContain('Đã xong hôm nay'); // the 14 min workout is already logged
-      expect(text).toContain('3.2 / 4.5 L');
+      expect(text).toContain('Đã uống 3,200 / 4,500 ml');
     });
 
     it('adds water to today and reports it', () => {
@@ -208,7 +212,7 @@ describe('FitQuest logging screens', () => {
       act(() => pressable(r, (l) => l.startsWith('Buổi tập')).props.onPress());
       expect(mockRouter.dismissTo).toHaveBeenCalledWith('/(tabs)/workout');
       act(() => pressable(r, (l) => l.startsWith('Cảm giác')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith('/checkin');
+      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/checkin', params: {} });
     });
 
     it('closes from the backdrop, falling back to home when there is nothing to go back to', () => {
@@ -363,6 +367,107 @@ describe('FitQuest logging screens', () => {
       act(() => pressable(r, (l) => l === 'Đau cơ').props.onPress()); // tap again to clear
       act(() => pressable(r, (l) => l === 'Ghi lại & nghỉ ngơi').props.onPress());
       expect(useFeelingStore.getState().records[0].workoutCondition).toBeNull();
+    });
+  });
+
+  describe('Selected day', () => {
+    function pickInStrip(label: string) {
+      const journal = render(<JournalScreen />);
+      act(() => {
+        pressable(journal, (l) => l.startsWith(label)).props.onPress();
+      });
+      act(() => journal.unmount());
+      renderer = undefined;
+    }
+
+    it('starts the quick-add sheet on the day selected in the week strip', () => {
+      pickInStrip('T4 21/10');
+      const r = render(<QuickAddScreen />);
+      expect(pressable(r, (l) => l.startsWith('Ghi cho ngày: T4 21/10'))).toBeDefined();
+      act(() => pressable(r, (l) => l === 'Thêm 250 ml nước').props.onPress());
+      expect(useNutritionStore.getState().logs['2026-10-21'].waterMl).toBe(250);
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3200);
+      act(() => pressable(r, (l) => l.startsWith('Cảm giác')).props.onPress());
+      expect(mockRouter.replace).toHaveBeenLastCalledWith({ pathname: '/checkin', params: { date: '2026-10-21' } });
+    });
+
+    it('stays on today when today is selected', () => {
+      pickInStrip('T6 23/10');
+      expect(useSelectedDayStore.getState().selectedKey).toBeNull();
+      const r = render(<QuickAddScreen />);
+      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true);
+    });
+
+    it('records the check-in for the selected past day', () => {
+      pickInStrip('T4 21/10');
+      const r = render(<CheckinScreen />);
+      expect(pressable(r, (l) => l.startsWith('Ghi cho ngày: T4 21/10'))).toBeDefined();
+      act(() => pressable(r, (l) => l === 'Tốt').props.onPress());
+      act(() => pressable(r, (l) => l === 'Mức thèm ăn 2').props.onPress());
+      act(() => pressable(r, (l) => l === 'Mức đói 3').props.onPress());
+      act(() => pressable(r, (l) => l === 'Ghi lại & nghỉ ngơi').props.onPress());
+      const records = useFeelingStore.getState().records;
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({ mood: 'good', cravingLevel: 2, hungerLevel: 3 });
+      expect(new Date(records[0].loggedAtISO).getDate()).toBe(21);
+      expect(new Date(records[0].loggedAtISO).getHours()).toBe(16); // at the time it was written
+      expect(pushFeelingRecord).toHaveBeenLastCalledWith(records[0]);
+    });
+
+    it("opens a past day's check-in for editing instead of adding another", () => {
+      useFeelingStore.setState({
+        records: [{ id: 'cloud-abc', loggedAtISO: new Date('2026-10-20T21:00:00').toISOString(), mood: 'tired', cravingLevel: 4, hungerLevel: 4, workoutCondition: null, note: 'mệt' }],
+      });
+      useSelectedDayStore.setState({ selectedKey: '2026-10-20' });
+      const r = render(<CheckinScreen />);
+      expect(allText(r)).toContain('Ngày này đã có check-in');
+      expect(textInput(r, 'Ghi chú').props.value).toBe('mệt');
+      act(() => pressable(r, (l) => l === 'Mức thèm ăn 1').props.onPress());
+      act(() => pressable(r, (l) => l === 'Ghi lại & nghỉ ngơi').props.onPress());
+      const records = useFeelingStore.getState().records;
+      expect(records).toHaveLength(1);
+      expect(records[0]).toMatchObject({ mood: 'tired', cravingLevel: 1, hungerLevel: 4, note: 'mệt', loggedAtISO: new Date('2026-10-20T21:00:00').toISOString() });
+      // A row the cloud had without a device id is re-sent under one and the old row removed: no duplicate.
+      expect(records[0].id).not.toBe('cloud-abc');
+      expect(pushFeelingRecord).toHaveBeenLastCalledWith(records[0]);
+      expect(deleteFeelingRecord).toHaveBeenCalledWith('cloud-abc');
+    });
+
+    it('moves the check-in between days with ‹ ›, today adding a new one as before', () => {
+      useFeelingStore.setState({
+        records: [{ id: 'r1', loggedAtISO: new Date('2026-10-22T20:00:00').toISOString(), mood: 'great', cravingLevel: 1, hungerLevel: 2, workoutCondition: null, note: 'ổn' }],
+      });
+      const r = render(<CheckinScreen />);
+      expect(allText(r)).not.toContain('Ngày này đã có check-in');
+      act(() => pressable(r, (l) => l === 'Ngày trước').props.onPress());
+      expect(textInput(r, 'Ghi chú').props.value).toBe('ổn');
+      act(() => pressable(r, (l) => l.startsWith('Ghi cho ngày: Hôm qua')).props.onPress()); // back to today
+      expect(textInput(r, 'Ghi chú').props.value).toBe('');
+      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true);
+    });
+  });
+
+  describe('Water decrease', () => {
+    it('takes water back off the day and syncs it', () => {
+      const r = render(<QuickAddScreen />);
+      act(() => pressable(r, (l) => l === 'Bớt 500 ml nước (ghi nhầm)').props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(2700);
+      expect(pushNutritionLog).toHaveBeenLastCalledWith(expect.objectContaining({ dateISO: DATE, waterMl: 2700 }));
+      const text = allText(r);
+      expect(text).toContain('Đã bớt 500 ml · còn 2,700 ml');
+      expect(text).toContain('Đã uống 2,700 / 4,500 ml');
+    });
+
+    it('never goes below 0', () => {
+      useNutritionStore.setState({
+        logs: { [DATE]: { dateISO: DATE, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 100 } },
+      });
+      const r = render(<QuickAddScreen />);
+      act(() => pressable(r, (l) => l === 'Bớt 250 ml nước (ghi nhầm)').props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(0);
+      expect(pushNutritionLog).toHaveBeenLastCalledWith(expect.objectContaining({ waterMl: 0 }));
+      expect(allText(r)).toContain('Đã bớt 100 ml · còn 0 ml');
+      expect(pressable(r, (l) => l === 'Bớt 250 ml nước (ghi nhầm)').props.disabled).toBe(true);
     });
   });
 

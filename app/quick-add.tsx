@@ -2,17 +2,19 @@ import { useMemo, useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { HudText } from '../src/components/quest/HudText';
+import { LogDayPicker } from '../src/components/quest/LogDayPicker';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestIcon, type QuestIconName } from '../src/components/quest/QuestIcon';
 import { QuestSheet } from '../src/components/quest/QuestSheet';
-import { WATER_QUICK_ADD_ML, getDayType } from '../src/constants/plan';
+import { WATER_QUICK_ADD_ML, WATER_QUICK_REMOVE_ML, getDayType } from '../src/constants/plan';
 import { MISSION_XP } from '../src/game/constants';
 import { evaluateDay } from '../src/game/missions';
 import { useGameText } from '../src/game/strings';
 import { useNow, useTodayInput } from '../src/game/useGameState';
 import { logDayLabel } from '../src/game/useLogDate';
 import { useNutritionStore } from '../src/store/useNutritionStore';
+import { useSelectedDayStore, workingDayKey } from '../src/store/useSelectedDayStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useWeightStore } from '../src/store/useWeightStore';
 import { quest, questFonts, questRadius } from '../src/theme/quest';
@@ -73,11 +75,14 @@ export default function QuickAddScreen() {
   useLightStatusBar();
   const now = useNow();
   const todayKey = toDateKey(now);
-  // The day meals and water go to: today unless another day is picked with ‹ › (up to MAX_LOG_DAYS_BACK days back).
-  const [picked, setPicked] = useState<string | null>(null);
+  // The day meals and water go to: the day selected in the battle log's week strip (today unless another is selected),
+  // changeable with ‹ › (up to MAX_LOG_DAYS_BACK days back).
+  const [picked, setPicked] = useState<string | null>(() => {
+    const start = workingDayKey(useSelectedDayStore.getState().selectedKey, now);
+    return start === todayKey ? null : start;
+  });
   const dateKey = picked && picked < todayKey && picked >= oldestLogDateKey(now) ? picked : todayKey;
   const isToday = dateKey === todayKey;
-  const dayLabel = logDayLabel(dateKey, now, g);
   const input = useTodayInput(now, dateKey);
 
   const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
@@ -130,9 +135,12 @@ export default function QuickAddScreen() {
   /** Route params that carry the picked day; none for today, so the screens keep their usual "today" behaviour. */
   const dateParams: Record<string, string> = isToday ? {} : { date: dateKey };
 
+  /** Adds `ml` of water to the day; a negative amount takes some off (a mistake fixed), never below 0. */
   function addWaterMl(ml: number) {
-    addWater(dateKey, ml);
-    setLastWaterMl(ml);
+    const change = Math.max(-waterMl, ml);
+    if (change === 0) return;
+    addWater(dateKey, change);
+    setLastWaterMl(change);
   }
 
   const parsedKg = parseKg(weightText);
@@ -156,52 +164,7 @@ export default function QuickAddScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.dateBox}>
-          <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-            {g('quick.date').toUpperCase()}
-          </HudText>
-          <View style={styles.dateRow}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={g('quick.datePrev')}
-              accessibilityState={{ disabled: dateKey <= oldestLogDateKey(now) }}
-              disabled={dateKey <= oldestLogDateKey(now)}
-              onPress={() => pickDay(-1)}
-              style={[styles.dateStep, dateKey <= oldestLogDateKey(now) && styles.off]}
-            >
-              <QuestIcon name="chevronLeft" size={20} color={quest.text} strokeWidth={2.4} />
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={isToday ? `${g('quick.date')}: ${dayLabel}` : `${g('quick.date')}: ${dayLabel}. ${g('quick.dateToday')}`}
-              disabled={isToday}
-              onPress={() => setPicked(null)}
-              style={[styles.dateValue, !isToday && styles.datePicked]}
-            >
-              <HudText size={16} color={isToday ? quest.text : quest.goldLight}>
-                {dayLabel}
-              </HudText>
-              <HudText size={11} weight="medium" color={quest.textSecondary}>
-                {isToday ? dateKey.split('-').reverse().slice(0, 2).join('/') : g('quick.dateToday')}
-              </HudText>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={g('quick.dateNext')}
-              accessibilityState={{ disabled: isToday }}
-              disabled={isToday}
-              onPress={() => pickDay(1)}
-              style={[styles.dateStep, isToday && styles.off]}
-            >
-              <QuestIcon name="chevron" size={20} color={quest.text} strokeWidth={2.4} />
-            </Pressable>
-          </View>
-          {!isToday && (
-            <HudText size={11} weight="medium" color={quest.textSecondary}>
-              {g('quick.dateHint')}
-            </HudText>
-          )}
-        </View>
+        <LogDayPicker dateKey={dateKey} now={now} onShift={pickDay} onToday={() => setPicked(null)} hint={g('quick.dateHint')} />
 
         <View style={styles.tiles}>
           <ActionTile
@@ -223,7 +186,7 @@ export default function QuickAddScreen() {
             tint={quest.gold}
             title={g('quick.tileCheckin')}
             hint={g('quick.tileCheckinHint')}
-            onPress={() => router.replace('/checkin')}
+            onPress={() => router.replace({ pathname: '/checkin', params: dateParams })}
           />
           <ActionTile
             icon="dumbbell"
@@ -237,7 +200,7 @@ export default function QuickAddScreen() {
         <View style={styles.sectionHead}>
           <HudText size={15}>{g('quick.water')}</HudText>
           <HudText size={13} weight="medium" color={quest.manaText}>
-            {g('quick.waterTotal', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })}
+            {g('quick.waterTotalMl', { cur: waterMl.toLocaleString('en-US'), target: waterTargetMl.toLocaleString('en-US') })}
           </HudText>
         </View>
         <View style={styles.chipRow}>
@@ -247,10 +210,22 @@ export default function QuickAddScreen() {
             </View>
           ))}
         </View>
+        <View style={[styles.chipRow, styles.chipRowGap]}>
+          {WATER_QUICK_REMOVE_ML.map((ml) => (
+            <View key={ml} style={styles.chipCell}>
+              <QuestChip
+                label={`−${ml} ml`}
+                accessibilityLabel={g('quick.waterRemove', { ml })}
+                disabled={waterMl <= 0}
+                onPress={() => addWaterMl(-ml)}
+              />
+            </View>
+          ))}
+        </View>
         {isToday && <WaterNextDrink schedule={water.schedule} waterMl={waterMl} now={now} />}
         {lastWaterMl != null && (
           <HudText size={12} weight="medium" color={quest.manaText} accessibilityLiveRegion="polite" style={styles.feedback}>
-            +{lastWaterMl} ml
+            {lastWaterMl > 0 ? `+${lastWaterMl} ml` : g('quick.waterRemoved', { ml: -lastWaterMl, total: waterMl.toLocaleString('en-US') })}
           </HudText>
         )}
 
@@ -308,32 +283,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  dateBox: { gap: 6, marginTop: 16 },
-  eyebrow: { letterSpacing: 1.6 },
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dateStep: {
-    width: 48,
-    height: 48,
-    borderRadius: 99,
-    backgroundColor: quest.panel,
-    borderWidth: 1.5,
-    borderColor: quest.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dateValue: {
-    flex: 1,
-    minWidth: 0,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: questRadius.row,
-    backgroundColor: quest.panel,
-    borderWidth: 1.5,
-    borderColor: quest.border,
-  },
-  datePicked: { borderColor: quest.gold },
-  off: { opacity: 0.4 },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16 },
   tile: {
     flexBasis: '46%',
@@ -352,6 +301,7 @@ const styles = StyleSheet.create({
   tileText: { textAlign: 'center' },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 20, marginBottom: 8, gap: 8 },
   chipRow: { flexDirection: 'row', gap: 8 },
+  chipRowGap: { marginTop: 8 },
   chipCell: { flex: 1 },
   feedback: { marginTop: 8 },
   stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
