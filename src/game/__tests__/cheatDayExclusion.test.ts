@@ -143,3 +143,12 @@ describe('a cheat day in what the AI is told', () => {
     expect(evaluatorFor({ ...source, cheatDays: undefined }, NOW).evaluate('2026-10-20').deficitKcal).toBe(-2500);
   });
 });
+
+describe('cheat days ahead and the 80/20 allowance', () => {
+  it('the weekly boss spreads what is left over the remaining non-cheat days', () => {
+    // Wednesday 21/10: Thu–Sun are left (4 days); Saturday is a cheat day, so 3 days share the HP left.
+    const boss = bossForWeek(new Date('2026-10-21T10:00:00'), () => null, 3000, (k) => k === '2026-10-24');
+    expect(boss.neededPerRemainingDay).toBe(1000);
+  });
+});
+

@@ -97,6 +97,6 @@ export function useInsights(scope?: AnalysisScope): InsightsView {
     () => buildWeekControl(insights.rows, meals, tdeeKcal, thresholds, cheatDays),
     [insights.rows, meals, tdeeKcal, thresholds, cheatDays]
   );
-  const quotas = useMemo(() => buildWeekQuotas(insights.rows, meals, thresholds), [insights.rows, meals, thresholds]);
+  const quotas = useMemo(() => buildWeekQuotas(insights.rows, meals, thresholds, cheatDays), [insights.rows, meals, thresholds, cheatDays]);
   return { insights, thresholds, tdeeKcal, goalWeightKg: settings.goalWeightKg, items, weekControl, quotas, scope, mode, live, stamps, status };
 }

@@ -148,6 +148,9 @@ describe('the current week', () => {
     ];
     const ok = buildWeekControl(week(3), meals(2), 2500, th)!;
     expect(ok).toMatchObject({ quota: 4, flexible: 2, quotaLeft: 2, quotaStatus: 'ok', mainMeals: 9, onPlan: 6, skipped: 1 });
+    // A cheat day's meals are not counted, and the allowance covers the other 6 days (round(18 x 0.2) = 4).
+    expect(buildWeekControl(week(3), meals(2), 2500, th, [D])).toMatchObject({ quota: 4, flexible: 1, mainMeals: 6 });
+    expect(buildWeekQuotas(week(3), meals(2), th, [D])[0]).toMatchObject({ flexible: 1, mainMeals: 6 });
     expect(ok.pctOnPlan).toBeCloseTo(6 / 9, 9);
     expect(buildWeekControl(week(3), meals(4), 2500, th)).toMatchObject({ quotaLeft: 0, quotaStatus: 'used' });
     expect(buildWeekControl(week(3), meals(5), 2500, th)).toMatchObject({ quotaLeft: -1, quotaStatus: 'over' });

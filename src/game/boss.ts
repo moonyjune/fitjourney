@@ -65,9 +65,11 @@ export function bossForWeek(
   const defeated = hpLeft === 0;
   const dayIndexToday = days.length; // 1 = Monday … 7 = Sunday
   const daysUntilReset = 8 - dayIndexToday;
-  // Today's damage is already counted in hpLeft, so only the days after today still add to it;
-  // on Sunday there are none left, so the whole remainder has to land today.
-  const remainingDays = Math.max(1, 7 - dayIndexToday);
+  // Today's damage is already counted in hpLeft, so only the days after today still add to it, less the cheat days among them
+  // (they deal nothing); with none left, the whole remainder has to land today.
+  let cheatAhead = 0;
+  for (let i = dayIndexToday; i < 7; i++) if (isCheatDay(toDateKey(addDays(monday, i)))) cheatAhead++;
+  const remainingDays = Math.max(1, 7 - dayIndexToday - cheatAhead);
   return {
     weekKey,
     maxHp,

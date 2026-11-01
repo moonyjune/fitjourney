@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.43 | no | — |
 | 0.42 | no | weekly-report, coach-digest, analyze-proof-photo, read-nutrition-label, parse-meal-text, suggest-dinner, suggest-swap |
 | 0.41 | no | — |
 | 0.40 | no | — |
@@ -54,6 +55,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.43
+- Cheat days and the week: meals on a cheat day no longer use up the 80/20 flexible-meal allowance (the allowance covers the other days), and the weekly boss's "needed per remaining day" spreads what is left over the days ahead that are not cheat days.
 
 ## 0.42
 - A cheat day is left out of every calorie figure: no boss damage or heal, not in deficit totals, averages, charts, forecasts, the weekly target or the AI's numbers, and no battle chat that day. It shows "Cheat day · không tính kcal" instead of a deficit.

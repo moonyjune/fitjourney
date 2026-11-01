@@ -46,16 +46,17 @@ export interface WeekControl {
 const countClass = (meals: MainMealRecord[], cls: MainMealRecord['cls']) => meals.filter((m) => m.cls === cls).length;
 
 /** The week that contains the latest logged day. Null with nothing logged. A cheat day (`cheatDays`) is not counted: the weekly
- *  target shrinks by one day's target for each, and one still ahead is not a day left to make up the shortfall. */
+ *  target shrinks by one day's target for each, one still ahead is not a day left to make up the shortfall, and its meals are not
+ *  counted against the 80/20 allowance (which covers the week's other days only). */
 export function buildWeekControl(rows: DayRow[], meals: MainMealRecord[], tdeeNow: number, th: Thresholds, cheatDays: readonly string[] = []): WeekControl | null {
   if (rows.length === 0) return null;
   const lastDataKey = rows[rows.length - 1].dateKey;
   const weekStart = mondayOf(lastDataKey);
   const weekEnd = addDaysToKey(weekStart, 6);
   const week = rows.filter((r) => r.dateKey >= weekStart && r.dateKey <= weekEnd);
-  const wm = meals.filter((m) => m.dateKey >= weekStart && m.dateKey <= weekEnd);
-
   const cheatInWeek = new Set(cheatDays.filter((d) => d >= weekStart && d <= weekEnd));
+  const wm = meals.filter((m) => m.dateKey >= weekStart && m.dateKey <= weekEnd && !cheatInWeek.has(m.dateKey));
+
   const cheatAhead = [...cheatInWeek].filter((d) => d > lastDataKey).length;
   const targetDeficit = (7 - cheatInWeek.size) * th.deficitOk;
   const achieved = week.reduce((s, r) => s + (r.cheat ? 0 : r.deficit), 0);
@@ -74,7 +75,7 @@ export function buildWeekControl(rows: DayRow[], meals: MainMealRecord[], tdeeNo
   const onPlan = countClass(wm, 'onPlan');
   const flexible = countClass(wm, 'flexible');
   const skipped = countClass(wm, 'skipped');
-  const quota = Math.round(MEALS_PER_WEEK * FLEX_SHARE);
+  const quota = Math.round(((7 - cheatInWeek.size) / 7) * MEALS_PER_WEEK * FLEX_SHARE);
   return {
     weekStart,
     weekEnd,
@@ -125,13 +126,15 @@ export interface WeekQuota {
   verdict: QuotaVerdict;
 }
 
-/** The 80/20 record of every logged week, oldest first. Up to 2 flexible meals over the allowance is "fair". */
-export function buildWeekQuotas(rows: DayRow[], meals: MainMealRecord[], th: Thresholds): WeekQuota[] {
+/** The 80/20 record of every logged week, oldest first. Up to 2 flexible meals over the allowance is "fair". Meals on a cheat day
+ *  (`cheatDays`) are left out. */
+export function buildWeekQuotas(rows: DayRow[], meals: MainMealRecord[], th: Thresholds, cheatDays: readonly string[] = []): WeekQuota[] {
+  const cheat = new Set(cheatDays);
   const weeks = [...new Set(rows.map((r) => mondayOf(r.dateKey)))].sort();
   return weeks.map((weekStart) => {
     const weekEnd = addDaysToKey(weekStart, 6);
     const week = rows.filter((r) => r.dateKey >= weekStart && r.dateKey <= weekEnd);
-    const wm = meals.filter((m) => m.dateKey >= weekStart && m.dateKey <= weekEnd);
+    const wm = meals.filter((m) => m.dateKey >= weekStart && m.dateKey <= weekEnd && !cheat.has(m.dateKey));
     const flexible = countClass(wm, 'flexible');
     const total = week.reduce((s, r) => s + r.deficit, 0);
     const allowed = Math.round(wm.length * FLEX_SHARE);
