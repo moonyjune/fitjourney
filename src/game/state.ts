@@ -89,6 +89,7 @@ export function computeGameState(input: GameInputs): GameState {
 
   const deficitFor = (dateKey: string) => evaluations.get(dateKey)?.deficitKcal ?? null;
   const isCheatDay = (dateKey: string) => cheatDays.has(dateKey);
+  const burnedFor = (dateKey: string) => evaluations.get(dateKey)?.burnedKcal ?? 0;
 
   let totalXp = 0;
   let perfectDays = 0;
@@ -108,7 +109,7 @@ export function computeGameState(input: GameInputs): GameState {
     if (seenWeeks.has(week)) continue;
     seenWeeks.add(week);
     const asOf = week === currentWeek ? now : addDays(new Date(`${week}T12:00:00`), 6);
-    const weekBoss = bossForWeek(asOf, deficitFor, undefined, isCheatDay);
+    const weekBoss = bossForWeek(asOf, deficitFor, undefined, isCheatDay, burnedFor);
     if (weekBoss.defeated) bossesDefeated += 1;
     bossHistory.push(weekBoss);
   }
@@ -116,7 +117,7 @@ export function computeGameState(input: GameInputs): GameState {
   totalXp += bossesDefeated * BOSS_DEFEAT_XP;
   totalXp += Math.max(0, Math.round(input.bonusXp ?? 0));
 
-  const boss = bossForWeek(now, deficitFor, undefined, isCheatDay);
+  const boss = bossForWeek(now, deficitFor, undefined, isCheatDay, burnedFor);
   return {
     today: evaluations.get(toDateKey(today))!,
     boss,

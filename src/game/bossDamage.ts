@@ -24,11 +24,15 @@ export interface DamageDayInput {
   deficitKcal: number | null;
   /** A cheat day (GameState.days): left out of the damage, shown as such. */
   cheat?: boolean;
+  /** Kcal burned by exercise that day (GameState.days), for the too-big-deficit warnings. */
+  burnedKcal?: number;
 }
 
 export interface DamageDay {
   dateKey: string;
   deficitKcal: number | null;
+  /** Kcal burned by exercise that day. */
+  burnedKcal?: number;
   /** A cheat day: no estimate (no damage, no heal) whatever was eaten. */
   cheat: boolean;
   /** Estimated fat lost that day in kg; negative for a surplus; null when the day has no food logged. */
@@ -131,6 +135,7 @@ export function buildDamageLog({ days: input, entries, startKg, startDateKey, bo
     days.push({
       dateKey: d.dateKey,
       deficitKcal: cheat ? null : d.deficitKcal,
+      burnedKcal: d.burnedKcal ?? 0,
       cheat,
       estKg,
       weightKg,

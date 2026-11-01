@@ -1,7 +1,7 @@
 import { addDays } from '../utils/milestones';
 import { toDateKey } from '../utils/date';
 import { weekStartKey } from '../utils/weekKey';
-import { BOSS_MAX_HP, DAILY_DAMAGE_CAP_KCAL } from './constants';
+import { BOSS_MAX_HP, dailyDamageCapKcal } from './constants';
 
 export interface BossDay {
   dateKey: string;
@@ -28,11 +28,13 @@ export interface BossState {
   neededPerRemainingDay: number;
 }
 
-/** Damage for one day: its deficit clamped to [0, DAILY_DAMAGE_CAP]. A day without data deals 0. */
-export function damageForDeficit(deficitKcal: number | null): { damage: number; capped: boolean } {
+/** Damage for one day: its deficit clamped to [0, DAILY_DAMAGE_CAP + the day's exercise kcal] (eating alone counts for at most
+ *  DAILY_DAMAGE_CAP; training adds on top). A day without data deals 0. */
+export function damageForDeficit(deficitKcal: number | null, burnedKcal = 0): { damage: number; capped: boolean } {
   if (deficitKcal == null || deficitKcal <= 0) return { damage: 0, capped: false };
-  const capped = deficitKcal > DAILY_DAMAGE_CAP_KCAL;
-  return { damage: Math.round(capped ? DAILY_DAMAGE_CAP_KCAL : deficitKcal), capped };
+  const cap = dailyDamageCapKcal(burnedKcal);
+  const capped = deficitKcal > cap;
+  return { damage: Math.round(capped ? cap : deficitKcal), capped };
 }
 
 /**
@@ -44,7 +46,8 @@ export function bossForWeek(
   now: Date,
   deficitForDateKey: (dateKey: string) => number | null,
   maxHp: number = BOSS_MAX_HP,
-  isCheatDay: (dateKey: string) => boolean = () => false
+  isCheatDay: (dateKey: string) => boolean = () => false,
+  burnedForDateKey: (dateKey: string) => number = () => 0
 ): BossState {
   const weekKey = weekStartKey(now);
   const monday = new Date(`${weekKey}T12:00:00`);
@@ -56,7 +59,7 @@ export function bossForWeek(
     if (dateKey > todayKey) break;
     const cheat = isCheatDay(dateKey);
     const deficitKcal = cheat ? null : deficitForDateKey(dateKey);
-    const { damage, capped } = damageForDeficit(deficitKcal);
+    const { damage, capped } = damageForDeficit(deficitKcal, burnedForDateKey(dateKey));
     days.push({ dateKey, damage, deficitKcal, capped, cheat });
   }
 

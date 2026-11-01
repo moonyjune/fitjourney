@@ -366,7 +366,11 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   // A day's workouts are folded to one summary line; tapping it lists them with each exercise and set.
   const [workoutsOpen, setWorkoutsOpen] = useState<Record<string, boolean>>({});
   // Deficit colours against the daily target; a cheat day shows as such.
-  const levelOf = (dateKey: string, deficit: number | null) => deficitLevel(deficit, settings.targetDailyDeficitKcal, cheatDays.includes(dateKey));
+  const levelOf = (dateKey: string, deficit: number | null) =>
+    deficitLevel(deficit, settings.targetDailyDeficitKcal, cheatDays.includes(dateKey), {
+      burnedKcal: dayByKey.get(dateKey)?.caloriesBurned,
+      tdeeKcal: currentTdeeKcal,
+    });
   const [viewing, setViewing] = useState<{ dateKey: string; photos: ProofPhoto[] } | null>(null);
 
   /** Which meal (or workout) a day's photo belongs to and when it was logged, e.g. "Tối · 19:30". */

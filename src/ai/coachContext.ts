@@ -182,7 +182,7 @@ export function buildCoachContext(now: Date = new Date()): CoachContext {
     if (day.eatenKcal > 0 || day.burnedKcal > 0 || day.waterMl > 0) recentDays.push(day);
   }
 
-  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal, undefined, isCheatDay);
+  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal, undefined, isCheatDay, (key) => evaluate(key).burnedKcal);
   const since = toDateKey(addDays(now, -COACH_HISTORY_DAYS));
 
   return {

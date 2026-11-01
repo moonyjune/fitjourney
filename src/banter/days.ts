@@ -46,8 +46,8 @@ export function buildBanterSummary(input: BanterDayInput): BanterDaySummary | nu
   if (cheat || day.cheat || day.deficitKcal == null || day.estKg == null) return null;
   const deficitKcal = Math.round(day.deficitKcal);
   // The exchange keeps its five levels: a too-steep deficit still hits hard, a maintenance day is the boss's day.
-  const shown = deficitLevel(deficitKcal, targetKcal) ?? (deficitKcal > 0 ? 'ok' : 'over');
-  const level = shown === 'excess' ? 'met' : shown === 'flat' ? 'over' : shown;
+  const shown = deficitLevel(deficitKcal, targetKcal, false, { burnedKcal: evaluation?.burnedKcal }) ?? (deficitKcal > 0 ? 'ok' : 'over');
+  const level = shown === 'excess' || shown === 'underEat' ? 'met' : shown === 'flat' ? 'over' : shown;
 
   // Foods: the biggest items logged off-plan, then any junk not among them.
   const items = (log?.extraItems ?? []).filter((x) => x.name.trim());

@@ -101,7 +101,7 @@ describe('Boss detail screen', () => {
 
   it('lists every day of the week up to today, marks days without data and keeps HP consistent with the log', () => {
     useNutritionStore.setState({ logs: { '2026-10-20': log('2026-10-20'), '2026-10-22': log('2026-10-22') } });
-    useWorkoutStore.setState({ entries: [bigBurn('2026-10-22')] });
+    useWorkoutStore.setState({ entries: [{ ...bigBurn('2026-10-22'), caloriesBurned: 500 }] }); // keeps the boss alive (training adds on top of the cap)
     const r = render();
     const text = allText(r);
     expect(text).toContain('Quái Một Ký Mỡ');
@@ -121,10 +121,11 @@ describe('Boss detail screen', () => {
     useNutritionStore.setState({ logs: { '2026-10-23': log('2026-10-23') } });
     useWorkoutStore.setState({ entries: [bigBurn('2026-10-23')] });
     const text = allText(render());
-    expect(text).toContain('→ 1,500 sát thương');
-    expect(text).toContain('Chạm giới hạn an toàn 1,500/ngày');
-    expect(text).toContain('−1,500');
-    expect(text.replace(/\s+/g, ' ')).toContain('6,200 / 7,700');
+    // 1,500 from eating + 5,000 of training: training adds on top of the cap.
+    expect(text).toContain('→ 6,500 sát thương');
+    expect(text).toContain('chạm mức an toàn 1,500/ngày');
+    expect(text).toContain('−6,500');
+    expect(text.replace(/\s+/g, ' ')).toContain('1,200 / 7,700');
   });
 
   it('says so instead of showing a hit when nothing is logged today', () => {
@@ -135,8 +136,8 @@ describe('Boss detail screen', () => {
     useNutritionStore.setState({ logs: { '2026-10-23': log('2026-10-23') } });
     useWorkoutStore.setState({ entries: [bigBurn('2026-10-23')] });
     const text = allText(render());
-    expect(text).toContain('Còn 2 ngày nữa · cần trung bình 3,100 kcal/ngày'); // 6,200 HP over Saturday and Sunday
-    expect(text).toContain('vượt giới hạn 1,500/ngày'); // 3,100 a day can never be dealt: say so
+    expect(text).toContain('Còn 2 ngày nữa · cần trung bình 600 kcal/ngày'); // 1,200 HP over Saturday and Sunday
+    expect(text).not.toContain('chỉ còn hạ được boss nếu tập luyện thêm');
     act(() => renderer?.unmount());
     jest.setSystemTime(new Date('2026-10-25T10:00:00'));
     expect(allText(render())).toContain('Hôm nay là ngày cuối');

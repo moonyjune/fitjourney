@@ -6,6 +6,7 @@ import type { StageBoss } from '../../game/stageBosses';
 import { useGameText, type GameKey } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { KCAL_PER_KG_FAT } from '../../utils/tdee';
+import { useTdeeKcal } from '../../game/useGameState';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { QuestSegment } from './QuestSegment';
@@ -57,7 +58,8 @@ export function DamageDayRow({ day, boss, bosses, targetKcal, cheat, scale, talk
   const [open, setOpen] = useState(false);
   // A cheat day has no deficit figure: it reads "Cheat day · không tính kcal" in its colour instead.
   const isCheat = cheat || day.cheat;
-  const level = deficitLevel(day.deficitKcal, targetKcal, isCheat);
+  const tdeeKcal = useTdeeKcal();
+  const level = deficitLevel(day.deficitKcal, targetKcal, isCheat, { burnedKcal: day.burnedKcal, tdeeKcal });
   const estColor = deficitColor(level, quest.gold);
   const realColor = day.realKg != null && day.realKg < 0 ? quest.hp : quest.xp;
   const intake = isCheat

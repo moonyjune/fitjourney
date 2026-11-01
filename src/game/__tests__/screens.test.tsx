@@ -329,7 +329,7 @@ describe('FitQuest logging screens', () => {
       const text = allText(render(<CheckinScreen />));
       expect(text).toContain('Nghỉ ở lửa trại');
       expect(text).toContain('2/7'); // workout and deficit are done in the seeded day
-      expect(text).toContain('−1,500'); // today's boss damage, capped
+      expect(text).toContain('−1,885'); // today's boss damage: 1,500 from eating + the day's training
       expect(text).toContain('Rất tốt'); // the app's real mood scale
     });
 

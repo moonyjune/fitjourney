@@ -6,8 +6,17 @@ import { STREAK_MIN_DEFICIT_KCAL } from '../utils/streak';
 /** Weekly boss HP = the kcal needed to lose 1 kg of fat, so defeating it means roughly 1 kg lost. */
 export const BOSS_MAX_HP = KCAL_PER_KG_FAT;
 
-/** A single day can only deal this much damage, so starving yourself is never rewarded further. */
+/** The most a day's eating alone (TDEE − eaten) counts for, so eating too little is never rewarded further; the day's exercise
+ *  adds on top of it (the user's rule, 2026-11-01: a deficit from food alone should not pass 1500 kcal, with training it may). */
 export const DAILY_DAMAGE_CAP_KCAL = 1500;
+
+/** The cap of one day's damage: DAILY_DAMAGE_CAP_KCAL from eating plus the kcal burned by exercise. */
+export const dailyDamageCapKcal = (burnedKcal = 0) => DAILY_DAMAGE_CAP_KCAL + Math.max(0, burnedKcal);
+
+/** A whole-day deficit (eating + exercise) above this is warned about, never blocked: 2000 kcal for a big engine
+ *  (TDEE ≥ BIG_TDEE_KCAL), else 1800 kcal. */
+export const BIG_TDEE_KCAL = 2600;
+export const totalDeficitWarnKcal = (tdeeKcal?: number) => (tdeeKcal != null && tdeeKcal >= BIG_TDEE_KCAL ? 2000 : 1800);
 
 export const BOSS_DEFEAT_XP = 500;
 export const PERFECT_DAY_BONUS_XP = 50;

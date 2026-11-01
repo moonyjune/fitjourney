@@ -14,7 +14,7 @@ import { useGameText, type GameKey } from '../game/strings';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
 import { editListedPartPatch, partsOrSelf } from '../food/singlePart';
-import { useDayEvaluator, useNow } from '../game/useGameState';
+import { useDayEvaluator, useNow, useTdeeKcal } from '../game/useGameState';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 import type { StringKey } from '../i18n/strings';
 import { useTranslation } from '../i18n/useTranslation';
@@ -356,7 +356,11 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   const ownCheatDays = useCheatDayStore((s) => s.days);
   const toggleCheat = useCheatDayStore((s) => s.toggle);
   const cheatDays = useMemo(() => (client ? [] : ownCheatDays), [client, ownCheatDays]);
-  const levelOf = (key: string, deficit: number | null | undefined) => deficitLevel(deficit, deficitTarget, cheatDays.includes(key));
+  const ownTdeeKcal = useTdeeKcal();
+  const tdeeKcal = client?.tdeeKcal ?? ownTdeeKcal;
+  // The day's exercise splits off the deficit from eating (warned about above 1500 kcal); the TDEE sets the whole-day warning.
+  const levelOf = (key: string, deficit: number | null | undefined) =>
+    deficitLevel(deficit, deficitTarget, cheatDays.includes(key), { burnedKcal: evaluate(key).burnedKcal, tdeeKcal });
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   const evaluate = useMemo(
     () =>

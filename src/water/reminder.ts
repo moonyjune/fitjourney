@@ -14,6 +14,8 @@ export interface WaterReminder {
   label: string;
   /** What to drink now: the drink time's running total less what was drunk so far. */
   ml: number;
+  /** The drink time's running total: the day's water once this drink is done (the button sets the day to it, never adds it). */
+  reachMl: number;
   drunkMl: number;
   targetMl: number;
   /** Drink times of the day already reached by what was drunk (before this one). */
@@ -51,6 +53,7 @@ export function dueWaterReminder(
       minute: latest.minute,
       label: latest.label,
       ml: latest.cumulativeTargetMl - waterMl,
+      reachMl: latest.cumulativeTargetMl,
       drunkMl: waterMl,
       targetMl,
       doneCount: schedule.filter((c) => waterMl >= c.cumulativeTargetMl).length,

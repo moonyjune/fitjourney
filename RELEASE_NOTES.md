@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.44 | no | — |
 | 0.43 | no | — |
 | 0.42 | no | weekly-report, coach-digest, analyze-proof-photo, read-nutrition-label, parse-meal-text, suggest-dinner, suggest-swap |
 | 0.41 | no | — |
@@ -55,6 +56,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.44
+- Deficit limits: eating alone counts for at most 1500 kcal of a day's boss damage, but the day's training now adds on top (before, the whole day was capped at 1500).
+  - Warnings, never a ban: "⚠ Ăn quá ít" when the deficit from eating alone is over 1500 kcal; "⚠ Thâm hụt quá lớn" when the whole day (eating + training) is over 1800 kcal, or 2000 kcal with a TDEE of 2600 or more. They replace the 0.41 "too steep" rule.
+- Water pop-up: the button is now the milestone ("Đã uống đủ 3500 ml") and brings the day up to it, instead of adding that amount on top (3 L logged + "3.5 L" used to give 6.5 L).
 
 ## 0.43
 - Cheat days and the week: meals on a cheat day no longer use up the 80/20 flexible-meal allowance (the allowance covers the other days), and the weekly boss's "needed per remaining day" spreads what is left over the days ahead that are not cheat days.

@@ -68,9 +68,14 @@ export function WaterReminderHost({ enabled }: { enabled: boolean }) {
   return (
     <WaterReminderDialog
       reminder={enabled ? open : null}
-      onDrink={(ml) => {
+      onDrink={(reachMl) => {
+        // The button is a milestone ("reached 3,500 ml"), not an amount: add only what is missing from the day's water as it is now
+        // (it may have changed, e.g. synced from another device, since the pop-up opened).
         const reminder = useWaterReminderStore.getState().open;
-        if (reminder) useNutritionStore.getState().addWater(reminder.dateKey, ml);
+        if (reminder) {
+          const now = useNutritionStore.getState().logs[reminder.dateKey]?.waterMl ?? 0;
+          if (reachMl > now) useNutritionStore.getState().addWater(reminder.dateKey, reachMl - now);
+        }
         useWaterReminderStore.getState().close();
       }}
       onClose={() => useWaterReminderStore.getState().close()}

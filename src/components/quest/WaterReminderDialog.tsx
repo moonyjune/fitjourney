@@ -10,8 +10,8 @@ import { PulseRing } from './motion/PulseRing';
 
 interface Props {
   reminder: WaterReminder | null;
-  /** Logs the amount to drink on the reminder's day, then closes. */
-  onDrink: (ml: number) => void;
+  /** Brings the reminder's day up to `reachMl` (the drink time's running total, not an amount to add), then closes. */
+  onDrink: (reachMl: number) => void;
   onClose: () => void;
 }
 
@@ -19,7 +19,7 @@ interface Props {
 export function WaterReminderDialog({ reminder, onDrink, onClose }: Props) {
   const g = useGameText();
   if (!reminder) return null;
-  const { ml, drunkMl, targetMl, doneCount, totalCount } = reminder;
+  const { ml, reachMl, drunkMl, targetMl, doneCount, totalCount } = reminder;
   const pct = targetMl > 0 ? Math.min(100, Math.round((drunkMl / targetMl) * 100)) : 0;
   const cheer = g(`water.cheer.${waterCheerIndex(reminder.key)}` as GameKey);
   return (
@@ -36,7 +36,7 @@ export function WaterReminderDialog({ reminder, onDrink, onClose }: Props) {
               {g('water.popup.title', { time: clockText(reminder.hour, reminder.minute) })}
             </HudText>
             <HudText size={26} color={quest.manaText} style={styles.center} accessibilityLiveRegion="polite">
-              {g('water.popup.amount', { ml })}
+              {g('water.popup.amount', { ml, reach: reachMl })}
             </HudText>
             <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.center}>
               {reminder.label}
@@ -52,7 +52,7 @@ export function WaterReminderDialog({ reminder, onDrink, onClose }: Props) {
                 {cheer}
               </HudText>
             </View>
-            <QuestButton variant="mana" icon="check" title={g('water.popup.drink', { ml })} onPress={() => onDrink(ml)} />
+            <QuestButton variant="mana" icon="check" title={g('water.popup.drink', { reach: reachMl })} onPress={() => onDrink(reachMl)} />
             <QuestButton variant="ghost" title={g('water.popup.later')} onPress={onClose} />
           </View>
         </FadeInUp>

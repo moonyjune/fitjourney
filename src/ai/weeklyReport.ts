@@ -1,7 +1,7 @@
 import { getDayType } from '../constants/plan';
 import { lateMealHour } from '../utils/mealMode';
 import { bossForWeek, type BossState } from '../game/boss';
-import { DAILY_DAMAGE_CAP_KCAL, type MissionId } from '../game/constants';
+import { DAILY_DAMAGE_CAP_KCAL, dailyDamageCapKcal, type MissionId } from '../game/constants';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { toDateKey } from '../utils/date';
 import { addDays } from '../utils/milestones';
@@ -129,7 +129,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     const day: WeekDay = {
       date,
       logged,
-      damage: Math.min(Math.max(e.deficitKcal ?? 0, 0), DAILY_DAMAGE_CAP_KCAL),
+      damage: Math.min(Math.max(e.deficitKcal ?? 0, 0), dailyDamageCapKcal(e.burnedKcal)),
       eatenKcal: Math.round(e.eatenKcal),
       proteinG: Math.round(e.proteinG),
       burnedKcal: Math.round(e.burnedKcal),
@@ -167,7 +167,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     lateMealDays: count((d) => d.lastMealHour !== undefined && d.lastMealHour >= lateMealHour()),
   };
 
-  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal, undefined, isCheatDay);
+  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal, undefined, isCheatDay, (key) => evaluate(key).burnedKcal);
 
   // Weight: from the last weigh-in before the week (else the first of the week) to the latest, against what the deficit predicts.
   const points = weights
@@ -190,7 +190,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
   // Last week, for comparison: the same rules, ended on its Sunday.
   const prevSunday = addDays(monday, -1);
   prevSunday.setHours(12, 0, 0, 0);
-  const prevBoss = bossForWeek(prevSunday, (key) => evaluate(key).deficitKcal, undefined, isCheatDay);
+  const prevBoss = bossForWeek(prevSunday, (key) => evaluate(key).deficitKcal, undefined, isCheatDay, (key) => evaluate(key).burnedKcal);
   const prevDeficits = prevBoss.days.map((d) => d.deficitKcal).filter((v): v is number => v !== null);
   const previousWeek: WeekInput['previousWeek'] =
     prevDeficits.length > 0 ? { damage: Math.round(prevBoss.totalDamage), daysLogged: prevDeficits.length, avgDeficitKcal: avg(prevDeficits) } : undefined;

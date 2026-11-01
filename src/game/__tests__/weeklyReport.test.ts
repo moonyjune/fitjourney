@@ -67,7 +67,8 @@ describe('buildWeeklyReportInput', () => {
     expect(w.week).toMatchObject({ start: '2026-10-19', today: '2026-10-23', daysElapsed: 5, daysUntilReset: 3 });
     expect(w.days.map((d) => d.date)).toEqual(['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23']);
     const [mon, tue, wed, thu, fri] = w.days;
-    expect(mon).toMatchObject({ logged: true, deficitKcal: 1900, damage: 1500, eatenKcal: 1500, proteinG: 200, burnedKcal: 400, workouts: 1, waterMl: 3000, lastMealHour: 12 });
+    expect(mon).toMatchObject({ logged: true, deficitKcal: 1900, damage: 1900, // 1500 from eating + 400 training
+       eatenKcal: 1500, proteinG: 200, burnedKcal: 400, workouts: 1, waterMl: 3000, lastMealHour: 12 });
     expect(tue).toMatchObject({ logged: true, deficitKcal: -400, damage: 0, junkCount: 1, saltG: 9, purineMg: 1500, lastMealHour: 21 });
     expect(tue.missed).toEqual(expect.arrayContaining(['salt', 'purine', 'junk', 'deficit']));
     expect(wed).toMatchObject({ logged: false, damage: 0, eatenKcal: 0 });
@@ -94,10 +95,10 @@ describe('buildWeeklyReportInput', () => {
 
   it('reports the boss: damage so far, HP left and the status from the numbers', () => {
     const { boss } = buildWeeklyReportInput(NOW);
-    expect(boss).toMatchObject({ maxHp: 7700, damageSoFar: 1500 + 0 + 1200 + 1500, defeated: false });
-    expect(boss.hpLeft).toBe(7700 - 4200);
-    expect(boss.neededPerRemainingDay).toBe(Math.ceil(3500 / 2)); // two days left after today: Saturday, Sunday
-    expect(boss.status).toBe('far'); // 1750 a day is more than a day can deal
+    expect(boss).toMatchObject({ maxHp: 7700, damageSoFar: 1900 + 0 + 1200 + 1500, defeated: false });
+    expect(boss.hpLeft).toBe(7700 - 4600);
+    expect(boss.neededPerRemainingDay).toBe(Math.ceil(3100 / 2)); // two days left after today: Saturday, Sunday
+    expect(boss.status).toBe('far'); // 1550 a day is more than eating alone can deal
   });
 
   it('compares the weight with what the deficit predicts (3,500-ish kcal per 0.45 kg is kcal / 7,700 per kg)', () => {

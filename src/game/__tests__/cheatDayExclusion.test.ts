@@ -152,3 +152,12 @@ describe('cheat days ahead and the 80/20 allowance', () => {
   });
 });
 
+describe('the daily damage cap: 1500 kcal from eating, training adds on top', () => {
+  it('a day with 600 kcal of training can deal up to 2100', () => {
+    const boss = bossForWeek(new Date('2026-10-21T10:00:00'), () => 2500, 7700, () => false, () => 600);
+    expect(boss.days[0]).toMatchObject({ damage: 2100, capped: true });
+    expect(bossForWeek(new Date('2026-10-21T10:00:00'), () => 1900, 7700, () => false, () => 600).days[0]).toMatchObject({ damage: 1900, capped: false });
+    expect(bossForWeek(new Date('2026-10-21T10:00:00'), () => 1900).days[0]).toMatchObject({ damage: 1500, capped: true });
+  });
+});
+

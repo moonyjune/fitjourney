@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, jest } from '@jest/globals';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 jest.mock('../../lib/supabase', () => ({ supabase: {} }));
-jest.mock('../../sync/cloudSync', () => ({}));
+jest.mock('../../sync/cloudSync', () => ({ pushNutritionLog: jest.fn(), pushUserData: jest.fn() }));
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
@@ -75,7 +75,7 @@ describe('water reminder pop-up', () => {
     r = undefined;
   });
 
-  it('says how much to drink, the day so far and cheers; "drank" logs that amount', () => {
+  it('says how much to drink, the day so far and cheers; the button names the running total to reach', () => {
     const onDrink = jest.fn();
     const due = dueWaterReminder(schedule, 1000, 3500, at(11, 2), DAY, [])!;
     act(() => {
@@ -85,10 +85,33 @@ describe('water reminder pop-up', () => {
     expect(text).toContain('11:00');
     expect(text).toContain('500 ml');
     expect(text).toContain('1000/3500 ml');
-    const drink = r!.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Đã uống 500 ml')[0];
+    const drink = r!.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Đã uống đủ 1500 ml')[0];
     act(() => {
       drink.props.onPress();
     });
-    expect(onDrink).toHaveBeenCalledWith(500);
+    expect(onDrink).toHaveBeenCalledWith(1500);
   });
 });
+
+describe('water reminder: the button sets the day to the milestone, never adds it', () => {
+  it('with 3,000 ml already logged, "reached 3,500 ml" makes the day 3,500 ml, not 6,500', () => {
+    const { WaterReminderHost } = require('../../water/WaterReminderHost');
+    const { useNutritionStore } = require('../../store/useNutritionStore');
+    const DAY_KEY = '2026-11-01';
+    useNutritionStore.getState().addWater(DAY_KEY, 3000);
+    const due = dueWaterReminder(schedule, 0, 3500, at(21, 5), DAY_KEY, [])!; // a stale pop-up that thought nothing was drunk
+    expect(due.reminder.reachMl).toBe(3500);
+    useWaterReminderStore.setState({ open: due.reminder, shown: [] });
+    let host: ReactTestRenderer | undefined;
+    act(() => {
+      host = create(<WaterReminderHost enabled />);
+    });
+    const button = host!.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Đã uống đủ 3500 ml')[0];
+    act(() => {
+      button.props.onPress();
+    });
+    expect(useNutritionStore.getState().logs[DAY_KEY]?.waterMl).toBe(3500);
+    act(() => host?.unmount());
+  });
+});
+
