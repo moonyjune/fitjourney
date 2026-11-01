@@ -23,17 +23,68 @@ export interface WebSearchOptions {
 export const WEB_SEARCH_TOOL_TYPE = 'web_search_20260318';
 export const WEB_SEARCH_BASIC_TYPE = 'web_search_20250305';
 
-/** The tool definition for a variant. */
-export function webSearchTool(opts: WebSearchOptions, variant: WebSearchVariant = 'dynamic'): Record<string, unknown> {
+/** Countries the web search's `user_location.country` refuses (the API answered 400 "country not supported" for VN, 2026-11-01):
+ *  never sent; the place goes into the prompt text instead, and city / region / timezone still go when given. */
+export const UNSUPPORTED_SEARCH_COUNTRIES: readonly string[] = ['VN'];
+
+/** `user_location` as it is sent: an unsupported country left out, empty fields dropped; null when nothing is left. */
+export function searchLocation(loc: WebSearchOptions['userLocation']): Record<string, string> | null {
+  if (!loc) return null;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(loc)) {
+    if (typeof v !== 'string' || !v.trim()) continue;
+    if (k === 'country' && UNSUPPORTED_SEARCH_COUNTRIES.includes(v.trim().toUpperCase())) continue;
+    out[k] = v.trim();
+  }
+  return Object.keys(out).length > 0 ? { type: 'approximate', ...out } : null;
+}
+
+/** The tool definition for a variant; `withLocation: false` leaves `user_location` out (after the API refused it). */
+export function webSearchTool(opts: WebSearchOptions, variant: WebSearchVariant = 'dynamic', withLocation = true): Record<string, unknown> {
   const tool: Record<string, unknown> = {
     type: variant === 'basic' ? WEB_SEARCH_BASIC_TYPE : WEB_SEARCH_TOOL_TYPE,
     name: 'web_search',
     max_uses: Math.max(1, Math.min(10, Math.round(opts.maxUses))),
   };
   if (variant === 'dynamic-direct') tool.allowed_callers = ['direct'];
-  if (opts.userLocation && Object.values(opts.userLocation).some(Boolean)) tool.user_location = { type: 'approximate', ...opts.userLocation };
+  const location = withLocation ? searchLocation(opts.userLocation) : null;
+  if (location) tool.user_location = location;
   return tool;
 }
+
+/** The API refused the tool's `user_location` (a country, region or time zone it does not support, or a malformed one): a 400
+ *  whose body names user_location, or names a country / location / region together with "not supported" / "invalid" / "not
+ *  available". The request is then made once more without `user_location`. */
+export function isUserLocationRejected(status: number, body: string): boolean {
+  if (status !== 400) return false;
+  if (/user_location/i.test(body)) return true;
+  return /\b(country|countries|location|region|timezone)\b/i.test(body) && /not supported|unsupported|not available|invalid|not allowed|not permitted/i.test(body);
+}
+
+/** The region of the user or of the account is not served by web search at all (still refused without `user_location`): a 400 / 403
+ *  naming a country / region / location as not supported or not available. Shown to the user as "not available", with the reason. */
+export function isRegionUnsupported(status: number, body: string): boolean {
+  if (status !== 400 && status !== 403) return false;
+  return /\b(country|countries|region|location)\b/i.test(body) && /not supported|unsupported|not available/i.test(body);
+}
+
+/** How the web search request is made: which tool version, and whether `user_location` goes with it. */
+export interface WebSearchAttempt {
+  variant: WebSearchVariant;
+  withLocation: boolean;
+}
+
+/** What to try after a failed web search request: the same tool without `user_location` when the API refused the location (once),
+ *  else the next tool version (`webSearchVariantAfter`); null when there is nothing left to try. */
+export function webSearchRetryAfter(status: number, body: string, current: WebSearchAttempt): WebSearchAttempt | null {
+  if (current.withLocation && isUserLocationRejected(status, body)) return { variant: current.variant, withLocation: false };
+  const next = webSearchVariantAfter(status, body, current.variant);
+  return next ? { variant: next, withLocation: current.withLocation } : null;
+}
+
+/** The message for a region web search does not serve (after the retry without location also failed). */
+export const regionUnsupportedMessage = (upstream: string): string =>
+  `${PLACES_UNAVAILABLE_PREFIX}: tìm kiếm web của Claude chưa hỗ trợ quốc gia / khu vực này (${upstream})`;
 
 /** Models that take the dynamic-filtering versions (Claude 4.6 and later); any other model starts on the basic one. */
 const DYNAMIC_MODELS = /^claude-(opus-(4-[678]|5)|sonnet-(4-6|5)|haiku-5|fable|mythos)/;

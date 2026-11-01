@@ -11,12 +11,15 @@
 // drink or dessert rather than a meal); the prompt then follows them (`dinnerPrompt` in _shared/dinner.ts builds it).
 // `cheat` ({ where: home | out | both }) asks for cheat-day dishes: no rules at all, no budget, no gout / purine / salt / sugar rule,
 // just tasty popular dishes (cheatPrompt in _shared/dinner.ts, CHEAT_SYSTEM);
-// those are not put into the shared cook book (it feeds the everyday suggestions of every user).
+// those are not put into the shared cook book (it feeds the everyday suggestions of every user). A cheat request may also carry the
+// user's wish in their own words and a compact picture of their recent eating (`cheat.wish`, `cheat.context`, cleaned and worded by
+// _shared/places.ts as for suggest-cheat-places); the answer then also says how the wish was read (`readWish`).
 // Calls per user per day: app_settings key `ai_quota.dinner` (default 30).
 
 import { ACCURACY_PROPERTY } from '../_shared/coach.ts';
 import { cookbookRows } from '../_shared/cookbook.ts';
 import { cleanDinnerRequest, dinnerPrompt } from '../_shared/dinner.ts';
+import { cleanWish, cleanWishContext, wishPrompt } from '../_shared/places.ts';
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
 
 const DINNER_TOOL = {
@@ -56,6 +59,7 @@ const DINNER_TOOL = {
           required: ['name', 'calories', 'proteinG', 'accuracyPercent', 'ingredients', 'steps', 'minutes', 'difficulty'],
         },
       },
+      readWish: { type: 'string', description: 'Cheat day with a wish only: one short Vietnamese sentence, how the wish was understood.' },
     },
     required: ['options'],
   },
@@ -73,7 +77,10 @@ const CHEAT_SYSTEM =
 serveAi('dinner', async (body) => {
   const req = cleanDinnerRequest(body);
   if (!req) return jsonResponse({ error: 'Thiếu số liệu còn lại trong ngày.' }, 400);
-  const prompt = dinnerPrompt(req);
+  const cheat = (body.cheat && typeof body.cheat === 'object' ? body.cheat : {}) as Record<string, unknown>;
+  const wish = req.cheat ? cleanWish(cheat.wish) : '';
+  const context = req.cheat ? cleanWishContext(cheat.context) : null;
+  const prompt = dinnerPrompt(req, wish || context ? wishPrompt(wish, context) : '');
   return {
     responseKey: 'result',
     call: { tool: DINNER_TOOL, system: req.cheat ? CHEAT_SYSTEM : SYSTEM, maxTokens: 6000, messages: [{ role: 'user', content: `<request>${prompt}</request>` }] },

@@ -1,14 +1,15 @@
 import { MAX_DINNER_IDEAS, type DinnerIdea } from '../ai/dinner';
 import { foodKey } from '../food/remember';
 import { CHEAT_WHERE, type CheatWhere } from '../../supabase/functions/_shared/dinner';
-import { cleanPlacesAnswer, type CheatPlacesAnswer } from '../../supabase/functions/_shared/places';
+import { cleanPlacesAnswer, cleanWish, type CheatPlacesAnswer } from '../../supabase/functions/_shared/places';
 import { cleanRecipeDetails, type CookbookRecipe } from './recipes';
 
 // Cheat day: the cook book finder's checkbox drops every rule for the ideas (no calorie or limit budget, no gout / purine warning;
 // any dish, cooked at home or eaten out), keeps them in their own part of the cook book, and looks up real places near the user
-// (suggest-cheat-places) for what the user types ("lẩu bò") or for the AI's dishes.
+// (suggest-cheat-places). The one text box holds the user's wish in their own words (a craving, a mood, something vague); "find
+// places" sends it with a compact picture of their recent eating (cheatWish.ts) and always gets dishes that fit it AND places.
 
-export { CHEAT_WHERE };
+export { CHEAT_WHERE, cleanWish };
 export type { CheatWhere, CheatPlacesAnswer };
 
 const num = (v: unknown, max: number): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= max ? v : null);
@@ -47,6 +48,12 @@ export function cleanCheatIdeas(raw: unknown, where: CheatWhere): DinnerIdea[] {
     if (out.length === MAX_DINNER_IDEAS) break;
   }
   return out;
+}
+
+/** How the AI read the wish in a suggest-dinner cheat answer (one line), or null. */
+export function cheatReadWish(raw: unknown): string | null {
+  const v = raw && typeof raw === 'object' ? (raw as { readWish?: unknown }).readWish : null;
+  return cleanWish(v) || null;
 }
 
 /** The cook book split into everyday dishes and cheat-day dishes. */

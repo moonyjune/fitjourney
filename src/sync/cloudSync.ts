@@ -11,7 +11,7 @@ import { cleanSearch, pickShared, SHARED_COOKBOOK_COLUMNS } from '../cookbook/sh
 import { rankShared, type CookbookFilters } from '../cookbook/filters';
 import { cookbookRows } from '../../supabase/functions/_shared/cookbook';
 import type { CheatWhere } from '../../supabase/functions/_shared/dinner';
-import type { CheatPlacesAnswer } from '../../supabase/functions/_shared/places';
+import type { CheatPlacesAnswer, CheatWishContext } from '../../supabase/functions/_shared/places';
 import { PLACES_UNAVAILABLE_PREFIX } from '../../supabase/functions/_shared/webSearch';
 import { recheckPlaces } from '../cookbook/cheat';
 import type { ClientRows } from '../ai/coachDigest';
@@ -1405,12 +1405,18 @@ export type DinnerOutcome = { ok: true; result: unknown } | { ok: false; message
 
 /** Calls the suggest-dinner edge function: dinner ideas for what is left of today (the brief is worked out on the device). The
  *  answer is raw; the caller checks each idea with `cleanAiDinner`. Same rules as the other AI requests. */
-export async function requestDinner(brief: DinnerBrief, favorites: string[], avoidNames: string[] = [], filters?: CookbookFilters, cheat?: { where: CheatWhere }): Promise<DinnerOutcome> {
+export async function requestDinner(
+  brief: DinnerBrief,
+  favorites: string[],
+  avoidNames: string[] = [],
+  filters?: CookbookFilters,
+  cheat?: { where: CheatWhere; wish?: string; context?: CheatWishContext }
+): Promise<DinnerOutcome> {
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
     await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
-    return { ok: true, result: cheat ? fakeCheatDinner(cheat.where) : fakeDinner(brief, filters) };
+    return { ok: true, result: cheat ? fakeCheatDinner(cheat.where, cheat.wish) : fakeDinner(brief, filters) };
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
@@ -1436,22 +1442,23 @@ export type CheatPlacesOutcome = { ok: true; result: CheatPlacesAnswer } | { ok:
 /** How long the app waits for suggest-cheat-places: the server gives its web search 135 s, the platform cuts a function at ~150 s. */
 const PLACES_TIMEOUT_MS = 170_000;
 
-/** Calls the suggest-cheat-places edge function (web search for places near `location` / `coords`): for what the user typed
- *  (`typed`, one entry) or for up to 3 AI dishes. The answer is checked again here (`recheckPlaces`). `unavailable`: web search is
- *  not allowed for the organization. Every failure carries the server's own reason in `message` (shown to the user). The
- *  offline dev account gets clearly labelled sample places. */
+/** Calls the suggest-cheat-places edge function: dishes that fit the user's wish (`wish`, their own words, may be empty, read with
+ *  `context`, their recent eating) and places near `location` / `coords` found by web search, both in one answer. `dishes`: one dish
+ *  the user asked for (`typed`), up to 3 AI dishes, or none (the AI picks them). The answer is checked again here
+ *  (`recheckPlaces`). `unavailable`: web search is not allowed for the organization or not served in the region. Every failure
+ *  carries the server's own reason in `message` (shown to the user). The offline dev account gets clearly labelled sample data. */
 export async function requestCheatPlaces(
   dishes: string[],
   location: string,
   coords?: { lat: number; lon: number },
-  opts: { typed?: boolean; now?: Date } = {}
+  opts: { typed?: boolean; now?: Date; wish?: string; context?: CheatWishContext } = {}
 ): Promise<CheatPlacesOutcome> {
   const now = opts.now ?? new Date();
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
     await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
-    return { ok: true, result: fakeCheatPlaces(dishes, location, now) };
+    return { ok: true, result: fakeCheatPlaces(dishes, location, now, opts.wish) };
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -1461,7 +1468,15 @@ export async function requestCheatPlaces(
     kind: message.startsWith(PLACES_UNAVAILABLE_PREFIX) ? 'unavailable' : classifyAiError(message, status),
   });
   try {
-    const body = { dishes, location, today, ...(coords ? { coords } : {}), ...(opts.typed ? { typed: true } : {}) };
+    const body = {
+      dishes,
+      location,
+      today,
+      ...(coords ? { coords } : {}),
+      ...(opts.typed ? { typed: true } : {}),
+      ...(opts.wish ? { wish: opts.wish } : {}),
+      ...(opts.context ? { context: opts.context } : {}),
+    };
     const { data, error } = await supabase.functions.invoke('suggest-cheat-places', { body, timeout: PLACES_TIMEOUT_MS });
     if (error) throw error;
     if (data?.error) return fail(String(data.error));

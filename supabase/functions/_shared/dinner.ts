@@ -82,8 +82,9 @@ const CHEAT_WHERE_WORDS: Record<CheatWhere, string> = {
   both: 'cả món tự nấu và món ăn ngoài (ít nhất 1 món mỗi loại; ghi where = "home" hoặc "out" cho từng món; món ăn ngoài thì các bước là mẹo gọi món)',
 };
 
-/** The user message of suggest-dinner on a cheat day. */
-export function cheatPrompt(req: DinnerRequest): string {
+/** The user message of suggest-dinner on a cheat day. `wishText`: the part that reads the user's wish and recent eating
+ *  (`wishPrompt` of places.ts, added by the Edge Function), empty when there is none. */
+export function cheatPrompt(req: DinnerRequest, wishText = ''): string {
   const where = req.cheat?.where ?? 'both';
   const f = req.filters;
   const parts: string[] = [];
@@ -102,6 +103,7 @@ export function cheatPrompt(req: DinnerRequest): string {
     `Trong how chỉ nói món ngon ở điểm nào / ăn sao cho ngon, không nhắc calo hay sức khỏe. ` +
     (req.favorites.length ? `Món người dùng hay ăn (để hợp khẩu vị): ${req.favorites.join('; ')}. ` : '') +
     (req.avoid.length ? `Người dùng đã có các món này, hãy đề xuất MÓN KHÁC: ${req.avoid.join('; ')}. ` : '') +
+    (wishText ? `${wishText} Các món phải hợp với mong muốn đó; ghi readWish = một câu ngắn bạn hiểu mong muốn của họ thế nào. ` : '') +
     `Ghi accuracyPercent cho từng món. Gọi tool report_dinner_ideas.`
   );
 }
@@ -206,9 +208,9 @@ export function filtersPrompt(f: DinnerFilters | undefined): string {
 
 const MEAL_WORD: Record<string, string> = { breakfast: 'bữa sáng', lunch: 'bữa trưa', dinner: 'bữa tối', meal: 'bữa ăn' };
 
-/** The user message of suggest-dinner, from a clean request. */
-export function dinnerPrompt(req: DinnerRequest): string {
-  if (req.cheat) return cheatPrompt(req);
+/** The user message of suggest-dinner, from a clean request (`wishText`: cheat day only, see `cheatPrompt`). */
+export function dinnerPrompt(req: DinnerRequest, wishText = ''): string {
+  if (req.cheat) return cheatPrompt(req, wishText);
   const light = req.budgetKcal < 150;
   const occasions = req.filters?.occasions ?? [];
   const word = req.snack ? (occasions.length ? occasions.map((id) => OCCASION_WORDS[id]).join(' / ') : 'món ăn vặt / đồ uống') : MEAL_WORD[req.meal];

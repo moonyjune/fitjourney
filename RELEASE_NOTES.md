@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.47 | no | suggest-cheat-places, suggest-dinner, tempt-me |
 | 0.46 | no | — |
 | 0.45 | no | estimate-workout-kcal |
 | 0.44 | no | — |
@@ -58,6 +59,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.47
+- Place search works in Vietnam again: the web search no longer gets "VN" as its country (the API rejected it); the address from the map goes into the prompt, and a rejected location is retried once without it.
+- Cheat day reads your wish: one box for a craving, a mood or something vague ("buồn, muốn ăn gì ấm bụng"). The AI reads it with the time of day, what you ate lately, your favourites, the foods that pushed days over target and current food trends, says how it understood you ("AI hiểu là: …") and pampers you.
+  - "Tìm quán" always returns dishes that fit the wish and nearby places together, even with an empty box.
 
 ## 0.46
 - Water pop-up shows the day against the schedule: every drink time (✓ reached, ✗ missed, • now), how far behind you are and which times were missed, and a catch-up plan — drink this time's portion plus up to 250 ml now, the rest spread over the drink times ahead. The button brings the day up to what you drink now.

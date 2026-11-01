@@ -237,8 +237,9 @@ export function fakeDinner(brief: DinnerBrief, filters?: CookbookFilters): { opt
   return { options: [make(light ? 'Rau luộc + đạm nạc' : 'Cá hấp + rau luộc', 1), make(light ? 'Canh rau' : 'Ức gà áp chảo + salad', 0.95), make(light ? 'Đậu phụ hấp' : 'Trứng hấp + rau cải', 0.9)] };
 }
 
-/** Offline stand-in for the cheat-day ideas: three hearty dishes (no budget), home-cooked, eaten out or one of each. Labelled as simulated. */
-export function fakeCheatDinner(where: CheatWhere): { options: Record<string, unknown>[] } {
+/** Offline stand-in for the cheat-day ideas: three hearty dishes (no budget), home-cooked, eaten out or one of each, and how a wish
+ *  was "read" when one was given. Labelled as simulated. */
+export function fakeCheatDinner(where: CheatWhere, wish?: string): { options: Record<string, unknown>[]; readWish?: string } {
   const home = [
     { name: 'Gà rán sốt mật ong', calories: 850, proteinG: 45, purineMg: 220, saltG: 3.5, sugarG: 18, where: 'home', minutes: 40, difficulty: 3 },
     { name: 'Bánh xèo tôm thịt', calories: 700, proteinG: 25, purineMg: 320, saltG: 3, sugarG: 6, where: 'home', minutes: 50, difficulty: 3 },
@@ -250,6 +251,7 @@ export function fakeCheatDinner(where: CheatWhere): { options: Record<string, un
   ];
   const picked = where === 'home' ? [...home, { ...out[2], where: 'home', name: 'Chè khúc bạch' }] : where === 'out' ? out : [home[0], out[0], out[2]];
   return {
+    ...(wish?.trim() ? { readWish: `${SIMULATED}: AI không thật sự đọc "${wish.trim().slice(0, 60)}".` } : {}),
     options: picked.map((d) => ({
       ...d,
       name: `${d.name} (giả lập)`,
@@ -261,13 +263,18 @@ export function fakeCheatDinner(where: CheatWhere): { options: Record<string, un
   };
 }
 
-/** Offline stand-in for suggest-cheat-places: one obviously fake place per dish, with example.com links, marked as sample data
- *  (`sample`), checked by the same rules as a real answer. Never a real place. */
-export function fakeCheatPlaces(dishes: string[], location: string, now: Date = new Date()): CheatPlacesAnswer {
+/** Offline stand-in for suggest-cheat-places: sample dishes for the wish (the given ones, or three sample ones), how the wish was
+ *  "read", and one obviously fake place per dish, with example.com links, marked as sample data (`sample`), checked by the same
+ *  rules as a real answer. Never a real place. */
+export function fakeCheatPlaces(dishes: string[], location: string, now: Date = new Date(), wish?: string): CheatPlacesAnswer {
   const today = now.toISOString().slice(0, 10);
   const month = today.slice(0, 7);
+  const w = (wish ?? '').trim().slice(0, 60);
+  const picked = dishes.length > 0 ? dishes.slice(0, 3) : ['Món mẫu A (giả lập)', 'Món mẫu B (giả lập)', 'Món mẫu C (giả lập)'];
   const raw = {
-    places: dishes.slice(0, 3).map((dish, i) => ({
+    readWish: w ? `${SIMULATED}: AI không thật sự đọc "${w}".` : `${SIMULATED}: chưa có mong muốn, đây là gợi ý mẫu.`,
+    dishes: picked.map((name, i) => ({ name, why: `${SIMULATED}: lý do mẫu, không phải của AI.`, kcal: 600 + i * 100, emoji: '🍽' })),
+    places: picked.map((dish, i) => ({
       dish,
       name: `Quán mẫu ${String.fromCharCode(65 + i)} (DỮ LIỆU MẪU)`,
       address: `Địa chỉ mẫu, ${location || 'khu vực của bạn'}`,

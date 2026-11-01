@@ -17,19 +17,25 @@ export interface WebToolOptions {
   maxSearches: number;
   /** Fetches at most this many pages per request (0: no fetch tool). */
   maxFetches: number;
-  /** Rough location for local results (a city name, cleaned by the caller); the country and time zone are fixed. */
+  /** Rough location for local results (a city name, cleaned by the caller); the time zone defaults to Vietnam's. A country the
+   *  search refuses (VN: "country not supported") is never sent; the city is in the prompt text anyway. */
   city?: string;
   country?: string;
   timezone?: string;
 }
 
+/** Countries `user_location.country` refuses. (The same list as in webSearch.ts; kept as its own copy because the shared files
+ *  import nothing from each other.) */
+const UNSUPPORTED_COUNTRIES = ['VN'];
+
 /** The server tools to declare for `model`: search (and fetch on models with the newer variants, which need no beta header). */
 export function webToolsFor(model: string, options: WebToolOptions): Record<string, unknown>[] {
   const dynamic = DYNAMIC_FILTERING.test(model);
+  const country = options.country && !UNSUPPORTED_COUNTRIES.includes(options.country.toUpperCase()) ? options.country : undefined;
   const location = {
     type: 'approximate',
     ...(options.city ? { city: options.city } : {}),
-    country: options.country ?? 'VN',
+    ...(country ? { country } : {}),
     timezone: options.timezone ?? 'Asia/Ho_Chi_Minh',
   };
   const tools: Record<string, unknown>[] = [
@@ -89,10 +95,24 @@ export function seenInEvidence(url: string, evidence: WebEvidence | undefined): 
   return evidence.texts.some((t) => t.includes(url));
 }
 
-/** The API refused the web tools themselves (not enabled for the organisation, not on this model, a bad tool version): the call is
- *  then made again without them. */
+/** The API refused the web tools themselves (not enabled for the organisation, not on this model, a bad tool version, a region
+ *  web search does not serve): the call is then made again without them. A refused `user_location` alone is tried first without the
+ *  location (`isUserLocationRejected` in webSearch.ts, `withoutUserLocation`). */
 export function isServerToolUnavailable(status: number, body: string): boolean {
-  return (status === 400 || status === 403) && /web_search|web_fetch|server[ _]tool/i.test(body);
+  if (status !== 400 && status !== 403) return false;
+  return /web_search|web_fetch|server[ _]tool/i.test(body) || (/\b(country|countries|region|location)\b/i.test(body) && /not supported|unsupported|not available/i.test(body));
+}
+
+/** Whether any of the tools carries a `user_location`. */
+export const hasUserLocation = (tools: Record<string, unknown>[]): boolean => tools.some((t) => t.user_location !== undefined);
+
+/** The same tools with `user_location` taken out (after the API refused it). */
+export function withoutUserLocation(tools: Record<string, unknown>[]): Record<string, unknown>[] {
+  return tools.map((t) => {
+    if (t.user_location === undefined) return t;
+    const { user_location: _dropped, ...rest } = t;
+    return rest;
+  });
 }
 
 /** Cost of the web searches of one call. */

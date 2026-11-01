@@ -19,7 +19,8 @@ import {
   type CookbookFilters,
   type FilterTag,
 } from '../../cookbook/filters';
-import { CHEAT_WHERE, cleanCheatIdeas, cleanQuery, dishesToLocate, type CheatWhere } from '../../cookbook/cheat';
+import { CHEAT_WHERE, cheatReadWish, cleanCheatIdeas, cleanWish, dishesToLocate, type CheatWhere } from '../../cookbook/cheat';
+import { buildCheatWishContext } from '../../cookbook/cheatWish';
 import { filterBrief } from '../../cookbook/finderBrief';
 import { osmUrl, reverseGeocode } from '../../cookbook/geocode';
 import { recipeFromIdea, recipeKey } from '../../cookbook/recipes';
@@ -32,6 +33,7 @@ import { pick as pickPrefs, useMealPrefStore } from '../../store/useMealPrefStor
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { requestCheatPlaces, requestDinner, searchSharedCookbookFiltered, shareToCookbook, type AiErrorKind } from '../../sync/cloudSync';
 import { quest, questRadius } from '../../theme/quest';
+import { WISH_MAX_CHARS } from '../../../supabase/functions/_shared/places';
 import { CheatPlacesList } from './CheatPlacesList';
 import { DishCard } from './DishCard';
 import { HudText } from './HudText';
@@ -96,6 +98,7 @@ export function CookbookFinder() {
   const want = useCookbookFinderStore((s) => s.query);
   const cheatAi = useCookbookFinderStore((s) => s.cheatAi);
   const cheatAiAtISO = useCookbookFinderStore((s) => s.cheatAiAtISO);
+  const cheatAiReadWish = useCookbookFinderStore((s) => s.cheatAiReadWish);
   const places = useCookbookFinderStore((s) => s.places);
   const placesNear = useCookbookFinderStore((s) => s.placesNear);
   const book = useCookbookStore((s) => s.recipes);
@@ -177,7 +180,13 @@ export function CookbookFinder() {
     const recipes = useCookbookStore.getState().recipes;
     const known = new Set([...recipes.map((r) => r.id), ...cheatAi.map((i) => recipeKey(i.name))]);
     const avoidNames = [...cheatAi.map((i) => i.name), ...recipes.filter((r) => r.cheat).map((r) => r.name)].slice(0, 40);
-    const outcome = await requestDinner(brief, buildTasteProfile().favorites, avoidNames, filtersEmpty(f) ? undefined : f, { where });
+    // The wish (may be empty) and the user's recent eating go with it, so the dishes fit what they feel like.
+    const wish = cleanWish(store().query);
+    const outcome = await requestDinner(brief, buildTasteProfile().favorites, avoidNames, filtersEmpty(f) ? undefined : f, {
+      where,
+      ...(wish ? { wish } : {}),
+      context: buildCheatWishContext(),
+    });
     setBusy(null);
     if (!outcome.ok) {
       setFailure(outcome.kind);
@@ -190,25 +199,31 @@ export function CookbookFinder() {
     }
     // Into the cook book's Cheat day part (never the shared cook book: that one feeds everyday suggestions).
     useCookbookStore.getState().saveMany(fresh.map((i) => recipeFromIdea(i)));
-    store().setCheatAi(fresh, new Date().toISOString());
+    store().setCheatAi(fresh, new Date().toISOString(), cheatReadWish(outcome.result));
     // Eating out with an area set: look up places for the new dishes straight away.
     const out = dishesToLocate(fresh, where);
-    if (out.length > 0 && (location || coords)) await findPlaces(out, false);
+    if (out.length > 0 && (location || coords)) await findPlaces(out, 'ai');
   }
 
-  /** Places near the address / position for `dishes`: what the user typed (`typed`, one entry) or the AI's eat-out dishes. A
-   *  failure is shown with its real reason (the server's message), never as nothing. */
-  async function findPlaces(dishes: string[], typed: boolean) {
+  /** Dishes for the wish AND places near the address / position, in one call: for the wish alone (`wish`: the AI picks the dishes,
+   *  even with an empty box), one dish the user picked (`typed`) or the AI's eat-out dishes (`ai`). The wish and the user's recent
+   *  eating always go with it. A failure is shown with its real reason (the server's message), never as nothing. */
+  async function findPlaces(dishes: string[], mode: 'wish' | 'typed' | 'ai') {
     if (busy) return;
     setNotice(null);
     setPlacesError(null);
     setFailure(null);
-    if (dishes.length === 0) return setNotice(typed ? 'cheat.needWant' : 'cheat.noOutDishes');
-    const { location: loc, coords: at } = store();
+    if (mode === 'ai' && dishes.length === 0) return setNotice('cheat.noOutDishes');
+    const { location: loc, coords: at, query: wishText } = store();
     if (!loc && !at) return setNotice('cheat.needLocation');
     const near = loc || (at ? `${at.lat}, ${at.lon}` : g('cheat.here'));
     setBusy('places');
-    const outcome = await requestCheatPlaces(dishes, loc, at ?? undefined, { typed });
+    const wish = cleanWish(wishText);
+    const outcome = await requestCheatPlaces(mode === 'wish' ? [] : dishes, loc, at ?? undefined, {
+      typed: mode === 'typed',
+      ...(wish ? { wish } : {}),
+      context: buildCheatWishContext(),
+    });
     setBusy(null);
     if (!outcome.ok) {
       if (outcome.kind === 'unavailable') setPlacesError(g('cheat.unavailable', { why: outcome.message.replace(/^[^:]*:\s*/, '') }));
@@ -218,17 +233,11 @@ export function CookbookFinder() {
     store().setPlaces(outcome.result, near);
   }
 
-  /** "Search" for what was typed in the box. */
-  const searchWant = (text: string = want) => {
-    const q = cleanQuery(text);
-    return findPlaces(q ? [q] : [], true);
-  };
+  /** "Find places" for the wish in the box (empty is fine). */
+  const searchWant = () => findPlaces([], 'wish');
 
-  /** A cheat dish's "find places": into the box, then searched. */
-  function searchDish(name: string) {
-    store().setQuery(name);
-    void searchWant(name);
-  }
+  /** A cheat dish's "find places": that dish exactly (the wish in the box stays and goes with it). */
+  const searchDish = (name: string) => void findPlaces([name], 'typed');
 
   async function useMyLocation() {
     if (busy) return;
@@ -457,11 +466,14 @@ export function CookbookFinder() {
                 placeholder={g('cheat.wantPlaceholder')}
                 placeholderTextColor={quest.textSecondary}
                 accessibilityLabel={g('cheat.want')}
-                maxLength={80}
+                maxLength={WISH_MAX_CHARS}
                 returnKeyType="search"
               />
               <QuestButton variant="mana" icon="map" title={g('cheat.searchWant')} loading={busy === 'places'} disabled={!!busy} onPress={() => void searchWant()} />
             </View>
+            <HudText size={11} weight="medium" color={quest.textSecondary}>
+              {g('cheat.wishHint')}
+            </HudText>
             <TextInput
               style={styles.input}
               value={location}
@@ -543,7 +555,7 @@ export function CookbookFinder() {
           </View>
         </View>
         {cheat && cheatWhere !== 'home' && dishesToLocate(cheatAi, cheatWhere).length > 0 && (
-          <QuestButton variant="ghost" icon="map" title={g('cheat.findPlaces')} loading={busy === 'places'} disabled={!!busy} onPress={() => void findPlaces(dishesToLocate(cheatAi, cheatWhere), false)} />
+          <QuestButton variant="ghost" icon="map" title={g('cheat.findPlaces')} loading={busy === 'places'} disabled={!!busy} onPress={() => void findPlaces(dishesToLocate(cheatAi, cheatWhere), 'ai')} />
         )}
         {busy === 'places' && (
           <HudText size={12} weight="medium" color={quest.textSecondary} accessibilityRole="alert">
@@ -574,6 +586,11 @@ export function CookbookFinder() {
               ? g('cheat.fromAi', { n: cheatAi.length, time: cheatAt ? `${pad(cheatAt.getHours())}:${pad(cheatAt.getMinutes())}` : '' })
               : g('cookbook.finder.fromAi', { n: ai.length, time: at ? `${pad(at.getHours())}:${pad(at.getMinutes())}` : '' })}
           </HudText>
+          {cheat && cheatAiReadWish ? (
+            <HudText size={12} weight="medium" color={quest.manaText}>
+              {g('cheat.readWish', { text: cheatAiReadWish })}
+            </HudText>
+          ) : null}
           {shownAi.map((idea) => row(idea, null, brief))}
           {cheat &&
             strip(cheatAi.filter((i) => i.where !== 'home').map((i) => chip(`find-${i.name}`, g('cheat.findForDish', { dish: i.name }), false, () => searchDish(i.name))))}
@@ -582,7 +599,7 @@ export function CookbookFinder() {
           </HudText>
         </View>
       )}
-      {cheat && places && <CheatPlacesList answer={places} near={placesNear} />}
+      {cheat && places && <CheatPlacesList answer={places} near={placesNear} onFindDish={busy ? undefined : searchDish} />}
       {searched && searchedBrief && (
         <View style={styles.section}>
           <HudText size={13} color={quest.goldLight}>

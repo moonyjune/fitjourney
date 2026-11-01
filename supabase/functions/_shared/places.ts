@@ -1,5 +1,5 @@
-// Cheat day > "where to eat it": the request the app sends (the dishes and the area), the prompt and tool of suggest-cheat-places,
-// and the cleaning of its answer. The answer is only kept where it can be traced to what the web search actually returned: a
+// Cheat day > "where to eat it": the request the app sends (the user's wish, the dishes and the area, a compact picture of their
+// recent eating), the prompt and tool of suggest-cheat-places, and the cleaning of its answer (dishes that fit the wish + places). The answer is only kept where it can be traced to what the web search actually returned: a
 // rating, a review or a source whose URL the search did not see is dropped (shown as "not found"), never trusted. The reliability
 // the model gives is capped by what can be checked here (independent sources, how recent the newest review is, sponsored content).
 // Pure (no Deno use): the Edge Function and the app (dev stand-in, re-check of the answer) both use it; unit-tested in jest.
@@ -36,8 +36,106 @@ export function mapsSearchUrl(name: string, address: string | null, near: string
 
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
+// ----- the wish -----
+// What the user feels like on their cheat day, in their own words ("thèm gì đó giòn giòn", "buồn, muốn ăn gì ấm bụng", "trời mưa"),
+// plus what the app knows that helps read it: the local time, and a compact picture of the last two weeks of eating built on the
+// device (food names and kcal only: no dates, photos, ids or other free text). Also used by suggest-dinner's cheat-day ideas.
+
+export const WISH_MAX_CHARS = 200;
+export const WISH_SLOTS = ['breakfast', 'lunch', 'afternoon', 'dinner', 'late'] as const;
+export type WishSlot = (typeof WISH_SLOTS)[number];
+
+export interface CheatWishContext {
+  /** Local time "HH:MM", weekday (0 = Sunday) and the meal slot it falls in. */
+  time: string;
+  weekday: number;
+  slot: WishSlot;
+  /** What was eaten in the last 3 days, most recent first. */
+  recent: string[];
+  /** What the user eats most in the last 14 days, most frequent first. */
+  favorites: string[];
+  /** The biggest foods of the days that went over the calorie target in the last 14 days (cheat days left out). */
+  overTarget: { name: string; kcal: number }[];
+  /** Days of the last 14 with food logged, and how many of them went over the calorie target. */
+  loggedDays: number;
+  overDays: number;
+}
+
+/** The wish as it is sent and put in the prompt: one line, no tags, at most 200 characters (empty is allowed). */
+export const cleanWish = (v: unknown): string => clean(v, WISH_MAX_CHARS);
+
+const nameList = (v: unknown, max: number): string[] => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of Array.isArray(v) ? v : []) {
+    const name = clean(raw, 60);
+    if (!name || seen.has(name.toLowerCase())) continue;
+    seen.add(name.toLowerCase());
+    out.push(name);
+    if (out.length === max) break;
+  }
+  return out;
+};
+const int = (v: unknown, min: number, max: number): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? Math.round(v) : null);
+
+/** The context as a clean object (bounded numbers, at most a few short names each), or null when it holds no usable time. */
+export function cleanWishContext(raw: unknown): CheatWishContext | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const time = typeof r.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(r.time) ? r.time : null;
+  const weekday = int(r.weekday, 0, 6);
+  if (!time || weekday === null) return null;
+  const overTarget: { name: string; kcal: number }[] = [];
+  for (const o of Array.isArray(r.overTarget) ? r.overTarget : []) {
+    const x = (o ?? {}) as Record<string, unknown>;
+    const name = clean(x.name, 60);
+    const kcal = int(x.kcal, 0, 5000);
+    if (!name || kcal === null || overTarget.some((e) => e.name.toLowerCase() === name.toLowerCase())) continue;
+    overTarget.push({ name, kcal });
+    if (overTarget.length === 6) break;
+  }
+  const loggedDays = int(r.loggedDays, 0, 14) ?? 0;
+  return {
+    time,
+    weekday,
+    slot: WISH_SLOTS.includes(r.slot as WishSlot) ? (r.slot as WishSlot) : 'dinner',
+    recent: nameList(r.recent, 12),
+    favorites: nameList(r.favorites, 8),
+    overTarget,
+    loggedDays,
+    overDays: Math.min(loggedDays, int(r.overDays, 0, 14) ?? 0),
+  };
+}
+
+const WEEKDAY_WORDS = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+const SLOT_WORDS: Record<WishSlot, string> = { breakfast: 'bữa sáng', lunch: 'bữa trưa', afternoon: 'xế chiều / ăn vặt', dinner: 'bữa tối', late: 'ăn khuya' };
+
+/** The part of a prompt that reads the wish: what the user said, the time, their recent eating, and how to read it all (generously,
+ *  pampering them: it is a planned cheat day, no limits). Shared by suggest-cheat-places and suggest-dinner's cheat ideas. */
+export function wishPrompt(wish: string, ctx: CheatWishContext | null | undefined): string {
+  const parts: string[] = [];
+  parts.push(
+    wish
+      ? `Mong muốn của người dùng (lời của họ, có thể là món, cảm giác, tâm trạng hay điều gì đó mơ hồ): "${wish}". Hãy đoán ý họ thật rộng lượng và tinh tế: cảm giác / tâm trạng / thời tiết họ nhắc tới hợp với kiểu món nào (giòn, ấm bụng, cay, ngọt, no nê, mát lạnh...).`
+      : 'Người dùng không nói muốn gì: hãy tự đoán điều họ sẽ thích nhất lúc này từ thời gian và thói quen ăn uống bên dưới.'
+  );
+  if (ctx) {
+    parts.push(`Bây giờ là ${ctx.time}, ${WEEKDAY_WORDS[ctx.weekday]} (giờ Việt Nam), đang là giờ ${SLOT_WORDS[ctx.slot]}. Không có thông tin thời tiết: đừng tự bịa thời tiết, chỉ dùng nếu người dùng nhắc.`);
+    if (ctx.recent.length) parts.push(`Mấy ngày gần đây họ đã ăn: ${ctx.recent.join('; ')} (đừng gợi ý lặp lại, trừ khi mong muốn của họ nói rõ là muốn món đó).`);
+    if (ctx.favorites.length) parts.push(`Món họ hay ăn (để hiểu khẩu vị): ${ctx.favorites.join('; ')}.`);
+    if (ctx.loggedDays > 0) parts.push(`Trong ${ctx.loggedDays} ngày có ghi chép gần đây, ${ctx.overDays} ngày ăn vượt mục tiêu calo.`);
+    if (ctx.overTarget.length)
+      parts.push(`Những món đã làm họ vượt mục tiêu (họ thèm nhưng ngày thường phải kiêng — hôm nay là dịp được ăn): ${ctx.overTarget.map((o) => `${o.name} (~${o.kcal} kcal)`).join('; ')}.`);
+  }
+  parts.push(
+    'Hôm nay là CHEAT DAY đã lên kế hoạch: không có giới hạn calo, purine, muối, đường, không cảnh báo sức khỏe hay bệnh gout. ' +
+      'Hãy chiều người dùng hết mức, như chiều người yêu: giọng ấm áp, nuông chiều, gợi ý món thật đáng thưởng.'
+  );
+  return parts.join(' ');
+}
+
 export interface PlacesRequest {
-  /** What to eat: the user's own words from the search box (one entry, `typed`) or up to 3 AI dish names. */
+  /** What to eat: one dish the user asked for (`typed`), up to 3 AI dish names, or none (the AI picks dishes from the wish). */
   dishes: string[];
   /** The area or address: typed by the user ("Quận 1, TP.HCM") or read from the device position ("123 Lê Lợi, Phường Bến Thành..."). */
   location: string;
@@ -47,11 +145,15 @@ export interface PlacesRequest {
   today: string;
   /** The user typed exactly what they want ("lẩu bò", "trà sữa ít ngọt"): search for that, not for a dish name. */
   typed?: true;
+  /** What the user feels like (see `cleanWish`); empty when they said nothing. */
+  wish: string;
+  context?: CheatWishContext;
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The request as a clean object, or null when there is no dish or no place to search around. */
+/** The request as a clean object, or null when there is no place to search around. With no dish the AI picks them from the wish
+ *  (or, with no wish either, from the time and the user's eating). */
 export function cleanPlacesRequest(raw: unknown, now: Date = new Date()): PlacesRequest | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
@@ -71,16 +173,22 @@ export function cleanPlacesRequest(raw: unknown, now: Date = new Date()): Places
   const lat = typeof c?.lat === 'number' && Number.isFinite(c.lat) && Math.abs(c.lat) <= 90 ? Math.round(c.lat * 10_000) / 10_000 : null;
   const lon = typeof c?.lon === 'number' && Number.isFinite(c.lon) && Math.abs(c.lon) <= 180 ? Math.round(c.lon * 10_000) / 10_000 : null;
   const coords = lat !== null && lon !== null ? { lat, lon } : undefined;
-  if (dishes.length === 0 || (!location && !coords)) return null;
+  if (!location && !coords) return null;
   const today = typeof r.today === 'string' && DAY_RE.test(r.today) ? r.today : now.toISOString().slice(0, 10);
-  return { dishes, location, ...(coords ? { coords } : {}), today, ...(typed ? { typed: true as const } : {}) };
+  const context = cleanWishContext(r.context);
+  return {
+    dishes,
+    location,
+    ...(coords ? { coords } : {}),
+    today,
+    ...(typed && dishes.length > 0 ? { typed: true as const } : {}),
+    wish: cleanWish(r.wish),
+    ...(context ? { context } : {}),
+  };
 }
 
 /** Why a request was refused, for the 400 answer (the app shows it). */
-export function placesRequestProblem(raw: unknown): string {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const hasDish = Array.isArray(r.dishes) && r.dishes.some((d) => clean(d, 80));
-  if (!hasDish) return 'Thiếu món muốn tìm.';
+export function placesRequestProblem(_raw: unknown): string {
   return 'Thiếu địa chỉ / khu vực hoặc vị trí để tìm quán gần đó.';
 }
 
@@ -94,10 +202,19 @@ export function placesPrompt(req: PlacesRequest): string {
     .join('; ');
   const want = req.typed
     ? `Người dùng muốn tìm đúng thứ này: "${req.dishes[0]}". Tìm quán bán đúng món / đồ uống đó (hiểu theo cách người Việt gọi, kể cả kiểu như "ít ngọt", "ốc" là các quán ốc), tối đa 5 quán; ghi dish = "${req.dishes[0]}".`
-    : `Họ muốn ăn: ${req.dishes.join('; ')}. Tìm tối đa 2 quán mỗi món.`;
+    : req.dishes.length > 0
+      ? `Họ muốn ăn: ${req.dishes.join('; ')}. Tìm tối đa 2 quán mỗi món.`
+      : 'Họ chưa chọn món: hãy tự chọn 3 món (ăn ngoài được) hợp nhất với mong muốn, rồi tìm tối đa 2 quán mỗi món.';
   return (
-    `Hôm nay là ${req.today}. Người dùng đang ở ${where}. ${want}\n` +
-    'Hãy DÙNG CÔNG CỤ TÌM KIẾM WEB để tìm các quán thật GẦN NHẤT vị trí đó (cùng phường / quận trước, rồi mới xa dần; tìm kèm tên đường, phường, quận): tìm trang Google Maps của quán, ' +
+    `Hôm nay là ${req.today}. Người dùng đang ở Việt Nam, ${where}. ${want}\n` +
+    `${wishPrompt(req.wish, req.context)}\n` +
+    'PHẦN 1 — MÓN: trong dishes gợi ý 3 món (tối đa 4) hợp với mong muốn ' +
+    (req.dishes.length > 0 ? `(gồm ${req.typed ? 'đúng món họ tìm' : 'các món họ muốn ăn ở trên'}, có thể thêm món gần giống)` : '(chính là các món bạn tìm quán)') +
+    ': tên món tiếng Việt, why = một câu ấm áp vì sao món hợp ý họ lúc này, kcal = ước tính cho một phần (chỉ để tham khảo). ' +
+    'Trong readWish viết MỘT câu ngắn: bạn hiểu mong muốn của họ thế nào (ví dụ "Bạn đang buồn và trời mưa, cần món nóng hổi, ấm bụng"). ' +
+    'Có thể dùng 1 lần tìm kiếm web để xem món / đồ uống nào đang hot trend ở Việt Nam (hoặc ở khu vực của họ) gần đây, nếu hợp với mong muốn; các lần còn lại để tìm quán.\n' +
+    'PHẦN 2 — QUÁN: ' +
+    'hãy DÙNG CÔNG CỤ TÌM KIẾM WEB để tìm các quán thật GẦN NHẤT vị trí đó (cùng phường / quận trước, rồi mới xa dần; tìm kèm tên đường, phường, quận): tìm trang Google Maps của quán, ' +
     'trang Foody / ShopeeFood / GrabFood, bài review của báo, blog ẩm thực, reviewer và bài đăng mạng xã hội (Facebook, TikTok, Instagram).\n' +
     'QUY TẮC BẮT BUỘC: chỉ ghi điều bạn thấy trong kết quả tìm kiếm; KHÔNG bịa tên quán, địa chỉ, điểm, số lượt đánh giá hay lời review. ' +
     'Mỗi điểm đánh giá, mỗi review và mỗi nguồn phải kèm đúng URL của trang tìm thấy nó. Không thấy thì để null hoặc bỏ trống, và ghi món đó vào notFound. ' +
@@ -107,16 +224,33 @@ export function placesPrompt(req: PlacesRequest): string {
     'Ghi sponsored = true nếu bài viết có dấu hiệu quảng cáo hoặc hợp tác. Ghi openStatus nếu nguồn có giờ mở cửa / tình trạng hoạt động, không có thì null. ' +
     'Nếu thấy địa chỉ của quán thì ước tính distanceKm từ vị trí người dùng (đường chim bay, km), không thấy địa chỉ thì null. ' +
     'Nếu kết quả tìm kiếm có trang Google Maps của quán thì ghi mapsUrl đúng URL đó, không thì null. Xếp quán gần nhất lên trước. ' +
-    'Xong thì gọi tool report_cheat_places đúng một lần.'
+    'Ghi dish của mỗi quán đúng bằng tên một món trong dishes. Quy tắc trung thực trên áp dụng cho quán; phần món là gợi ý của bạn. ' +
+    'Xong thì gọi tool report_cheat_places đúng một lần, LUÔN có cả readWish, dishes và places (không thấy quán thì places để trống).'
   );
 }
 
 export const PLACES_TOOL = {
   name: 'report_cheat_places',
-  description: 'Reports places that sell the dishes, only with facts seen in the web search results, each with the URL it was seen on.',
+  description:
+    'Reports how the wish was read, the dishes that fit it, and places that sell them (places only with facts seen in the web search results, each with the URL it was seen on).',
   input_schema: {
     type: 'object',
     properties: {
+      readWish: { type: 'string', description: 'One short Vietnamese sentence: how the wish was understood.' },
+      dishes: {
+        type: 'array',
+        maxItems: 4,
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Vietnamese dish or drink name.' },
+            why: { type: 'string', description: 'One warm Vietnamese sentence: why it fits the wish right now.' },
+            kcal: { type: 'number', description: 'Rough kcal of one portion as eaten.' },
+            emoji: { type: 'string' },
+          },
+          required: ['name', 'why', 'kcal'],
+        },
+      },
       places: {
         type: 'array',
         maxItems: 6,
@@ -170,7 +304,7 @@ export const PLACES_TOOL = {
       notFound: { type: 'array', items: { type: 'string' }, description: 'Dishes for which no place could be found in the results.' },
       note: { type: ['string', 'null'], description: 'One short Vietnamese sentence, e.g. what could not be checked.' },
     },
-    required: ['places', 'notFound'],
+    required: ['readWish', 'dishes', 'places', 'notFound'],
   },
 };
 
@@ -220,7 +354,19 @@ export interface CheatPlace {
     capped: boolean;
   };
 }
+/** A dish the AI suggests for the wish (not checked against the web: a suggestion, with a rough kcal for information). */
+export interface CheatWishDish {
+  name: string;
+  why: string;
+  /** One portion, rough; null when the AI gave none usable. */
+  kcal: number | null;
+  emoji: string | null;
+}
 export interface CheatPlacesAnswer {
+  /** How the AI read the wish (one line); null when it said nothing. */
+  readWish: string | null;
+  /** Dishes that fit the wish, at most 4 (empty on answers stored before they existed). */
+  dishes: CheatWishDish[];
   places: CheatPlace[];
   notFound: string[];
   note: string | null;
@@ -372,9 +518,20 @@ export function cleanPlacesAnswer(
   }
   // Nearest first; a place without a distance keeps its order after the ones with one.
   places.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+  const dishes: CheatWishDish[] = [];
+  for (const entry of Array.isArray(o.dishes) ? o.dishes : []) {
+    const d = (entry ?? {}) as Record<string, unknown>;
+    const name = clean(d.name, 80);
+    if (!name || dishes.some((x) => x.name.toLowerCase() === name.toLowerCase())) continue;
+    const kcal = typeof d.kcal === 'number' && Number.isFinite(d.kcal) && d.kcal > 0 && d.kcal <= 5000 ? Math.round(d.kcal) : null;
+    dishes.push({ name, why: clean(d.why, 200), kcal, emoji: clean(d.emoji, 8) || null });
+    if (dishes.length === 4) break;
+  }
   const found = new Set(places.map((p) => p.dish.toLowerCase()));
   const notFound = [...new Set((Array.isArray(o.notFound) ? o.notFound : []).map((x) => clean(x, 80)).filter((x) => x && !found.has(x.toLowerCase())))].slice(0, 3);
   return {
+    readWish: clean(o.readWish, 200) || null,
+    dishes,
     places,
     notFound,
     note: clean(o.note, 200) || null,

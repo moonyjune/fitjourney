@@ -243,12 +243,14 @@ describe('History screen (FitQuest)', () => {
       const header = (k: string) => byLabel(r, new RegExp(`^${viMonth(k)}\\. 1 ngày có ghi chép$`));
       expect(header(today).props.accessibilityState).toEqual({ expanded: true });
       expect(header(old).props.accessibilityState).toEqual({ expanded: false });
-      expect(text(r)).toContain(formatDateVi(today));
-      expect(text(r)).not.toContain(formatDateVi(old));
+      // The day rows only: on a Monday the weekly summary also names today ("Tuần bắt đầu …").
+      const rows = () => text(r).replace(/Tuần bắt đầu \S+/g, '');
+      expect(rows()).toContain(formatDateVi(today));
+      expect(rows()).not.toContain(formatDateVi(old));
       await act(async () => header(old).props.onPress());
-      expect(text(r)).toContain(formatDateVi(old));
+      expect(rows()).toContain(formatDateVi(old));
       await act(async () => header(today).props.onPress());
-      expect(text(r)).not.toContain(formatDateVi(today));
+      expect(rows()).not.toContain(formatDateVi(today));
     });
 
     it('calendar: remembered choice, deficit under each logged day, and a tap opens that day', async () => {

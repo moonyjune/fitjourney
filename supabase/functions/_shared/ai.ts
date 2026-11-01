@@ -37,17 +37,21 @@ import {
 } from './usage.ts';
 import {
   collectWebFindings,
+  isRegionUnsupported,
+  isUserLocationRejected,
   isWebSearchUnavailable,
   mergeFindings,
   PLACES_UNAVAILABLE_PREFIX,
+  regionUnsupportedMessage,
+  searchLocation,
+  webSearchRetryAfter,
   webSearchTool,
-  webSearchVariantAfter,
   webSearchVariantFor,
   type WebFindings,
+  type WebSearchAttempt,
   type WebSearchOptions,
-  type WebSearchVariant,
 } from './webSearch.ts';
-import { collectWebEvidence, emptyEvidence, isServerToolUnavailable, type WebEvidence } from './webtools.ts';
+import { collectWebEvidence, emptyEvidence, hasUserLocation, isServerToolUnavailable, withoutUserLocation, type WebEvidence } from './webtools.ts';
 
 export type { AiFeature };
 
@@ -271,6 +275,13 @@ async function callClaude(
     const retryable = response === null || shouldRetry(response.status);
     if (response) {
       const text = await response.text();
+      if (hasUserLocation(serverTools) && isUserLocationRejected(response.status, text)) {
+        // The API does not take the location (e.g. country VN not supported): the same tools without it, at once (not a failed attempt).
+        console.warn('[ai] web tools user_location refused, retrying without it:', summarizeUpstreamError(response.status, text));
+        serverTools = withoutUserLocation(serverTools);
+        attempt -= 1;
+        continue;
+      }
       if (serverTools.length > 0 && isServerToolUnavailable(response.status, text)) {
         // The key may not use the web tools: go on without them (the feature tells the user). Not a failed attempt.
         console.warn('[ai] web tools refused, continuing without them:', summarizeUpstreamError(response.status, text));
@@ -316,7 +327,8 @@ async function callClaudeWithSearch(
   model: string
 ): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings } | { error: string; status: number }> {
   const started = Date.now();
-  let variant: WebSearchVariant = webSearchVariantFor(model);
+  // withLocation only when there is a location left to send (VN is never sent), so a refusal is not retried for nothing.
+  let how: WebSearchAttempt = { variant: webSearchVariantFor(model), withLocation: searchLocation(call.webSearch!.userLocation) !== null };
   const messages: unknown[] = [...call.messages];
   const findings: WebFindings[] = [];
   let usage: TokenUsage | undefined;
@@ -334,7 +346,7 @@ async function callClaudeWithSearch(
           model,
           max_tokens: call.maxTokens,
           system: call.system ? `${call.system} ${searchThenReport(call.tool.name)}` : searchThenReport(call.tool.name),
-          tools: [webSearchTool(call.webSearch!, variant), call.tool],
+          tools: [webSearchTool(call.webSearch!, how.variant, how.withLocation), call.tool],
           tool_choice: { type: 'auto' },
           messages,
         }),
@@ -346,13 +358,22 @@ async function callClaudeWithSearch(
     }
     if (!response.ok) {
       const text = await response.text();
+      // A refused location first (it may also name web_search, which would otherwise read as "not enabled" or a tool version).
+      const next = webSearchRetryAfter(response.status, text, how);
+      if (next && !next.withLocation && how.withLocation) {
+        console.warn('[ai] web search user_location refused; retrying without it:', summarizeUpstreamError(response.status, text));
+        how = next;
+        continue;
+      }
+      if (isRegionUnsupported(response.status, text)) {
+        return { error: regionUnsupportedMessage(summarizeUpstreamError(response.status, text)), status: 503 };
+      }
       if (isWebSearchUnavailable(response.status, text)) {
         return { error: `${PLACES_UNAVAILABLE_PREFIX}: ${summarizeUpstreamError(response.status, text)}`, status: 503 };
       }
-      const next = webSearchVariantAfter(response.status, text, variant);
       if (next) {
-        console.warn('[ai] web search variant', variant, 'refused; trying', next);
-        variant = next;
+        console.warn('[ai] web search variant', how.variant, 'refused; trying', next.variant);
+        how = next;
         continue;
       }
       console.error('[ai]', summarizeUpstreamError(response.status, text), 'request-id', response.headers.get('request-id'));

@@ -16,7 +16,7 @@ import { weatherSummary, currentWeather } from '../../temptation/weather';
 import { useTemptationStore } from '../../store/useTemptationStore';
 import { USER_DATA_KEYS } from '../../sync/userDataKeys';
 import { cleanTemptAnswer, cleanTemptRequest, extractOgImage, publicHttpsUrl, temptPrompt } from '../../../supabase/functions/_shared/tempt';
-import { collectWebEvidence, emptyEvidence, isServerToolUnavailable, seenInEvidence, webSearchCostUsd, webToolsFor } from '../../../supabase/functions/_shared/webtools';
+import { collectWebEvidence, emptyEvidence, hasUserLocation, isServerToolUnavailable, seenInEvidence, webSearchCostUsd, webToolsFor, withoutUserLocation } from '../../../supabase/functions/_shared/webtools';
 import { DAILY_QUOTA } from '../../../supabase/functions/_shared/usage';
 
 const on = (patch: Partial<TemptSettings> = {}): TemptSettings => ({ ...DEFAULT_TEMPT_SETTINGS, enabled: true, ...patch });
@@ -214,7 +214,18 @@ describe('Hard level: the tempt-me request and answer (server, pure)', () => {
   it('declares the web tools the model takes', () => {
     const sonnet = webToolsFor('claude-sonnet-5-5', { maxSearches: 2, maxFetches: 1, city: 'Hà Nội' });
     expect(sonnet.map((t) => t.type)).toEqual(['web_search_20260209', 'web_fetch_20260209']);
-    expect(sonnet[0]).toMatchObject({ name: 'web_search', max_uses: 2, user_location: { type: 'approximate', city: 'Hà Nội', country: 'VN', timezone: 'Asia/Ho_Chi_Minh' } });
+    // Never the country VN (the API answers "country not supported"); the city and the time zone still go.
+    expect(sonnet[0]).toMatchObject({ name: 'web_search', max_uses: 2, user_location: { type: 'approximate', city: 'Hà Nội', timezone: 'Asia/Ho_Chi_Minh' } });
+    expect(sonnet[0].user_location).not.toHaveProperty('country');
+    expect(webToolsFor('claude-sonnet-5-5', { maxSearches: 2, maxFetches: 0, country: 'VN' })[0].user_location).not.toHaveProperty('country');
+    expect(webToolsFor('claude-sonnet-5-5', { maxSearches: 2, maxFetches: 0, country: 'SG' })[0].user_location).toMatchObject({ country: 'SG' });
+    // A refused location: the same tools without it.
+    expect(hasUserLocation(sonnet)).toBe(true);
+    const bare = withoutUserLocation(sonnet);
+    expect(hasUserLocation(bare)).toBe(false);
+    expect(bare.map((t) => t.type)).toEqual(['web_search_20260209', 'web_fetch_20260209']);
+    expect(bare[0]).toMatchObject({ name: 'web_search', max_uses: 2 });
+    expect(isServerToolUnavailable(403, 'Web search is not available in your country')).toBe(true);
     expect(webToolsFor('claude-opus-4-7', { maxSearches: 2, maxFetches: 1 })[0].type).toBe('web_search_20260209');
     expect(webToolsFor('claude-haiku-4-5', { maxSearches: 2, maxFetches: 1 }).map((t) => t.type)).toEqual(['web_search_20250305']);
     expect(isServerToolUnavailable(400, '{"error":{"message":"web_search is not enabled for this organization"}}')).toBe(true);
