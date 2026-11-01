@@ -16,7 +16,18 @@ Notifications.setNotificationHandler({
 });
 
 export async function requestNotificationPermissions(): Promise<boolean> {
-  if (Platform.OS === 'web') return false;
+  if (Platform.OS === 'web') {
+    // On the web the reminders are in-app pop-ups (WaterReminderHost), which need no permission; the browser's own notification
+    // (shown when the tab is in the background) is asked for here, and a refusal only leaves that part out.
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      try {
+        await Notification.requestPermission();
+      } catch {
+        // Older browsers: callback form only, or no permission prompt at all.
+      }
+    }
+    return true;
+  }
   const current = await Notifications.getPermissionsAsync();
   if (current.granted) return true;
   const requested = await Notifications.requestPermissionsAsync();

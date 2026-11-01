@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.39 | no | — |
 | 0.38 | no | suggest-cheat-places, suggest-dinner |
 | 0.37 | no | boss-banter |
 | 0.36 | no | — |
@@ -50,6 +51,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.39
+- Water reminders work on the web: at each drink time of the water plan a pop-up says how much to drink now (catching up on missed times), how far the day is, and cheers you on; "Đã uống … ml" logs it.
+  - Missed times while the app was closed give one pop-up for the latest (up to 2 h late), never a pile.
+  - With the tab in the background, the browser's own notification shows too, if allowed. Turning Reminders on in Profile now works on the web (it asks the browser once).
 
 ## 0.38
 - Cook book, Cheat day: place search fixed and reworked.

@@ -32,6 +32,7 @@ import { useShoppingListStore } from './useShoppingListStore';
 import { useUricStore } from './useUricStore';
 import { useWeightStore } from './useWeightStore';
 import { useWorkoutStore } from './useWorkoutStore';
+import { useWaterReminderStore } from './useWaterReminderStore';
 import { useWaterWindowStore } from './useWaterWindowStore';
 import { DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN } from '../water/schedule';
 import { DEFAULT_TARGET_UMOL } from '../uric/types';
@@ -79,6 +80,7 @@ export function resetAllLocalStores() {
   useBossTalkStore.setState({ talks: [], autoTried: null });
   useMealModeStore.setState({ fasting: true });
   useWaterWindowStore.setState({ startMinutes: DEFAULT_WATER_START_MIN, endMinutes: DEFAULT_WATER_END_MIN });
+  useWaterReminderStore.setState({ shown: [], open: null });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });
   useCookbookStore.setState({ recipes: [] });
   useMealIdeasStore.setState({ byDay: {} });
