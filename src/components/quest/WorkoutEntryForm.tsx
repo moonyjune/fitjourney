@@ -3,7 +3,8 @@ import { Alert, StyleSheet, View } from 'react-native';
 import { aiNumberText, useAiFields } from '../../ai/useAiFields';
 import { decideWorkoutAutoLog } from '../../ai/workoutAutoLog';
 import { useAiErrorText, useConfidenceText, usePhotoAnalysis } from '../../ai/usePhotoAnalysis';
-import { useGameText } from '../../game/strings';
+import { useWorkoutKcalEstimate, type WorkoutKcalProblem } from '../../ai/workoutKcal';
+import { useGameText, type GameKey } from '../../game/strings';
 import { useTranslation } from '../../i18n/useTranslation';
 import type { PhotoAnalysisResult } from '../../sync/cloudSync';
 import { quest, questRadius } from '../../theme/quest';
@@ -53,12 +54,16 @@ interface WorkoutEntryFormProps {
 
 type Field = 'label' | 'duration' | 'calories';
 
+/** What the kcal button says when it sent nothing or got no usable kcal back. */
+const KCAL_PROBLEM: Record<WorkoutKcalProblem, GameKey> = { noLabel: 'wkai.hint', noWeight: 'wkai.noWeight', noKcal: 'wkai.noKcal' };
+
 const toText = (n: number | undefined) => (n === undefined ? '' : String(n));
 
 /** The workout form used both for logging a new workout and for editing a logged one: name, minutes, calories burned,
  *  and a photo of the result. With a photo attached, "Analyze with AI" sends it to the vision API (together with the
  *  user's body data) and fills the inputs as suggestions: anything the user has typed in this form is kept, nothing is
- *  saved until the user taps the save button. */
+ *  saved until the user taps the save button. "AI estimate kcal" does the same from the typed description alone: the kcal the
+ *  workout burns for the user's body (and the minutes, when the description says them and the field is empty). */
 export function WorkoutEntryForm({
   initial,
   existingPhotoUri = null,
@@ -88,6 +93,8 @@ export function WorkoutEntryForm({
   const [autoFailed, setAutoFailed] = useState(false);
   const [logged, setLogged] = useState<{ id: string; confidence: string | null; reasoning: string } | null>(null);
   const busy = useRef(false);
+  const kcalAi = useWorkoutKcalEstimate();
+  const [kcalNote, setKcalNote] = useState<{ summary: string; explanation: string } | null>(null);
 
   const shownPhoto = newPhoto ?? (photoRemoved ? null : existingPhotoUri);
 
@@ -139,6 +146,18 @@ export function WorkoutEntryForm({
     if (!shownPhoto || ai.analyzing || saving) return;
     const result = await ai.analyze(shownPhoto);
     if (result && alive.current) applyAi(result);
+  }
+
+  /** "AI estimate kcal": the calories field always takes the estimate (that is what was asked for), the minutes only when empty
+   *  or AI-filled. Nothing is saved. */
+  async function estimateKcal() {
+    if (kcalAi.estimating || saving || working) return;
+    setKcalNote(null);
+    const result = await kcalAi.estimate(label, duration);
+    if (!result || !alive.current) return;
+    aiFields.fill('calories', '', String(result.kcal), setCalories);
+    if (result.durationMin) aiFields.fill('duration', latest.current.duration, String(result.durationMin), setDuration);
+    setKcalNote({ summary: g('wkai.result', { activity: result.activity ?? label.trim(), kcal: result.kcal }), explanation: result.explanation });
   }
 
   function changePhoto(uri: string | null) {
@@ -214,6 +233,8 @@ export function WorkoutEntryForm({
     setNeedsCheck(false);
     setAutoFailed(false);
     ai.reset();
+    setKcalNote(null);
+    kcalAi.reset();
     aiFields.clear();
     touched.current = {};
   }
@@ -239,6 +260,8 @@ export function WorkoutEntryForm({
       if (alive.current) setSaving(false);
     }
   }
+
+  const kcalErrorText = kcalAi.error ? ('problem' in kcalAi.error ? g(KCAL_PROBLEM[kcalAi.error.problem]) : aiErrorText(kcalAi.error.kind, kcalAi.error.message)) : null;
 
   const photoLabels = { title: g('wkp.title'), hint: autoLog ? g('wkp.hintAuto') : g('wkp.hint'), preview: g('wkp.preview') };
   const locked = saving || working;
@@ -331,6 +354,36 @@ export function WorkoutEntryForm({
           />
         </View>
       </View>
+      <QuestButton
+        variant="ghost"
+        title={kcalAi.estimating ? g('wkai.working') : g('wkai.button')}
+        accessibilityLabel={g('wkai.a11y')}
+        onPress={() => {
+          void estimateKcal();
+        }}
+        loading={kcalAi.estimating}
+        disabled={locked}
+      />
+      {kcalErrorText && (
+        <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          {kcalErrorText}
+        </HudText>
+      )}
+      {kcalNote && !kcalAi.error && (
+        <View style={styles.aiNote} accessibilityLiveRegion="polite">
+          <HudText size={12} color={quest.manaText}>
+            {g('ai.suggested')}
+          </HudText>
+          <HudText size={12} color={quest.text}>
+            {kcalNote.summary}
+          </HudText>
+          {kcalNote.explanation ? (
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {kcalNote.explanation}
+            </HudText>
+          ) : null}
+        </View>
+      )}
       {date && onDateChange && <DateOffsetPicker selectedDate={date} onChange={onDateChange} dark />}
     </>
   );

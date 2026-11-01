@@ -16,11 +16,12 @@ import { PLACES_UNAVAILABLE_PREFIX } from '../../supabase/functions/_shared/webS
 import { recheckPlaces } from '../cookbook/cheat';
 import type { ClientRows } from '../ai/coachDigest';
 import type { SwapContext, SwapItem } from '../food/swaps';
-import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport } from '../ai/devPhotoAnalysis';
+import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport, fakeWorkoutKcal } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { sampleTemptation } from '../temptation/sample';
 import { cleanBanterAnswer, type BanterDaySummary, type BanterText } from '../../supabase/functions/_shared/banter';
 import { templateBanter } from '../banter/templates';
+import { cleanWorkoutKcalAnswer, type WorkoutKcalEstimate } from '../../supabase/functions/_shared/workoutKcal';
 import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
@@ -1303,6 +1304,45 @@ export async function requestSwaps(input: SwapRequestInput): Promise<SwapsOutcom
   } catch (error) {
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? ((error as { context: Response }).context.status) : undefined;
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+export interface WorkoutKcalInput {
+  /** The user's own words for the workout (the name field). */
+  description: string;
+  durationMin?: number;
+  /** Must carry a weight: the estimate is worked out from it. */
+  profile: BodyProfile & { weightKg: number };
+}
+
+/** The failure message of an answer that holds no usable kcal. */
+export const WORKOUT_KCAL_EMPTY = 'empty';
+
+export type WorkoutKcalOutcome = { ok: true; result: WorkoutKcalEstimate; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the estimate-workout-kcal edge function: the kcal a described workout burns for this body (MET × kg × hours), to fill
+ *  the workout form; nothing is saved here. The answer is checked again here (`cleanWorkoutKcalAnswer`); one without a usable
+ *  kcal (e.g. no minutes to work from) is a failure with the message `WORKOUT_KCAL_EMPTY`. Same rules as the other AI
+ *  requests (device switch, dev account simulated, offline fails softly). */
+export async function requestWorkoutKcal(input: WorkoutKcalInput): Promise<WorkoutKcalOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    const result = cleanWorkoutKcalAnswer(fakeWorkoutKcal(input.description, input.durationMin, input.profile.weightKg));
+    return result ? { ok: true, result, sample: true } : { ok: false, message: WORKOUT_KCAL_EMPTY, kind: 'generic' };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('estimate-workout-kcal', { body: input });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
+    const result = cleanWorkoutKcalAnswer(data?.result);
+    return result ? { ok: true, result } : { ok: false, message: WORKOUT_KCAL_EMPTY, kind: 'generic' };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;
     return { ok: false, message, kind: classifyReached(message, status) };
   }
 }

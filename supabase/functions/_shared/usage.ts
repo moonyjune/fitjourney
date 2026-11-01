@@ -1,6 +1,6 @@
 // Pure helpers for the per-user AI quota and the cost estimate (no Deno or network use, so they are unit-tested in jest).
 
-export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter';
+export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter' | 'workout';
 
 /** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
@@ -18,6 +18,8 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   tempt: 6,
   /** Battle banter (Map): one day's boss/player exchange per call; yesterday's is asked once on its own, the rest by a tap. */
   banter: 10,
+  /** Workout kcal estimate (Training > log a workout): one short text call per tap. */
+  workout: 20,
 };
 
 export interface TokenUsage {

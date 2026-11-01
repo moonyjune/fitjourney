@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.45 | no | estimate-workout-kcal |
 | 0.44 | no | — |
 | 0.43 | no | — |
 | 0.42 | no | weekly-report, coach-digest, analyze-proof-photo, read-nutrition-label, parse-meal-text, suggest-dinner, suggest-swap |
@@ -56,6 +57,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.45
+- Logging a workout by hand (Training > the classic log, add or edit): "✨ AI ước tính kcal" estimates the kcal burned from the description and minutes with your body profile (latest weight, height, age, gender) — MET × kg × hours, shown with the formula. It only fills the form; you check and save. New function `estimate-workout-kcal` (AI feature `workout`, 20 a day).
 
 ## 0.44
 - Deficit limits: eating alone counts for at most 1500 kcal of a day's boss damage, but the day's training now adds on top (before, the whole day was capped at 1500).

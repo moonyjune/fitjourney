@@ -162,6 +162,21 @@ export function fakeWeeklyReport(input: WeekInput): WeeklyReport {
   };
 }
 
+/** Offline stand-in for the workout kcal estimate: a moderate session (MET 6) for the typed minutes (45 if none) and the given
+ *  weight, worked out the same way the real answer is (MET × kg × hours). Labelled as simulated. */
+export function fakeWorkoutKcal(description: string, durationMin: number | undefined, weightKg: number): Record<string, unknown> {
+  const minutes = durationMin ?? WORKOUT_MINUTES;
+  const kcal = Math.round((WORKOUT_MET * weightKg * minutes) / 60);
+  return {
+    activity: `${description.slice(0, 50)} (giả lập)`,
+    met: WORKOUT_MET,
+    durationMin: minutes,
+    kcal,
+    explanation: `${SIMULATED}: MET ${WORKOUT_MET} × ${weightKg} kg × ${Math.round((minutes / 60) * 100) / 100} giờ ≈ ${kcal} kcal.`,
+    accuracyPercent: 50,
+  };
+}
+
 /** Offline stand-in for the swap suggestions: two lighter versions of the item (about 90% of its size and protein, a fifth of
  *  the exceeded limits, none of the others), so they hold up to the same checks the real answer goes through. */
 export function fakeSwaps(item: SwapItem, ctx: SwapContext): { swaps: Record<string, unknown>[] } {
