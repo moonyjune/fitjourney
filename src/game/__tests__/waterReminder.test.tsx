@@ -48,6 +48,20 @@ describe('water reminder: which drink time pops up', () => {
     expect(due?.dueKeys).toEqual([`${DAY}@06:00`, `${DAY}@08:30`, `${DAY}@11:00`]);
   });
 
+  it('lists the day\'s drink times, the missed ones and spreads a shortfall over the times ahead', () => {
+    // 11:20 with nothing drunk: 06:00 and 08:30 missed, 1,500 ml short. Drink 750 now (500 + 250), the other 750 over 13:30–21:00.
+    const r = dueWaterReminder(schedule, 0, 3500, at(11, 20), DAY, [])!.reminder;
+    expect(r).toMatchObject({ ml: 1500, nowMl: 750, reachMl: 750, missed: ['06:00', '08:30'] });
+    expect(r.steps.map((s) => s.status)).toEqual(['missed', 'missed', 'now', 'later', 'later', 'later', 'later']);
+    expect(r.catchUp.map((c) => [c.time, c.extraMl])).toEqual([['13:30', 150], ['16:00', 150], ['18:30', 150], ['21:00', 300]]);
+    expect(r.catchUp.reduce((s, c) => s + c.extraMl, 0)).toBe(750);
+    // On schedule: no missed time, no plan, drink the portion.
+    const onTime = dueWaterReminder(schedule, 1000, 3500, at(11, 2), DAY, [])!.reminder;
+    expect(onTime).toMatchObject({ nowMl: 500, reachMl: 1500, missed: [], catchUp: [] });
+    // The last drink time takes the whole shortfall.
+    expect(dueWaterReminder(schedule, 2000, 3500, at(21, 5), DAY, [])!.reminder).toMatchObject({ nowMl: 1500, reachMl: 3500, catchUp: [] });
+  });
+
   it('a time more than 2 hours old is skipped', () => {
     expect(dueWaterReminder(schedule, 0, 3500, at(23, 30), DAY, [])).toBeNull();
   });

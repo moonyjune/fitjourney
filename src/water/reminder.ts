@@ -4,6 +4,25 @@ import { clockText } from './schedule';
 /** A drink time whose pop-up was missed (app closed) is still shown this long after it, then skipped. */
 export const WATER_REMINDER_LATE_MIN = 120;
 
+/** Most a pop-up asks to drink at once beyond the drink time's own portion: a shortfall bigger than that is spread over the
+ *  drink times still ahead (gulping a litre at once is neither pleasant nor useful). */
+export const WATER_CATCH_UP_EXTRA_ML = 250;
+
+/** One drink time of the day as the pop-up lists it: reached, missed (its time passed before its running total was drunk),
+ *  the one this pop-up is for, or still ahead. */
+export interface WaterStep {
+  time: string;
+  cumulativeTargetMl: number;
+  status: 'done' | 'missed' | 'now' | 'later';
+}
+
+/** A drink time ahead that takes part of a shortfall: drink `extraMl` more than planned there, to reach `reachMl` by then. */
+export interface WaterCatchUp {
+  time: string;
+  extraMl: number;
+  reachMl: number;
+}
+
 /** One water pop-up: the drink time it is for, how much to drink now and where the day stands. */
 export interface WaterReminder {
   /** `<dateKey>@<HH:MM>`: shown once per drink time. */
@@ -14,8 +33,17 @@ export interface WaterReminder {
   label: string;
   /** What to drink now: the drink time's running total less what was drunk so far. */
   ml: number;
-  /** The drink time's running total: the day's water once this drink is done (the button sets the day to it, never adds it). */
+  /** What to drink now: the drink time's own portion plus up to WATER_CATCH_UP_EXTRA_ML of any shortfall (all of `ml` when
+   *  no drink time is left). */
+  nowMl: number;
+  /** The day's water once this drink is done (drunkMl + nowMl): the button sets the day to it, never adds it. */
   reachMl: number;
+  /** Every drink time of the day with its status. */
+  steps: WaterStep[];
+  /** The drink times passed whose running total was not drunk in time (this one excluded). */
+  missed: string[];
+  /** How the rest of a shortfall is spread over the drink times ahead (empty when on schedule). */
+  catchUp: WaterCatchUp[];
   drunkMl: number;
   targetMl: number;
   /** Drink times of the day already reached by what was drunk (before this one). */
@@ -45,6 +73,28 @@ export function dueWaterReminder(
   if (shown.includes(key) || nowMin - at(latest) > WATER_REMINDER_LATE_MIN) return null;
   const dueKeys = due.map((c) => waterReminderKey(dateKey, c)).filter((k) => !shown.includes(k));
   if (waterMl >= latest.cumulativeTargetMl) return null;
+  const latestIndex = schedule.indexOf(latest);
+  const ml = latest.cumulativeTargetMl - waterMl;
+  const portion = latest.cumulativeTargetMl - (latestIndex > 0 ? schedule[latestIndex - 1].cumulativeTargetMl : 0);
+  const ahead = schedule.slice(latestIndex + 1);
+  const nowMl = ahead.length === 0 ? ml : Math.min(ml, portion + WATER_CATCH_UP_EXTRA_ML);
+  // The rest of the shortfall, in even 50 ml shares over the drink times ahead (the last one takes the rounding).
+  const rest = ml - nowMl;
+  const catchUp: WaterCatchUp[] = [];
+  if (rest > 0) {
+    const share = Math.floor(rest / ahead.length / 50) * 50;
+    let carried = 0;
+    ahead.forEach((c, i) => {
+      const extraMl = i === ahead.length - 1 ? rest - carried : share;
+      carried += extraMl;
+      if (extraMl > 0) catchUp.push({ time: clockText(c.hour, c.minute), extraMl, reachMl: c.cumulativeTargetMl });
+    });
+  }
+  const steps: WaterStep[] = schedule.map((c, i) => ({
+    time: clockText(c.hour, c.minute),
+    cumulativeTargetMl: c.cumulativeTargetMl,
+    status: i === latestIndex ? 'now' : i > latestIndex ? 'later' : waterMl >= c.cumulativeTargetMl ? 'done' : 'missed',
+  }));
   return {
     reminder: {
       key,
@@ -52,8 +102,12 @@ export function dueWaterReminder(
       hour: latest.hour,
       minute: latest.minute,
       label: latest.label,
-      ml: latest.cumulativeTargetMl - waterMl,
-      reachMl: latest.cumulativeTargetMl,
+      ml,
+      nowMl,
+      reachMl: waterMl + nowMl,
+      steps,
+      missed: steps.filter((s) => s.status === 'missed').map((s) => s.time),
+      catchUp,
       drunkMl: waterMl,
       targetMl,
       doneCount: schedule.filter((c) => waterMl >= c.cumulativeTargetMl).length,

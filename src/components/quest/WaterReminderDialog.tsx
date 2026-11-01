@@ -2,7 +2,7 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useGameText, type GameKey } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { clockText } from '../../water/schedule';
-import { waterCheerIndex, type WaterReminder } from '../../water/reminder';
+import { waterCheerIndex, type WaterReminder, type WaterStep } from '../../water/reminder';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { FadeInUp } from './motion/FadeInUp';
@@ -19,7 +19,8 @@ interface Props {
 export function WaterReminderDialog({ reminder, onDrink, onClose }: Props) {
   const g = useGameText();
   if (!reminder) return null;
-  const { ml, reachMl, drunkMl, targetMl, doneCount, totalCount } = reminder;
+  const { ml, nowMl, reachMl, drunkMl, targetMl, doneCount, totalCount, steps, missed, catchUp } = reminder;
+  const time = clockText(reminder.hour, reminder.minute);
   const pct = targetMl > 0 ? Math.min(100, Math.round((drunkMl / targetMl) * 100)) : 0;
   const cheer = g(`water.cheer.${waterCheerIndex(reminder.key)}` as GameKey);
   return (
@@ -33,11 +34,34 @@ export function WaterReminderDialog({ reminder, onDrink, onClose }: Props) {
               <HudText size={40}>💧</HudText>
             </View>
             <HudText size={20} accessibilityRole="header" style={styles.center}>
-              {g('water.popup.title', { time: clockText(reminder.hour, reminder.minute) })}
+              {g('water.popup.title', { time })}
             </HudText>
             <HudText size={26} color={quest.manaText} style={styles.center} accessibilityLiveRegion="polite">
-              {g('water.popup.amount', { ml, reach: reachMl })}
+              {g('water.popup.amount', { ml: nowMl })}
             </HudText>
+            {/* Where the day stands against the schedule: on time, or short (and which drink times were missed). */}
+            <HudText size={13} weight="medium" color={missed.length > 0 ? quest.hpText : quest.textSecondary} style={styles.center}>
+              {missed.length > 0
+                ? g('water.popup.short', { ml, times: missed.join(', ') })
+                : g('water.popup.onTrack', { time, reach: reachMl })}
+            </HudText>
+            {catchUp.length > 0 && (
+              <HudText size={13} weight="medium" color={quest.manaText} style={styles.center}>
+                {g('water.popup.catchUp', {
+                  now: nowMl,
+                  items: catchUp.map((c) => g('water.popup.catchUpItem', { time: c.time, ml: c.extraMl })).join(' · '),
+                })}
+              </HudText>
+            )}
+            <View style={styles.steps} accessibilityLabel={g('water.popup.schedule')}>
+              {steps.map((s) => (
+                <View key={s.time} style={[styles.step, { borderColor: STEP_COLOR[s.status] }]}>
+                  <HudText size={11} weight="medium" color={STEP_COLOR[s.status]}>
+                    {s.time} {g(`water.popup.step.${s.status}` as GameKey)}
+                  </HudText>
+                </View>
+              ))}
+            </View>
             <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.center}>
               {reminder.label}
             </HudText>
@@ -61,7 +85,16 @@ export function WaterReminderDialog({ reminder, onDrink, onClose }: Props) {
   );
 }
 
+const STEP_COLOR: Record<WaterStep['status'], string> = {
+  done: quest.xp,
+  missed: quest.hpText,
+  now: quest.manaText,
+  later: quest.textSecondary,
+};
+
 const styles = StyleSheet.create({
+  steps: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6 },
+  step: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
   overlay: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: 'rgba(8,6,18,0.72)' },
   sheet: { maxWidth: 420, width: '100%', alignSelf: 'center' },
   inner: { gap: 10, padding: 18, borderRadius: 22, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.panel, alignItems: 'stretch' },

@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.46 | no | — |
 | 0.45 | no | estimate-workout-kcal |
 | 0.44 | no | — |
 | 0.43 | no | — |
@@ -57,6 +58,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.46
+- Water pop-up shows the day against the schedule: every drink time (✓ reached, ✗ missed, • now), how far behind you are and which times were missed, and a catch-up plan — drink this time's portion plus up to 250 ml now, the rest spread over the drink times ahead. The button brings the day up to what you drink now.
 
 ## 0.45
 - Logging a workout by hand (Training > the classic log, add or edit): "✨ AI ước tính kcal" estimates the kcal burned from the description and minutes with your body profile (latest weight, height, age, gender) — MET × kg × hours, shown with the formula. It only fills the form; you check and save. New function `estimate-workout-kcal` (AI feature `workout`, 20 a day).
