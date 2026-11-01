@@ -14,6 +14,7 @@ import { useGameText, type GameKey } from '../../src/game/strings';
 import { estimateKcal, EXERCISE_BY_ID, type ExerciseId } from '../../src/game/training/exercises';
 import { exerciseName, formatAmount } from '../../src/game/training/format';
 import { applyRating, progressFor, type Rating } from '../../src/game/training/progress';
+import { useScreenAwake } from '../../src/utils/useScreenAwake';
 import { preloadVoices, speak, stopSpeaking, voiceInUse, type VoiceGender, type VoicePrefs } from '../../src/game/training/speech';
 import {
   dueEvents,
@@ -168,6 +169,8 @@ export default function SessionScreen() {
   const [holdStartedAt, setHoldStartedAt] = useState<number | null>(null);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [result, setResult] = useState<{ durationMin: number; kcal: number } | null>(null);
+  // The screen stays on for the whole session (the voice coach and timers run while the phone lies untouched), until it is saved.
+  useScreenAwake(result === null);
   // Timed auto count of a rep set: the clock (not the user's taps) decides when each rep is done and when the set ends.
   const [auto, setAuto] = useState<{ startedAt: number; offsetMs: number } | null>(null);
   const autoElapsed = useRef(0);

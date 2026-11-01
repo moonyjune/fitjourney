@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.20.2 | no | — |
 | 0.20.1 | no | — |
 | 0.20.0 | yes | dish-photo |
 | 0.19.0 | no | suggest-cheat-places, suggest-dinner, tempt-me |
@@ -64,6 +65,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.20.2
+- Training session: the screen stays on for the whole session, so the voice coach no longer stops when the phone would dim after 30 s (web: the browser's screen wake lock, asked again when you come back to the tab; phone app: keep-awake).
 
 ## 0.20.1
 - Version numbers are now A.B.C (fix/small change: C, new feature: B, big update: A); every earlier release was renumbered and keeps its old number. 0.48 is 0.20.0.
