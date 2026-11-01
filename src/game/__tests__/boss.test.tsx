@@ -123,6 +123,8 @@ describe('Boss detail screen', () => {
     const text = allText(render());
     // 1,500 from eating + 5,000 of training: training adds on top of the cap.
     expect(text).toContain('→ 6,500 sát thương');
+    // The battle log splits the deficit: eating below the TDEE (capped at 1,500 for damage) and training.
+    expect(text).toMatch(/🍽 ăn dưới TDEE [\d,]+ \(tính tối đa 1,500\) · 🏃 tập luyện 5,000/);
     expect(text).toContain('chạm mức an toàn 1,500/ngày');
     expect(text).toContain('−6,500');
     expect(text.replace(/\s+/g, ' ')).toContain('1,200 / 7,700');

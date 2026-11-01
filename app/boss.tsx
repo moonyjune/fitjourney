@@ -8,6 +8,7 @@ import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { XpBar } from '../src/components/quest/XpBar';
 import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../src/game/constants';
+import type { BossDay } from '../src/game/boss';
 import { useGameText, type GameKey } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
 import { DEFICIT_LEVEL_COLOR } from '../src/game/deficitLevel';
@@ -23,8 +24,26 @@ function back() {
   else router.replace('/(tabs)');
 }
 
+/** A day's deficit split into its two sources: eating below (or above) the TDEE, and training. Eating counts for at most
+ *  DAILY_DAMAGE_CAP_KCAL of the damage, training on top. */
+function useDeficitSplit() {
+  const g = useGameText();
+  return (d: BossDay): string => {
+    if (d.deficitKcal == null) return '';
+    const diet = Math.round(d.deficitKcal - d.burnedKcal);
+    const parts = [
+      diet >= 0
+        ? g(diet > DAILY_DAMAGE_CAP_KCAL ? 'boss.detail.fromDietCapped' : 'boss.detail.fromDiet', { n: num(diet), cap: num(DAILY_DAMAGE_CAP_KCAL) })
+        : g('boss.detail.overDiet', { n: num(-diet) }),
+    ];
+    if (d.burnedKcal > 0) parts.push(g('boss.detail.fromTraining', { n: num(Math.round(d.burnedKcal)) }));
+    return parts.join(' · ');
+  };
+}
+
 export default function BossScreen() {
   const g = useGameText();
+  const splitText = useDeficitSplit();
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow(60_000);
@@ -114,9 +133,7 @@ export default function BossScreen() {
             ? g('boss.detail.cheat')
             : noData
               ? g('boss.detail.noData')
-              : d.deficitKcal! > 0
-                ? g('boss.detail.deficit', { n: num(d.deficitKcal!) })
-                : '';
+              : [d.deficitKcal! > 0 ? g('boss.detail.deficit', { n: num(d.deficitKcal!) }) : '', splitText(d)].filter(Boolean).join(' · ');
           return (
             <View
               key={d.dateKey}

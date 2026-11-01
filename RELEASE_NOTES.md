@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.20.3 | no | — |
 | 0.20.2 | no | — |
 | 0.20.1 | no | — |
 | 0.20.0 | yes | dish-photo |
@@ -65,6 +66,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.20.3
+- Boss battle log: each day's deficit is split into its two sources — "🍽 ăn dưới TDEE …" (or "ăn vượt TDEE …"; marked when above the 1,500 that eating can count for) and "🏃 tập luyện …".
 
 ## 0.20.2
 - Training session: the screen stays on for the whole session, so the voice coach no longer stops when the phone would dim after 30 s (web: the browser's screen wake lock, asked again when you come back to the tab; phone app: keep-awake).

@@ -12,6 +12,9 @@ export interface BossDay {
   capped: boolean;
   /** A cheat day: no damage and no heal, whatever was eaten. */
   cheat: boolean;
+  /** Kcal burned by exercise that day: the part of the deficit from training (the rest, deficitKcal − burnedKcal, is from eating
+   *  below the TDEE, or above it when negative). */
+  burnedKcal: number;
 }
 
 export interface BossState {
@@ -70,8 +73,9 @@ export function bossForWeek(
     if (dateKey > todayKey) break;
     const cheat = isCheatDay(dateKey);
     const deficitKcal = cheat ? null : deficitForDateKey(dateKey);
-    const { damage, capped } = damageForDeficit(deficitKcal, burnedForDateKey(dateKey));
-    days.push({ dateKey, damage, deficitKcal, capped, cheat });
+    const burnedKcal = Math.max(0, burnedForDateKey(dateKey));
+    const { damage, capped } = damageForDeficit(deficitKcal, burnedKcal);
+    days.push({ dateKey, damage, deficitKcal, capped, cheat, burnedKcal });
   }
 
   const totalDamage = days.reduce((s, d) => s + d.damage, 0);
