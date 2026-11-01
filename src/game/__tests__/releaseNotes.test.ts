@@ -8,17 +8,22 @@ const RETIRED_FUNCTIONS = new Set(['story-chapter']);
 
 describe('release notes', () => {
   const notes = readFileSync(join(__dirname, '../../../RELEASE_NOTES.md'), 'utf8');
-  const versions = [...notes.matchAll(/^## (\d+\.\d{2})\s*$/gm)].map((m) => m[1]);
-  const steps = new Map([...notes.matchAll(/^\| (\d+\.\d{2}) \| (.*?) \| (.*?) \|$/gm)].map((m) => [m[1], { schema: m[2], deploy: m[3] }]));
+  const versions = [...notes.matchAll(/^## (\d+\.\d+\.\d+)\s*$/gm)].map((m) => m[1]);
+  const steps = new Map([...notes.matchAll(/^\| (\d+\.\d+\.\d+) \| (.*?) \| (.*?) \|$/gm)].map((m) => [m[1], { schema: m[2], deploy: m[3] }]));
+  const parts = (v: string) => v.split('.').map(Number);
 
-  it('the version is A.BC', () => {
-    expect(APP_VERSION).toMatch(/^\d\.\d{2}$/);
+  it('the version is A.B.C', () => {
+    expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
   });
-  it('the newest entry is the version shown in the app, and entries count down without gaps', () => {
+  it('the newest entry is the version shown in the app, and each release is one step up from the one before', () => {
     expect(versions[0]).toBe(APP_VERSION);
-    const n = (v: string) => Math.round(parseFloat(v) * 100);
-    versions.forEach((v, i) => expect(n(v)).toBe(n(versions[0]) - i));
-    expect(versions[versions.length - 1]).toBe('0.01');
+    expect(versions[versions.length - 1]).toBe('0.1.0');
+    // Newest first: each entry is the one below it raised by exactly one step (C + 1, B + 1 with C = 0, or A + 1 with B = C = 0).
+    for (let i = 0; i < versions.length - 1; i++) {
+      const [a, b, c] = parts(versions[i + 1]);
+      const next = [`${a}.${b}.${c + 1}`, `${a}.${b + 1}.0`, `${a + 1}.0.0`];
+      expect(next).toContain(versions[i]);
+    }
   });
   it('every release has a server-steps row: schema.sql yes/no and the functions to redeploy (existing ones) or —', () => {
     expect([...steps.keys()]).toEqual(versions);

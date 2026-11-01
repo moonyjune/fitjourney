@@ -37,8 +37,18 @@ export function damageForDeficit(deficitKcal: number | null, burnedKcal = 0): { 
   return { damage: Math.round(capped ? cap : deficitKcal), capped };
 }
 
+/** The weekly boss resets at 05:00 on Monday, not at midnight (the user's rule, 2026-11-02: time to enjoy a Sunday-night win). */
+export const BOSS_RESET_HOUR = 5;
+
+/** The moment the weekly boss is judged at: `now`, except Monday before BOSS_RESET_HOUR, which still belongs to the week before
+ *  (judged as the very end of that Sunday; food logged in those hours counts for Monday, so for the new boss from 05:00). */
+export function bossClock(now: Date): Date {
+  if (now.getDay() !== 1 || now.getHours() >= BOSS_RESET_HOUR) return now;
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59);
+}
+
 /**
- * Builds the boss for the week containing `now`. Only days up to and including today deal damage;
+ * Builds the boss for the week containing `now` (as of `bossClock(now)`: until 05:00 on Monday, the week before). Only days up to and including today deal damage;
  * today's damage is live (it grows as the day's deficit grows), matching how the streak treats it.
  * A cheat day (`isCheatDay`) deals nothing and heals nothing.
  */
@@ -49,6 +59,7 @@ export function bossForWeek(
   isCheatDay: (dateKey: string) => boolean = () => false,
   burnedForDateKey: (dateKey: string) => number = () => 0
 ): BossState {
+  now = bossClock(now);
   const weekKey = weekStartKey(now);
   const monday = new Date(`${weekKey}T12:00:00`);
   const todayKey = toDateKey(now);

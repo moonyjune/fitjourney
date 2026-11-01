@@ -106,7 +106,7 @@ describe('Boss detail screen', () => {
     const text = allText(r);
     expect(text).toContain('Quái Một Ký Mỡ');
     expect(text).toContain('BOSS TUẦN 43'); // the eyebrow is set in capitals
-    expect(text).toContain('RESET 00:00 THỨ HAI');
+    expect(text).toContain('RESET 05:00 SÁNG THỨ HAI');
     const labels = rowLabels(r);
     expect(labels).toHaveLength(5); // Mon-Fri
     expect(labels[0]).toMatch(/^T2\. chưa có dữ liệu/); // Monday: no data, not "0 damage"

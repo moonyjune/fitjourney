@@ -2,7 +2,7 @@ import type { DailyNutritionLog, DayType, MealTemplate, WorkoutLogEntry } from '
 import { addDays } from '../utils/milestones';
 import { toDateKey } from '../utils/date';
 import { weekStartKey } from '../utils/weekKey';
-import { bossForWeek, type BossState } from './boss';
+import { bossClock, bossForWeek, type BossState } from './boss';
 import { BOSS_DEFEAT_XP, type Limits } from './constants';
 import { levelProgress, type LevelProgress } from './level';
 import { evaluateDay, type DayEvaluation } from './missions';
@@ -102,7 +102,7 @@ export function computeGameState(input: GameInputs): GameState {
   // days (evaluated as of that Sunday); the current week as of now.
   let bossesDefeated = 0;
   const bossHistory: BossState[] = [];
-  const currentWeek = weekStartKey(now);
+  const currentWeek = weekStartKey(bossClock(now));
   const seenWeeks = new Set<string>();
   for (const dateKey of evaluations.keys()) {
     const week = weekStartKey(new Date(`${dateKey}T12:00:00`));

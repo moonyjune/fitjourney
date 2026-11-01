@@ -21,7 +21,7 @@ import { buildWeekControl } from '../../insights/weekControl';
 import { computeCurrentStreak, computeLongestStreak } from '../../utils/streak';
 import { toDateKey } from '../../utils/date';
 import type { DailyNutritionLog, DayType, ExtraFoodItem, MealTemplate } from '../../types';
-import { bossForWeek } from '../boss';
+import { bossClock, bossForWeek } from '../boss';
 import { buildDamageLog } from '../bossDamage';
 import { evaluateDay } from '../missions';
 import { computeGameState } from '../state';
@@ -158,6 +158,17 @@ describe('the daily damage cap: 1500 kcal from eating, training adds on top', ()
     expect(boss.days[0]).toMatchObject({ damage: 2100, capped: true });
     expect(bossForWeek(new Date('2026-10-21T10:00:00'), () => 1900, 7700, () => false, () => 600).days[0]).toMatchObject({ damage: 1900, capped: false });
     expect(bossForWeek(new Date('2026-10-21T10:00:00'), () => 1900).days[0]).toMatchObject({ damage: 1500, capped: true });
+  });
+});
+
+describe('the weekly boss resets at 05:00 on Monday', () => {
+  it('Monday before 05:00 still shows last week\'s boss, from 05:00 the new one', () => {
+    const early = bossForWeek(new Date('2026-10-26T02:30:00'), () => 1000); // Monday 02:30
+    expect(early.weekKey).toBe('2026-10-19');
+    expect(early.days.map((d) => d.dateKey)).toHaveLength(7);
+    expect(early.totalDamage).toBe(7000);
+    expect(bossForWeek(new Date('2026-10-26T05:00:00'), () => 1000).weekKey).toBe('2026-10-26');
+    expect(bossClock(new Date('2026-10-27T02:00:00')).getTime()).toBe(new Date('2026-10-27T02:00:00').getTime()); // other days: midnight as usual
   });
 });
 
