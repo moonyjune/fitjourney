@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.41 | no | — |
 | 0.40 | no | — |
 | 0.39 | no | — |
 | 0.38 | no | suggest-cheat-places, suggest-dinner |
@@ -52,6 +53,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.41
+- Deficit colours: a deficit far beyond the target (more than 160 % of it and more than 1000 kcal) is now "Thâm hụt quá mức" in violet — losing that fast costs muscle and, with gout, raises uric acid.
+  - The old red "Quá lố" is split: 0–10 % of the target is "Duy trì" (light red, eating about what you burn) and a real surplus is "Ăn dư" (red). A cheat day is still "Cheat day".
 
 ## 0.40
 - Add food: a name the food database knows (one food, e.g. "2 quả trứng gà") now fills the form with its figures (scaled to the amount) and says where they came from; nothing is saved until you check and save it.

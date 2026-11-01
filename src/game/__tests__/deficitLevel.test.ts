@@ -14,12 +14,16 @@ describe('deficit level against the daily target (1000 kcal)', () => {
     expect(deficitLevel(1000, 1000)).toBe('met');
     expect(deficitLevel(900, 1000)).toBe('met'); // within 10 %
     expect(deficitLevel(1300, 1000)).toBe('met');
+    expect(deficitLevel(1600, 1000)).toBe('met');
+    expect(deficitLevel(1601, 1000)).toBe('excess'); // more than 1.6× the target
+    expect(deficitLevel(900, 500)).toBe('met'); // 1.8× but under 1000 kcal
+    expect(deficitLevel(1001, 500)).toBe('excess');
     expect(deficitLevel(899, 1000)).toBe('ok');
     expect(deficitLevel(500, 1000)).toBe('ok');
     expect(deficitLevel(499, 1000)).toBe('low');
     expect(deficitLevel(100, 1000)).toBe('low');
-    expect(deficitLevel(99, 1000)).toBe('over');
-    expect(deficitLevel(0, 1000)).toBe('over');
+    expect(deficitLevel(99, 1000)).toBe('flat');
+    expect(deficitLevel(0, 1000)).toBe('flat'); // eating what the body burns
     expect(deficitLevel(-400, 1000)).toBe('over'); // a surplus
   });
 

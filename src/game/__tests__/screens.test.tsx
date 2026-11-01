@@ -431,10 +431,10 @@ describe('FitQuest logging screens', () => {
       expect(text).not.toContain('CHI-TIẾT');
     });
 
-    it('colours the day\'s deficit by how it compares with the target, and a cheat day is never "over"', () => {
+    it('colours the day\'s deficit by how it compares with the target, and a cheat day is never "maintenance" or "surplus"', () => {
       useCheatDayStore.setState({ days: [] });
       const r = render(<JournalScreen />);
-      const level = () => ['Đạt', 'Tạm chấp nhận', 'Không đạt', 'Quá lố', 'Cheat day'].filter((l) => r.root.findAll((n) => (n.type as unknown) === 'Text' && [n.props.children].flat(5).join('') === l).length > 0);
+      const level = () => ['Thâm hụt quá mức', 'Đạt', 'Tạm chấp nhận', 'Không đạt', 'Duy trì', 'Ăn dư', 'Cheat day'].filter((l) => r.root.findAll((n) => (n.type as unknown) === 'Text' && [n.props.children].flat(5).join('') === l).length > 0);
       expect(level().length).toBeGreaterThan(0);
       expect(allText(r)).toContain('Màu thâm hụt so với mục tiêu');
       act(() => pressable(r, (l) => l.startsWith('Đánh dấu ngày này là cheat day')).props.onPress());
