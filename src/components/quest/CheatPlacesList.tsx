@@ -3,6 +3,7 @@ import type { CheatPlace, CheatPlacesAnswer } from '../../../supabase/functions/
 import { mapsSearchUrl, urlHost } from '../../../supabase/functions/_shared/places';
 import { useGameText, type GameKey } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
+import { DishPhoto, DishPhotoCredit } from './DishPhoto';
 import { HudText } from './HudText';
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -97,9 +98,9 @@ function PlaceCard({ p, checked, near }: { p: CheatPlace; checked: string; near:
 }
 
 /** The answer of "find places": how the AI read the wish, the dishes that fit it (each with a "find places" chip when `onFindDish` is
- *  given; nothing is logged), then the places found, nearest first: distance and a Google Maps link, rating with its source, recent
- *  reviews with date and link, sources, when it was checked and how reliable it is (and why). Sample data of the dev account is
- *  labelled as such. */
+ *  given; nothing is logged; each with its real photo when one is found, else its emoji), then the places found, nearest first:
+ *  distance and a Google Maps link, rating with its source, recent reviews with date and link, sources, when it was checked and how
+ *  reliable it is (and why). Sample data of the dev account is labelled as such. */
 export function CheatPlacesList({ answer, near, onFindDish }: { answer: CheatPlacesAnswer; near: string; onFindDish?: (dish: string) => void }) {
   const g = useGameText();
   const at = new Date(answer.checkedAtISO);
@@ -124,19 +125,23 @@ export function CheatPlacesList({ answer, near, onFindDish }: { answer: CheatPla
           </HudText>
           {answer.dishes.map((d) => (
             <View key={d.name} style={styles.dish} accessibilityLabel={d.name}>
-              <HudText size={14}>{`${d.emoji ?? '🍽'} ${d.name}${d.kcal !== null ? ` · ${g('cheat.dishKcal', { kcal: d.kcal })}` : ''}`}</HudText>
-              {d.why ? (
-                <HudText size={12} weight="medium" color={quest.textSecondary}>
-                  {d.why}
-                </HudText>
-              ) : null}
-              {onFindDish ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={g('cheat.findForDish', { dish: d.name })} onPress={() => onFindDish(d.name)} hitSlop={6}>
-                  <HudText size={12} weight="medium" color={quest.manaText} style={styles.link}>
-                    {g('cheat.findForDish', { dish: d.name })}
+              <DishPhoto name={d.name} emoji={d.emoji ?? '🍽'} size={64} />
+              <View style={styles.dishText}>
+                <HudText size={14}>{`${d.name}${d.kcal !== null ? ` · ${g('cheat.dishKcal', { kcal: d.kcal })}` : ''}`}</HudText>
+                {d.why ? (
+                  <HudText size={12} weight="medium" color={quest.textSecondary}>
+                    {d.why}
                   </HudText>
-                </Pressable>
-              ) : null}
+                ) : null}
+                {onFindDish ? (
+                  <Pressable accessibilityRole="button" accessibilityLabel={g('cheat.findForDish', { dish: d.name })} onPress={() => onFindDish(d.name)} hitSlop={6}>
+                    <HudText size={12} weight="medium" color={quest.manaText} style={styles.link}>
+                      {g('cheat.findForDish', { dish: d.name })}
+                    </HudText>
+                  </Pressable>
+                ) : null}
+                <DishPhotoCredit name={d.name} />
+              </View>
             </View>
           ))}
         </>
@@ -182,7 +187,8 @@ const styles = StyleSheet.create({
   section: { gap: 6, marginTop: 4 },
   place: { gap: 3, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg },
   review: { gap: 1, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: quest.border },
-  dish: { gap: 2, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.bg },
+  dish: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.bg },
+  dishText: { flex: 1, minWidth: 0, gap: 2 },
   links: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 2 },
   link: { textDecorationLine: 'underline' },
 });

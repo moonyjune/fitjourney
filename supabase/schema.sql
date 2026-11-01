@@ -900,3 +900,21 @@ alter table public.habits add column if not exists formed_mark boolean;
 -- Mục tiêu nước (ml) đang áp dụng cho ngày đó, ghi lần đầu ngày được lưu và giữ nguyên cho ngày đã qua: đổi mục tiêu trong
 -- cài đặt không viết lại lịch sử. Null = ngày lưu trước khi có cột (app dùng mục tiêu hiện tại). App vẫn đẩy được khi cột chưa có.
 alter table public.nutrition_logs add column if not exists water_target_ml integer;
+
+-- ===== Dish photos cache (dish-photo function) =====
+-- Ảnh thật của món được gợi ý (cheat day, pop-up dụ dỗ), lấy từ Wikimedia Commons / Openverse và được AI kiểm tra đúng món. Khóa là tên
+-- món đã chuẩn hóa (chữ thường, bỏ dấu, một khoảng trắng: dishKey trong _shared/dishPhoto.ts). photo null = đã tìm mà không có ảnh
+-- đúng món (hàm tìm lại sau 30 ngày). Chỉ hàm dish-photo (service role) ghi; người dùng đã đăng nhập chỉ đọc. Chạy lại nhiều lần vẫn an
+-- toàn; khi bảng chưa có, hàm vẫn chạy (chỉ không có cache).
+create table if not exists public.dish_photos (
+  dish_key text primary key check (char_length(dish_key) between 1 and 100),
+  name text not null check (char_length(name) between 1 and 100),
+  photo jsonb check (photo is null or (jsonb_typeof(photo) = 'object' and pg_column_size(photo) <= 4000)),
+  checked_at timestamptz not null default now()
+);
+alter table public.dish_photos enable row level security;
+revoke all on public.dish_photos from public, anon, authenticated;
+grant select on public.dish_photos to authenticated;
+drop policy if exists "dish_photos_select_signed_in" on public.dish_photos;
+create policy "dish_photos_select_signed_in" on public.dish_photos for select
+  to authenticated using (true);

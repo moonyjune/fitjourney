@@ -8,6 +8,7 @@ import type { DinnerBrief } from './dinner';
 import type { CookbookFilters } from '../cookbook/filters';
 import type { CheatWhere } from '../../supabase/functions/_shared/dinner';
 import { cleanPlacesAnswer, type CheatPlacesAnswer } from '../../supabase/functions/_shared/places';
+import { dishKey, type DishPhotoResult } from '../../supabase/functions/_shared/dishPhoto';
 
 // Offline stand-in for the vision API, used only by the Login Dev account so the photo-analysis UI can be tried without a
 // backend. Deterministic (same input, same output) and always labelled as simulated.
@@ -160,6 +161,21 @@ export function fakeWeeklyReport(input: WeekInput): WeeklyReport {
     ],
     encouragement: `${FAKE_PREFIX}Dữ liệu mẫu, không phải nhận xét của AI.`,
   };
+}
+
+/** The dev account's sample dish photo: one real Wikimedia Commons photo (phở bò, CC BY-SA 4.0) for every dish, so the photo, the
+ *  shimmer and the credit line can be tried; the app labels it as a sample. Offline it does not load and the emoji shows. */
+export const SAMPLE_DISH_PHOTO = {
+  url: 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/44/Ph%E1%BB%9F_b%C3%B2_in_a_German_restaurant_03.jpg/960px-Ph%E1%BB%9F_b%C3%B2_in_a_German_restaurant_03.jpg',
+  sourceUrl: 'https://commons.wikimedia.org/wiki/File:Ph%E1%BB%9F_b%C3%B2_in_a_German_restaurant_03.jpg',
+  author: 'Kritzolina',
+  license: 'CC BY-SA 4.0',
+  source: 'wikimedia' as const,
+};
+
+/** Offline stand-in for the dish-photo function: the sample photo for every dish. */
+export function fakeDishPhotos(names: string[]): DishPhotoResult[] {
+  return names.map((name) => ({ name, key: dishKey(name), photo: SAMPLE_DISH_PHOTO }));
 }
 
 /** Offline stand-in for the workout kcal estimate: a moderate session (MET 6) for the typed minutes (45 if none) and the given

@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import type { DinnerIdea } from '../../ai/dinner';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
+import { DishPhoto, DishPhotoCredit } from './DishPhoto';
 import { HudText } from './HudText';
 
 export interface DishCardProps {
@@ -17,6 +18,8 @@ export interface DishCardProps {
   fits?: boolean;
   /** One short extra line (matched filters, a note), cut to one line. */
   sub?: string;
+  /** Show the dish's real photo (with its credit line) instead of the emoji when one is found (cheat day dishes). */
+  photo?: boolean;
 }
 
 function Badge({ text, color = quest.textTertiary, strong }: { text: string; color?: string; strong?: boolean }) {
@@ -29,16 +32,20 @@ function Badge({ text, color = quest.textTertiary, strong }: { text: string; col
   );
 }
 
-/** One dish as a compact card: emoji, the name on one line, kcal / protein / purine as small badges, stars and times cooked.
- *  Ingredients, steps and notes are in the recipe dialog it opens. */
-export function DishCard({ idea, onPress, purineHigh, cheat, rating, cooked, fits, sub }: DishCardProps) {
+/** One dish as a compact card: emoji (or, with `photo`, the dish's real photo and its credit), the name on one line, kcal / protein /
+ *  purine as small badges, stars and times cooked. Ingredients, steps and notes are in the recipe dialog it opens. */
+export function DishCard({ idea, onPress, purineHigh, cheat, rating, cooked, fits, sub, photo }: DishCardProps) {
   const g = useGameText();
   const minutes = idea.recipe?.minutes;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={idea.name} onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View style={styles.emoji}>
-        <HudText size={22}>{idea.recipe?.emoji ?? '🍽️'}</HudText>
-      </View>
+      {photo ? (
+        <DishPhoto name={idea.name} emoji={idea.recipe?.emoji ?? '🍽️'} size={56} />
+      ) : (
+        <View style={styles.emoji}>
+          <HudText size={22}>{idea.recipe?.emoji ?? '🍽️'}</HudText>
+        </View>
+      )}
       <View style={styles.body}>
         <HudText size={14} numberOfLines={1}>
           {idea.name}
@@ -59,6 +66,7 @@ export function DishCard({ idea, onPress, purineHigh, cheat, rating, cooked, fit
             {sub}
           </HudText>
         ) : null}
+        {photo ? <DishPhotoCredit name={idea.name} /> : null}
       </View>
     </Pressable>
   );

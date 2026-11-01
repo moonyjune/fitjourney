@@ -19,6 +19,7 @@ const FEATURE_LABEL: Record<AiFeature, GameKey> = {
   tempt: 'aiUsage.tempt',
   banter: 'aiUsage.banter',
   workout: 'aiUsage.workout',
+  dishphoto: 'aiUsage.dishphoto',
 };
 
 /** Tokens as "950" or "12.4k". */

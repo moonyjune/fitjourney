@@ -6,6 +6,8 @@ import type { TemptationOpen } from '../../store/useTemptationStore';
 import type { TemptItem } from '../../temptation/item';
 import type { TemptOutcome } from '../../temptation/stats';
 import { quest, questRadius } from '../../theme/quest';
+import { useDishPhoto } from '../../ai/useDishPhotos';
+import { DishPhoto, DishPhotoCredit } from './DishPhoto';
 import { HudText } from './HudText';
 import { FadeInUp } from './motion/FadeInUp';
 import { PopIn } from './motion/PopIn';
@@ -32,11 +34,8 @@ function ItemPicture({ item, size }: { item: TemptItem; size: number }) {
       />
     );
   }
-  return (
-    <View style={[styles.badge, { width: size, height: size, backgroundColor: item.color }]}>
-      <HudText size={Math.round(size * 0.55)}>{item.emoji}</HudText>
-    </View>
-  );
+  // No picture of its own (or it did not load): a real photo of the dish when one is found, else its emoji badge.
+  return <DishPhoto name={item.name} emoji={item.emoji} size={size} radius={item.imageUrl ? 14 : 18} color={item.color} />;
 }
 
 /** A drop that wobbles down beside the picture: the "drooling" effect (nothing with reduced motion). */
@@ -65,10 +64,12 @@ function Drool() {
 
 function ItemCard({ item }: { item: TemptItem }) {
   const g = useGameText();
+  const dish = useDishPhoto(item.imageUrl ? null : item.name);
+  const big = !!item.imageUrl || (dish?.status === 'done' && !!dish.photo);
   return (
     <View style={styles.card}>
       <View>
-        <ItemPicture item={item} size={item.imageUrl ? 120 : 76} />
+        <ItemPicture item={item} size={big ? 120 : 76} />
         <Drool />
       </View>
       <View style={styles.cardText}>
@@ -94,6 +95,7 @@ function ItemCard({ item }: { item: TemptItem }) {
             {g('tempt.source', { d: item.sourceDomain })}
           </HudText>
         ) : null}
+        {item.imageUrl ? null : <DishPhotoCredit name={item.name} />}
       </View>
     </View>
   );
@@ -124,6 +126,8 @@ export function TemptationDialog({ open, onAnswer, onLog, onClose, streak }: Pro
   const g = useGameText();
   const motion = useMotionEnabled();
   const item = open?.item ?? null;
+  // The dish's real photo is asked for at once, so it is there when the card comes after the boss's lines.
+  useDishPhoto(item && !item.imageUrl ? item.name : null);
   const steps: Step[] = item ? [...item.lines.map((text) => ({ kind: 'line' as const, text })), { kind: 'card' as const }] : [];
   const [shown, setShown] = useState(0);
   const [answer, setAnswer] = useState<TemptOutcome | null>(null);
@@ -293,7 +297,6 @@ const styles = StyleSheet.create({
   typing: { paddingVertical: 4 },
   card: { flexDirection: 'row', gap: 12, alignItems: 'center', padding: 10, borderRadius: questRadius.panel, backgroundColor: quest.raised, borderWidth: 1.5, borderColor: quest.border, maxWidth: '96%' },
   cardText: { flex: 1, minWidth: 0, gap: 4 },
-  badge: { borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   drool: { position: 'absolute', right: -4, top: '45%' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: quest.bg, overflow: 'hidden' },

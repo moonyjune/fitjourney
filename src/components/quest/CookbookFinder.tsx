@@ -302,6 +302,7 @@ export function CookbookFinder() {
         onPress={() => setOpen({ idea, brief: forBrief })}
         purineHigh={!isCheat && purineWarning(idea)}
         cheat={isCheat}
+        photo={isCheat}
         rating={book1?.rating}
         cooked={book1?.cookedCount}
         fits={isCheat ? undefined : acceptDinner(forBrief, idea)}

@@ -16,12 +16,13 @@ import { PLACES_UNAVAILABLE_PREFIX } from '../../supabase/functions/_shared/webS
 import { recheckPlaces } from '../cookbook/cheat';
 import type { ClientRows } from '../ai/coachDigest';
 import type { SwapContext, SwapItem } from '../food/swaps';
-import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport, fakeWorkoutKcal } from '../ai/devPhotoAnalysis';
+import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport, fakeWorkoutKcal, fakeDishPhotos } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { sampleTemptation } from '../temptation/sample';
 import { cleanBanterAnswer, type BanterDaySummary, type BanterText } from '../../supabase/functions/_shared/banter';
 import { templateBanter } from '../banter/templates';
 import { cleanWorkoutKcalAnswer, type WorkoutKcalEstimate } from '../../supabase/functions/_shared/workoutKcal';
+import { cleanDishPhotoAnswer, MAX_DISHES, type DishPhotoResult } from '../../supabase/functions/_shared/dishPhoto';
 import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
@@ -1519,6 +1520,33 @@ export async function requestTemptation(body: TemptationRequest): Promise<Tempta
     if (error) throw error;
     if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
     return { ok: true, result: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+export type DishPhotosOutcome = { ok: true; dishes: DishPhotoResult[]; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+
+/** Calls the dish-photo edge function: a real photo (Wikimedia Commons / Openverse, checked by the AI to show that dish) for up to
+ *  MAX_DISHES dish names, or null per dish when none was found. The answer is cleaned again here (`cleanDishPhotoAnswer`). Same rules
+ *  as the other AI requests: the device switch, the offline dev account (a labelled sample photo), offline fails softly. Callers go
+ *  through `useDishPhotos`, which batches and remembers the answers. */
+export async function requestDishPhotos(names: string[]): Promise<DishPhotosOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  const dishes = names.slice(0, MAX_DISHES);
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, dishes: fakeDishPhotos(dishes), sample: true };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('dish-photo', { body: { dishes: dishes.map((name) => ({ name })) } });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
+    return { ok: true, dishes: cleanDishPhotoAnswer(data?.result) };
   } catch (error) {
     const message = await describeFunctionsError(error);
     const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;

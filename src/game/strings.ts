@@ -366,6 +366,11 @@ const vi = {
   'wkai.noKcal': 'AI chưa ước tính được. Hãy nhập số phút hoặc mô tả rõ hơn rồi thử lại.',
   'wkai.result': '{activity}: ~{kcal} kcal',
   'aiUsage.workout': 'Ước tính kcal buổi tập',
+  'aiUsage.dishphoto': 'Ảnh thật của món',
+  'dishPhoto.credit': 'Ảnh: {author} · {license} · {source}',
+  'dishPhoto.creditA11y': 'Mở trang gốc của ảnh {name}',
+  'dishPhoto.sample': 'Ảnh mẫu (tài khoản dev)',
+  'dishPhoto.a11y': 'Ảnh món {name}',
   'wkp.autoFailedKeep': 'Ảnh vẫn được giữ lại. Bạn có thể bấm Phân tích lại hoặc tự nhập rồi bấm Ghi nhận.',
   'coach.extraFood': 'Món ngoài kế hoạch',
 
@@ -1757,6 +1762,11 @@ const en: Record<GameKey, string> = {
   'wkai.noKcal': 'The AI could not estimate it. Enter the minutes or describe it more clearly, then try again.',
   'wkai.result': '{activity}: ~{kcal} kcal',
   'aiUsage.workout': 'Workout kcal estimate',
+  'aiUsage.dishphoto': 'Real dish photos',
+  'dishPhoto.credit': 'Photo: {author} · {license} · {source}',
+  'dishPhoto.creditA11y': 'Open the source page of the {name} photo',
+  'dishPhoto.sample': 'Sample photo (dev account)',
+  'dishPhoto.a11y': 'Photo of {name}',
   'wkp.autoFailedKeep': 'The photo is kept. You can tap Analyze again, or type the numbers and tap Log.',
   'coach.extraFood': 'Off-plan food',
 

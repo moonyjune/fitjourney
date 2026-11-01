@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.48 | yes | dish-photo |
 | 0.47 | no | suggest-cheat-places, suggest-dinner, tempt-me |
 | 0.46 | no | — |
 | 0.45 | no | estimate-workout-kcal |
@@ -59,6 +60,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.48
+- Real dish photos: cheat-day dish suggestions and the temptation pop-up show a real photograph of the dish, found in Wikimedia Commons / Openverse (free, reusable licences) and checked by the AI to really show that dish; the emoji stays when none fits. A small credit line names the author and licence and opens the source. No AI-drawn images.
+  - New function `dish-photo` (AI feature `dishphoto`, 40 a day); photos are kept in the new `dish_photos` table, so each dish is looked up once (run schema.sql; it works without the table, just uncached).
 
 ## 0.47
 - Place search works in Vietnam again: the web search no longer gets "VN" as its country (the API rejected it); the address from the map goes into the prompt, and a rejected location is retried once without it.

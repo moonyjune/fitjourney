@@ -21,6 +21,7 @@ import { useAiReportStore } from './useAiReportStore';
 import { resetAnalysisStore } from './useAnalysisStore';
 import { useCheatDayStore } from './useCheatDayStore';
 import { resetTemptationStore } from './useTemptationStore';
+import { resetDishPhotoStore } from './useDishPhotoStore';
 import { useBossTalkStore } from './useBossTalkStore';
 import { useMealModeStore } from './useMealModeStore';
 import { NO_MEAL_PREFS, useMealPrefStore } from './useMealPrefStore';
@@ -77,6 +78,7 @@ export function resetAllLocalStores() {
   resetAnalysisStore();
   useCheatDayStore.setState({ days: [] });
   resetTemptationStore();
+  resetDishPhotoStore();
   useBossTalkStore.setState({ talks: [], autoTried: null });
   useMealModeStore.setState({ fasting: true });
   useWaterWindowStore.setState({ startMinutes: DEFAULT_WATER_START_MIN, endMinutes: DEFAULT_WATER_END_MIN });
