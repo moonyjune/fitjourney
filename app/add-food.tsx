@@ -106,7 +106,7 @@ export default function AddFoodScreen() {
   const [saveFailed, setSaveFailed] = useState(false);
   /** The outcome of looking a name-only entry up in the food database: what was added from it, or why nothing was. */
   const [dbOutcome, setDbOutcome] = useState<
-    { kind: 'added'; name: string; food: string; kcal: number } | { kind: 'none' | 'multiple'; text: string } | null
+    { kind: 'filled'; name: string; food: string; kcal: number } | { kind: 'none' | 'multiple'; text: string } | null
   >(null);
 
   const alive = useRef(true);
@@ -300,7 +300,7 @@ export default function AddFoodScreen() {
       const nameOnly = rows.length === 1 && rowHasNoFigures(rows[0]) ? rows[0].name.trim() : '';
       const asked = nameOnly || (rows.every(rowIsEmpty) ? text.trim() : '');
       if (asked) {
-        if (!timeInvalid) await saveFromDb(asked);
+        if (!timeInvalid) fillFromDb(asked);
         return;
       }
       setHint(rows.every(rowIsEmpty) && photos.length === 0 ? 'text' : 'value');
@@ -336,46 +336,24 @@ export default function AddFoodScreen() {
     }
   }
 
-  /** Adds a name-only entry with the food database's figures when the name is ONE food it knows (an amount typed with it is
-   *  scaled), and stays on the form to show where the figures came from. Several foods or an unknown name are never guessed. */
-  async function saveFromDb(asked: string) {
+  /** A name-only entry that is ONE food the database knows (an amount typed with it is scaled): its figures are filled into the
+   *  form and nothing is saved yet; the user checks them and saves. Several foods or an unknown name are never guessed. */
+  function fillFromDb(asked: string) {
     const found = lookupDescribedFood(asked, foods);
     if (found.kind !== 'match') {
       setDbOutcome({ kind: found.kind, text: asked });
       return;
     }
     const item = found.item;
-    setSaving(true);
-    setSaveFailed(false);
-    let kept: { main?: string; more: string[] } = { more: [] };
-    try {
-      if (photos[0]) kept = await persistPhotos();
-      addExtra(input.dateKey, item.name, item.calories, item.proteinG, mealTime, {
-        purineMg: item.purineMg || undefined,
-        saltG: item.saltG || undefined,
-        sugarG: item.sugarG || undefined,
-        junk: junk || undefined,
-        photoUri: kept.main,
-        morePhotoUris: kept.more,
-        fromFoodDb: true,
-        clock,
-      });
-      if (!alive.current) return;
-      // Saved: the form is cleared so a second tap cannot add it twice; the note says what was added and from where.
-      setText('');
-      setRows([emptyRow(newKey('m'))]);
-      setPhotos([]);
-      ai.reset();
-      lab.reset();
-      setNote(null);
-      setAdvice(null);
-      setDbOutcome({ kind: 'added', name: item.name, food: baseName(item.food.name), kcal: item.calories });
-    } catch {
-      for (const uri of [kept.main, ...kept.more]) if (uri) deletePersistedPhoto(uri).catch(() => {});
-      if (alive.current) setSaveFailed(true);
-    } finally {
-      if (alive.current) setSaving(false);
-    }
+    setRows([
+      rowFromFigures(
+        newKey('db'),
+        { name: item.name, calories: item.calories, proteinG: item.proteinG, purineMg: item.purineMg, saltG: item.saltG, sugarG: item.sugarG },
+        true
+      ),
+    ]);
+    setHint(null);
+    setDbOutcome({ kind: 'filled', name: item.name, food: baseName(item.food.name), kcal: item.calories });
   }
 
   /** Logs the chosen main meal as not eaten (0 kcal, the diary's "Không ăn" convention) and closes. */
@@ -629,10 +607,10 @@ export default function AddFoodScreen() {
               {g('food.db.hint')}
             </HudText>
           )}
-          {dbOutcome?.kind === 'added' && (
+          {dbOutcome?.kind === 'filled' && (
             <View style={styles.note} accessibilityLiveRegion="polite">
               <HudText size={12} color={quest.manaText}>
-                {day.isToday ? g('food.db.added', { name: dbOutcome.name }) : g('food.db.addedOn', { name: dbOutcome.name, day: day.label })}
+                {g('food.db.filled', { name: dbOutcome.name })}
               </HudText>
               <HudText size={12} weight="medium" color={quest.textSecondary}>
                 {g('food.db.source', { food: dbOutcome.food, kcal: dbOutcome.kcal })}
