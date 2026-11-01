@@ -36,7 +36,7 @@ function boss(weekOffset: number, damages: number[], maxHp = 7700): BossState {
     maxHp,
     hpLeft: Math.max(0, maxHp - damages.reduce((a, b) => a + b, 0)),
     totalDamage: damages.reduce((a, b) => a + b, 0),
-    days: damages.map((damage, i) => ({ dateKey: key(weekOffset * 7 + i), damage, deficitKcal: damage, capped: false })),
+    days: damages.map((damage, i) => ({ dateKey: key(weekOffset * 7 + i), damage, deficitKcal: damage, capped: false, cheat: false })),
     defeated: damages.reduce((a, b) => a + b, 0) >= maxHp,
     daysUntilReset: 1,
     neededPerRemainingDay: 0,

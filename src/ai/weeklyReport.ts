@@ -25,8 +25,10 @@ export interface WeekDay {
   date: string;
   /** Anything was logged to eat that day. */
   logged: boolean;
-  /** TDEE + exercise − eaten; omitted when no food was logged. */
+  /** TDEE + exercise − eaten; omitted when no food was logged or on a cheat day. */
   deficitKcal?: number;
+  /** The user marked the day as a cheat day: its kcal are not counted (no deficit, no damage) and it is left out of the patterns. */
+  cheatDay?: true;
   /** Damage dealt to the boss that day. */
   damage: number;
   eatenKcal: number;
@@ -45,7 +47,10 @@ export interface WeekDay {
 }
 
 export interface WeekPatterns {
+  /** Days with food logged, cheat days excluded (the patterns below cover these days only). */
   daysLogged: number;
+  /** Days marked as a cheat day this week (food logged, not counted). */
+  cheatDays: number;
   avgDeficitKcal?: number;
   avgProteinG?: number;
   workoutDays: number;
@@ -80,7 +85,7 @@ export interface WeekSource extends DaySource {
 
 /** The week source of the signed-in user, read from this device's stores. */
 export function weekSourceFromStores(now: Date = new Date()): WeekSource {
-  const { logs, weights, plan, settings, limits, tdeeKcal } = makeDayEvaluator(now);
+  const { logs, weights, plan, settings, limits, tdeeKcal, cheatDays } = makeDayEvaluator(now);
   return {
     logs,
     workoutEntries: useWorkoutStore.getState().entries,
@@ -91,6 +96,7 @@ export function weekSourceFromStores(now: Date = new Date()): WeekSource {
     weights,
     dailyDeficitKcal: settings.targetDailyDeficitKcal,
     waterTargetMl: settings.waterTargetMl,
+    cheatDays,
   };
 }
 
@@ -104,7 +110,7 @@ export function buildWeeklyReportInput(now: Date = new Date()): WeekInput {
  *  and dates only (no names, emails, ids or free text). */
 export function buildWeekInput(source: WeekSource, now: Date = new Date()): WeekInput {
   const { logs, weights, limits, tdeeKcal } = source;
-  const { evaluate, byDay } = evaluatorFor(source, now);
+  const { evaluate, byDay, isCheatDay } = evaluatorFor(source, now);
   const settings = { waterTargetMl: source.waterTargetMl, targetDailyDeficitKcal: source.dailyDeficitKcal, proteinTargetG: source.proteinTargetG };
   const todayKey = toDateKey(now);
   const startKey = weekStartKey(now);
@@ -119,7 +125,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     const extras = log?.extraItems ?? [];
     const planned = source.mealTemplates[getDayType(new Date(`${date}T12:00:00`))].filter((m) => log?.mealsEaten[m.slot]).map((m) => m.startHour);
     const hours = [...planned, ...extras.map((x) => new Date(x.loggedAtISO).getHours())].filter((h) => Number.isFinite(h));
-    const logged = e.deficitKcal !== null;
+    const logged = e.deficitKcal !== null || (e.cheat && e.eatenKcal > 0);
     const day: WeekDay = {
       date,
       logged,
@@ -136,16 +142,19 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
       missed: e.missions.filter((m) => m.status === 'missed').map((m) => m.id),
     };
     if (e.deficitKcal !== null) day.deficitKcal = Math.round(e.deficitKcal);
+    if (e.cheat) day.cheatDay = true;
     if (hours.length > 0) day.lastMealHour = Math.max(...hours);
     days.push(day);
   }
 
-  const loggedDays = days.filter((d) => d.logged);
+  // A cheat day ignores the limits and its kcal are not counted, so the patterns are drawn from the other logged days.
+  const loggedDays = days.filter((d) => d.logged && !d.cheatDay);
   const count = (pred: (d: WeekDay) => boolean) => loggedDays.filter(pred).length;
   const avg = (vals: number[]) => (vals.length ? Math.round(vals.reduce((s, v) => s + v, 0) / vals.length) : undefined);
   const deficits = loggedDays.map((d) => d.deficitKcal).filter((v): v is number => v !== undefined);
   const patterns: WeekPatterns = {
     daysLogged: loggedDays.length,
+    cheatDays: days.filter((d) => d.cheatDay).length,
     avgDeficitKcal: avg(deficits),
     avgProteinG: avg(loggedDays.map((d) => d.proteinG)),
     workoutDays: days.filter((d) => d.workouts > 0).length,
@@ -158,7 +167,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     lateMealDays: count((d) => d.lastMealHour !== undefined && d.lastMealHour >= lateMealHour()),
   };
 
-  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal);
+  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal, undefined, isCheatDay);
 
   // Weight: from the last weigh-in before the week (else the first of the week) to the latest, against what the deficit predicts.
   const points = weights
@@ -181,7 +190,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
   // Last week, for comparison: the same rules, ended on its Sunday.
   const prevSunday = addDays(monday, -1);
   prevSunday.setHours(12, 0, 0, 0);
-  const prevBoss = bossForWeek(prevSunday, (key) => evaluate(key).deficitKcal);
+  const prevBoss = bossForWeek(prevSunday, (key) => evaluate(key).deficitKcal, undefined, isCheatDay);
   const prevDeficits = prevBoss.days.map((d) => d.deficitKcal).filter((v): v is number => v !== null);
   const previousWeek: WeekInput['previousWeek'] =
     prevDeficits.length > 0 ? { damage: Math.round(prevBoss.totalDamage), daysLogged: prevDeficits.length, avgDeficitKcal: avg(prevDeficits) } : undefined;

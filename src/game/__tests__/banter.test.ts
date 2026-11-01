@@ -102,7 +102,7 @@ const log = (date: string, items: ExtraFoodItem[]): DailyNutritionLog => ({
   dateISO: `${date}T00:00:00`, mealsEaten: {}, extraCalories: items.reduce((s, x) => s + x.calories, 0), extraProteinG: 0, extraItems: items, waterMl: 0,
 });
 const day = (dateKey: string, deficitKcal: number | null, extra: Partial<DamageDay> = {}): DamageDay => ({
-  dateKey, deficitKcal, estKg: deficitKcal == null ? null : deficitKcal / 7700, weightKg: null, realKg: null, estTotalKg: 0, realTotalKg: null, bossIndex: 0, felled: [], ...extra,
+  dateKey, deficitKcal, cheat: false, estKg: deficitKcal == null ? null : deficitKcal / 7700, weightKg: null, realKg: null, estTotalKg: 0, realTotalKg: null, bossIndex: 0, felled: [], ...extra,
 });
 const evaluation = (dateKey: string): DayEvaluation => ({ dateKey, eatenKcal: 1500, proteinG: 160 } as DayEvaluation);
 const workout = (date: string, label: string, min: number): WorkoutLogEntry => ({ id: `wo-${date}`, dateISO: `${date}T17:00:00`, templateId: null, label, durationMin: min, caloriesBurned: 200 });
@@ -131,10 +131,11 @@ describe('day summary', () => {
     expect(s.boss).toMatchObject({ name: 'Quỷ Bánh Kem', fell: true });
   });
 
-  it('a day without food has no exchange; a cheat day with a surplus is a cheat level', () => {
+  it('a day without food or a cheat day (its kcal are not counted) has no exchange', () => {
     const base = { boss, evaluation: undefined, log: undefined, workouts: [], targetKcal: 1000, proteinTargetG: 150, todayKey: TODAY, bossName: 'X', skillNames: [] };
     expect(buildBanterSummary({ ...base, day: day('2026-10-30', null), cheat: false })).toBeNull();
-    expect(buildBanterSummary({ ...base, day: day('2026-10-30', -500), cheat: true })?.level).toBe('cheat');
+    expect(buildBanterSummary({ ...base, day: day('2026-10-30', -500), cheat: true })).toBeNull();
+    expect(buildBanterSummary({ ...base, day: day('2026-10-30', null, { cheat: true }), cheat: false })).toBeNull();
     expect(buildBanterSummary({ ...base, day: day(TODAY, 400), cheat: false })?.live).toBe(true);
   });
 });
@@ -161,6 +162,12 @@ describe('which days talk', () => {
     expect(shown).toHaveLength(BANTER_DAYS - 1);
     expect(shown.find((d) => d.date === '2026-10-30')).toMatchObject({ source: 'ai', stale: false, text: { moveName: 'Chưởng AI' } });
     expect(shown.find((d) => d.date === '2026-10-28')).toMatchObject({ source: 'ai', stale: true });
+  });
+
+  it('skips a cheat day', () => {
+    const shown = buildBanterShown(input({ cheatDays: ['2026-10-27'] }));
+    expect(shown.map((d) => d.date)).not.toContain('2026-10-27');
+    expect(shown).toHaveLength(BANTER_DAYS - 2);
   });
 
   it('yesterday is asked of the AI once on its own: not when written, tried already, or without food', () => {

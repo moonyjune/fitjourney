@@ -67,6 +67,8 @@ interface Day {
   burnedKcal?: number;
   workouts?: number;
   deficitKcal?: number;
+  /** A cheat day the user marked: its kcal are not counted, so it has no deficitKcal. */
+  cheatDay?: boolean;
 }
 
 function sanitizeDay(raw: unknown): Day | null {
@@ -83,6 +85,7 @@ function sanitizeDay(raw: unknown): Day | null {
     burnedKcal: bounded(d.burnedKcal, 0, 10000),
     workouts: bounded(d.workouts, 0, 20),
     deficitKcal: bounded(d.deficitKcal, -20000, 20000),
+    ...(d.cheatDay === true ? { cheatDay: true } : {}),
   };
   // A day whose every figure was out of bounds says nothing.
   return Object.entries(day).some(([k, v]) => k !== 'date' && v !== undefined) ? day : null;

@@ -55,20 +55,24 @@ interface DayRowProps {
 export function DamageDayRow({ day, boss, bosses, targetKcal, cheat, scale, talk }: DayRowProps) {
   const g = useGameText();
   const [open, setOpen] = useState(false);
-  const level = deficitLevel(day.deficitKcal, targetKcal, cheat);
+  // A cheat day has no deficit figure: it reads "Cheat day · không tính kcal" in its colour instead.
+  const isCheat = cheat || day.cheat;
+  const level = deficitLevel(day.deficitKcal, targetKcal, isCheat);
   const estColor = deficitColor(level, quest.gold);
   const realColor = day.realKg != null && day.realKg < 0 ? quest.hp : quest.xp;
-  const intake =
-    day.deficitKcal == null
+  const intake = isCheat
+    ? ''
+    : day.deficitKcal == null
       ? g('dmg.noFood')
       : g(day.deficitKcal >= 0 ? 'dmg.deficit' : 'dmg.surplus', { n: Math.round(Math.abs(day.deficitKcal)).toLocaleString('en-US') });
-  const est = day.estKg == null ? g('dmg.noFood') : `${signedKg(day.estKg)} kg`;
+  const intakeLine = [intake, level ? g(`deficit.level.${level}` as GameKey) : ''].filter(Boolean).join(' · ');
+  const est = isCheat ? '—' : day.estKg == null ? g('dmg.noFood') : `${signedKg(day.estKg)} kg`;
   const real = day.realKg == null ? g('dmg.noWeigh') : `${signedKg(day.realKg)} kg`;
   const felled = day.felled.map((i) => bosses[i]).filter((b): b is StageBoss => !!b);
   const label = [
     shortDate(day.dateKey),
     boss ? g('dmg.vs', { name: bossName(boss, g) }) : '',
-    intake + (level ? ` · ${g(`deficit.level.${level}` as GameKey)}` : ''),
+    intakeLine,
     `${g('dmg.est')} ${est}`,
     `${g('dmg.real')} ${real}`,
     ...felled.map((b) => g('dmg.felled', { name: bossName(b, g) })),
@@ -85,8 +89,8 @@ export function DamageDayRow({ day, boss, bosses, targetKcal, cheat, scale, talk
       <View style={styles.flex}>
         <View style={styles.rowHead}>
           <HudText size={13}>{shortDate(day.dateKey)}</HudText>
-          <HudText size={11} weight="medium" color={day.deficitKcal == null ? quest.textSecondary : estColor} style={styles.flex} numberOfLines={1}>
-            {intake + (level ? ` · ${g(`deficit.level.${level}` as GameKey)}` : '')}
+          <HudText size={11} weight="medium" color={day.deficitKcal == null && !isCheat ? quest.textSecondary : estColor} style={styles.flex} numberOfLines={1}>
+            {intakeLine}
           </HudText>
           {day.weightKg != null && (
             <HudText size={11} weight="medium" color={quest.textSecondary}>
@@ -155,7 +159,7 @@ function barScale(days: DamageDay[]): number {
 
 /** Days worth listing: those with logged food or a weigh-in, newest first. */
 function listedDays(days: DamageDay[]): DamageDay[] {
-  return days.filter((d) => d.estKg != null || d.weightKg != null).reverse();
+  return days.filter((d) => d.estKg != null || d.weightKg != null || d.cheat).reverse();
 }
 
 /** One row of the weight log: a weigh-in, a boss's weight line (fallen or still ahead) or the start. */

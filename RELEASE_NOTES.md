@@ -12,6 +12,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.42 | no | weekly-report, coach-digest, analyze-proof-photo, read-nutrition-label, parse-meal-text, suggest-dinner, suggest-swap |
 | 0.41 | no | — |
 | 0.40 | no | — |
 | 0.39 | no | — |
@@ -53,6 +54,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.03 | no | — |
 | 0.02 | no | suggest-dinner |
 | 0.01 | no | — |
+
+## 0.42
+- A cheat day is left out of every calorie figure: no boss damage or heal, not in deficit totals, averages, charts, forecasts, the weekly target or the AI's numbers, and no battle chat that day. It shows "Cheat day · không tính kcal" instead of a deficit.
+  - The streak neither breaks nor grows on a cheat day; the deficit mission gives no XP.
+  - Its foods, photos and eaten kcal are still saved and shown as data. The weekly review and coach AI are told the day is a marked cheat day.
 
 ## 0.41
 - Deficit colours: a deficit far beyond the target (more than 160 % of it and more than 1000 kcal) is now "Thâm hụt quá mức" in violet — losing that fast costs muscle and, with gout, raises uric acid.

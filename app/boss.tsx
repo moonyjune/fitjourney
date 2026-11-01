@@ -10,6 +10,7 @@ import { XpBar } from '../src/components/quest/XpBar';
 import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../src/game/constants';
 import { useGameText, type GameKey } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
+import { DEFICIT_LEVEL_COLOR } from '../src/game/deficitLevel';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
@@ -34,7 +35,8 @@ export default function BossScreen() {
   const lastDay = boss.daysUntilReset <= 1;
 
   let hit: string;
-  if (!today || today.deficitKcal == null) hit = g('boss.detail.hitNone');
+  if (today?.cheat) hit = g('boss.detail.hitCheat');
+  else if (!today || today.deficitKcal == null) hit = g('boss.detail.hitNone');
   else if (today.deficitKcal <= 0) hit = g('boss.detail.hitSurplus');
   else if (today.capped) hit = g('boss.detail.hitCap', { cap: num(DAILY_DAMAGE_CAP_KCAL) });
   else hit = '';
@@ -108,16 +110,18 @@ export default function BossScreen() {
           const name = isToday ? g('boss.detail.today') : g(`weekday.${dow}` as GameKey);
           const noData = d.deficitKcal == null;
           const amount = noData ? '—' : `−${num(d.damage)}`;
-          const sub = noData
-            ? g('boss.detail.noData')
-            : d.deficitKcal! > 0
-              ? g('boss.detail.deficit', { n: num(d.deficitKcal!) })
-              : '';
+          const sub = d.cheat
+            ? g('boss.detail.cheat')
+            : noData
+              ? g('boss.detail.noData')
+              : d.deficitKcal! > 0
+                ? g('boss.detail.deficit', { n: num(d.deficitKcal!) })
+                : '';
           return (
             <View
               key={d.dateKey}
               accessible
-              accessibilityLabel={`${name}. ${noData ? g('boss.detail.noData') : `${amount} HP`}`}
+              accessibilityLabel={`${name}. ${d.cheat ? g('boss.detail.cheat') : noData ? g('boss.detail.noData') : `${amount} HP`}`}
               style={[styles.logRow, i > 0 && styles.logDivider]}
             >
               <View style={styles.flex}>
@@ -125,7 +129,7 @@ export default function BossScreen() {
                   {name} <HudText size={12} weight="medium" color={quest.textSecondary}>{d.dateKey.slice(8)}/{d.dateKey.slice(5, 7)}</HudText>
                 </HudText>
                 {sub ? (
-                  <HudText size={11} weight="medium" color={quest.textSecondary}>
+                  <HudText size={11} weight="medium" color={d.cheat ? DEFICIT_LEVEL_COLOR.cheat : quest.textSecondary}>
                     {sub}
                   </HudText>
                 ) : null}

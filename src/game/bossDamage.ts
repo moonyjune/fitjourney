@@ -9,7 +9,7 @@ import type { StageBoss, StageStatus } from './stageBosses';
  * log with the bosses' weight lines.
  *
  * - Estimated: a day with logged food deals deficit / KCAL_PER_KG_FAT kg; a surplus is negative (the boss heals). A day
- *   with no food logged has no estimate (it is a gap, not a zero). No daily cap here: the weekly boss caps its damage
+ *   with no food logged has no estimate (it is a gap, not a zero), and neither has a cheat day. No daily cap here: the weekly boss caps its damage
  *   for the game, this log is about the body.
  * - Real: the day's last weigh-in against the weigh-in before it (the start weight for the first one); positive = kg
  *   lost. Weigh-ins before the plan start are ignored, like the journey does.
@@ -20,13 +20,17 @@ import type { StageBoss, StageStatus } from './stageBosses';
 
 export interface DamageDayInput {
   dateKey: string;
-  /** The day's deficit (GameState.days), null when no food was logged. */
+  /** The day's deficit (GameState.days), null when no food was logged or on a cheat day. */
   deficitKcal: number | null;
+  /** A cheat day (GameState.days): left out of the damage, shown as such. */
+  cheat?: boolean;
 }
 
 export interface DamageDay {
   dateKey: string;
   deficitKcal: number | null;
+  /** A cheat day: no estimate (no damage, no heal) whatever was eaten. */
+  cheat: boolean;
   /** Estimated fat lost that day in kg; negative for a surplus; null when the day has no food logged. */
   estKg: number | null;
   /** The day's last weigh-in. */
@@ -114,7 +118,8 @@ export function buildDamageLog({ days: input, entries, startKg, startDateKey, bo
   let realTotal: number | null = null;
   for (const d of input) {
     if (startDateKey && d.dateKey < startDateKey) continue;
-    const estKg = d.deficitKcal == null || !Number.isFinite(d.deficitKcal) ? null : deficitToKg(d.deficitKcal);
+    const cheat = !!d.cheat;
+    const estKg = cheat || d.deficitKcal == null || !Number.isFinite(d.deficitKcal) ? null : deficitToKg(d.deficitKcal);
     if (estKg != null) estTotal += estKg;
     const weightKg = weights.get(d.dateKey) ?? null;
     let realKg: number | null = null;
@@ -125,7 +130,8 @@ export function buildDamageLog({ days: input, entries, startKg, startDateKey, bo
     }
     days.push({
       dateKey: d.dateKey,
-      deficitKcal: d.deficitKcal,
+      deficitKcal: cheat ? null : d.deficitKcal,
+      cheat,
       estKg,
       weightKg,
       realKg,

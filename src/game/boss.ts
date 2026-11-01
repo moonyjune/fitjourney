@@ -7,9 +7,11 @@ export interface BossDay {
   dateKey: string;
   /** Damage dealt that day (0 when the day has no data). */
   damage: number;
-  /** Raw deficit before the daily cap, or null when the day has no logged food. */
+  /** Raw deficit before the daily cap, or null when the day has no logged food or is a cheat day. */
   deficitKcal: number | null;
   capped: boolean;
+  /** A cheat day: no damage and no heal, whatever was eaten. */
+  cheat: boolean;
 }
 
 export interface BossState {
@@ -36,11 +38,13 @@ export function damageForDeficit(deficitKcal: number | null): { damage: number; 
 /**
  * Builds the boss for the week containing `now`. Only days up to and including today deal damage;
  * today's damage is live (it grows as the day's deficit grows), matching how the streak treats it.
+ * A cheat day (`isCheatDay`) deals nothing and heals nothing.
  */
 export function bossForWeek(
   now: Date,
   deficitForDateKey: (dateKey: string) => number | null,
-  maxHp: number = BOSS_MAX_HP
+  maxHp: number = BOSS_MAX_HP,
+  isCheatDay: (dateKey: string) => boolean = () => false
 ): BossState {
   const weekKey = weekStartKey(now);
   const monday = new Date(`${weekKey}T12:00:00`);
@@ -50,9 +54,10 @@ export function bossForWeek(
   for (let i = 0; i < 7; i++) {
     const dateKey = toDateKey(addDays(monday, i));
     if (dateKey > todayKey) break;
-    const deficitKcal = deficitForDateKey(dateKey);
+    const cheat = isCheatDay(dateKey);
+    const deficitKcal = cheat ? null : deficitForDateKey(dateKey);
     const { damage, capped } = damageForDeficit(deficitKcal);
-    days.push({ dateKey, damage, deficitKcal, capped });
+    days.push({ dateKey, damage, deficitKcal, capped, cheat });
   }
 
   const totalDamage = days.reduce((s, d) => s + d.damage, 0);

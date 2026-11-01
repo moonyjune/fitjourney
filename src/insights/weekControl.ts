@@ -45,8 +45,9 @@ export interface WeekControl {
 
 const countClass = (meals: MainMealRecord[], cls: MainMealRecord['cls']) => meals.filter((m) => m.cls === cls).length;
 
-/** The week that contains the latest logged day. Null with nothing logged. */
-export function buildWeekControl(rows: DayRow[], meals: MainMealRecord[], tdeeNow: number, th: Thresholds): WeekControl | null {
+/** The week that contains the latest logged day. Null with nothing logged. A cheat day (`cheatDays`) is not counted: the weekly
+ *  target shrinks by one day's target for each, and one still ahead is not a day left to make up the shortfall. */
+export function buildWeekControl(rows: DayRow[], meals: MainMealRecord[], tdeeNow: number, th: Thresholds, cheatDays: readonly string[] = []): WeekControl | null {
   if (rows.length === 0) return null;
   const lastDataKey = rows[rows.length - 1].dateKey;
   const weekStart = mondayOf(lastDataKey);
@@ -54,10 +55,12 @@ export function buildWeekControl(rows: DayRow[], meals: MainMealRecord[], tdeeNo
   const week = rows.filter((r) => r.dateKey >= weekStart && r.dateKey <= weekEnd);
   const wm = meals.filter((m) => m.dateKey >= weekStart && m.dateKey <= weekEnd);
 
-  const targetDeficit = 7 * th.deficitOk;
-  const achieved = week.reduce((s, r) => s + r.deficit, 0);
+  const cheatInWeek = new Set(cheatDays.filter((d) => d >= weekStart && d <= weekEnd));
+  const cheatAhead = [...cheatInWeek].filter((d) => d > lastDataKey).length;
+  const targetDeficit = (7 - cheatInWeek.size) * th.deficitOk;
+  const achieved = week.reduce((s, r) => s + (r.cheat ? 0 : r.deficit), 0);
   const short = Math.max(0, targetDeficit - achieved);
-  const daysLeft = dayNumber(weekEnd) - dayNumber(lastDataKey);
+  const daysLeft = Math.max(0, dayNumber(weekEnd) - dayNumber(lastDataKey) - cheatAhead);
   const safeMaxPerDay = tdeeNow - th.minKcal;
   const neededPerDay = daysLeft === 0 ? null : short / daysLeft;
 
@@ -84,7 +87,7 @@ export function buildWeekControl(rows: DayRow[], meals: MainMealRecord[], tdeeNo
     pctTarget: targetDeficit > 0 ? achieved / targetDeficit : 0,
     neededPerDay,
     safeMaxPerDay,
-    maxPossiblePct: daysLeft === 0 ? null : Math.min(1, (achieved + daysLeft * safeMaxPerDay) / targetDeficit),
+    maxPossiblePct: daysLeft === 0 || targetDeficit <= 0 ? null : Math.min(1, (achieved + daysLeft * safeMaxPerDay) / targetDeficit),
     deficitStatus,
     mainMeals: wm.length,
     flexible,

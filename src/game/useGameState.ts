@@ -11,6 +11,7 @@ import { useLimitsStore } from '../store/useLimitsStore';
 import { useFeelingStore } from '../store/useFeelingStore';
 import { useProofStore } from '../store/useProofStore';
 import { useTrainingStore } from '../store/useTrainingStore';
+import { useCheatDayStore } from '../store/useCheatDayStore';
 import {
   computeAchievementStats,
   evaluateAchievements,
@@ -80,14 +81,15 @@ export function useTodayInput(now: Date, dateKeyOverride?: string): DayInput {
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const mealTemplatesByDayType = usePlanStore((s) => s.plan.mealTemplates);
   const limits = useLimits();
+  const cheat = useCheatDayStore((s) => s.days.includes(dateKey));
   const workouts = useMemo(
     () => workoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey),
     [workoutEntries, dateKey]
   );
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   return useMemo(
-    () => ({ dateKey, now: new Date(minuteStamp * 60_000), log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits }),
-    [dateKey, minuteStamp, log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits]
+    () => ({ dateKey, now: new Date(minuteStamp * 60_000), log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat }),
+    [dateKey, minuteStamp, log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat]
   );
 }
 
@@ -100,10 +102,11 @@ export function useDayEvaluator(now: Date): (dateKey: string) => DayEvaluation {
   const workoutEntries = useWorkoutStore((s) => s.entries);
   const mealTemplatesByDayType = usePlanStore((s) => s.plan.mealTemplates);
   const limits = useLimits();
+  const cheatDays = useCheatDayStore((s) => s.days);
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   return useMemo(
-    () => buildDayEvaluator({ now: new Date(minuteStamp * 60_000), logs, workouts: workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits }),
-    [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits]
+    () => buildDayEvaluator({ now: new Date(minuteStamp * 60_000), logs, workouts: workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays }),
+    [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays]
   );
 }
 
@@ -117,6 +120,7 @@ export function useGameState(now: Date): GameView {
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
   const limits = useLimits();
   const bonusXp = useTemptationStore((s) => temptationXp(s.stats));
+  const cheatDays = useCheatDayStore((s) => s.days);
 
   // Re-evaluate once per minute rather than on every 30 s tick: nothing in the rules changes
   // faster than the eating-window cut-off, and the replay walks every day since the start date.
@@ -132,10 +136,11 @@ export function useGameState(now: Date): GameView {
       tdeeKcal,
       proteinTargetG,
       limits,
+      cheatDays,
       bonusXp,
     });
-    return { ...state, streak: computeCurrentStreak(logs, mealTemplates, workoutEntries, tdeeKcal, at) };
-  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, bonusXp]);
+    return { ...state, streak: computeCurrentStreak(logs, mealTemplates, workoutEntries, tdeeKcal, at, cheatDays) };
+  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, cheatDays, bonusXp]);
 }
 
 /** Stickers and banners for the signed-in user, derived from every log store. */
@@ -156,6 +161,7 @@ export function useAchievements(now: Date): {
   const photos = useProofStore((s) => s.photos);
   const feelings = useFeelingStore((s) => s.records);
   const plan = usePlanStore((s) => s.plan);
+  const cheatDays = useCheatDayStore((s) => s.days);
 
   return useMemo(() => {
     const waterGoalMl = waterTargetMl > 0 ? waterTargetMl : DEFAULT_WATER_TARGET_ML;
@@ -170,7 +176,7 @@ export function useAchievements(now: Date): {
       startWeightKg,
       goalWeightKg,
       weights,
-      longestStreak: computeLongestStreak(logs, plan.mealTemplates, workouts, tdeeKcal),
+      longestStreak: computeLongestStreak(logs, plan.mealTemplates, workouts, tdeeKcal, cheatDays),
       workouts,
       trainingProgress,
       photos,
@@ -180,5 +186,5 @@ export function useAchievements(now: Date): {
       waterGoalByDay,
     });
     return { stats, stickers: evaluateAchievements(stats), banners: evaluateBanners(stats) };
-  }, [game, startWeightKg, goalWeightKg, weights, logs, workouts, trainingProgress, photos, feelings, plan, tdeeKcal, waterTargetMl]);
+  }, [game, startWeightKg, goalWeightKg, weights, logs, workouts, trainingProgress, photos, feelings, plan, tdeeKcal, waterTargetMl, cheatDays]);
 }

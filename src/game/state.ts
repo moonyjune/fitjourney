@@ -17,6 +17,8 @@ export interface GameInputs {
   tdeeKcal: number;
   proteinTargetG: number;
   limits?: Partial<Limits>;
+  /** Days marked as a cheat day: they keep their food but have no deficit (no boss damage, no deficit XP). */
+  cheatDays?: readonly string[];
   /** XP earned outside the replayed logs (the temptation challenge's resisted pop-ups). */
   bonusXp?: number;
 }
@@ -50,6 +52,7 @@ function startOfDay(date: Date): Date {
  */
 export function computeGameState(input: GameInputs): GameState {
   const { now, startDateISO, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits } = input;
+  const cheatDays = new Set(input.cheatDays ?? []);
 
   const workoutsByDay = new Map<string, WorkoutLogEntry[]>();
   for (const entry of workoutEntries) {
@@ -79,11 +82,13 @@ export function computeGameState(input: GameInputs): GameState {
         tdeeKcal,
         proteinTargetG,
         limits,
+        cheat: cheatDays.has(dateKey),
       })
     );
   }
 
   const deficitFor = (dateKey: string) => evaluations.get(dateKey)?.deficitKcal ?? null;
+  const isCheatDay = (dateKey: string) => cheatDays.has(dateKey);
 
   let totalXp = 0;
   let perfectDays = 0;
@@ -103,7 +108,7 @@ export function computeGameState(input: GameInputs): GameState {
     if (seenWeeks.has(week)) continue;
     seenWeeks.add(week);
     const asOf = week === currentWeek ? now : addDays(new Date(`${week}T12:00:00`), 6);
-    const weekBoss = bossForWeek(asOf, deficitFor);
+    const weekBoss = bossForWeek(asOf, deficitFor, undefined, isCheatDay);
     if (weekBoss.defeated) bossesDefeated += 1;
     bossHistory.push(weekBoss);
   }
@@ -111,7 +116,7 @@ export function computeGameState(input: GameInputs): GameState {
   totalXp += bossesDefeated * BOSS_DEFEAT_XP;
   totalXp += Math.max(0, Math.round(input.bonusXp ?? 0));
 
-  const boss = bossForWeek(now, deficitFor);
+  const boss = bossForWeek(now, deficitFor, undefined, isCheatDay);
   return {
     today: evaluations.get(toDateKey(today))!,
     boss,

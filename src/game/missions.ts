@@ -43,6 +43,9 @@ export interface DayInput {
   proteinTargetG: number;
   /** Overrides for the daily limits (e.g. a user-chosen purine ceiling); defaults to LIMITS. */
   limits?: Partial<Limits>;
+  /** The user marked this date as a cheat day: its food is still logged and summed, but the day has no deficit figure (no boss
+   *  damage or heal, no deficit mission, left out of every deficit sum and average). */
+  cheat?: boolean;
 }
 
 export interface DayEvaluation {
@@ -51,8 +54,10 @@ export interface DayEvaluation {
   eatenKcal: number;
   proteinG: number;
   burnedKcal: number;
-  /** TDEE + exercise − eaten; null when the day has no logged food at all (no data ≠ big deficit). */
+  /** TDEE + exercise − eaten; null when the day has no logged food at all (no data ≠ big deficit) or is a cheat day. */
   deficitKcal: number | null;
+  /** A cheat day: the calorie math leaves it out (deficitKcal is null although food may be logged). */
+  cheat: boolean;
   nutrients: Nutrients;
   /** Plan food lines the estimator could not recognise (their purine/salt count as 0). */
   unknownItems: number;
@@ -96,7 +101,8 @@ export function evaluateDay(input: DayInput): DayEvaluation {
   const junkCount = extras.filter((e) => e.junk).length;
 
   const hasFood = hasFoodLog(log);
-  const deficitKcal = hasFood ? Math.round(actualDailyDeficitKcal(tdeeKcal, burnedKcal, eatenKcal)) : null;
+  const cheat = !!input.cheat;
+  const deficitKcal = hasFood && !cheat ? Math.round(actualDailyDeficitKcal(tdeeKcal, burnedKcal, eatenKcal)) : null;
 
   /** "Reach the goal" mission. */
   function reach(id: MissionId, value: number, target: number, reached: boolean, closed: boolean): MissionResult {
@@ -143,6 +149,7 @@ export function evaluateDay(input: DayInput): DayEvaluation {
     proteinG,
     burnedKcal,
     deficitKcal,
+    cheat,
     nutrients,
     unknownItems,
     junkCount,

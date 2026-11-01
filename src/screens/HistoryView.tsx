@@ -35,7 +35,7 @@ import { actualDailyDeficitKcal, resolveTdeeKcal } from '../utils/tdee';
 import type { CoachFeedback, ExtraFoodItem, MealSlot, MealTemplate, Mood, ProofPhoto, WorkoutLogEntry } from '../types';
 import { WorkoutEntries, workoutRange } from '../components/quest/WorkoutDetailDialog';
 import { mealsLogged } from '../food/mealCount';
-import { deficitColor, deficitLevel } from '../game/deficitLevel';
+import { DEFICIT_LEVEL_COLOR, deficitColor, deficitLevel } from '../game/deficitLevel';
 import { useCheatDayStore } from '../store/useCheatDayStore';
 import { PhotoViewer } from '../components/quest/PhotoViewer';
 import { mealCaption } from '../utils/mealCaption';
@@ -80,6 +80,8 @@ interface DaySummary {
    *  no nutrition log was ever entered for that day (a workout/weight/proof entry alone isn't
    *  enough to say anything about that day's calorie balance). */
   deficitKcal: number | null;
+  /** A cheat day: its food is shown, but its kcal are not counted (deficitKcal is null). */
+  cheat: boolean;
 }
 
 const MILESTONE_STATUS_KEY: Record<string, StringKey> = {
@@ -218,6 +220,10 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
     ]
   );
 
+  // The user's own cheat days: their kcal are not counted (a coach's view has none).
+  const ownCheatDays = useCheatDayStore((s) => s.days);
+  const cheatDays = useMemo(() => (client ? [] : ownCheatDays), [client, ownCheatDays]);
+
   const daySummaries = useMemo<DaySummary[]>(() => {
     const dateKeys = new Set<string>();
     Object.keys(nutritionLogs).forEach((k) => dateKeys.add(k));
@@ -239,6 +245,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
         const dayWorkouts = workoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey);
         const dayWeight = weightEntries.find((e) => toDateKey(new Date(e.dateISO)) === dateKey);
         const dayProofs = proofs.filter((p) => toDateKey(new Date(p.dateISO)) === dateKey);
+        const cheat = cheatDays.includes(dateKey);
 
         return {
           dateKey,
@@ -253,7 +260,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           proofsCount: dayProofs.length,
           proofs: dayProofs,
           weightKg: dayWeight?.weightKg ?? null,
-          deficitKcal: dayHasFood(log)
+          deficitKcal: dayHasFood(log) && !cheat
             ? actualDailyDeficitKcal(currentTdeeKcal, dayWorkouts.reduce((s, w) => s + w.caloriesBurned, 0), calories)
             : null,
           meals,
@@ -261,9 +268,10 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           extraItems: log?.extraItems ?? [],
           legacyTotals: { kcal: log?.extraCalories ?? 0, proteinG: log?.extraProteinG ?? 0 },
           removedMealSlots: log?.removedMealSlots ?? [],
+          cheat,
         };
       });
-  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal, settings.waterTargetMl]);
+  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal, settings.waterTargetMl, cheatDays]);
 
   const weeklySummaries = useMemo(() => {
     const groups = new Map<string, DaySummary[]>();
@@ -275,7 +283,9 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
     return [...groups.entries()]
       .sort((a, b) => (a[0] < b[0] ? 1 : -1))
       .map(([weekKey, days]) => {
-        const avgCalories = days.reduce((s, d) => s + d.calories, 0) / days.length;
+        // Cheat days are not counted in the calorie average (their food is still listed below).
+        const counted = days.filter((d) => !d.cheat);
+        const avgCalories = counted.length > 0 ? counted.reduce((s, d) => s + d.calories, 0) / counted.length : 0;
         const totalWorkouts = days.reduce((s, d) => s + d.workoutsCount, 0);
         const weightsLogged = days.map((d) => d.weightKg).filter((w): w is number => w !== null);
         const weightChange =
@@ -347,17 +357,15 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   }
 
   const streak = useMemo(
-    () => computeCurrentStreak(nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal),
-    [nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal]
+    () => computeCurrentStreak(nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, new Date(), cheatDays),
+    [nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, cheatDays]
   );
   const badges = unlockedStreakBadges(streak);
 
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
   // A day's workouts are folded to one summary line; tapping it lists them with each exercise and set.
   const [workoutsOpen, setWorkoutsOpen] = useState<Record<string, boolean>>({});
-  // Deficit colours against the daily target; the user's own cheat days are never "over" (a coach's view has none).
-  const ownCheatDays = useCheatDayStore((s) => s.days);
-  const cheatDays = client ? [] : ownCheatDays;
+  // Deficit colours against the daily target; a cheat day shows as such.
   const levelOf = (dateKey: string, deficit: number | null) => deficitLevel(deficit, settings.targetDailyDeficitKcal, cheatDays.includes(dateKey));
   const [viewing, setViewing] = useState<{ dateKey: string; photos: ProofPhoto[] } | null>(null);
 
@@ -415,20 +423,21 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   // Daily deficit trend, one point per calendar day from the plan's start date through today
   // (not just days with logged data) — a fixed grid like the Weight tab's chart. A day with no
   // nutrition log at all (nobody entered anything) is a genuine gap, not a 0-kcal-eaten deficit —
-  // returning null here breaks the line there instead of drawing a fabricated slope through it.
+  // returning null here breaks the line there instead of drawing a fabricated slope through it. A cheat day is not counted,
+  // so it is a gap too.
   const deficitTrendChart = useMemo(
     () =>
       buildDeficitChartData(
         settings.startDateISO,
         (dateKey) => {
-          if (!nutritionLogs[dateKey]) return null;
+          if (!nutritionLogs[dateKey] || cheatDays.includes(dateKey)) return null;
           const { calories, caloriesBurned } = computeDayCaloriesBurn(dateKey, nutritionLogs, mealTemplates, workoutEntries);
           return actualDailyDeficitKcal(currentTdeeKcal, caloriesBurned, calories);
         },
         new Date(),
         quest.gold
       ),
-    [settings.startDateISO, nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal]
+    [settings.startDateISO, nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, cheatDays]
   );
 
   // Weekly summary bar chart (avg daily calories), oldest -> newest, last 8 weeks.
@@ -454,7 +463,11 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           {t('history.dayMeta2', { meals: d.mealsEatenCount, n: d.workoutsCount, kcal: d.caloriesBurned })}{' '}
           {d.weightKg !== null ? `· ${d.weightKg.toFixed(1)} kg` : ''}
         </Meta>
-        {d.deficitKcal == null ? (
+        {d.cheat ? (
+          <Meta color={DEFICIT_LEVEL_COLOR.cheat}>
+            {t('tdee.deficitLabel')}: {g('deficit.level.cheat')}
+          </Meta>
+        ) : d.deficitKcal == null ? (
           <Meta>
             {t('tdee.deficitLabel')}: {t('common.notAvailable')}
           </Meta>
@@ -844,9 +857,13 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
                   const day = dayByKey.get(dateKey);
                   const deficit = day?.deficitKcal ?? null;
                   const selected = selectedDay === dateKey;
-                  const deficitText = deficit == null ? '' : formatDeficitShort(deficit);
-                  const deficitLabel =
-                    deficit == null ? '' : `. ${t(deficit >= 0 ? 'history.deficitShort' : 'history.surplusShort')}: ${Math.round(Math.abs(deficit))} kcal`;
+                  const cheat = !!day?.cheat;
+                  const deficitText = cheat ? g('deficit.cheatShort') : deficit == null ? '' : formatDeficitShort(deficit);
+                  const deficitLabel = cheat
+                    ? `. ${g('deficit.level.cheat')}`
+                    : deficit == null
+                      ? ''
+                      : `. ${t(deficit >= 0 ? 'history.deficitShort' : 'history.surplusShort')}: ${Math.round(Math.abs(deficit))} kcal`;
                   return (
                     <Pressable
                       key={dateKey}

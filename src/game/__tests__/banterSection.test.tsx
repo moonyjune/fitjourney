@@ -33,7 +33,7 @@ const g = (key: Parameters<typeof formatGameText>[1], params?: Record<string, st
 const { bosses } = buildStageJourney({ startKg: 110, goalKg: 95, currentKg: 108, entries: [], startDateISO: '2026-10-20T08:00:00' });
 
 const day = (dateKey: string, deficitKcal: number): DamageDay => ({
-  dateKey, deficitKcal, estKg: deficitKcal / 7700, weightKg: null, realKg: null, estTotalKg: 0, realTotalKg: null, bossIndex: 0, felled: [],
+  dateKey, deficitKcal, cheat: false, estKg: deficitKcal / 7700, weightKg: null, realKg: null, estTotalKg: 0, realTotalKg: null, bossIndex: 0, felled: [],
 });
 const DAYS = [day('2026-10-27', 900), day('2026-10-28', -300), day('2026-10-29', 600), day('2026-10-30', 1000), day(TODAY, 400)];
 

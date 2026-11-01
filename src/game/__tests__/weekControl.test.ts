@@ -91,6 +91,7 @@ const row = (dateKey: string, over: Partial<DayRow> = {}): DayRow => ({
   cumDeficit: 0,
   complete: true,
   missing: [],
+  cheat: false,
   ...over,
 });
 const meal = (dateKey: string, c: MainMealRecord['cls'], slot: MainMealRecord['slot'] = 'lunch'): MainMealRecord => ({ dateKey, slot, cls: c });

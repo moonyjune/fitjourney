@@ -201,7 +201,7 @@ export default function UricScreen() {
                 </HudText>
                 {[...sorted].reverse().map((r) => {
                   const index = sorted.indexOf(r);
-                  const ctx = contextFor(r, sorted[index - 1] ?? null, { rows: insights.rows, items, weighs, thresholds });
+                  const ctx = contextFor(r, sorted[index - 1] ?? null, { rows: insights.allRows, items, weighs, thresholds });
                   const status = summarizeReadings([r], targetUmol, todayKey)!.status;
                   return (
                     <View key={r.id} style={styles.card}>

@@ -96,7 +96,7 @@ describe('summary of the tests', () => {
 });
 
 describe('what the diary looked like before a test', () => {
-  const row = (dateKey: string, over: Partial<DayRow> = {}): DayRow => ({ dateKey, kcal: 1500, proteinG: 100, purineMg: 400, sugarG: 10, sodiumMg: 2000, exerciseKcal: 0, tdee: 2500, deficit: 1000, cumDeficit: 0, complete: true, missing: [], ...over });
+  const row = (dateKey: string, over: Partial<DayRow> = {}): DayRow => ({ dateKey, kcal: 1500, proteinG: 100, purineMg: 400, sugarG: 10, sodiumMg: 2000, exerciseKcal: 0, tdee: 2500, deficit: 1000, cumDeficit: 0, complete: true, missing: [], cheat: false, ...over });
   const item = (dateKey: string, text: string): DiaryItem => ({ id: dateKey + text, dateKey, text, mealTime: null, kcal: 0, proteinG: 0, purineMg: 0, sugarG: 0, sodiumMg: 0 });
   const day = (n: number) => `2026-10-${String(n).padStart(2, '0')}`;
 

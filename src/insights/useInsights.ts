@@ -7,6 +7,7 @@ import { useWorkoutStore } from '../store/useWorkoutStore';
 import { resolveTdeeKcal } from '../utils/tdee';
 import { buildDiaryItems, type DiaryItem } from '../feedback/items';
 import { useAnalysisStore } from '../store/useAnalysisStore';
+import { useCheatDayStore } from '../store/useCheatDayStore';
 import { classifyMainMeals } from '../feedback/flex';
 import { computeInsights, type Insights } from './index';
 import type { Thresholds } from './thresholds';
@@ -50,6 +51,7 @@ export function useInsights(scope?: AnalysisScope): InsightsView {
   const mode = useAnalysisStore((s) => s.mode);
   const stamps = useAnalysisStore((s) => (scope ? s.scopes[scope] : undefined)) ?? NO_STAMPS;
   const stored = useAnalysisStore((s) => s.data);
+  const cheatDays = useCheatDayStore((s) => s.days);
   const live = useMemo(() => liveDays(liveLogs, liveWorkouts, liveWeights, mealTemplates), [liveLogs, liveWorkouts, liveWeights, mealTemplates]);
   const frozen = !!scope && mode === 'manual';
   const input = useMemo(
@@ -86,11 +88,15 @@ export function useInsights(scope?: AnalysisScope): InsightsView {
         startWeightKg: settings.startWeightKg,
         goalWeightKg: settings.goalWeightKg,
         thresholds,
+        cheatDays,
       }),
-    [logs, mealTemplates, workouts, weights, tdeeKcal, settings.startWeightKg, settings.goalWeightKg, thresholds]
+    [logs, mealTemplates, workouts, weights, tdeeKcal, settings.startWeightKg, settings.goalWeightKg, thresholds, cheatDays]
   );
   const meals = useMemo(() => classifyMainMeals(items, thresholds), [items, thresholds]);
-  const weekControl = useMemo(() => buildWeekControl(insights.rows, meals, tdeeKcal, thresholds), [insights.rows, meals, tdeeKcal, thresholds]);
+  const weekControl = useMemo(
+    () => buildWeekControl(insights.rows, meals, tdeeKcal, thresholds, cheatDays),
+    [insights.rows, meals, tdeeKcal, thresholds, cheatDays]
+  );
   const quotas = useMemo(() => buildWeekQuotas(insights.rows, meals, thresholds), [insights.rows, meals, thresholds]);
   return { insights, thresholds, tdeeKcal, goalWeightKg: settings.goalWeightKg, items, weekControl, quotas, scope, mode, live, stamps, status };
 }

@@ -84,6 +84,7 @@ export function contextFor(
 ): UricContext {
   const from = addDaysToKey(reading.dateKey, -(CONTEXT_DAYS - 1));
   const rows = data.rows.filter((r) => r.dateKey >= from && r.dateKey <= reading.dateKey);
+  const counted = rows.filter((r) => !r.cheat);
   const itemsByDay = new Map<string, string[]>();
   for (const i of data.items) {
     if (i.dateKey < from || i.dateKey > reading.dateKey) continue;
@@ -98,7 +99,8 @@ export function contextFor(
     avgPurineMg: rows.length > 0 ? avg(rows.map((r) => r.purineMg)) : null,
     purineOverDays: rows.filter((r) => r.purineMg > data.thresholds.purineMax).length,
     alcoholDays: [...itemsByDay.values()].filter((texts) => mentionsAlcohol(texts)).length,
-    avgDeficit: rows.length > 0 ? avg(rows.map((r) => r.deficit)) : null,
+    // A cheat day's food counts for the purine above, but its kcal are not counted.
+    avgDeficit: counted.length > 0 ? avg(counted.map((r) => r.deficit)) : null,
     weightKg,
     weightChangeKg: weightKg !== null && previousKg !== null ? weightKg - previousKg : null,
   };

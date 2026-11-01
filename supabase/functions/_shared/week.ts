@@ -26,6 +26,8 @@ function day(raw: unknown): Record<string, unknown> | null {
   return {
     date: d.date,
     logged: d.logged === true,
+    // A cheat day the user marked: its kcal are not counted (no deficitKcal, no damage).
+    ...(d.cheatDay === true ? { cheatDay: true } : {}),
     ...pickNumbers(d, {
       deficitKcal: [-20000, 20000],
       damage: [0, 5000],
@@ -63,7 +65,7 @@ export function cleanWeek(raw: unknown): Record<string, unknown> | null {
     days,
     patterns: pickNumbers(w.patterns, {
       daysLogged: [0, 7], avgDeficitKcal: [-20000, 20000], avgProteinG: [0, 1000], workoutDays: [0, 7], proteinMissDays: [0, 7], saltOverDays: [0, 7],
-      purineOverDays: [0, 7], sugarOverDays: [0, 7], junkDays: [0, 7], waterShortDays: [0, 7], lateMealDays: [0, 7],
+      purineOverDays: [0, 7], sugarOverDays: [0, 7], junkDays: [0, 7], waterShortDays: [0, 7], lateMealDays: [0, 7], cheatDays: [0, 7],
     }),
     weight: pickNumbers(w.weight, { startKg: [20, 400], endKg: [20, 400], changeKg: [-50, 50], expectedChangeKg: [-50, 50], gapKg: [-100, 100] }),
     ...(prev && Object.keys(prev).length > 0 ? { previousWeek: prev } : {}),

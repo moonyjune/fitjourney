@@ -53,7 +53,7 @@ function markSkipped(dateKey: string, meal: MainMeal) {
 
 /** The days of a week that lack a main meal, each with a "not eaten" button per missing meal, and the days with nothing logged. */
 function MissingMeals({ p, view, t, today }: { p: PeriodSummary; view: InsightsView; t: T; today: string }) {
-  const { partial, empty } = missingInPeriod(view.insights.rows, p.fromKey, p.toKey, today);
+  const { partial, empty } = missingInPeriod(view.insights.allRows, p.fromKey, p.toKey, today);
   if (partial.length === 0 && empty.length === 0) return null;
   const mealName = (m: MainMeal) => t(`ins.meal.${m}`);
   return (

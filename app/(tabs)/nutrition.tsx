@@ -16,6 +16,7 @@ import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
 import { TdeeCard } from '../../src/components/TdeeCard';
 import { DailyMealBreakdownTable } from '../../src/components/DailyMealBreakdownTable';
 import { useNutritionStore } from '../../src/store/useNutritionStore';
+import { useCheatDayStore } from '../../src/store/useCheatDayStore';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
@@ -69,6 +70,7 @@ export default function NutritionScreen() {
   const meals = mealTemplates[dayType];
 
   const log = useNutritionStore((s) => s.getLog(dateKey));
+  const cheatDay = useCheatDayStore((s) => s.days.includes(dateKey));
   const toggleMeal = useNutritionStore((s) => s.toggleMeal);
   const addWater = useNutritionStore((s) => s.addWater);
   const resetWater = useNutritionStore((s) => s.resetWater);
@@ -159,6 +161,7 @@ export default function NutritionScreen() {
         weightKg={currentWeight}
         caloriesConsumedToday={totalCalories}
         caloriesBurnedExerciseToday={caloriesBurnedOnViewDate}
+        cheatDay={cheatDay}
       />
 
       <View style={styles.card}>

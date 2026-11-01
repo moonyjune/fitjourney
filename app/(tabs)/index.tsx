@@ -52,7 +52,7 @@ function describeMission(m: MissionResult, day: DayEvaluation, g: Translate): Mi
       break;
     case 'deficit':
       title = g('mission.deficit', { n: m.target });
-      sub = day.deficitKcal == null ? g('sub.deficitNone') : g('sub.deficit', { kcal: Math.round(day.deficitKcal).toLocaleString('en-US') });
+      sub = day.cheat ? g('sub.deficitCheat') : day.deficitKcal == null ? g('sub.deficitNone') : g('sub.deficit', { kcal: Math.round(day.deficitKcal).toLocaleString('en-US') });
       progress = m.target > 0 ? Math.max(0, m.value) / m.target : 0;
       break;
     case 'protein':

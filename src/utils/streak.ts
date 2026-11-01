@@ -29,15 +29,18 @@ function dayCaloriesInOut(
  * needs at least one logged entry (otherwise "eating nothing" would trivially look like a huge
  * deficit) AND an actual deficit (TDEE + exercise - intake) of at least STREAK_MIN_DEFICIT_KCAL.
  * Today only counts if already complete; otherwise the streak is measured through yesterday so an
- * in-progress day doesn't reset it early.
+ * in-progress day doesn't reset it early. A cheat day (`cheatDays`) is neutral: it neither adds to the
+ * streak nor breaks it, the count just carries on past it.
  */
 export function computeCurrentStreak(
   logs: Record<string, DailyNutritionLog>,
   mealTemplatesByDayType: Record<DayType, MealTemplate[]>,
   workoutEntries: WorkoutLogEntry[],
   tdeeKcal: number,
-  now: Date = new Date()
+  now: Date = new Date(),
+  cheatDays: readonly string[] = []
 ): number {
+  const cheat = new Set(cheatDays);
   function isDayComplete(dateKey: string): boolean {
     const log = logs[dateKey];
     if (!dayHasFood(log)) return false;
@@ -52,8 +55,12 @@ export function computeCurrentStreak(
     cursor.setDate(cursor.getDate() - 1);
   }
 
-  while (isDayComplete(toDateKey(cursor))) {
-    streak += 1;
+  // Cheat days are skipped; the guard only stops a run of cheat days (at most a year is kept) from walking forever.
+  for (let skipped = 0; skipped <= 400; ) {
+    const key = toDateKey(cursor);
+    if (cheat.has(key)) skipped += 1;
+    else if (isDayComplete(key)) streak += 1;
+    else break;
     cursor.setDate(cursor.getDate() - 1);
   }
 
@@ -61,13 +68,15 @@ export function computeCurrentStreak(
 }
 
 /** The longest run of consecutive days (anywhere in the logs) that hit the streak deficit — the same
- *  per-day rule as `computeCurrentStreak`, used so an earned fire badge survives a later break. */
+ *  per-day rule as `computeCurrentStreak` (cheat days neutral), used so an earned fire badge survives a later break. */
 export function computeLongestStreak(
   logs: Record<string, DailyNutritionLog>,
   mealTemplatesByDayType: Record<DayType, MealTemplate[]>,
   workoutEntries: WorkoutLogEntry[],
-  tdeeKcal: number
+  tdeeKcal: number,
+  cheatDays: readonly string[] = []
 ): number {
+  const cheat = new Set(cheatDays);
   const keys = Object.keys(logs).sort();
   if (keys.length === 0) return 0;
   let best = 0;
@@ -76,6 +85,10 @@ export function computeLongestStreak(
   const last = new Date(`${keys[keys.length - 1]}T12:00:00`);
   while (cursor.getTime() <= last.getTime()) {
     const dateKey = toDateKey(cursor);
+    if (cheat.has(dateKey)) {
+      cursor.setDate(cursor.getDate() + 1);
+      continue;
+    }
     const log = logs[dateKey];
     let complete = false;
     if (dayHasFood(log)) {

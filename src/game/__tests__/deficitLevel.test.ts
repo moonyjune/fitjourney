@@ -27,9 +27,10 @@ describe('deficit level against the daily target (1000 kcal)', () => {
     expect(deficitLevel(-400, 1000)).toBe('over'); // a surplus
   });
 
-  it('a cheat day is never "over"; no figure or no target gives no level', () => {
+  it('a cheat day is always "cheat" (its kcal are not counted); no figure or no target gives no level', () => {
     expect(deficitLevel(-400, 1000, true)).toBe('cheat');
-    expect(deficitLevel(950, 1000, true)).toBe('met');
+    expect(deficitLevel(950, 1000, true)).toBe('cheat');
+    expect(deficitLevel(null, 1000, true)).toBe('cheat');
     expect(deficitLevel(null, 1000)).toBeNull();
     expect(deficitLevel(500, 0)).toBeNull();
   });

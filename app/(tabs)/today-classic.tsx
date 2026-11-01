@@ -10,6 +10,7 @@ import { TdeeCard } from '../../src/components/TdeeCard';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
 import { useNutritionStore, todayKey } from '../../src/store/useNutritionStore';
+import { useCheatDayStore } from '../../src/store/useCheatDayStore';
 import { dayWaterTargetMl } from '../../src/water/schedule';
 import { useWorkoutStore } from '../../src/store/useWorkoutStore';
 import { getDayType } from '../../src/constants/plan';
@@ -38,6 +39,7 @@ export default function TodayScreen() {
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
   const nutritionLog = useNutritionStore((s) => s.getLog(todayKey()));
+  const cheatDays = useCheatDayStore((s) => s.days);
   const allNutritionLogs = useNutritionStore((s) => s.logs);
   const allWorkoutEntries = useWorkoutStore((s) => s.entries);
   const workoutEntries = useMemo(
@@ -99,8 +101,8 @@ export default function TodayScreen() {
   );
 
   const streak = useMemo(
-    () => computeCurrentStreak(allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, now),
-    [allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, now]
+    () => computeCurrentStreak(allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, now, cheatDays),
+    [allNutritionLogs, mealTemplates, allWorkoutEntries, tdeeKcal, now, cheatDays]
   );
   const badges = unlockedStreakBadges(streak);
 
@@ -175,6 +177,7 @@ export default function TodayScreen() {
         weightKg={currentWeight}
         caloriesConsumedToday={totalCalories}
         caloriesBurnedExerciseToday={caloriesBurnedToday}
+        cheatDay={cheatDays.includes(todayKey())}
       />
 
       <Card>

@@ -6,7 +6,7 @@ import { quest } from '../theme/quest';
 //   10–50 %  (e.g. 100–500 kcal)                          → low        orange  "không đạt"
 //   0–10 %, about what the body burns                     → flat       light red "duy trì"
 //   < 0, a surplus                                        → over       red     "ăn dư"
-// unless the day is a cheat day (then both are "cheat"). Added 2026-11-01: a deficit far beyond the target (more than 1.6× and
+// A cheat day is always "cheat" (added 2026-11-01: it is left out of the calorie math, so it has no level). Added 2026-11-01: a deficit far beyond the target (more than 1.6× and
 // more than 1000 kcal) is "excess" in violet — losing that fast costs muscle and, with gout, raises uric acid (flare risk).
 export type DeficitLevel = 'excess' | 'met' | 'ok' | 'low' | 'flat' | 'over' | 'cheat';
 
@@ -27,15 +27,15 @@ export const DEFICIT_LEVEL_COLOR: Record<DeficitLevel, string> = {
 export const DEFICIT_LEVELS: DeficitLevel[] = ['excess', 'met', 'ok', 'low', 'flat', 'over', 'cheat'];
 
 /** The level of a day's deficit against the target, or null when the day has no figure (nothing eaten logged) or no
- *  target is set. A day marked as a cheat day is never "flat" or "over". */
+ *  target is set. A day marked as a cheat day is "cheat" whatever it ate: its kcal are not counted. */
 export function deficitLevel(deficitKcal: number | null | undefined, targetKcal: number, cheatDay = false): DeficitLevel | null {
+  if (cheatDay) return 'cheat';
   if (deficitKcal == null || !Number.isFinite(deficitKcal) || !(targetKcal > 0)) return null;
   const ratio = deficitKcal / targetKcal;
   if (ratio > EXCESS_DEFICIT_RATIO && deficitKcal > EXCESS_DEFICIT_MIN_KCAL) return 'excess';
   if (ratio >= 0.9) return 'met';
   if (ratio >= 0.5) return 'ok';
   if (ratio >= 0.1) return 'low';
-  if (cheatDay) return 'cheat';
   return deficitKcal >= 0 ? 'flat' : 'over';
 }
 

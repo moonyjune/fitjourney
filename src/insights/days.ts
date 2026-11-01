@@ -42,6 +42,9 @@ export interface DayRow {
   /** All three main meals are on record (a skipped meal logged as "0 kcal" counts). */
   complete: boolean;
   missing: MainMeal[];
+  /** A day the user marked as a cheat day: its food is on record, but it is left out of the running deficit (and, in
+   *  computeInsights, of every analysis: only `allRows` keeps it). */
+  cheat: boolean;
 }
 
 export interface DayInput {
@@ -50,9 +53,11 @@ export interface DayInput {
   workouts: WorkoutLogEntry[];
   /** TDEE for a given day (already adjusted for that day's body weight). */
   tdeeFor: (dateKey: string) => number;
+  /** Days marked as a cheat day. */
+  cheatDays?: readonly string[];
 }
 
-/** One row for every day that has something on record, oldest first, with the running deficit. */
+/** One row for every day that has something on record, oldest first, with the running deficit (cheat days do not add to it). */
 export function buildDayRows(input: DayInput): DayRow[] {
   const exerciseByDay = new Map<string, number>();
   for (const w of input.workouts) {
@@ -60,6 +65,7 @@ export function buildDayRows(input: DayInput): DayRow[] {
     exerciseByDay.set(key, (exerciseByDay.get(key) ?? 0) + w.caloriesBurned);
   }
 
+  const cheatDays = new Set(input.cheatDays ?? []);
   const rows: DayRow[] = [];
   let cum = 0;
   for (const dateKey of Object.keys(input.logs).sort()) {
@@ -98,7 +104,8 @@ export function buildDayRows(input: DayInput): DayRow[] {
     const exerciseKcal = exerciseByDay.get(dateKey) ?? 0;
     const tdee = input.tdeeFor(dateKey);
     const deficit = tdee + exerciseKcal - kcal;
-    cum += deficit;
+    const cheat = cheatDays.has(dateKey);
+    if (!cheat) cum += deficit;
     rows.push({
       dateKey,
       kcal,
@@ -112,6 +119,7 @@ export function buildDayRows(input: DayInput): DayRow[] {
       cumDeficit: cum,
       complete: missing.length === 0,
       missing,
+      cheat,
     });
   }
   return rows;

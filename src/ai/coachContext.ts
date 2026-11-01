@@ -8,6 +8,7 @@ import { usePlanStore } from '../store/usePlanStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useWeightStore } from '../store/useWeightStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
+import { useCheatDayStore } from '../store/useCheatDayStore';
 import { toDateKey } from '../utils/date';
 import { addDays } from '../utils/milestones';
 import { resolveTdeeKcal } from '../utils/tdee';
@@ -26,8 +27,10 @@ export interface CoachDay {
   waterMl: number;
   burnedKcal: number;
   workouts: number;
-  /** TDEE + exercise − eaten; omitted when nothing was logged that day. */
+  /** TDEE + exercise − eaten; omitted when nothing was logged that day or on a cheat day. */
   deficitKcal?: number;
+  /** The user marked the day as a cheat day: its kcal are not counted toward the deficit (no deficitKcal). */
+  cheatDay?: true;
 }
 
 /** What the AI is told about the user's situation so its advice fits the plan. Numbers and dates only: no names, emails,
@@ -77,6 +80,7 @@ function toCoachDay(e: DayEvaluation, waterMl: number, workouts: number): CoachD
     workouts,
   };
   if (e.deficitKcal != null) day.deficitKcal = Math.round(e.deficitKcal);
+  if (e.cheat) day.cheatDay = true;
   return day;
 }
 
@@ -88,6 +92,8 @@ export interface DaySource {
   tdeeKcal: number;
   proteinTargetG: number;
   limits: { purineMg: number; saltG: number; sugarG: number };
+  /** Days marked as a cheat day (no deficit); none for a client read by their coach. */
+  cheatDays?: readonly string[];
 }
 
 /** A day evaluator (missions, deficit, nutrients: the game's own rules) over a source, plus its workouts grouped by day. */
@@ -99,6 +105,7 @@ export function evaluatorFor(source: DaySource, now: Date) {
     if (list) list.push(e);
     else byDay.set(key, [e]);
   }
+  const cheat = new Set(source.cheatDays ?? []);
   const evaluate = (dateKey: string) =>
     evaluateDay({
       dateKey,
@@ -109,8 +116,10 @@ export function evaluatorFor(source: DaySource, now: Date) {
       tdeeKcal: source.tdeeKcal,
       proteinTargetG: source.proteinTargetG,
       limits: source.limits,
+      cheat: cheat.has(dateKey),
     });
-  return { evaluate, byDay };
+  const isCheatDay = (dateKey: string) => cheat.has(dateKey);
+  return { evaluate, byDay, isCheatDay };
 }
 
 /** The user's data and a day evaluator (the same rules as the game: missions, deficit, nutrients) for the given moment.
@@ -122,6 +131,7 @@ export function makeDayEvaluator(now: Date) {
   const workoutEntries = useWorkoutStore.getState().entries;
   const weights = useWeightStore.getState().entries;
   const plan = usePlanStore.getState().plan;
+  const cheatDays = useCheatDayStore.getState().days;
 
   const latestWeight = useWeightStore.getState().latest();
   const weightKg = latestWeight?.weightKg ?? settings.startWeightKg;
@@ -135,17 +145,25 @@ export function makeDayEvaluator(now: Date) {
     targetDailyDeficitKcal: settings.targetDailyDeficitKcal,
   }).tdeeKcal;
 
-  const { evaluate, byDay } = evaluatorFor(
-    { logs, workoutEntries, mealTemplates: plan.mealTemplates, tdeeKcal, proteinTargetG: settings.proteinTargetG, limits: { purineMg: limits.purineMg, saltG: limits.saltG, sugarG: limits.sugarG } },
+  const { evaluate, byDay, isCheatDay } = evaluatorFor(
+    {
+      logs,
+      workoutEntries,
+      mealTemplates: plan.mealTemplates,
+      tdeeKcal,
+      proteinTargetG: settings.proteinTargetG,
+      limits: { purineMg: limits.purineMg, saltG: limits.saltG, sugarG: limits.sugarG },
+      cheatDays,
+    },
     now
   );
-  return { evaluate, byDay, logs, weights, plan, settings, limits, tdeeKcal };
+  return { evaluate, byDay, isCheatDay, logs, weights, plan, settings, limits, tdeeKcal, cheatDays };
 }
 
 /** Reads the stores and builds the snapshot sent with a photo analysis: the last up-to-7 days of intake and workouts,
  *  today so far, the daily/weekly targets and the state of this week's boss. */
 export function buildCoachContext(now: Date = new Date()): CoachContext {
-  const { evaluate, byDay, logs, weights, plan, settings, limits, tdeeKcal } = makeDayEvaluator(now);
+  const { evaluate, byDay, isCheatDay, logs, weights, plan, settings, limits, tdeeKcal } = makeDayEvaluator(now);
   const dayOf = (dateKey: string) => toCoachDay(evaluate(dateKey), logs[dateKey]?.waterMl ?? 0, byDay.get(dateKey)?.length ?? 0);
 
   const todayKey = toDateKey(now);
@@ -164,7 +182,7 @@ export function buildCoachContext(now: Date = new Date()): CoachContext {
     if (day.eatenKcal > 0 || day.burnedKcal > 0 || day.waterMl > 0) recentDays.push(day);
   }
 
-  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal);
+  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal, undefined, isCheatDay);
   const since = toDateKey(addDays(now, -COACH_HISTORY_DAYS));
 
   return {

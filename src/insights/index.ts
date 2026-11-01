@@ -18,10 +18,15 @@ export interface InsightsInput {
   startWeightKg: number;
   goalWeightKg: number | null;
   thresholds: Thresholds;
+  /** Days marked as a cheat day: left out of the analysis (their kcal are not counted). */
+  cheatDays?: readonly string[];
 }
 
 export interface Insights {
+  /** The days the analysis counts: every day on record except cheat days. */
   rows: DayRow[];
+  /** Every day on record, cheat days included (flagged): for what is about the food itself, such as purine before a uric test. */
+  allRows: DayRow[];
   weighs: Weigh[];
   windows: WindowStats[];
   efficiency: Efficiency;
@@ -46,7 +51,9 @@ export function computeInsights(input: InsightsInput): Insights {
     const w = weightAtDay(weighs, dateKey);
     return w === null ? input.tdeeNowKcal : input.tdeeNowKcal + th.tdeePerKg * (w - currentWeightKg);
   };
-  const rows = buildDayRows({ logs: input.logs, mealTemplates: input.mealTemplates, workouts: input.workouts, tdeeFor });
+  const allRows = buildDayRows({ logs: input.logs, mealTemplates: input.mealTemplates, workouts: input.workouts, tdeeFor, cheatDays: input.cheatDays });
+  // A cheat day is not counted: its deficit (or surplus) stays out of every sum, average, score and forecast below.
+  const rows = allRows.filter((r) => !r.cheat);
 
   const efficiency = computeEfficiency(weighs, rows, th);
   const futureDeficit = recentAvgDeficit(rows, th);
@@ -55,6 +62,7 @@ export function computeInsights(input: InsightsInput): Insights {
   const windows = OVERVIEW_WINDOWS.map((d) => windowStats(rows, d)).filter((w): w is WindowStats => w !== null);
   return {
     rows,
+    allRows,
     weighs,
     windows,
     efficiency,

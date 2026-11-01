@@ -10,9 +10,10 @@ import { templateBanter } from './templates';
 import type { BossTalk } from './talks';
 
 /**
- * Which days have a battle exchange and what it says (Map > Hội thoại chiến đấu). A day has one when food was logged on it, a stage
- * boss was being fought, and it is one of the last BANTER_DAYS days (today included, as a live "so far" exchange). The exchange is
- * the AI's when one was saved for that day, else the template built from the same summary, so every such day always talks.
+ * Which days have a battle exchange and what it says (Map > Hội thoại chiến đấu). A day has one when food was logged on it, it is
+ * not a cheat day (its kcal are not counted, so there is no fight), a stage boss was being fought, and it is one of the last
+ * BANTER_DAYS days (today included, as a live "so far" exchange). The exchange is the AI's when one was saved for that day, else
+ * the template built from the same summary, so every such day always talks.
  * Pure: the caller passes the damage log, the game's day evaluations and the logs, so it is unit-tested.
  */
 
@@ -38,13 +39,14 @@ export interface BanterDayInput {
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** The summary one day's exchange is written from, or null when the day has no food logged (no deficit, nothing to say). */
+/** The summary one day's exchange is written from, or null when the day has no food logged or is a cheat day (no deficit,
+ *  nothing to say). */
 export function buildBanterSummary(input: BanterDayInput): BanterDaySummary | null {
   const { day, boss, evaluation, log, workouts, targetKcal, cheat } = input;
-  if (day.deficitKcal == null || day.estKg == null) return null;
+  if (cheat || day.cheat || day.deficitKcal == null || day.estKg == null) return null;
   const deficitKcal = Math.round(day.deficitKcal);
   // The exchange keeps its five levels: a too-steep deficit still hits hard, a maintenance day is the boss's day.
-  const shown = deficitLevel(deficitKcal, targetKcal, cheat) ?? (deficitKcal > 0 ? 'ok' : cheat ? 'cheat' : 'over');
+  const shown = deficitLevel(deficitKcal, targetKcal) ?? (deficitKcal > 0 ? 'ok' : 'over');
   const level = shown === 'excess' ? 'met' : shown === 'flat' ? 'over' : shown;
 
   // Foods: the biggest items logged off-plan, then any junk not among them.

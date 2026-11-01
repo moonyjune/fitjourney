@@ -355,7 +355,7 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   // Cheat days are the user's own marks (a coach's view has none).
   const ownCheatDays = useCheatDayStore((s) => s.days);
   const toggleCheat = useCheatDayStore((s) => s.toggle);
-  const cheatDays = client ? [] : ownCheatDays;
+  const cheatDays = useMemo(() => (client ? [] : ownCheatDays), [client, ownCheatDays]);
   const levelOf = (key: string, deficit: number | null | undefined) => deficitLevel(deficit, deficitTarget, cheatDays.includes(key));
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   const evaluate = useMemo(
@@ -382,9 +382,11 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
         const key = toDateKey(date);
         const future = key > todayKey;
         const deficit = future ? null : evaluate(key).deficitKcal;
-        return { key, date, future, deficit };
+        // A cheat day has no deficit figure (its kcal are not counted); the strip says "Cheat" instead.
+        const cheat = !future && cheatDays.includes(key);
+        return { key, date, future, deficit, cheat };
       }),
-    [monday, todayKey, evaluate]
+    [monday, todayKey, evaluate, cheatDays]
   );
 
   function shiftWeek(delta: number) {
@@ -548,7 +550,7 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
     { label: g('journal.burned'), value: Math.round(day.burnedKcal).toLocaleString('en-US'), color: quest.hpText, accent: false },
     {
       label: g('journal.deficit'),
-      value: day.deficitKcal == null ? '—' : Math.round(day.deficitKcal).toLocaleString('en-US'),
+      value: cheatDays.includes(selectedKey) ? g('deficit.cheatShort') : day.deficitKcal == null ? '—' : Math.round(day.deficitKcal).toLocaleString('en-US'),
       color: deficitColor(levelOf(selectedKey, day.deficitKcal), quest.gold),
       accent: true,
     },
@@ -586,9 +588,11 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
               const dl = dateLabel(d.date);
               const a11y = d.future
                 ? `${wd} ${dl}`
-                : d.deficit == null
-                  ? g('journal.dayNoData', { weekday: wd, date: dl })
-                  : g('journal.day', { weekday: wd, date: dl, deficit: Math.round(d.deficit ?? 0) });
+                : d.cheat
+                  ? g('journal.dayCheat', { weekday: wd, date: dl })
+                  : d.deficit == null
+                    ? g('journal.dayNoData', { weekday: wd, date: dl })
+                    : g('journal.day', { weekday: wd, date: dl, deficit: Math.round(d.deficit ?? 0) });
               return (
                 <Pressable
                   key={d.key}
@@ -610,7 +614,7 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
                     {d.date.getDate()}
                   </HudText>
                   <HudText size={10} weight="medium" color={selected ? quest.onGold : deficitColor(levelOf(d.key, d.deficit), quest.hpText)}>
-                    {d.future ? '·' : d.deficit == null ? '–' : Math.round(d.deficit).toLocaleString('en-US')}
+                    {d.future ? '·' : d.cheat ? g('deficit.cheatShort') : d.deficit == null ? '–' : Math.round(d.deficit).toLocaleString('en-US')}
                   </HudText>
                   {/* The deficit level as a bar, still readable on the selected (gold) day. */}
                   <View style={[styles.levelBar, { backgroundColor: d.future ? 'transparent' : deficitColor(levelOf(d.key, d.deficit), 'transparent') }]} />

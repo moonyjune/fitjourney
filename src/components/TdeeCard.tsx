@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card } from './Card';
 import { useTranslation } from '../i18n/useTranslation';
+import { useGameText } from '../game/strings';
+import { DEFICIT_LEVEL_COLOR } from '../game/deficitLevel';
 import type { StringKey } from '../i18n/strings';
 import { ACTIVITY_MULTIPLIER, actualDailyDeficitKcal, resolveTdeeKcal, type TdeeSource } from '../utils/tdee';
 import { colors, spacing, typography } from '../theme/tokens';
@@ -21,6 +23,8 @@ interface TdeeCardProps {
   caloriesBurnedExerciseToday: number;
   /** Dark FitQuest look (default off = classic light). */
   dark?: boolean;
+  /** The day is a cheat day: its balance is not counted, so it reads "Cheat day · không tính kcal" instead of a figure. */
+  cheatDay?: boolean;
 }
 
 const ACTIVITY_LABEL_KEY: Record<ActivityLevel, StringKey> = {
@@ -53,8 +57,10 @@ export function TdeeCard({
   caloriesConsumedToday,
   caloriesBurnedExerciseToday,
   dark,
+  cheatDay,
 }: TdeeCardProps) {
   const { t } = useTranslation();
+  const g = useGameText();
   const styles = useMemo(() => makeStyles(!!dark), [dark]);
   const { tdeeKcal, bmrKcal, source } = resolveTdeeKcal({
     gender,
@@ -78,8 +84,12 @@ export function TdeeCard({
           <Text style={styles.value}>{Math.round(tdeeKcal)} kcal</Text>
         </View>
         <View style={styles.column}>
-          <Text style={styles.label}>{isDeficit ? t('tdee.deficitLabel') : t('tdee.surplusLabel')}</Text>
-          <Text style={[styles.value, { color: isDeficit ? (dark ? quest.xp : colors.success) : dark ? quest.gold : colors.warning }]}>{Math.round(Math.abs(balance))} kcal</Text>
+          <Text style={styles.label}>{isDeficit || cheatDay ? t('tdee.deficitLabel') : t('tdee.surplusLabel')}</Text>
+          {cheatDay ? (
+            <Text style={[styles.hint, { color: DEFICIT_LEVEL_COLOR.cheat, marginTop: 0 }]}>{g('deficit.level.cheat')}</Text>
+          ) : (
+            <Text style={[styles.value, { color: isDeficit ? (dark ? quest.xp : colors.success) : dark ? quest.gold : colors.warning }]}>{Math.round(Math.abs(balance))} kcal</Text>
+          )}
         </View>
       </View>
       <Text style={styles.hint}>{t('tdee.targetHint', { kcal: targetDailyDeficitKcal })}</Text>

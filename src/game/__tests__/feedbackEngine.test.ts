@@ -221,6 +221,7 @@ describe('what to do tomorrow', () => {
     cumDeficit: 0,
     complete: true,
     missing: [],
+    cheat: false,
     ...over,
   });
   const keys = (r: DayRow, rows: DayRow[] = [r], items: DiaryItem[] = []): AdviceKey[] => adviceFor(r, rows, items, th).map((a) => a.key);
@@ -288,7 +289,7 @@ describe('what to do tomorrow', () => {
 
 describe('a day’s feedback', () => {
   const rows: DayRow[] = [
-    { dateKey: '2026-10-05', kcal: 1500, proteinG: 120, purineMg: 300, sugarG: 10, sodiumMg: 1800, exerciseKcal: 0, tdee: 2500, deficit: 1000, cumDeficit: 1000, complete: true, missing: [] },
+    { dateKey: '2026-10-05', kcal: 1500, proteinG: 120, purineMg: 300, sugarG: 10, sodiumMg: 1800, exerciseKcal: 0, tdee: 2500, deficit: 1000, cumDeficit: 1000, complete: true, missing: [], cheat: false },
   ];
 
   it('is null for a day with nothing on record', () => {
