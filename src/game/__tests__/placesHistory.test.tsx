@@ -269,8 +269,8 @@ describe('"Gợi ý tiếp" and an empty wish (server request)', () => {
     expect(placesPrompt(more)).toContain('<seen>Ốc Oanh</seen>');
     expect(placesPrompt(more)).toContain('<seen>Ốc len xào dừa</seen>');
     expect(placesPrompt(more)).not.toContain('hot trend ở Việt Nam');
-    expect(placesMaxSearches(first)).toBe(4);
-    expect(placesMaxSearches(more)).toBe(3);
+    expect(placesMaxSearches(first)).toBe(2);
+    expect(placesMaxSearches(more)).toBe(2);
   });
 
   it('a place that comes back anyway is dropped by name', () => {

@@ -201,6 +201,16 @@ export interface PlacesRequest {
 
 /** Names sent in `exclude` at most, and dish names in `excludeDishes`. */
 export const MAX_EXCLUDE = 20;
+/** Names the server itself may put in `exclude` when a saved batch is used up (the request's and every place served from it). */
+export const MAX_EXCLUDE_BATCH = 45;
+/** One AI call finds a batch (0.26): up to this many dishes and places, kept on the server and served PAGE_PLACES / PAGE_DISHES at a
+ *  time (the size of an answer before 0.26, what the app keeps of one). */
+export const BATCH_MAX_DISHES = 10;
+export const BATCH_MAX_PLACES = 15;
+export const BATCH_PLACES_AIM = '10–15';
+export const PAGE_PLACES = 6;
+export const PAGE_DISHES = 4;
+export const PLACES_SEARCHES = 2;
 export const MAX_EXCLUDE_DISHES = 8;
 
 /** Up to `max` distinct names (by `placeNameKey`), one line each, at most 100 characters, no tags. */
@@ -259,9 +269,9 @@ export function cleanPlacesRequest(raw: unknown, now: Date = new Date()): Places
   };
 }
 
-/** Web searches a request may run: a first search 4 (one may look at what is trending), "suggest more" 3 (places only). Each costs
- *  $0.01 plus the tokens of the pages it returns, which are most of a call's cost. */
-export const placesMaxSearches = (req: PlacesRequest): number => (req.exclude ? 3 : 4);
+/** Web searches a request may run: 2, the first search and "suggest more" alike (0.26: each search costs $0.01 plus the tokens of
+ *  the pages it returns, which were most of a call's cost; one call now finds a big batch that is served page by page). */
+export const placesMaxSearches = (_req: PlacesRequest): number => 2;
 
 /** Why a request was refused, for the 400 answer (the app shows it). */
 export function placesRequestProblem(_raw: unknown): string {
@@ -277,10 +287,10 @@ export function placesPrompt(req: PlacesRequest): string {
     .filter(Boolean)
     .join('; ');
   const want = req.typed
-    ? `Người dùng muốn tìm đúng thứ này: "${req.dishes[0]}". Tìm quán bán đúng món / đồ uống đó (hiểu theo cách người Việt gọi, kể cả kiểu như "ít ngọt", "ốc" là các quán ốc), tối đa 5 quán; ghi dish = "${req.dishes[0]}".`
+    ? `Người dùng muốn tìm đúng thứ này: "${req.dishes[0]}". Tìm quán bán đúng món / đồ uống đó (hiểu theo cách người Việt gọi, kể cả kiểu như "ít ngọt", "ốc" là các quán ốc), càng nhiều càng tốt (${BATCH_PLACES_AIM} quán nếu kiểm chứng được); ghi dish = "${req.dishes[0]}".`
     : req.dishes.length > 0
-      ? `Họ muốn ăn: ${req.dishes.join('; ')}. Tìm tối đa 2 quán mỗi món.`
-      : 'Họ chưa chọn món: hãy tự chọn 3 món (ăn ngoài được) hợp nhất với mong muốn, rồi tìm tối đa 2 quán mỗi món.';
+      ? `Họ muốn ăn: ${req.dishes.join('; ')}. Tìm 3–5 quán mỗi món (tổng ${BATCH_PLACES_AIM} quán nếu kiểm chứng được).`
+      : `Họ chưa chọn món: hãy tự chọn 3 món (ăn ngoài được) hợp nhất với mong muốn, thêm vài món hot trend / gần giống (tối đa ${BATCH_MAX_DISHES} món), rồi tìm quán cho các món đó (1–3 quán mỗi món, tổng ${BATCH_PLACES_AIM} quán nếu kiểm chứng được).`;
   // "Suggest more": the places already shown must not come back; new dishes are welcome, and no search for trends.
   const more = req.exclude
     ? `ĐÂY LÀ LẦN GỢI Ý TIẾP: người dùng đã xem các quán sau, TUYỆT ĐỐI KHÔNG gợi ý lại (kể cả chi nhánh khác tên gần giống): <seen>${req.exclude.join('; ')}</seen>. Hãy tìm quán KHÁC.` +
@@ -291,11 +301,13 @@ export function placesPrompt(req: PlacesRequest): string {
     `Hôm nay là ${req.today}. Người dùng đang ở Việt Nam, ${where}. ${want}\n` +
     more +
     `${wishPrompt(req.wish, req.context)}\n` +
-    'PHẦN 1 — MÓN: trong dishes gợi ý 3 món (tối đa 4) hợp với mong muốn ' +
+    `PHẦN 1 — MÓN: trong dishes gợi ý ${BATCH_MAX_DISHES} món (ít nhất 4) hợp với mong muốn, món hợp nhất xếp trước, gồm cả món / đồ uống đang hot trend gần đây nếu hợp ý ` +
     (req.dishes.length > 0 ? `(gồm ${req.typed ? 'đúng món họ tìm' : 'các món họ muốn ăn ở trên'}, có thể thêm món gần giống)` : '(chính là các món bạn tìm quán)') +
     ': tên món tiếng Việt, why = một câu ấm áp vì sao món hợp ý họ lúc này, kcal = ước tính cho một phần (chỉ để tham khảo). ' +
     'Trong readWish viết MỘT câu ngắn: bạn hiểu mong muốn của họ thế nào (ví dụ "Bạn đang buồn và trời mưa, cần món nóng hổi, ấm bụng"). ' +
-    (req.exclude ? '' : 'Có thể dùng 1 lần tìm kiếm web để xem món / đồ uống nào đang hot trend ở Việt Nam (hoặc ở khu vực của họ) gần đây, nếu hợp với mong muốn; các lần còn lại để tìm quán.\n') +
+    `Bạn chỉ có ${PLACES_SEARCHES} lần tìm kiếm web: viết câu tìm thật rộng để mỗi lần ra NHIỀU quán (ví dụ "quán ăn ngon <món A> <món B> gần <phường>, <quận>", danh sách quán ngon / quán đang hot ở <quận>), đừng tìm từng quán một. ` +
+    (req.exclude ? '' : 'Một lần tìm có thể kèm món / đồ uống đang hot trend ở Việt Nam (hoặc ở khu vực của họ) gần đây, nếu hợp với mong muốn.') +
+    '\n' +
     'PHẦN 2 — QUÁN: ' +
     'hãy DÙNG CÔNG CỤ TÌM KIẾM WEB để tìm các quán thật GẦN NHẤT vị trí đó (cùng phường / quận trước, rồi mới xa dần; tìm kèm tên đường, phường, quận): tìm trang Google Maps của quán, ' +
     'trang Foody / ShopeeFood / GrabFood, bài review của báo, blog ẩm thực, reviewer và bài đăng mạng xã hội (Facebook, TikTok, Instagram).\n' +
@@ -322,7 +334,7 @@ export const PLACES_TOOL = {
       readWish: { type: 'string', description: 'One short Vietnamese sentence: how the wish was understood.' },
       dishes: {
         type: 'array',
-        maxItems: 4,
+        maxItems: BATCH_MAX_DISHES,
         items: {
           type: 'object',
           properties: {
@@ -336,7 +348,7 @@ export const PLACES_TOOL = {
       },
       places: {
         type: 'array',
-        maxItems: 6,
+        maxItems: BATCH_MAX_PLACES,
         items: {
           type: 'object',
           properties: {
@@ -359,7 +371,7 @@ export const PLACES_TOOL = {
             },
             reviews: {
               type: 'array',
-              maxItems: 3,
+              maxItems: 2,
               items: {
                 type: 'object',
                 properties: {
@@ -373,7 +385,7 @@ export const PLACES_TOOL = {
             },
             sources: {
               type: 'array',
-              maxItems: 5,
+              maxItems: 3,
               items: { type: 'object', properties: { title: { type: 'string' }, url: { type: 'string' } }, required: ['url'] },
             },
             openStatus: { type: ['string', 'null'], description: 'Opening hours / still operating, as seen; null if unknown.' },
@@ -513,8 +525,13 @@ export function cleanPlacesAnswer(
     keepPhotos?: boolean;
     /** Names of places already shown ("suggest more"): such a place is left out (not counted as dropped). */
     exclude?: string[];
+    /** Most places / dishes kept: an answer's PAGE_PLACES / PAGE_DISHES (default), a batch's BATCH_MAX_PLACES / BATCH_MAX_DISHES. */
+    maxPlaces?: number;
+    maxDishes?: number;
   }
 ): CheatPlacesAnswer {
+  const maxPlaces = opts.maxPlaces ?? PAGE_PLACES;
+  const maxDishes = opts.maxDishes ?? PAGE_DISHES;
   const excluded = new Set((opts.exclude ?? []).map(placeNameKey).filter(Boolean));
   const o = (raw ?? {}) as Record<string, unknown>;
   const seen = opts.seenUrls ? new Set(opts.seenUrls.map(urlKey).filter(Boolean)) : null;
@@ -616,7 +633,7 @@ export function cleanPlacesAnswer(
         capped: level !== claimed,
       },
     });
-    if (places.length === 6) break;
+    if (places.length === maxPlaces) break;
   }
   // Nearest first; a place without a distance keeps its order after the ones with one.
   places.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
@@ -628,7 +645,7 @@ export function cleanPlacesAnswer(
     const kcal = typeof d.kcal === 'number' && Number.isFinite(d.kcal) && d.kcal > 0 && d.kcal <= 5000 ? Math.round(d.kcal) : null;
     const photo = opts.keepPhotos ? cleanPlacePhoto(d.photo) : null;
     dishes.push({ name, why: clean(d.why, 200), kcal, emoji: clean(d.emoji, 8) || null, ...(photo ? { photo } : {}) });
-    if (dishes.length === 4) break;
+    if (dishes.length === maxDishes) break;
   }
   const found = new Set(places.map((p) => p.dish.toLowerCase()));
   const notFound = [...new Set((Array.isArray(o.notFound) ? o.notFound : []).map((x) => clean(x, 80)).filter((x) => x && !found.has(x.toLowerCase())))].slice(0, 3);
@@ -645,4 +662,144 @@ export function cleanPlacesAnswer(
     ...(opts.sample ? { sample: true as const } : {}),
     ...(opts.seenUrls ? { seenUrls: [...new Set(opts.seenUrls.map(normalizeUrl).filter(Boolean))].slice(0, 200) } : {}),
   };
+}
+
+// ----- the saved batch (0.26) -----
+// One AI call (2 web searches) finds up to BATCH_MAX_PLACES places and BATCH_MAX_DISHES dishes. The cleaned batch is kept on the
+// server (table places_batches, per user, 7 days) under a key of the request (`placesRequestKey`), with the places and dishes already
+// served. The first search and "suggest more" are answered page by page from it (`placesPage`: the answer's usual size) without a new
+// AI call; only a batch that is used up (or older than 7 days) leads to a new call, told to leave out every place served before.
+
+export const PLACES_BATCH_TTL_DAYS = 7;
+const KEY_VERSION = 'v1';
+
+/** What makes two requests "the same search": the place (the position rounded to ~1 km when there is one, else the area typed), the
+ *  dishes asked for (`typed` or the AI's), the wish, and the meal slot of the time (a breakfast batch does not answer a late-night
+ *  wish). Not the `exclude` lists (they only steer the paging), nor the eating history (it changes every day). */
+export function placesRequestKey(req: PlacesRequest): string {
+  const where = req.coords ? `@${req.coords.lat.toFixed(2)},${req.coords.lon.toFixed(2)}` : placeNameKey(req.location);
+  const dishes = req.dishes.map(placeNameKey).filter(Boolean).sort().join('+');
+  return [KEY_VERSION, where, req.typed ? 'typed' : 'free', dishes, placeNameKey(req.wish), req.context?.slot ?? ''].join('|').slice(0, 600);
+}
+
+/** Whether a batch saved at `createdAtISO` may still be served (younger than PLACES_BATCH_TTL_DAYS). */
+export function placesBatchFresh(createdAtISO: string, now: Date = new Date()): boolean {
+  const at = Date.parse(createdAtISO);
+  return Number.isFinite(at) && now.getTime() - at < PLACES_BATCH_TTL_DAYS * 86_400_000 && at <= now.getTime() + 60_000;
+}
+
+/** The ids kept in a batch's `served` list: a place by its name ("p:quan oc oanh"), a dish by its name ("d:oc len xao dua"). */
+export const placeServedId = (name: string): string => `p:${placeNameKey(name)}`;
+export const dishServedId = (name: string): string => `d:${placeNameKey(name)}`;
+
+/** The places of a batch that may still be served: not served yet, not named in the request's `exclude` (shown, saved). */
+function placesLeftOf(batch: CheatPlacesAnswer, served: string[], exclude: string[] = []): CheatPlace[] {
+  const skip = new Set([...served, ...exclude.map(placeServedId)]);
+  const seen = new Set<string>();
+  return batch.places.filter((p) => {
+    const id = placeServedId(p.name);
+    if (skip.has(id) || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+/** How many places of the batch are left to serve. */
+export const placesBatchLeft = (batch: CheatPlacesAnswer, served: string[], exclude?: string[]): number => placesLeftOf(batch, served, exclude).length;
+
+/** The names of the places a batch already served (what a new batch must leave out), with the request's own `exclude` first. */
+export function placesBatchExclude(batch: CheatPlacesAnswer, served: string[], exclude: string[] = []): string[] {
+  const ids = new Set(served);
+  const names = [...exclude, ...batch.places.filter((p) => ids.has(placeServedId(p.name))).map((p) => p.name)];
+  const out: string[] = [];
+  const keys = new Set<string>();
+  for (const n of names) {
+    const k = placeNameKey(n);
+    if (!k || keys.has(k)) continue;
+    keys.add(k);
+    out.push(n);
+  }
+  return out.slice(0, MAX_EXCLUDE_BATCH);
+}
+
+/** The next page of a batch: up to PAGE_PLACES places not served yet (nearest first, at most 3 per dish while others are left, at most
+ *  PAGE_DISHES dishes among them), the dishes of those places, then dishes not served yet up to PAGE_DISHES. `notFound`, the
+ *  search count and what was dropped go with the first page only. `served` is the list after this page; `left` the places still
+ *  unserved after it. The answer has the shape of a single answer (the app cleans it again with the default caps). */
+export function placesPage(batch: CheatPlacesAnswer, served: string[], exclude?: string[]): { answer: CheatPlacesAnswer; served: string[]; left: number } {
+  const first = served.length === 0;
+  const left = placesLeftOf(batch, served, exclude);
+  const chosen: CheatPlace[] = [];
+  const dishKeys: string[] = [];
+  const perDish = new Map<string, number>();
+  const take = (p: CheatPlace, perDishCap: number): boolean => {
+    const d = placeNameKey(p.dish);
+    if (!dishKeys.includes(d) && dishKeys.length >= PAGE_DISHES) return false;
+    if ((perDish.get(d) ?? 0) >= perDishCap) return false;
+    if (!dishKeys.includes(d)) dishKeys.push(d);
+    perDish.set(d, (perDish.get(d) ?? 0) + 1);
+    chosen.push(p);
+    return true;
+  };
+  for (const pass of [3, Infinity]) {
+    for (const p of left) {
+      if (chosen.length >= PAGE_PLACES) break;
+      if (!chosen.includes(p)) take(p, pass);
+    }
+  }
+  chosen.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+  const servedIds = new Set(served);
+  const dishes: CheatWishDish[] = [];
+  const addDish = (d: CheatWishDish) => {
+    if (dishes.length < PAGE_DISHES && !dishes.some((x) => placeNameKey(x.name) === placeNameKey(d.name))) dishes.push(d);
+  };
+  for (const k of dishKeys) {
+    const d = batch.dishes.find((x) => placeNameKey(x.name) === k);
+    if (d) addDish(d);
+  }
+  for (const d of batch.dishes) if (!servedIds.has(dishServedId(d.name))) addDish(d);
+  const nextServed = [...new Set([...served, ...chosen.map((p) => placeServedId(p.name)), ...dishes.map((d) => dishServedId(d.name))])];
+  return {
+    answer: {
+      readWish: batch.readWish,
+      dishes,
+      places: chosen,
+      notFound: first ? batch.notFound : [],
+      note: first ? batch.note : null,
+      checkedAtISO: batch.checkedAtISO,
+      searches: first ? batch.searches : 0,
+      dropped: first ? batch.dropped : 0,
+      searchErrors: first ? batch.searchErrors : [],
+      ...(batch.sample ? { sample: true as const } : {}),
+      ...(batch.seenUrls ? { seenUrls: batch.seenUrls } : {}),
+    },
+    served: nextServed,
+    left: left.length - chosen.length,
+  };
+}
+
+/** A batch as read back from the table: cleaned again with the batch caps (photos kept), or null when it is not one. */
+export function cleanStoredBatch(raw: unknown): CheatPlacesAnswer | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (!Array.isArray(o.places) || typeof o.checkedAtISO !== 'string') return null;
+  const seenUrls = Array.isArray(o.seenUrls) ? o.seenUrls.filter((u): u is string => typeof u === 'string') : null;
+  const answer = cleanPlacesAnswer(raw, {
+    seenUrls,
+    today: o.checkedAtISO.slice(0, 10),
+    checkedAtISO: o.checkedAtISO,
+    searches: typeof o.searches === 'number' ? o.searches : 0,
+    searchErrors: Array.isArray(o.searchErrors) ? o.searchErrors.filter((e): e is string => typeof e === 'string') : [],
+    sample: o.sample === true,
+    keepPhotos: true,
+    maxPlaces: BATCH_MAX_PLACES,
+    maxDishes: BATCH_MAX_DISHES,
+  });
+  if (typeof o.dropped === 'number' && o.dropped > 0 && o.dropped < 1000) answer.dropped += Math.round(o.dropped);
+  return answer;
+}
+
+/** A `served` list as read back: distinct "p:" / "d:" ids only. */
+export function cleanServed(raw: unknown): string[] {
+  return [...new Set((Array.isArray(raw) ? raw : []).filter((x): x is string => typeof x === 'string' && /^[pd]:[a-z0-9 ]{1,120}$/.test(x)))].slice(0, 200);
 }

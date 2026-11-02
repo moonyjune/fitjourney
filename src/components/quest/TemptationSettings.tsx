@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
-import { DAILY_QUOTA } from '../../../supabase/functions/_shared/usage';
 import { TEMPTATION_RESIST_XP } from '../../game/constants';
 import { useGameText } from '../../game/strings';
 import { useMealModeStore } from '../../store/useMealModeStore';
@@ -81,7 +80,7 @@ export function TemptationSettings() {
             ]}
           />
           <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {settings.level === 'easy' ? g('tempt.levelHintEasy') : g('tempt.levelHintHard', { n: DAILY_QUOTA.tempt })}
+            {settings.level === 'easy' ? g('tempt.levelHintEasy') : g('tempt.levelHintHard')}
           </HudText>
 
           <HudText size={13}>{g('tempt.freq')}</HudText>

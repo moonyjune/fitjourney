@@ -123,6 +123,8 @@ export interface AiCall {
   /** Anthropic server tools (web search / fetch) offered next to the feature's tool, for the model in force. With them the model
    *  chooses when to call the feature's tool (a forced call would skip the searches); without them nothing changes. */
   serverTools?: (model: string) => Record<string, unknown>[];
+  /** Time one attempt may take (default ATTEMPT_TIMEOUT_MS), for a call that writes a long answer (tempt-me's bulk refill). */
+  attemptTimeoutMs?: number;
 }
 
 /** What the web tools gave a call: whether they were offered and accepted by the API, and what the answer showed of the web. */
@@ -242,7 +244,7 @@ async function callClaude(
         method: 'POST',
         headers: anthropicHeaders(ANTHROPIC_API_KEY!, Deno.env.get('AI_WORKSPACE_ID')),
         body: bodyFor(!noForcedTool.has(model)),
-        signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+        signal: AbortSignal.timeout(call.attemptTimeoutMs ?? ATTEMPT_TIMEOUT_MS),
       });
     } catch (error) {
       // No answer at all (network, or the attempt timed out): worth another try like a 5xx.
@@ -409,6 +411,31 @@ async function callClaudeWithSearch(
   }
 }
 
+/** Whether this user may make one more call of `feature` now: the feature's daily calls, the user's daily budget and the global one.
+ *  The refusal (message and status) otherwise. */
+export async function aiAllowance(ctx: AiContext, feature: AiFeature): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  const quota = await loadQuota(ctx.admin, feature);
+  if (quotaReached(feature, await usedToday(ctx.admin, ctx.userId, feature), quota)) return { ok: false, error: quotaMessage(feature, quota), status: 429 };
+  if (budgetReached(await userCostToday(ctx.admin, ctx.userId), USER_BUDGET)) return { ok: false, error: USER_BUDGET_MESSAGE, status: 429 };
+  if (GLOBAL_BUDGET > 0 && budgetReached(await globalCostToday(ctx.admin), GLOBAL_BUDGET)) return { ok: false, error: GLOBAL_BUDGET_MESSAGE, status: 503 };
+  return { ok: true };
+}
+
+/** What one call gave: the tool input, the usage, and what the web showed (`findings` of a `webSearch` call, `web` of a
+ *  `serverTools` call). */
+export type AiCallResult = { input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings | null; web?: WebOutcome };
+
+/** One Claude call, made and logged (under `feature`, for this user) the way serveAi makes its call. No quota or budget check: the
+ *  caller asks `aiAllowance` first. For a function that makes several calls in one request (tempt-me's bulk refill). */
+export async function runAiCall(ctx: AiContext, feature: AiFeature, call: AiCall): Promise<AiCallResult | { error: string; status: number }> {
+  if (!ANTHROPIC_API_KEY) return { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.', status: 500 };
+  const config = await loadConfig(ctx.admin);
+  const outcome = call.webSearch ? await callClaudeWithSearch(call, config.model) : await callClaude(call, config.model);
+  if ('error' in outcome) return outcome;
+  await recordUsage(ctx.admin, ctx.userId, feature, outcome.usage, config);
+  return { input: outcome.input, usage: outcome.usage, findings: 'findings' in outcome ? outcome.findings : null, web: 'web' in outcome ? outcome.web : undefined };
+}
+
 /** Wraps a feature: `plan` receives the parsed JSON body and the context, and returns the Claude call (or a Response). */
 export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>, ctx: AiContext) => Promise<AiPlan>) {
   Deno.serve(async (req) => {
@@ -440,17 +467,13 @@ export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>
       const planned = await plan(body ?? {}, ctx);
       if (planned instanceof Response) return planned;
 
-      const quota = await loadQuota(admin, feature);
-      if (quotaReached(feature, await usedToday(admin, user.id, feature), quota)) return jsonResponse({ error: quotaMessage(feature, quota) }, 429);
-      if (budgetReached(await userCostToday(admin, user.id), USER_BUDGET)) return jsonResponse({ error: USER_BUDGET_MESSAGE }, 429);
-      if (GLOBAL_BUDGET > 0 && budgetReached(await globalCostToday(admin), GLOBAL_BUDGET)) return jsonResponse({ error: GLOBAL_BUDGET_MESSAGE }, 503);
+      const allowed = await aiAllowance(ctx, feature);
+      if (!allowed.ok) return jsonResponse({ error: allowed.error }, allowed.status);
 
-      const config = await loadConfig(admin);
-      const outcome = planned.call.webSearch ? await callClaudeWithSearch(planned.call, config.model) : await callClaude(planned.call, config.model);
+      const outcome = await runAiCall(ctx, feature, planned.call);
       if ('error' in outcome) return jsonResponse({ error: outcome.error }, outcome.status);
-      await recordUsage(admin, user.id, feature, outcome.usage, config);
       if (planned.after) await planned.after(outcome.input, ctx);
-      const info: ShapeInfo = { ctx, usage: outcome.usage, findings: 'findings' in outcome ? outcome.findings : null, web: 'web' in outcome ? outcome.web : undefined };
+      const info: ShapeInfo = { ctx, usage: outcome.usage, findings: outcome.findings, web: outcome.web };
       return jsonResponse({ [planned.responseKey]: planned.shape ? await planned.shape(outcome.input, info) : outcome.input });
     } catch (error) {
       return jsonResponse({ error: error instanceof Error ? error.message : 'Lỗi không xác định.' }, 500);

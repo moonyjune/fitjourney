@@ -980,3 +980,100 @@ select cron.schedule(
   where exists (select 1 from vault.decrypted_secrets where name = 'push_function_url');
   $cron$
 );
+
+-- ===== Giảm chi phí AI (0.26): lô quán đã tìm + kho món cám dỗ dùng chung =====
+-- Tìm quán (suggest-cheat-places): MỘT lần gọi AI (2 lần tìm web) tìm cả lô (tối đa 10 món, 10-15 quán), lưu ở đây 7 ngày theo
+-- request_key (khu vực / tọa độ làm tròn ~1 km, món, mong muốn, buổi; placesRequestKey trong _shared/places.ts). Lần tìm lại và
+-- "Gợi ý tiếp" lấy trang kế tiếp từ lô (served = các quán / món đã trả: "p:<tên>", "d:<tên>") mà không gọi AI; lô hết hoặc quá 7 ngày
+-- mới gọi AI lần nữa. Hàm (service role) đọc/ghi; user chỉ xem / xóa lô của mình. Chạy lại nhiều lần vẫn an toàn; khi bảng chưa có,
+-- hàm vẫn chạy như trước (mỗi lần một lần gọi AI).
+create table if not exists public.places_batches (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  request_key text not null check (char_length(request_key) between 1 and 600),
+  payload jsonb not null check (jsonb_typeof(payload) = 'object' and pg_column_size(payload) <= 200000),
+  served jsonb not null default '[]'::jsonb check (jsonb_typeof(served) = 'array' and pg_column_size(served) <= 20000),
+  created_at timestamptz not null default now()
+);
+create index if not exists places_batches_lookup on public.places_batches (user_id, request_key, created_at desc);
+alter table public.places_batches enable row level security;
+revoke all on public.places_batches from public, anon, authenticated;
+grant select, delete on public.places_batches to authenticated;
+drop policy if exists "places_batches_own_select" on public.places_batches;
+create policy "places_batches_own_select" on public.places_batches for select
+  to authenticated using (auth.uid() = user_id);
+drop policy if exists "places_batches_own_delete" on public.places_batches;
+create policy "places_batches_own_delete" on public.places_batches for delete
+  to authenticated using (auth.uid() = user_id);
+
+-- Thử thách cám dỗ mức Khó (tempt-me): kho món dùng chung cho mọi người chơi (~200 món mỗi lần nạp, nạp bằng vài lần gọi AI khi kho
+-- sắp cạn: còn dưới 40 món hợp lúc này mà người chơi chưa thấy trong 30 ngày, hoặc món mới nhất đã 30 ngày). item = món như app
+-- hiển thị (name, emoji, whyNow, pitch, kcal, sugarG, purineMg, sourceUrl/sourceDomain/imageUrl nếu có) + khi nào hợp (kind, times,
+-- days, weather, city, occasion, trending); name_key = tên chuẩn hóa (poolNameKey), không trùng. Mỗi lần mời chỉ chọn MỘT món từ kho
+-- (không gọi AI) và ghi vào tempt_shown để không lặp lại với người đó trong 30 ngày. User đã đăng nhập chỉ đọc kho; chỉ hàm ghi.
+create table if not exists public.tempt_pool (
+  id uuid primary key default gen_random_uuid(),
+  name_key text not null unique check (char_length(name_key) between 1 and 100),
+  item jsonb not null check (jsonb_typeof(item) = 'object' and pg_column_size(item) <= 8000),
+  created_at timestamptz not null default now()
+);
+create index if not exists tempt_pool_created on public.tempt_pool (created_at desc);
+alter table public.tempt_pool enable row level security;
+revoke all on public.tempt_pool from public, anon, authenticated;
+grant select on public.tempt_pool to authenticated;
+drop policy if exists "tempt_pool_select_signed_in" on public.tempt_pool;
+create policy "tempt_pool_select_signed_in" on public.tempt_pool for select
+  to authenticated using (true);
+
+-- Món đã mời ai, lần cuối lúc nào (một dòng mỗi người mỗi món; mời lại thì cập nhật shown_at).
+create table if not exists public.tempt_shown (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  pool_id uuid not null references public.tempt_pool (id) on delete cascade,
+  shown_at timestamptz not null default now(),
+  primary key (user_id, pool_id)
+);
+create index if not exists tempt_shown_user_time on public.tempt_shown (user_id, shown_at desc);
+alter table public.tempt_shown enable row level security;
+revoke all on public.tempt_shown from public, anon, authenticated;
+grant select, insert on public.tempt_shown to authenticated;
+drop policy if exists "tempt_shown_own_select" on public.tempt_shown;
+create policy "tempt_shown_own_select" on public.tempt_shown for select
+  to authenticated using (auth.uid() = user_id);
+drop policy if exists "tempt_shown_own_insert" on public.tempt_shown;
+create policy "tempt_shown_own_insert" on public.tempt_shown for insert
+  to authenticated with check (auth.uid() = user_id);
+
+-- Trạng thái nạp kho (một dòng): đang nạp từ lúc nào, nạp xong lúc nào, lần nạp không được món nào lúc nào. Chỉ hàm (service role).
+create table if not exists public.tempt_pool_meta (
+  id integer primary key default 1 check (id = 1),
+  refill_started_at timestamptz,
+  refilled_at timestamptz,
+  failed_at timestamptz,
+  last_added integer
+);
+insert into public.tempt_pool_meta (id) values (1) on conflict (id) do nothing;
+alter table public.tempt_pool_meta enable row level security;
+revoke all on public.tempt_pool_meta from public, anon, authenticated;
+
+-- Giành quyền nạp kho: MỘT câu UPDATE có điều kiện, nên hai yêu cầu cùng lúc không bao giờ cùng nạp. Đúng = được nạp. Chỉ service role.
+create or replace function public.tempt_pool_claim_refill(p_running_before timestamptz, p_done_before timestamptz, p_failed_before timestamptz)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  claimed integer;
+begin
+  insert into public.tempt_pool_meta (id) values (1) on conflict (id) do nothing;
+  update public.tempt_pool_meta
+     set refill_started_at = now()
+   where id = 1
+     and (refill_started_at is null or refill_started_at < p_running_before)
+     and (refilled_at is null or refilled_at < p_done_before)
+     and (failed_at is null or failed_at < p_failed_before);
+  get diagnostics claimed = row_count;
+  return claimed > 0;
+end;
+$$;
+revoke all on function public.tempt_pool_claim_refill(timestamptz, timestamptz, timestamptz) from public, anon, authenticated;
+grant execute on function public.tempt_pool_claim_refill(timestamptz, timestamptz, timestamptz) to service_role;

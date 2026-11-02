@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26.0 | yes | suggest-cheat-places, tempt-me |
 | 0.25.0 | yes | send-push |
 | 0.24.0 | no | — |
 | 0.23.0 | no | — |
@@ -72,6 +73,11 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.26.0
+- AI cost, "Tìm quán" (cheat day): one AI call now runs 2 web searches (was up to 4) and finds a big batch (up to 10 dishes, 10–15 places). The batch is kept on the server for 7 days; searching the same wish / area / dishes again and "Gợi ý tiếp" are answered page by page from it (6 places, 4 dishes, as before) with no AI call. A new call only when the batch is used up or older than 7 days, and it leaves out every place already shown.
+- AI cost, temptation pop-up (Hard level): items now come from a pool shared by all players (~200 at a time, written in bulk by 4 AI calls, one of them searching the web for what is trending). Each pop-up picks one item that fits the time of day, weekday / weekend, the weather, the city and any holiday, never repeated for a player within 30 days: no AI call per pop-up. When the pool runs low it is refilled in the background (at most every 12 h). Pictures: a web item's page picture is fetched once and kept for everyone; otherwise the dish's real photo as before.
+- Server: tables `places_batches`, `tempt_pool`, `tempt_shown`, `tempt_pool_meta` and the function `tempt_pool_claim_refill` (run schema.sql), then deploy `suggest-cheat-places` and `tempt-me`. Until schema.sql is run both functions work as before (place search with 2 searches, one AI call per pop-up).
 
 ## 0.25.0
 - Web Push: reminders arrive while the app is closed. Profile › "Thông báo khi đóng app" (web only, next to "Nhắc nhở"). On iPhone it works only in the Home Screen app (Safari › Share › Add to Home Screen, iOS 16.4+); tapped in a Safari tab it shows how to add it.

@@ -229,10 +229,11 @@ export async function pagePhoto(pageUrl: string, fetchImpl: PageFetch, timeoutMs
 export async function findPlacePhotos(
   places: { sources?: { url: string }[]; reviews?: { url: string }[]; rating?: { url: string } | null }[],
   fetchImpl: PageFetch,
-  budgetMs = PHOTOS_BUDGET_MS
+  budgetMs = PHOTOS_BUDGET_MS,
+  maxPages = MAX_PAGES
 ): Promise<(WebPhoto | null)[]> {
   const pagesOf = places.map(photoPagesFor);
-  const unique = [...new Set(pagesOf.flat())].slice(0, MAX_PAGES);
+  const unique = [...new Set(pagesOf.flat())].slice(0, maxPages);
   const results = new Map<string, WebPhoto | null>();
   const work = Promise.all(unique.map(async (u) => results.set(u, await pagePhoto(u, fetchImpl, Math.min(PAGE_TIMEOUT_MS, budgetMs)))));
   let timer: ReturnType<typeof setTimeout> | undefined;
