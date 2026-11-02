@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import { disableWebPush } from '../notifications/webPush';
+import { usePushStore } from '../store/usePushStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { resetAllLocalStores } from '../store/resetLocalStores';
 import { flushSyncQueue } from '../sync/cloudSync';
@@ -9,6 +11,8 @@ import { useSyncQueueStore } from '../sync/syncQueue';
 export async function signOutAndReset(): Promise<void> {
   const wasDev = useAuthStore.getState().devMode;
   if (!wasDev && useSyncQueueStore.getState().pending.length > 0) await flushSyncQueue().catch(() => undefined);
+  // This device's Web Push subscription belongs to the account: drop it (and its row, while still signed in).
+  if (usePushStore.getState().enabled) await disableWebPush().catch(() => usePushStore.getState().reset());
   if (wasDev) useAuthStore.getState().leaveDevMode();
   else await supabase.auth.signOut();
   resetAllLocalStores();

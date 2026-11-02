@@ -22,6 +22,7 @@ import { AppIntro } from '../src/components/AppIntro';
 import { WeeklyReportAutoRefresh } from '../src/ai/useWeeklyReportAutoRefresh';
 import { TemptationHost } from '../src/temptation/TemptationHost';
 import { WaterReminderHost } from '../src/water/WaterReminderHost';
+import { WebPushHost } from '../src/notifications/WebPushHost';
 
 // Minimum time the branded intro stays on screen, so it isn't just a 1-frame flash on warm starts.
 const MIN_INTRO_MS = 1200;
@@ -151,6 +152,8 @@ export default function RootLayout() {
       {ready && <TemptationHost enabled={!!session && roleChosen && role === 'client'} />}
       {/* Water plan: a pop-up at each drink time while the app is open (reminders on in Profile). */}
       {ready && <WaterReminderHost enabled={!!session && roleChosen && role === 'client'} />}
+      {/* Web Push (Profile > Notifications when the app is closed): keeps this device's reminder plan saved with its subscription. */}
+      {ready && <WebPushHost enabled={!!session && roleChosen && role === 'client'} />}
       {!ready ? (
         <AppIntro durationMs={MIN_INTRO_MS} />
       ) : (

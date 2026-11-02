@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import { WaterReminderDialog } from '../components/quest/WaterReminderDialog';
 import { formatGameText } from '../game/strings';
 import { useNutritionStore } from '../store/useNutritionStore';
+import { usePushStore } from '../store/usePushStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useTemptationStore } from '../store/useTemptationStore';
 import { useWaterReminderStore } from '../store/useWaterReminderStore';
@@ -19,6 +20,8 @@ const pageHidden = () => Platform.OS === 'web' && typeof document !== 'undefined
 /** The browser's notification for a drink time, when the user allowed notifications for the site (best effort). */
 function browserNotify(reminder: WaterReminder) {
   if (Platform.OS !== 'web' || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  // Web Push is on for this device: the server's notification covers it (the in-app pop-up still shows).
+  if (usePushStore.getState().enabled) return;
   try {
     const language = useSettingsStore.getState().language;
     new Notification(formatGameText(language, 'water.notifTitle'), {
