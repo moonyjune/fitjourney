@@ -20,6 +20,7 @@ import { useAiDigestStore } from './useAiDigestStore';
 import { useAiReportStore } from './useAiReportStore';
 import { resetAnalysisStore } from './useAnalysisStore';
 import { useCheatDayStore } from './useCheatDayStore';
+import { resetCheatPlacesStore } from './useCheatPlacesStore';
 import { resetTemptationStore } from './useTemptationStore';
 import { resetDishPhotoStore } from './useDishPhotoStore';
 import { useBossTalkStore } from './useBossTalkStore';
@@ -78,6 +79,7 @@ export function resetAllLocalStores() {
   useAiReportStore.setState({ weekly: {} });
   resetAnalysisStore();
   useCheatDayStore.setState({ days: [] });
+  resetCheatPlacesStore();
   useSelectedDayStore.setState({ selectedKey: null });
   resetTemptationStore();
   resetDishPhotoStore();

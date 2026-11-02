@@ -1,9 +1,12 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { acceptDinner, cleanAiDinner, type DinnerBrief, type DinnerIdea } from '../../ai/dinner';
 import { buildMealPlan, dayTotals } from '../../ai/mealSplit';
 import { buildTasteProfile } from '../../ai/tasteProfile';
 import { useAiErrorText } from '../../ai/usePhotoAnalysis';
+import { useDishPhotos } from '../../ai/useDishPhotos';
+import { excludeNames, joinAnswers, newPlaces, placeToSaved, searchFromAnswer } from '../../cookbook/placesHistory';
+import { useCheatPlacesStore } from '../../store/useCheatPlacesStore';
 import {
   CRAVING_IDS,
   DISH_TYPE_IDS,
@@ -33,8 +36,9 @@ import { pick as pickPrefs, useMealPrefStore } from '../../store/useMealPrefStor
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { requestCheatPlaces, requestDinner, searchSharedCookbookFiltered, shareToCookbook, type AiErrorKind } from '../../sync/cloudSync';
 import { quest, questRadius } from '../../theme/quest';
-import { WISH_MAX_CHARS } from '../../../supabase/functions/_shared/places';
+import { placeNameKey, WISH_MAX_CHARS, type CheatPlace, type PlacePhoto } from '../../../supabase/functions/_shared/places';
 import { CheatPlacesList } from './CheatPlacesList';
+import { CheatPlacesSaved } from './CheatPlacesSaved';
 import { DishCard } from './DishCard';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
@@ -100,7 +104,12 @@ export function CookbookFinder() {
   const cheatAiAtISO = useCookbookFinderStore((s) => s.cheatAiAtISO);
   const cheatAiReadWish = useCookbookFinderStore((s) => s.cheatAiReadWish);
   const places = useCookbookFinderStore((s) => s.places);
+  const placesMore = useCookbookFinderStore((s) => s.placesMore);
+  const placesAsk = useCookbookFinderStore((s) => s.placesAsk);
+  const placesSearchId = useCookbookFinderStore((s) => s.placesSearchId);
   const placesNear = useCookbookFinderStore((s) => s.placesNear);
+  const savedPlaces = useCheatPlacesStore((s) => s.saved);
+  const placesHistory = useCheatPlacesStore((s) => s.history);
   const book = useCookbookStore((s) => s.recipes);
   const foods = useAllFoods();
   const logs = useNutritionStore((s) => s.logs);
@@ -110,7 +119,7 @@ export function CookbookFinder() {
   const prefs = useMemo(() => pickPrefs({ kcal: prefKcal, proteinG: prefProtein, strictKcal: prefStrict }), [prefKcal, prefProtein, prefStrict]);
   const [mode, setMode] = useState<'have' | 'avoid'>('have');
   const [query, setQuery] = useState('');
-  const [busy, setBusy] = useState<'ai' | 'shared' | 'places' | 'locate' | null>(null);
+  const [busy, setBusy] = useState<'ai' | 'shared' | 'places' | 'more' | 'locate' | null>(null);
   const [placesError, setPlacesError] = useState<string | null>(null);
   const [accuracyM, setAccuracyM] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -129,6 +138,29 @@ export function CookbookFinder() {
   const pool = useMemo(() => ingredientPool(book, foods), [book, foods]);
   const picked = [...filters.have, ...filters.avoid];
   const options = suggestIngredients(pool, query, picked, query.trim() ? 8 : 12);
+
+  // The places shown: the first answer and its "suggest more" pages, each place and dish once.
+  const shownPlaces = useMemo(() => (places ? joinAnswers([places, ...placesMore]) : null), [places, placesMore]);
+  const savedKeys = useMemo(() => new Set(savedPlaces.map((p) => p.key)), [savedPlaces]);
+  const shownSearch = placesSearchId ? placesHistory.find((h) => h.id === placesSearchId) : undefined;
+  const knownDishPhotos = useMemo(() => {
+    const out: Record<string, PlacePhoto> = {};
+    for (const d of shownSearch?.dishes ?? []) if (d.photo) out[placeNameKey(d.name)] = d.photo;
+    return out;
+  }, [shownSearch]);
+  // Dish photos found for the shown search are kept with it (history), so it shows them again without asking.
+  const photoNames = cheat && shownPlaces ? shownPlaces.dishes.filter((d) => !d.photo && !knownDishPhotos[placeNameKey(d.name)]).map((d) => d.name) : [];
+  const dishPhotoStates = useDishPhotos(photoNames);
+  useEffect(() => {
+    if (!placesSearchId) return;
+    const found: Record<string, PlacePhoto> = {};
+    for (const [name, st] of Object.entries(dishPhotoStates)) {
+      if (st?.status !== 'done' || !st.photo || st.sample) continue;
+      const p = st.photo;
+      found[name] = { url: p.url, pageUrl: p.sourceUrl, credit: `${p.author} · ${p.license} · ${p.source === 'wikimedia' ? 'Wikimedia' : 'Openverse'}` };
+    }
+    if (Object.keys(found).length > 0) useCheatPlacesStore.getState().setDishPhotos(placesSearchId, found);
+  }, [dishPhotoStates, placesSearchId]);
 
   const shownAi = cheat ? cheatAi : ai;
   const elsewhere = new Set([...shownAi, ...(cheat ? [] : shared)].map((i) => foodKey(i.name)));
@@ -219,19 +251,62 @@ export function CookbookFinder() {
     const near = loc || (at ? `${at.lat}, ${at.lon}` : g('cheat.here'));
     setBusy('places');
     const wish = cleanWish(wishText);
-    const outcome = await requestCheatPlaces(mode === 'wish' ? [] : dishes, loc, at ?? undefined, {
-      typed: mode === 'typed',
+    const ask = { dishes: mode === 'wish' ? [] : dishes, typed: mode === 'typed', wish };
+    const outcome = await requestCheatPlaces(ask.dishes, loc, at ?? undefined, {
+      typed: ask.typed,
       ...(wish ? { wish } : {}),
       context: buildCheatWishContext(),
     });
     setBusy(null);
-    if (!outcome.ok) {
-      if (outcome.kind === 'unavailable') setPlacesError(g('cheat.unavailable', { why: outcome.message.replace(/^[^:]*:\s*/, '') }));
-      else setPlacesError(g('cheat.placesFailed', { why: aiErrorText(outcome.kind, outcome.message) }));
-      return;
-    }
-    store().setPlaces(outcome.result, near);
+    if (!outcome.ok) return showPlacesError(outcome);
+    // Kept in the history at once (with its photos), so it can be opened again later without a new search.
+    const id = `ps-${Date.now().toString(36)}`;
+    store().setPlaces(outcome.result, near, ask, id);
+    useCheatPlacesStore.getState().putSearch(searchFromAnswer(outcome.result, { id, near, wish }));
   }
+
+  function showPlacesError(outcome: { message: string; kind: AiErrorKind | 'unavailable' }) {
+    if (outcome.kind === 'unavailable') setPlacesError(g('cheat.unavailable', { why: outcome.message.replace(/^[^:]*:\s*/, '') }));
+    else setPlacesError(g('cheat.placesFailed', { why: aiErrorText(outcome.kind, outcome.message) }));
+  }
+
+  /** "Suggest more": the same search again (dishes, wish, area), telling the server which places were shown already (this search,
+   *  and the saved / earlier places for the same wish) so it finds others; what comes back is added below, each place once. */
+  async function suggestMore() {
+    if (busy || !places || !shownPlaces) return;
+    setNotice(null);
+    setPlacesError(null);
+    setFailure(null);
+    const { location: loc, coords: at, placesSearchId: id } = store();
+    if (!loc && !at) return setNotice('cheat.needLocation');
+    const ask = placesAsk ?? { dishes: [], typed: false, wish: cleanWish(store().query) };
+    const kept = useCheatPlacesStore.getState();
+    const exclude = excludeNames(
+      shownPlaces.places.map((p) => p.name),
+      { history: kept.history, saved: kept.saved },
+      ask.wish
+    );
+    setBusy('more');
+    const outcome = await requestCheatPlaces(ask.dishes, loc, at ?? undefined, {
+      typed: ask.typed,
+      ...(ask.wish ? { wish: ask.wish } : {}),
+      context: buildCheatWishContext(),
+      exclude,
+      excludeDishes: shownPlaces.dishes.map((d) => d.name).slice(0, 8),
+    });
+    setBusy(null);
+    if (!outcome.ok) return showPlacesError(outcome);
+    const dishKeys = new Set(shownPlaces.dishes.map((d) => placeNameKey(d.name)));
+    const newDishes = outcome.result.dishes.filter((d) => !dishKeys.has(placeNameKey(d.name))).length;
+    if (newPlaces(shownPlaces, outcome.result) === 0 && newDishes === 0) return setNotice('cheat.moreNone');
+    store().addMorePlaces(outcome.result);
+    const joined = joinAnswers([places, ...store().placesMore]);
+    if (joined && id) useCheatPlacesStore.getState().putSearch(searchFromAnswer(joined, { id, near: store().placesNear, wish: ask.wish }));
+  }
+
+  /** The star of a shown place: saved with its photo, the area and the wish of this search. */
+  const toggleSave = (p: CheatPlace) =>
+    useCheatPlacesStore.getState().toggleSaved(placeToSaved(p, { near: placesNear, wish: placesAsk?.wish ?? '', atISO: new Date().toISOString() }));
 
   /** "Find places" for the wish in the box (empty is fine). */
   const searchWant = () => findPlaces([], 'wish');
@@ -600,7 +675,16 @@ export function CookbookFinder() {
           </HudText>
         </View>
       )}
-      {cheat && places && <CheatPlacesList answer={places} near={placesNear} onFindDish={busy ? undefined : searchDish} />}
+      {cheat && shownPlaces && (
+        <View style={styles.section}>
+          <CheatPlacesList answer={shownPlaces} near={placesNear} onFindDish={busy ? undefined : searchDish} savedKeys={savedKeys} onToggleSave={toggleSave} knownDishPhotos={knownDishPhotos} />
+          <QuestButton variant="ghost" icon="map" title={g('cheat.more')} loading={busy === 'more'} disabled={!!busy} onPress={() => void suggestMore()} />
+          <HudText size={11} weight="medium" color={quest.textSecondary}>
+            {busy === 'more' ? g('cheat.searchingPlaces') : g('cheat.moreHint')}
+          </HudText>
+        </View>
+      )}
+      {cheat && <CheatPlacesSaved />}
       {searched && searchedBrief && (
         <View style={styles.section}>
           <HudText size={13} color={quest.goldLight}>

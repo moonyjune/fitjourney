@@ -9,6 +9,8 @@ export const USER_DATA_KEYS = {
   cookbook: 'cookbook',
   analysisMode: 'analysisMode',
   cheatDays: 'cheatDays',
+  /** Cheat day place searches (history) and starred places. */
+  cheatPlaces: 'cheatPlaces',
   temptation: 'temptation',
   waterWindow: 'waterWindow',
   bossTalk: 'bossTalk',

@@ -91,6 +91,8 @@ export function recheckPlaces(raw: unknown): CheatPlacesAnswer | null {
     searches: typeof o.searches === 'number' ? o.searches : 0,
     searchErrors,
     sample: o.sample === true,
+    // The photos were added by the server (or kept with the answer): they stay.
+    keepPhotos: true,
   });
   // What the server already dropped still counts (cleaning an answer cleaned before drops nothing more).
   if (typeof o.dropped === 'number' && o.dropped > 0 && o.dropped < 1000) answer.dropped += Math.round(o.dropped);

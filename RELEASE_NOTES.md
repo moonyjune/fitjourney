@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.22.0 | no | dish-photo, suggest-cheat-places |
 | 0.21.0 | no | — |
 | 0.20.3 | no | — |
 | 0.20.2 | no | — |
@@ -67,6 +68,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.22.0
+- Cheat-day places are kept: every search goes to "🕘 Lịch sử tìm quán" (30 newest), and "☆ Lưu quán" keeps a place in "⭐ Quán đã lưu" (synced, user_data `cheatPlaces`).
+- Real photos: place cards show the picture of the place's own web page (og:image, with "Ảnh: <domain>"); dish photos now really show — the search used the AI's long dish names ("… (1 tô lớn)") and found nothing, now it searches the dish itself; Openverse photos were also all rejected (fixed).
+- "Gợi ý tiếp" asks for more places and dishes without repeating the ones already shown.
+- An empty box is fine: the AI picks dishes from your day and history and finds places. Fewer web searches per call (4, "Gợi ý tiếp" 3) to keep the cost down.
 
 ## 0.21.0
 - Camp: the day picked in the week strip becomes the working day. The (+) quick add opens on it, and "Nghỉ ở lửa trại" records for it (the button names the day when it is not today); both keep a ‹ › picker (today back to 30 days).

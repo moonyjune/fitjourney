@@ -13,6 +13,8 @@ import { useWaterWindowStore } from '../store/useWaterWindowStore';
 import { clampWaterWindow, DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN } from '../water/schedule';
 import { useAnalysisStore } from '../store/useAnalysisStore';
 import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
+import { useCheatPlacesStore } from '../store/useCheatPlacesStore';
+import { cleanCheatPlacesData, mergeCheatPlaces } from '../cookbook/placesHistory';
 import { useTemptationStore } from '../store/useTemptationStore';
 import { cleanTemptationData, mergeTemptation } from '../temptation/stats';
 import { useBossTalkStore } from '../store/useBossTalkStore';
@@ -367,6 +369,14 @@ function restoreUserData(remote: Map<string, unknown>): void {
   const mergedCheat = cleanCheatDays([...remoteCheat, ...localCheat]);
   if (!sameJson(mergedCheat, localCheat)) useCheatDayStore.setState({ days: mergedCheat });
   if (!sameJson(mergedCheat, remoteCheat)) void pushUserData(USER_DATA_KEYS.cheatDays, { days: mergedCheat });
+
+  // Cheat day places (history of searches, starred places): both sides joined, minus what either side removed after adding it.
+  const placesRemote = cleanCheatPlacesData(remote.get(USER_DATA_KEYS.cheatPlaces));
+  const placesState = useCheatPlacesStore.getState();
+  const placesLocal = cleanCheatPlacesData({ history: placesState.history, saved: placesState.saved, removed: placesState.removed, clearedAtISO: placesState.clearedAtISO });
+  const placesMerged = mergeCheatPlaces(placesLocal, placesRemote);
+  if (!sameJson(placesMerged, placesLocal)) useCheatPlacesStore.setState(placesMerged);
+  if (!sameJson(placesMerged, placesRemote)) void pushUserData(USER_DATA_KEYS.cheatPlaces, placesMerged);
 
   // Temptation challenge: the record with more answers wins, histories are joined, the device's settings win once changed.
   const temptRemote = cleanTemptationData(remote.get(USER_DATA_KEYS.temptation));

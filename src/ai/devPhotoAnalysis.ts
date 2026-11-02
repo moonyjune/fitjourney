@@ -282,17 +282,19 @@ export function fakeCheatDinner(where: CheatWhere, wish?: string): { options: Re
 /** Offline stand-in for suggest-cheat-places: sample dishes for the wish (the given ones, or three sample ones), how the wish was
  *  "read", and one obviously fake place per dish, with example.com links, marked as sample data (`sample`), checked by the same
  *  rules as a real answer. Never a real place. */
-export function fakeCheatPlaces(dishes: string[], location: string, now: Date = new Date(), wish?: string): CheatPlacesAnswer {
+export function fakeCheatPlaces(dishes: string[], location: string, now: Date = new Date(), wish?: string, exclude: string[] = []): CheatPlacesAnswer {
   const today = now.toISOString().slice(0, 10);
   const month = today.slice(0, 7);
   const w = (wish ?? '').trim().slice(0, 60);
   const picked = dishes.length > 0 ? dishes.slice(0, 3) : ['Món mẫu A (giả lập)', 'Món mẫu B (giả lập)', 'Món mẫu C (giả lập)'];
+  // "Suggest more": the sample places go on with the next letters, so none already shown comes back.
+  const first = Math.min(20, exclude.filter((n) => n.startsWith('Quán mẫu ')).length);
   const raw = {
     readWish: w ? `${SIMULATED}: AI không thật sự đọc "${w}".` : `${SIMULATED}: chưa có mong muốn, đây là gợi ý mẫu.`,
     dishes: picked.map((name, i) => ({ name, why: `${SIMULATED}: lý do mẫu, không phải của AI.`, kcal: 600 + i * 100, emoji: '🍽' })),
     places: picked.map((dish, i) => ({
       dish,
-      name: `Quán mẫu ${String.fromCharCode(65 + i)} (DỮ LIỆU MẪU)`,
+      name: `Quán mẫu ${String.fromCharCode(65 + first + i)} (DỮ LIỆU MẪU)`,
       address: `Địa chỉ mẫu, ${location || 'khu vực của bạn'}`,
       distanceKm: Math.round((0.4 + i * 0.7) * 10) / 10,
       priceRange: '50.000–90.000đ (mẫu)',

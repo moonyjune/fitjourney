@@ -36,6 +36,51 @@ export function mapsSearchUrl(name: string, address: string | null, near: string
 
 const clean = (v: unknown, max: number): string => (typeof v === 'string' ? v.replace(/[<>\n\r]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
+/** A place (or dish) name as it is compared: lower case, no Vietnamese accents (đ as d), punctuation as spaces, single spaces
+ *  ("Quán Ốc Oanh!" and "quan oc  oanh" are the same place). Empty for a name with no letters or digits. */
+export function placeNameKey(name: unknown): string {
+  return String(typeof name === 'string' ? name : '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// ----- photos -----
+// A real picture of a place, read on the server from the preview picture (og:image) of a page its search found (_shared/webImage.ts),
+// or of a dish (a dish-photo answer): kept with the answer and with the saved lists so it shows again without a new request.
+
+/** A photo as shown: the picture (https), the page it came from, the credit ("foody.vn"). */
+export interface PlacePhoto {
+  url: string;
+  pageUrl: string;
+  credit: string;
+}
+
+/** An https picture / http(s) page on a public host name (no IP literal, no localhost, no user:password), else ''. The same rule as
+ *  webImage.ts's `publicHttpUrl`, kept short here (the shared files import nothing from each other). */
+function publicUrl(raw: unknown, httpsOnly: boolean): string {
+  if (typeof raw !== 'string' || raw.length > 2000) return '';
+  const m = /^(https?):\/\/([a-z0-9.-]+)(\/[^\s<>"]*)?$/i.exec(raw.trim());
+  if (!m || (httpsOnly && m[1].toLowerCase() !== 'https')) return '';
+  const host = m[2].toLowerCase();
+  if (!host.includes('.') || /^[\d.]+$/.test(host) || host === 'localhost' || /\.(localhost|local|internal|lan|home|arpa)$/.test(host)) return '';
+  return `${m[1].toLowerCase()}://${host}${(m[3] ?? '').replace(/#.*$/, '')}`;
+}
+
+/** A stored / received photo, or null when it is not one the app may show. */
+export function cleanPlacePhoto(raw: unknown): PlacePhoto | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const url = publicUrl(r.url, true);
+  const pageUrl = publicUrl(r.pageUrl, false);
+  if (!url || !pageUrl) return null;
+  return { url, pageUrl, credit: clean(r.credit, 80) || urlHost(pageUrl) };
+}
+
 // ----- the wish -----
 // What the user feels like on their cheat day, in their own words ("thèm gì đó giòn giòn", "buồn, muốn ăn gì ấm bụng", "trời mưa"),
 // plus what the app knows that helps read it: the local time, and a compact picture of the last two weeks of eating built on the
@@ -148,6 +193,29 @@ export interface PlacesRequest {
   /** What the user feels like (see `cleanWish`); empty when they said nothing. */
   wish: string;
   context?: CheatWishContext;
+  /** "Suggest more": places already shown (this search, saved, or found before for the same wish), not to be suggested again; and
+   *  the dishes already suggested (others are welcome). Present only when not empty. */
+  exclude?: string[];
+  excludeDishes?: string[];
+}
+
+/** Names sent in `exclude` at most, and dish names in `excludeDishes`. */
+export const MAX_EXCLUDE = 20;
+export const MAX_EXCLUDE_DISHES = 8;
+
+/** Up to `max` distinct names (by `placeNameKey`), one line each, at most 100 characters, no tags. */
+function excludeList(v: unknown, max: number): string[] {
+  const out: string[] = [];
+  const keys = new Set<string>();
+  for (const raw of Array.isArray(v) ? v : []) {
+    const name = clean(raw, 100);
+    const key = placeNameKey(name);
+    if (!key || keys.has(key)) continue;
+    keys.add(key);
+    out.push(name);
+    if (out.length === max) break;
+  }
+  return out;
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -176,6 +244,8 @@ export function cleanPlacesRequest(raw: unknown, now: Date = new Date()): Places
   if (!location && !coords) return null;
   const today = typeof r.today === 'string' && DAY_RE.test(r.today) ? r.today : now.toISOString().slice(0, 10);
   const context = cleanWishContext(r.context);
+  const exclude = excludeList(r.exclude, MAX_EXCLUDE);
+  const excludeDishes = excludeList(r.excludeDishes, MAX_EXCLUDE_DISHES);
   return {
     dishes,
     location,
@@ -184,8 +254,14 @@ export function cleanPlacesRequest(raw: unknown, now: Date = new Date()): Places
     ...(typed && dishes.length > 0 ? { typed: true as const } : {}),
     wish: cleanWish(r.wish),
     ...(context ? { context } : {}),
+    ...(exclude.length > 0 ? { exclude } : {}),
+    ...(excludeDishes.length > 0 ? { excludeDishes } : {}),
   };
 }
+
+/** Web searches a request may run: a first search 4 (one may look at what is trending), "suggest more" 3 (places only). Each costs
+ *  $0.01 plus the tokens of the pages it returns, which are most of a call's cost. */
+export const placesMaxSearches = (req: PlacesRequest): number => (req.exclude ? 3 : 4);
 
 /** Why a request was refused, for the 400 answer (the app shows it). */
 export function placesRequestProblem(_raw: unknown): string {
@@ -205,14 +281,21 @@ export function placesPrompt(req: PlacesRequest): string {
     : req.dishes.length > 0
       ? `Họ muốn ăn: ${req.dishes.join('; ')}. Tìm tối đa 2 quán mỗi món.`
       : 'Họ chưa chọn món: hãy tự chọn 3 món (ăn ngoài được) hợp nhất với mong muốn, rồi tìm tối đa 2 quán mỗi món.';
+  // "Suggest more": the places already shown must not come back; new dishes are welcome, and no search for trends.
+  const more = req.exclude
+    ? `ĐÂY LÀ LẦN GỢI Ý TIẾP: người dùng đã xem các quán sau, TUYỆT ĐỐI KHÔNG gợi ý lại (kể cả chi nhánh khác tên gần giống): <seen>${req.exclude.join('; ')}</seen>. Hãy tìm quán KHÁC.` +
+      (req.excludeDishes ? ` Các món đã gợi ý: <seen>${req.excludeDishes.join('; ')}</seen>; có thể giữ món đó nếu họ đã chọn, hoặc gợi ý thêm món khác hợp ý.` : '') +
+      ' Không cần tìm món hot trend lần này.\n'
+    : '';
   return (
     `Hôm nay là ${req.today}. Người dùng đang ở Việt Nam, ${where}. ${want}\n` +
+    more +
     `${wishPrompt(req.wish, req.context)}\n` +
     'PHẦN 1 — MÓN: trong dishes gợi ý 3 món (tối đa 4) hợp với mong muốn ' +
     (req.dishes.length > 0 ? `(gồm ${req.typed ? 'đúng món họ tìm' : 'các món họ muốn ăn ở trên'}, có thể thêm món gần giống)` : '(chính là các món bạn tìm quán)') +
     ': tên món tiếng Việt, why = một câu ấm áp vì sao món hợp ý họ lúc này, kcal = ước tính cho một phần (chỉ để tham khảo). ' +
     'Trong readWish viết MỘT câu ngắn: bạn hiểu mong muốn của họ thế nào (ví dụ "Bạn đang buồn và trời mưa, cần món nóng hổi, ấm bụng"). ' +
-    'Có thể dùng 1 lần tìm kiếm web để xem món / đồ uống nào đang hot trend ở Việt Nam (hoặc ở khu vực của họ) gần đây, nếu hợp với mong muốn; các lần còn lại để tìm quán.\n' +
+    (req.exclude ? '' : 'Có thể dùng 1 lần tìm kiếm web để xem món / đồ uống nào đang hot trend ở Việt Nam (hoặc ở khu vực của họ) gần đây, nếu hợp với mong muốn; các lần còn lại để tìm quán.\n') +
     'PHẦN 2 — QUÁN: ' +
     'hãy DÙNG CÔNG CỤ TÌM KIẾM WEB để tìm các quán thật GẦN NHẤT vị trí đó (cùng phường / quận trước, rồi mới xa dần; tìm kèm tên đường, phường, quận): tìm trang Google Maps của quán, ' +
     'trang Foody / ShopeeFood / GrabFood, bài review của báo, blog ẩm thực, reviewer và bài đăng mạng xã hội (Facebook, TikTok, Instagram).\n' +
@@ -342,6 +425,8 @@ export interface CheatPlace {
   sources: { title: string; url: string }[];
   openStatus: string | null;
   sponsored: boolean;
+  /** A real picture of the place from one of its pages (og:image), added by the server after the check; absent when none. */
+  photo?: PlacePhoto | null;
   reliability: {
     level: Reliability;
     /** The model's own reasons (Vietnamese). */
@@ -361,6 +446,8 @@ export interface CheatWishDish {
   /** One portion, rough; null when the AI gave none usable. */
   kcal: number | null;
   emoji: string | null;
+  /** Its real photo when one is known (kept with a saved search). */
+  photo?: PlacePhoto | null;
 }
 export interface CheatPlacesAnswer {
   /** How the AI read the wish (one line); null when it said nothing. */
@@ -414,8 +501,21 @@ export function reliabilityCap(p: { sites: number; rating: boolean; newestReview
  *  only for data that has no search behind it, and then nothing is trusted above "low"). */
 export function cleanPlacesAnswer(
   raw: unknown,
-  opts: { seenUrls: string[] | null; today: string; checkedAtISO: string; searches?: number; searchErrors?: string[]; sample?: boolean }
+  opts: {
+    seenUrls: string[] | null;
+    today: string;
+    checkedAtISO: string;
+    searches?: number;
+    searchErrors?: string[];
+    sample?: boolean;
+    /** Keep the photos the answer carries (a stored answer, cleaned again). The model's own answer never has any: its photos are
+     *  added by the server afterwards, so whatever it may write there is dropped. */
+    keepPhotos?: boolean;
+    /** Names of places already shown ("suggest more"): such a place is left out (not counted as dropped). */
+    exclude?: string[];
+  }
 ): CheatPlacesAnswer {
+  const excluded = new Set((opts.exclude ?? []).map(placeNameKey).filter(Boolean));
   const o = (raw ?? {}) as Record<string, unknown>;
   const seen = opts.seenUrls ? new Set(opts.seenUrls.map(urlKey).filter(Boolean)) : null;
   let dropped = 0;
@@ -436,6 +536,7 @@ export function cleanPlacesAnswer(
       dropped++;
       continue;
     }
+    if (excluded.has(placeNameKey(name))) continue;
     // Rating: a number 0-5 with a source and a URL the search saw.
     let rating: PlaceRating | null = null;
     const r = p.rating as Record<string, unknown> | null | undefined;
@@ -506,6 +607,7 @@ export function cleanPlacesAnswer(
       sources,
       openStatus: clean(p.openStatus, 100) || null,
       sponsored,
+      ...(opts.keepPhotos && cleanPlacePhoto(p.photo) ? { photo: cleanPlacePhoto(p.photo) } : {}),
       reliability: {
         level,
         reasons: (Array.isArray(p.reliabilityReasons) ? p.reliabilityReasons : Array.isArray(before.reasons) ? before.reasons : []).map((x) => clean(x, 140)).filter(Boolean).slice(0, 3),
@@ -524,7 +626,8 @@ export function cleanPlacesAnswer(
     const name = clean(d.name, 80);
     if (!name || dishes.some((x) => x.name.toLowerCase() === name.toLowerCase())) continue;
     const kcal = typeof d.kcal === 'number' && Number.isFinite(d.kcal) && d.kcal > 0 && d.kcal <= 5000 ? Math.round(d.kcal) : null;
-    dishes.push({ name, why: clean(d.why, 200), kcal, emoji: clean(d.emoji, 8) || null });
+    const photo = opts.keepPhotos ? cleanPlacePhoto(d.photo) : null;
+    dishes.push({ name, why: clean(d.why, 200), kcal, emoji: clean(d.emoji, 8) || null, ...(photo ? { photo } : {}) });
     if (dishes.length === 4) break;
   }
   const found = new Set(places.map((p) => p.dish.toLowerCase()));

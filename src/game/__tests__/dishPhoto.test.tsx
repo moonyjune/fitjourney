@@ -121,8 +121,8 @@ describe('dish photos (server, pure)', () => {
     expect(cleanDishPhotoRequest({ dishes: [{ name: '  ' }, 5] })).toBeNull();
     const dishes = cleanDishPhotoRequest({ dishes: [{ name: 'Phở <bò>' }, 'phở bò', { name: 'Bún chả', en: 'bun cha' }, ...'abcdefgh'.split('').map((c) => `Món ${c}`)] })!;
     expect(dishes).toHaveLength(6);
-    expect(dishes[0]).toEqual({ name: 'Phở bò', en: 'pho noodle soup beef', key: 'pho bo' });
-    expect(dishes[1]).toEqual({ name: 'Bún chả', en: 'bun cha', key: 'bun cha' });
+    expect(dishes[0]).toEqual({ name: 'Phở bò', nameKey: 'pho bo', core: 'Phở bò', en: 'pho noodle soup beef', key: 'pho bo', queries: ['phở bò'] });
+    expect(dishes[1]).toEqual({ name: 'Bún chả', nameKey: 'bun cha', core: 'Bún chả', en: 'bun cha', key: 'bun cha', queries: ['bún chả'] });
   });
 
   it('search URLs ask for files with thumbnail, mime and licence (Wikimedia) and reusable licences only (Openverse)', () => {
@@ -364,5 +364,6 @@ describe('dish photos (app)', () => {
     for (let i = 0; i < 3; i++) await wait(TYPING_MS + 50);
     expect(mockPhotos).not.toHaveBeenCalled();
     expect(images(renderer!)).toEqual([own.imageUrl]);
-  });
+    // Six real typing waits (~4.7 s): more room than jest's default 5 s, which made it flaky under load.
+  }, 15_000);
 });

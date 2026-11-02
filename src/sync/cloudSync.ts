@@ -1447,19 +1447,20 @@ const PLACES_TIMEOUT_MS = 170_000;
  *  `context`, their recent eating) and places near `location` / `coords` found by web search, both in one answer. `dishes`: one dish
  *  the user asked for (`typed`), up to 3 AI dishes, or none (the AI picks them). The answer is checked again here
  *  (`recheckPlaces`). `unavailable`: web search is not allowed for the organization or not served in the region. Every failure
- *  carries the server's own reason in `message` (shown to the user). The offline dev account gets clearly labelled sample data. */
+ *  carries the server's own reason in `message` (shown to the user). The offline dev account gets clearly labelled sample data.
+ *  "Suggest more": `exclude` names the places already shown (not suggested again), `excludeDishes` the dishes. */
 export async function requestCheatPlaces(
   dishes: string[],
   location: string,
   coords?: { lat: number; lon: number },
-  opts: { typed?: boolean; now?: Date; wish?: string; context?: CheatWishContext } = {}
+  opts: { typed?: boolean; now?: Date; wish?: string; context?: CheatWishContext; exclude?: string[]; excludeDishes?: string[] } = {}
 ): Promise<CheatPlacesOutcome> {
   const now = opts.now ?? new Date();
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
     await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
-    return { ok: true, result: fakeCheatPlaces(dishes, location, now, opts.wish) };
+    return { ok: true, result: fakeCheatPlaces(dishes, location, now, opts.wish, opts.exclude) };
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -1477,6 +1478,8 @@ export async function requestCheatPlaces(
       ...(opts.typed ? { typed: true } : {}),
       ...(opts.wish ? { wish: opts.wish } : {}),
       ...(opts.context ? { context: opts.context } : {}),
+      ...(opts.exclude?.length ? { exclude: opts.exclude } : {}),
+      ...(opts.excludeDishes?.length ? { excludeDishes: opts.excludeDishes } : {}),
     };
     const { data, error } = await supabase.functions.invoke('suggest-cheat-places', { body, timeout: PLACES_TIMEOUT_MS });
     if (error) throw error;

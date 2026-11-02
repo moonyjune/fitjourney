@@ -32,6 +32,12 @@ interface CookbookFinderState {
   /** How the AI read the wish for `cheatAi` (one line), or null. */
   cheatAiReadWish: string | null;
   places: CheatPlacesAnswer | null;
+  /** "Suggest more" answers for the same search, oldest first (shown below the first, each place once). */
+  placesMore: CheatPlacesAnswer[];
+  /** What the shown places were asked with, so "suggest more" asks the same again. */
+  placesAsk: PlacesAsk | null;
+  /** The history entry of the shown places (useCheatPlacesStore). */
+  placesSearchId: string | null;
   /** The area the places were searched around. */
   placesNear: string;
   setFilters: (f: CookbookFilters) => void;
@@ -45,9 +51,27 @@ interface CookbookFinderState {
   setLocation: (text: string, coords?: { lat: number; lon: number } | null) => void;
   setQuery: (text: string) => void;
   setCheatAi: (ideas: DinnerIdea[], atISO: string, readWish?: string | null) => void;
-  setPlaces: (answer: CheatPlacesAnswer, near: string) => void;
+  setPlaces: (answer: CheatPlacesAnswer, near: string, ask?: PlacesAsk | null, searchId?: string | null) => void;
+  /** A "suggest more" answer, kept below the first. */
+  addMorePlaces: (answer: CheatPlacesAnswer) => void;
   reset: () => void;
 }
+
+/** A places search as it was asked: the dishes (none: the AI picks), one typed dish or not, the wish. */
+export interface PlacesAsk {
+  dishes: string[];
+  typed: boolean;
+  wish: string;
+}
+
+/** "Suggest more" pages kept at most. */
+export const MAX_MORE_PAGES = 4;
+
+const cleanAsk = (v: unknown): PlacesAsk | null => {
+  const a = v as Partial<PlacesAsk> | null;
+  if (!a || typeof a !== 'object' || !Array.isArray(a.dishes)) return null;
+  return { dishes: a.dishes.filter((d): d is string => typeof d === 'string').map((d) => d.slice(0, 80)).slice(0, 3), typed: a.typed === true, wish: cleanWish(a.wish) };
+};
 
 const INITIAL = {
   filters: EMPTY_FILTERS,
@@ -64,6 +88,9 @@ const INITIAL = {
   cheatAiAtISO: null,
   cheatAiReadWish: null,
   places: null,
+  placesMore: [] as CheatPlacesAnswer[],
+  placesAsk: null,
+  placesSearchId: null,
   placesNear: '',
 };
 
@@ -87,7 +114,9 @@ export const useCookbookFinderStore = create<CookbookFinderState>()(
       setLocation: (text, coords) => set(coords === undefined ? { location: cleanLocation(text) } : { location: cleanLocation(text), coords: cleanCoords(coords) }),
       setQuery: (text) => set({ query: typeof text === 'string' ? text.slice(0, WISH_MAX_CHARS) : '' }),
       setCheatAi: (ideas, atISO, readWish = null) => set({ cheatAi: ideas, cheatAiAtISO: atISO, cheatAiReadWish: cleanWish(readWish) || null }),
-      setPlaces: (answer, near) => set({ places: answer, placesNear: cleanLocation(near) }),
+      setPlaces: (answer, near, ask = null, searchId = null) =>
+        set({ places: answer, placesMore: [], placesAsk: cleanAsk(ask), placesSearchId: typeof searchId === 'string' ? searchId : null, placesNear: cleanLocation(near) }),
+      addMorePlaces: (answer) => set((s) => ({ placesMore: [...s.placesMore, answer].slice(-MAX_MORE_PAGES) })),
       reset: () => set({ ...INITIAL }),
     }),
     {
@@ -111,6 +140,9 @@ export const useCookbookFinderStore = create<CookbookFinderState>()(
           cheatAiAtISO: typeof p.cheatAiAtISO === 'string' ? p.cheatAiAtISO : null,
           cheatAiReadWish: cleanWish(p.cheatAiReadWish) || null,
           places: recheckPlaces(p.places),
+          placesMore: Array.isArray(p.placesMore) ? p.placesMore.map(recheckPlaces).filter((x): x is CheatPlacesAnswer => x !== null).slice(-MAX_MORE_PAGES) : [],
+          placesAsk: cleanAsk(p.placesAsk),
+          placesSearchId: typeof p.placesSearchId === 'string' ? p.placesSearchId : null,
           placesNear: cleanLocation(p.placesNear),
         };
       },
