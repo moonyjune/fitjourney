@@ -43,6 +43,10 @@ import { EXTRA_PROOF_PREFIX } from '../types';
 import { useTabBarClearance } from '../components/quest/QuestTabBar';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 import { useHistoryViewStore } from '../store/useHistoryViewStore';
+import { buildDayEvaluator } from '../game/dayEvaluator';
+import { useDayEvaluator, useNow } from '../game/useGameState';
+import { mealNames, shownDeficit, type ShownDeficit } from '../game/deficitView';
+import type { DayMeal } from '../game/missions';
 import {
   formatDeficitShort,
   groupByMonth,
@@ -82,6 +86,11 @@ interface DaySummary {
   deficitKcal: number | null;
   /** A cheat day: its food is shown, but its kcal are not counted (deficitKcal is null). */
   cheat: boolean;
+  /** The deficit as every screen shows it (see `shownDeficit`): today's end-of-day estimate while meals are still to come, and a
+   *  settled day with a meal not logged marked incomplete (no level colour, ⚠). */
+  shown: ShownDeficit;
+  /** That incomplete day's meals with nothing logged. */
+  missingMeals: DayMeal[];
 }
 
 const MILESTONE_STATUS_KEY: Record<string, StringKey> = {
@@ -153,9 +162,9 @@ function Panel({ style, ...rest }: ViewProps) {
   return <View {...rest} style={[styles.panel, style]} />;
 }
 
-function Meta({ children, color = quest.textSecondary, style }: { children: ReactNode; color?: string; style?: object }) {
+function Meta({ children, color = quest.textSecondary, style, accessibilityLabel }: { children: ReactNode; color?: string; style?: object; accessibilityLabel?: string }) {
   return (
-    <HudText size={12} weight="medium" color={color} style={[styles.meta, style]}>
+    <HudText size={12} weight="medium" color={color} style={[styles.meta, style]} accessibilityLabel={accessibilityLabel}>
       {children}
     </HudText>
   );
@@ -224,6 +233,26 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   const ownCheatDays = useCheatDayStore((s) => s.days);
   const cheatDays = useMemo(() => (client ? [] : ownCheatDays), [client, ownCheatDays]);
 
+  // The game's own reading of each day (settled or not, meals not logged), so the list flags a day the way the Journal does.
+  const now = useNow();
+  const ownEvaluate = useDayEvaluator(now);
+  const minuteStamp = Math.floor(now.getTime() / 60_000);
+  const evaluate = useMemo(
+    () =>
+      client
+        ? buildDayEvaluator({
+            now: new Date(minuteStamp * 60_000),
+            logs: client.logs,
+            workouts: client.workouts,
+            mealTemplatesByDayType: client.plan.mealTemplates,
+            tdeeKcal: client.tdeeKcal,
+            proteinTargetG: client.settings.proteinTargetG,
+            limits: client.limits,
+          })
+        : ownEvaluate,
+    [client, minuteStamp, ownEvaluate]
+  );
+
   const daySummaries = useMemo<DaySummary[]>(() => {
     const dateKeys = new Set<string>();
     Object.keys(nutritionLogs).forEach((k) => dateKeys.add(k));
@@ -246,6 +275,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
         const dayWeight = weightEntries.find((e) => toDateKey(new Date(e.dateISO)) === dateKey);
         const dayProofs = proofs.filter((p) => toDateKey(new Date(p.dateISO)) === dateKey);
         const cheat = cheatDays.includes(dateKey);
+        const evaluation = evaluate(dateKey);
 
         return {
           dateKey,
@@ -269,9 +299,11 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           legacyTotals: { kcal: log?.extraCalories ?? 0, proteinG: log?.extraProteinG ?? 0 },
           removedMealSlots: log?.removedMealSlots ?? [],
           cheat,
+          shown: shownDeficit(evaluation),
+          missingMeals: evaluation.missingMeals,
         };
       });
-  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal, settings.waterTargetMl, cheatDays]);
+  }, [nutritionLogs, workoutEntries, weightEntries, proofs, mealTemplates, currentTdeeKcal, settings.waterTargetMl, cheatDays, evaluate]);
 
   const weeklySummaries = useMemo(() => {
     const groups = new Map<string, DaySummary[]>();
@@ -454,6 +486,25 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
     };
   }, [weeklySummaries]);
 
+  /** A day's deficit line, read like the Journal's day strip: today with meals still to come shows "~X" (its end-of-day estimate);
+   *  a settled day with a meal not logged shows its number without the level colour, with ⚠ and the meals not logged. */
+  function renderDeficit(d: DaySummary, kcal: number) {
+    const { projected, incomplete } = d.shown;
+    const level = incomplete ? null : levelOf(d.dateKey, kcal);
+    const text =
+      `${t(kcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: ${projected ? '~' : ''}${Math.round(Math.abs(kcal))} kcal` +
+      (projected ? ` · ${g('deficit.projectedShort')}` : level ? ` · ${g(`deficit.level.${level}` as GameKey)}` : '');
+    const missing = incomplete ? g('deficit.missingLine', { meals: mealNames(d.missingMeals, g) }) : '';
+    return (
+      <Meta
+        color={incomplete ? quest.textSecondary : deficitColor(level, kcal >= 0 ? quest.xp : quest.gold)}
+        accessibilityLabel={incomplete ? `${text}. ${missing}` : undefined}
+      >
+        {incomplete ? `${text} ⚠` : text}
+      </Meta>
+    );
+  }
+
   /** One day of the diary: totals, deficit, photos and the expandable meal table. Shared by the list and the
    *  calendar (where the tapped day opens below the month). */
   function renderDay(d: DaySummary) {
@@ -471,15 +522,12 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
           <Meta color={DEFICIT_LEVEL_COLOR.cheat}>
             {t('tdee.deficitLabel')}: {g('deficit.level.cheat')}
           </Meta>
-        ) : d.deficitKcal == null ? (
+        ) : d.shown.kcal == null ? (
           <Meta>
             {t('tdee.deficitLabel')}: {t('common.notAvailable')}
           </Meta>
         ) : (
-          <Meta color={deficitColor(levelOf(d.dateKey, d.deficitKcal), d.deficitKcal >= 0 ? quest.xp : quest.gold)}>
-            {`${t(d.deficitKcal >= 0 ? 'tdee.deficitLabel' : 'tdee.surplusLabel')}: ${Math.round(Math.abs(d.deficitKcal))} kcal`}
-            {levelOf(d.dateKey, d.deficitKcal) ? ` · ${g(`deficit.level.${levelOf(d.dateKey, d.deficitKcal)}` as GameKey)}` : ''}
-          </Meta>
+          renderDeficit(d, d.shown.kcal)
         )}
         {d.workouts.length > 0 && (
           <View style={styles.workouts}>
@@ -859,15 +907,23 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
                 {week.map((dateKey, j) => {
                   if (!dateKey) return <View key={j} style={styles.calCell} />;
                   const day = dayByKey.get(dateKey);
-                  const deficit = day?.deficitKcal ?? null;
+                  const deficit = day?.shown.kcal ?? null;
+                  const projected = !!day?.shown.projected;
+                  const incomplete = !!day?.shown.incomplete;
                   const selected = selectedDay === dateKey;
                   const cheat = !!day?.cheat;
-                  const deficitText = cheat ? g('deficit.cheatShort') : deficit == null ? '' : formatDeficitShort(deficit);
+                  const deficitText = cheat
+                    ? g('deficit.cheatShort')
+                    : deficit == null
+                      ? ''
+                      : `${projected ? '~' : ''}${formatDeficitShort(deficit)}${incomplete ? '⚠' : ''}`;
                   const deficitLabel = cheat
                     ? `. ${g('deficit.level.cheat')}`
                     : deficit == null
                       ? ''
-                      : `. ${t(deficit >= 0 ? 'history.deficitShort' : 'history.surplusShort')}: ${Math.round(Math.abs(deficit))} kcal`;
+                      : `. ${t(deficit >= 0 ? 'history.deficitShort' : 'history.surplusShort')}: ${projected ? '~' : ''}${Math.round(Math.abs(deficit))} kcal` +
+                        (projected ? ` (${g('deficit.projectedShort')})` : '') +
+                        (incomplete && day ? `. ${g('deficit.missingLine', { meals: mealNames(day.missingMeals, g) })}` : '');
                   return (
                     <Pressable
                       key={dateKey}
@@ -885,7 +941,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
                       <HudText size={13} color={day ? quest.text : quest.textSecondary}>
                         {Number(dateKey.slice(8))}
                       </HudText>
-                      <HudText size={10} weight="medium" color={deficitColor(levelOf(dateKey, deficit), deficit == null ? quest.textSecondary : deficit >= 0 ? quest.xp : quest.gold)} numberOfLines={1}>
+                      <HudText size={10} weight="medium" color={incomplete ? quest.textSecondary : deficitColor(levelOf(dateKey, deficit), deficit == null ? quest.textSecondary : deficit >= 0 ? quest.xp : quest.gold)} numberOfLines={1}>
                         {deficitText || ' '}
                       </HudText>
                     </Pressable>

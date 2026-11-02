@@ -70,6 +70,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useCheatDayStore } from '../../store/useCheatDayStore';
+import { useSkippedMealStore } from '../../store/useSkippedMealStore';
 import { deleteFeelingRecord, pushFeelingRecord, pushNutritionLog } from '../../sync/cloudSync';
 
 const DATE = '2026-10-23';
@@ -692,6 +693,32 @@ describe('FitQuest logging screens', () => {
       expect(useSelectedDayStore.getState().selectedKey).toBe(thursday); // (+) opens on that day
     });
 
+    it('"Bỏ bữa" marks the meal not logged as skipped: the flag goes, and Undo brings it back', () => {
+      const thursday = '2026-10-22';
+      useNutritionStore.setState({
+        logs: { [thursday]: { dateISO: thursday, mealsEaten: { meal1: true, meal2: true }, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 0 } },
+      });
+      useSelectedDayStore.setState({ selectedKey: thursday });
+      useSkippedMealStore.setState({ days: {} });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.startsWith('Đánh dấu đã bỏ Bữa 3')).props.onPress());
+      expect(useSkippedMealStore.getState().days[thursday]).toEqual(['meal3']);
+      expect(allText(r)).not.toContain('⚠ Chưa ghi');
+      expect(allText(r)).toContain('Đã bỏ Bữa 3 - Tối (Chốt cửa sổ ăn): không tính là thiếu bữa.');
+      act(() => pressable(r, (l) => l.startsWith('Hoàn tác bỏ Bữa 3')).props.onPress());
+      expect(useSkippedMealStore.getState().days[thursday]).toBeUndefined();
+      expect(allText(r)).toContain('⚠ Chưa ghi Bữa 3');
+    });
+
+    it("today's meal still to come can be skipped, which settles the day", () => {
+      useSkippedMealStore.setState({ days: {} });
+      const r = render(<JournalScreen />);
+      expect(allText(r)).toContain('Đang tính: đã ăn');
+      act(() => pressable(r, (l) => l.startsWith('Đánh dấu đã bỏ Bữa 3')).props.onPress());
+      expect(allText(r)).not.toContain('Đang tính: đã ăn');
+      useSkippedMealStore.setState({ days: {} });
+    });
+
     it('shows the same deficit on the day strip as in the stats', () => {
       const r = render(<JournalScreen />);
       // Today still has meals to come: both show the end-of-day estimate ("Dự kiến ~…"), and say how it is worked out.
@@ -715,7 +742,8 @@ describe('FitQuest logging screens', () => {
 
     it('opens a meal only for today, and switches to another day of the week', () => {
       const r = render(<JournalScreen />);
-      act(() => pressable(r, (l) => l.includes('Bữa 3')).props.onPress());
+      // (The "Bỏ Bữa 3" chip under today's estimate names the meal too.)
+      act(() => pressable(r, (l) => l.includes('Bữa 3') && !l.startsWith('Đánh dấu đã bỏ')).props.onPress());
       expect(mockRouter.push).toHaveBeenCalledWith('/meal/meal3');
 
       // Thursday 22/10 has no log: the strip says so, "now" disappears and meals are not tappable.

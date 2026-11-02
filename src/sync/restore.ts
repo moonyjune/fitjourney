@@ -13,6 +13,7 @@ import { useWaterWindowStore } from '../store/useWaterWindowStore';
 import { clampWaterWindow, DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN } from '../water/schedule';
 import { useAnalysisStore } from '../store/useAnalysisStore';
 import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
+import { cleanSkippedMeals, mergeSkippedMeals, useSkippedMealStore } from '../store/useSkippedMealStore';
 import { useCheatPlacesStore } from '../store/useCheatPlacesStore';
 import { cleanCheatPlacesData, mergeCheatPlaces } from '../cookbook/placesHistory';
 import { useTemptationStore } from '../store/useTemptationStore';
@@ -338,12 +339,17 @@ function restoreUserData(remote: Map<string, unknown>): void {
 
   // Meal mode: fasting is on by default, so an off setting is the only thing worth keeping. This device still on the default takes the
   // cloud's choice; a device that chose off pushes it.
+  // "I skip breakfast" (off by default) follows the same rule: a device still off takes the cloud's on; a device that turned it on pushes it.
   const mealMode = remote.get(USER_DATA_KEYS.mealMode);
   const remoteFasting = isObj(mealMode) && typeof mealMode.fasting === 'boolean' ? mealMode.fasting : null;
-  const localFasting = useMealModeStore.getState().fasting;
-  if (localFasting) {
-    if (remoteFasting === false) useMealModeStore.setState({ fasting: false });
-  } else if (remoteFasting !== false) void pushUserData(USER_DATA_KEYS.mealMode, { fasting: false });
+  const remoteSkip = isObj(mealMode) && mealMode.skipBreakfast === true;
+  const { fasting: localFasting, skipBreakfast: localSkip } = useMealModeStore.getState();
+  const nextFasting = localFasting ? remoteFasting !== false : false;
+  const nextSkip = !!localSkip || remoteSkip;
+  if (nextFasting !== localFasting || nextSkip !== !!localSkip) useMealModeStore.setState({ fasting: nextFasting, skipBreakfast: nextSkip });
+  if ((!localFasting && remoteFasting !== false) || (localSkip && !remoteSkip)) {
+    void pushUserData(USER_DATA_KEYS.mealMode, nextSkip ? { fasting: nextFasting, skipBreakfast: true } : { fasting: nextFasting });
+  }
 
   // Drinking window: a device still on the default takes the cloud's; a device with its own window pushes it.
   const waterWindow = remote.get(USER_DATA_KEYS.waterWindow);
@@ -369,6 +375,14 @@ function restoreUserData(remote: Map<string, unknown>): void {
   const mergedCheat = cleanCheatDays([...remoteCheat, ...localCheat]);
   if (!sameJson(mergedCheat, localCheat)) useCheatDayStore.setState({ days: mergedCheat });
   if (!sameJson(mergedCheat, remoteCheat)) void pushUserData(USER_DATA_KEYS.cheatDays, { days: mergedCheat });
+
+  // Meals skipped on purpose: marks from either side are kept, like cheat days.
+  const skippedRaw = remote.get(USER_DATA_KEYS.skippedMeals);
+  const remoteSkipped = cleanSkippedMeals(isObj(skippedRaw) ? skippedRaw.days : {});
+  const localSkipped = useSkippedMealStore.getState().days;
+  const mergedSkipped = mergeSkippedMeals(localSkipped, remoteSkipped);
+  if (!sameJson(mergedSkipped, localSkipped)) useSkippedMealStore.setState({ days: mergedSkipped });
+  if (!sameJson(mergedSkipped, remoteSkipped)) void pushUserData(USER_DATA_KEYS.skippedMeals, { days: mergedSkipped });
 
   // Cheat day places (history of searches, starred places): both sides joined, minus what either side removed after adding it.
   const placesRemote = cleanCheatPlacesData(remote.get(USER_DATA_KEYS.cheatPlaces));

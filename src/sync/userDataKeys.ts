@@ -9,6 +9,8 @@ export const USER_DATA_KEYS = {
   cookbook: 'cookbook',
   analysisMode: 'analysisMode',
   cheatDays: 'cheatDays',
+  /** Meals the user marked as skipped on purpose, per day (no longer missing or still to come). */
+  skippedMeals: 'skippedMeals',
   /** Cheat day place searches (history) and starred places. */
   cheatPlaces: 'cheatPlaces',
   temptation: 'temptation',

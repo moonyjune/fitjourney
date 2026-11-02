@@ -15,6 +15,8 @@ export interface DayEvaluatorInput {
   cheatDays?: readonly string[];
   /** The daily deficit target (sizes the meals still to come in today's estimate). */
   targetDeficitKcal?: number;
+  /** Meals skipped on purpose, by date; a coach viewing a client passes none. */
+  skippedMeals?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** A function that evaluates the missions of any calendar day from the given records (no store involved), so the same rules serve
@@ -29,5 +31,5 @@ export function buildDayEvaluator(input: DayEvaluatorInput): (dateKey: string) =
     if (list) list.push(e);
     else byDay.set(key, [e]);
   }
-  return (dateKey) => evaluateDay({ dateKey, now, log: logs[dateKey], mealTemplatesByDayType, workouts: byDay.get(dateKey) ?? [], tdeeKcal, proteinTargetG, limits, cheat: cheat.has(dateKey), targetDeficitKcal: input.targetDeficitKcal });
+  return (dateKey) => evaluateDay({ dateKey, now, log: logs[dateKey], mealTemplatesByDayType, workouts: byDay.get(dateKey) ?? [], tdeeKcal, proteinTargetG, limits, cheat: cheat.has(dateKey), targetDeficitKcal: input.targetDeficitKcal, skippedMealIds: input.skippedMeals?.[dateKey] });
 }

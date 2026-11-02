@@ -96,6 +96,7 @@ import { useHabitStore } from '../../store/useHabitStore';
 import { useLearnStore } from '../../store/useLearnStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
+import { useSkippedMealStore } from '../../store/useSkippedMealStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { resetAllLocalStores } from '../../store/resetLocalStores';
 import { useUricStore } from '../../store/useUricStore';
@@ -377,6 +378,32 @@ describe('restore from the cloud', () => {
       resetAllLocalStores();
       expect(useMealModeStore.getState().fasting).toBe(true);
     });
+
+    it('"I skip breakfast": a device still off takes the cloud\'s on; a device that turned it on saves it', async () => {
+      cloud({ fasting: false, skipBreakfast: true });
+      await restoreOwnData();
+      expect(useMealModeStore.getState()).toMatchObject({ fasting: false, skipBreakfast: true });
+
+      resetAllLocalStores();
+      expect(useMealModeStore.getState().skipBreakfast).toBe(false);
+      useMealModeStore.setState({ fasting: false, skipBreakfast: true });
+      cloud({ fasting: false });
+      await restoreOwnData();
+      await whenPushesSettled();
+      expect(mockDb.user_data.find((r) => r.key === 'mealMode')?.value).toEqual({ fasting: false, skipBreakfast: true });
+    });
+  });
+
+  it('meals skipped on purpose: marks from either side are kept and the joined set is saved', async () => {
+    useSkippedMealStore.setState({ days: { '2026-10-22': ['meal3'] } });
+    mockDb.user_data = [{ user_id: 'user-1', key: 'skippedMeals', value: { days: { '2026-10-22': ['meal2'], '2026-10-21': ['breakfast'] } } }];
+    await restoreOwnData();
+    const joined = { '2026-10-22': ['meal2', 'meal3'], '2026-10-21': ['breakfast'] };
+    expect(useSkippedMealStore.getState().days).toEqual(joined);
+    await whenPushesSettled();
+    expect(mockDb.user_data.find((r) => r.key === 'skippedMeals')?.value).toEqual({ days: joined });
+    resetAllLocalStores();
+    expect(useSkippedMealStore.getState().days).toEqual({});
   });
 
   it('puts nothing on the device when the account changed while the requests were running', async () => {

@@ -25,6 +25,7 @@ import { resetTemptationStore } from './useTemptationStore';
 import { resetDishPhotoStore } from './useDishPhotoStore';
 import { useBossTalkStore } from './useBossTalkStore';
 import { useMealModeStore } from './useMealModeStore';
+import { useSkippedMealStore } from './useSkippedMealStore';
 import { NO_MEAL_PREFS, useMealPrefStore } from './useMealPrefStore';
 import { useNutritionStore } from './useNutritionStore';
 import { usePlanStore } from './usePlanStore';
@@ -84,7 +85,8 @@ export function resetAllLocalStores() {
   resetTemptationStore();
   resetDishPhotoStore();
   useBossTalkStore.setState({ talks: [], autoTried: null });
-  useMealModeStore.setState({ fasting: true });
+  useMealModeStore.setState({ fasting: true, skipBreakfast: false });
+  useSkippedMealStore.setState({ days: {} });
   useWaterWindowStore.setState({ startMinutes: DEFAULT_WATER_START_MIN, endMinutes: DEFAULT_WATER_END_MIN });
   useWaterReminderStore.setState({ shown: [], open: null });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });

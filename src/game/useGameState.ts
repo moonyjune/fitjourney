@@ -13,6 +13,7 @@ import { useProofStore } from '../store/useProofStore';
 import { useTrainingStore } from '../store/useTrainingStore';
 import { useCheatDayStore } from '../store/useCheatDayStore';
 import { useMealModeStore } from '../store/useMealModeStore';
+import { useSkippedMealStore } from '../store/useSkippedMealStore';
 import {
   computeAchievementStats,
   evaluateAchievements,
@@ -86,14 +87,16 @@ export function useTodayInput(now: Date, dateKeyOverride?: string): DayInput {
   const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
   // The evaluation reads the meal mode (fasting or not) to know which meals are still to come: a switch re-evaluates.
   const fasting = useMealModeStore((s) => s.fasting);
+  const skipBreakfast = useMealModeStore((s) => s.skipBreakfast);
+  const skippedMealIds = useSkippedMealStore((s) => s.days[dateKey]);
   const workouts = useMemo(
     () => workoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey),
     [workoutEntries, dateKey]
   );
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   return useMemo(
-    () => ({ dateKey, now: new Date(minuteStamp * 60_000), log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat, targetDeficitKcal }),
-    [dateKey, minuteStamp, log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat, targetDeficitKcal, fasting] // eslint-disable-line react-hooks/exhaustive-deps
+    () => ({ dateKey, now: new Date(minuteStamp * 60_000), log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat, targetDeficitKcal, skippedMealIds }),
+    [dateKey, minuteStamp, log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat, targetDeficitKcal, skippedMealIds, fasting, skipBreakfast] // eslint-disable-line react-hooks/exhaustive-deps
   );
 }
 
@@ -109,10 +112,12 @@ export function useDayEvaluator(now: Date): (dateKey: string) => DayEvaluation {
   const cheatDays = useCheatDayStore((s) => s.days);
   const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
   const fasting = useMealModeStore((s) => s.fasting);
+  const skipBreakfast = useMealModeStore((s) => s.skipBreakfast);
+  const skippedMeals = useSkippedMealStore((s) => s.days);
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   return useMemo(
-    () => buildDayEvaluator({ now: new Date(minuteStamp * 60_000), logs, workouts: workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays, targetDeficitKcal }),
-    [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays, targetDeficitKcal, fasting] // eslint-disable-line react-hooks/exhaustive-deps
+    () => buildDayEvaluator({ now: new Date(minuteStamp * 60_000), logs, workouts: workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays, targetDeficitKcal, skippedMeals }),
+    [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays, targetDeficitKcal, skippedMeals, fasting, skipBreakfast] // eslint-disable-line react-hooks/exhaustive-deps
   );
 }
 
@@ -129,6 +134,8 @@ export function useGameState(now: Date): GameView {
   const cheatDays = useCheatDayStore((s) => s.days);
   const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
   const fasting = useMealModeStore((s) => s.fasting);
+  const skipBreakfast = useMealModeStore((s) => s.skipBreakfast);
+  const skippedMeals = useSkippedMealStore((s) => s.days);
 
   // Re-evaluate once per minute rather than on every 30 s tick: nothing in the rules changes
   // faster than the eating-window cut-off, and the replay walks every day since the start date.
@@ -147,9 +154,10 @@ export function useGameState(now: Date): GameView {
       cheatDays,
       bonusXp,
       targetDeficitKcal,
+      skippedMeals,
     });
     return { ...state, streak: computeCurrentStreak(logs, mealTemplates, workoutEntries, tdeeKcal, at, cheatDays) };
-  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, cheatDays, bonusXp, targetDeficitKcal, fasting]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, cheatDays, bonusXp, targetDeficitKcal, skippedMeals, fasting, skipBreakfast]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Stickers and banners for the signed-in user, derived from every log store. */

@@ -109,13 +109,14 @@ export interface MealPlan {
 
 /** Today so far and the meals still to come, from this device's logs, split by what is left. Null when no meal is left to suggest. */
 export function buildMealPlan(now: Date = new Date(), prefs: MealPrefs = NO_MEAL_PREFS): MealPlan | null {
-  const { evaluate, logs, plan, settings, limits, tdeeKcal } = makeDayEvaluator(now);
+  const { evaluate, logs, plan, settings, limits, tdeeKcal, skippedMeals } = makeDayEvaluator(now);
   const fasting = isFasting();
   const dateKey = toDateKey(now);
   const today = evaluate(dateKey);
   const planMeals = plan.mealTemplates[getDayType(now)];
   const defs = mealDefs(fasting, planMeals);
   const covered = coveredMealIds(fasting, defs, planMeals, logs[dateKey]);
+  for (const id of skippedMeals[dateKey] ?? []) covered.add(id);
   const left = remainingMeals(defs, covered, now.getHours() * 60 + now.getMinutes());
   if (left.length === 0) return null;
   const totals = totalsOf(now, today, settings, limits, tdeeKcal);

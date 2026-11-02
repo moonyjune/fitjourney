@@ -86,7 +86,7 @@ export interface WeekSource extends DaySource {
 
 /** The week source of the signed-in user, read from this device's stores. */
 export function weekSourceFromStores(now: Date = new Date()): WeekSource {
-  const { logs, weights, plan, settings, limits, tdeeKcal, cheatDays } = makeDayEvaluator(now);
+  const { logs, weights, plan, settings, limits, tdeeKcal, cheatDays, skippedMeals } = makeDayEvaluator(now);
   return {
     logs,
     workoutEntries: useWorkoutStore.getState().entries,
@@ -98,6 +98,7 @@ export function weekSourceFromStores(now: Date = new Date()): WeekSource {
     dailyDeficitKcal: settings.targetDailyDeficitKcal,
     waterTargetMl: settings.waterTargetMl,
     cheatDays,
+    skippedMeals,
   };
 }
 

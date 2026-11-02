@@ -13,6 +13,15 @@ export function setFastingState(value: boolean): void {
   fasting = value;
 }
 
+/** Normal mode only: the user does not eat breakfast, so a normal day expects just lunch and dinner. Mirrored from `useMealModeStore`
+ *  like the mode itself. Off by default. */
+let skipBreakfast = false;
+
+export const skipsBreakfast = (): boolean => skipBreakfast;
+export function setSkipBreakfastState(value: boolean): void {
+  skipBreakfast = value;
+}
+
 /** First and last hour of the day's eating: the 12:00-20:00 window with fasting on, 06:00-22:00 with it off. */
 export const eatingStartHour = (f: boolean = fasting): number => (f ? IF_EATING_START_HOUR : NORMAL_EATING_START_HOUR);
 export const eatingEndHour = (f: boolean = fasting): number => (f ? IF_EATING_END_HOUR : NORMAL_EATING_END_HOUR);

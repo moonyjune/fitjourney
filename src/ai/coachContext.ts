@@ -9,6 +9,7 @@ import { usePlanStore } from '../store/usePlanStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useWeightStore } from '../store/useWeightStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
+import { useSkippedMealStore } from '../store/useSkippedMealStore';
 import { useCheatDayStore } from '../store/useCheatDayStore';
 import { toDateKey } from '../utils/date';
 import { addDays } from '../utils/milestones';
@@ -95,6 +96,8 @@ export interface DaySource {
   limits: { purineMg: number; saltG: number; sugarG: number };
   /** Days marked as a cheat day (no deficit); none for a client read by their coach. */
   cheatDays?: readonly string[];
+  /** Meals skipped on purpose, by date; none for a client read by their coach. */
+  skippedMeals?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** A day evaluator (missions, deficit, nutrients: the game's own rules) over a source, plus its workouts grouped by day. */
@@ -118,6 +121,7 @@ export function evaluatorFor(source: DaySource, now: Date) {
       proteinTargetG: source.proteinTargetG,
       limits: source.limits,
       cheat: cheat.has(dateKey),
+      skippedMealIds: source.skippedMeals?.[dateKey],
     });
   const isCheatDay = (dateKey: string) => cheat.has(dateKey);
   return { evaluate, byDay, isCheatDay };
@@ -133,6 +137,7 @@ export function makeDayEvaluator(now: Date) {
   const weights = useWeightStore.getState().entries;
   const plan = usePlanStore.getState().plan;
   const cheatDays = useCheatDayStore.getState().days;
+  const skippedMeals = useSkippedMealStore.getState().days;
 
   const latestWeight = useWeightStore.getState().latest();
   const weightKg = latestWeight?.weightKg ?? settings.startWeightKg;
@@ -155,10 +160,11 @@ export function makeDayEvaluator(now: Date) {
       proteinTargetG: settings.proteinTargetG,
       limits: { purineMg: limits.purineMg, saltG: limits.saltG, sugarG: limits.sugarG },
       cheatDays,
+      skippedMeals,
     },
     now
   );
-  return { evaluate, byDay, isCheatDay, logs, weights, plan, settings, limits, tdeeKcal, cheatDays };
+  return { evaluate, byDay, isCheatDay, logs, weights, plan, settings, limits, tdeeKcal, cheatDays, skippedMeals };
 }
 
 /** Reads the stores and builds the snapshot sent with a photo analysis: the last up-to-7 days of intake and workouts,

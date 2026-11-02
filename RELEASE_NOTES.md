@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.24.0 | no | — |
 | 0.23.0 | no | — |
 | 0.22.1 | no | — |
 | 0.22.0 | no | dish-photo, suggest-cheat-places |
@@ -70,6 +71,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.24.0
+- History: a day with a meal not logged shows its deficit without the level colour and with "⚠" (list and calendar); a screen reader reads "⚠ Chưa ghi …" with the meals. Today while meals are still to come shows its estimate, "~X · dự kiến", like the Journal.
+- "Tôi không ăn sáng" (Profile, under the 16:8 switch, normal mode only): breakfast is no longer expected, so it is never "còn chờ" or "chưa ghi"; lunch and dinner share the day's kcal, so the day's expected total stays the same. Synced with the meal mode (user_data `mealMode.skipBreakfast`).
+- "Bỏ bữa" on the Journal, next to "Ghi bổ sung" (and under today's "Đang tính" line for the meals still to come): marks that meal of that day as skipped on purpose. It no longer counts as missing or still to come, so the day gets its normal colours, or settles today (final deficit, boss hit no longer pending). "Đã bỏ … · Hoàn tác" undoes it. Synced per day (user_data `skippedMeals`).
+- The diary's "Không ăn" mark on a normal-day meal counts as skipped too.
 
 ## 0.23.0
 - Deficit without food: a day with nothing eaten has no deficit figure anywhere ("— · Chưa ghi bữa nào"), not the whole TDEE (~2,500 kcal). The TDEE card and the History deficit chart read it the same way as Camp (a day with only water is a gap).

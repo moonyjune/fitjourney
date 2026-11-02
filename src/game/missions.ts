@@ -50,6 +50,8 @@ export interface DayInput {
   /** The user's daily deficit target: sizes the meals still to come in the end-of-day estimate (normal days; a fasting plan's meals
    *  carry their own kcal). Defaults to the deficit mission's bar. */
   targetDeficitKcal?: number;
+  /** Meals of this date the user marked as skipped on purpose ("Bỏ bữa"): taken care of, so never still to come or missing. */
+  skippedMealIds?: readonly string[];
 }
 
 /** A meal of the day, for the "still to come" and "not logged" lines. */
@@ -92,6 +94,8 @@ export interface DayEvaluation {
   projectedDeficitKcal: number | null;
   /** A settled day with food: its meals with nothing logged, so the deficit may be higher than what was really eaten. */
   missingMeals: DayMeal[];
+  /** The day's meals the user marked as skipped on purpose (neither still to come nor missing). */
+  skippedMeals: DayMeal[];
 }
 
 const hasFoodLog = dayHasFood;
@@ -132,12 +136,15 @@ export function evaluateDay(input: DayInput): DayEvaluation {
   const fasting = isFasting();
   const defs = mealDefs(fasting, meals);
   const covered = coveredMealIds(fasting, defs, meals, log);
+  const skippedIds = new Set(input.skippedMealIds ?? []);
+  for (const id of skippedIds) covered.add(id);
   const intakeTarget = Math.max(0, tdeeKcal - (input.targetDeficitKcal ?? lim.deficitKcal));
   const toMeal = (d: (typeof defs)[number]): DayMeal => ({ id: d.id, kind: d.kind, ...(d.label ? { label: d.label } : {}), kcal: Math.round(d.plan?.kcal ?? d.weight * intakeTarget) });
   const pendingMeals = dayOver || dateKey > todayKey ? [] : remainingMeals(defs, covered, now.getHours() * 60 + now.getMinutes()).map(toMeal);
   const settled = pendingMeals.length === 0;
   const projectedDeficitKcal = settled || deficitKcal == null ? null : deficitKcal - pendingMeals.reduce((sum, m) => sum + m.kcal, 0);
   const missingMeals = settled && deficitKcal != null ? defs.filter((d) => !covered.has(d.id)).map(toMeal) : [];
+  const skippedMeals = defs.filter((d) => skippedIds.has(d.id)).map(toMeal);
 
   /** "Reach the goal" mission. */
   function reach(id: MissionId, value: number, target: number, reached: boolean, closed: boolean): MissionResult {
@@ -196,5 +203,6 @@ export function evaluateDay(input: DayInput): DayEvaluation {
     pendingMeals,
     projectedDeficitKcal,
     missingMeals,
+    skippedMeals,
   };
 }

@@ -1,5 +1,6 @@
 import type { DailyNutritionLog, ExtraMealTime, MealTemplate } from '../types';
-import { eatingEndHour } from '../utils/mealMode';
+import { eatingEndHour, skipsBreakfast } from '../utils/mealMode';
+import { SKIPPED_MEAL_NAME } from '../insights/missing';
 
 /* The meals of a day and which of them are already eaten or still to come: pure helpers shared by the meal suggestions (ai/mealSplit)
  * and the day's evaluation (game/missions), which uses them to tell a deficit still being eaten into from a final one. */
@@ -38,10 +39,15 @@ export const FASTING_COVER_SHARE = 0.5;
 export const COVER_MIN_KCAL = 150;
 
 /** The meals of a day. Fasting on: the plan's own meals at the plan's times, each until the next starts (the last until the window
- *  closes), sized like the plan sized them. Fasting off: breakfast, lunch and dinner. */
-export function mealDefs(fasting: boolean, planMeals: MealTemplate[]): MealSlotDef[] {
+ *  closes), sized like the plan sized them. Fasting off: breakfast, lunch and dinner; without breakfast when the user said they skip it
+ *  (lunch and dinner then share the whole day, so the day's expected intake stays the same). */
+export function mealDefs(fasting: boolean, planMeals: MealTemplate[], skipBreakfast: boolean = skipsBreakfast()): MealSlotDef[] {
   if (!fasting) {
-    return NORMAL_MEALS.map((m, i) => ({ ...m, endMinutes: i < NORMAL_ENDS_MIN.length ? NORMAL_ENDS_MIN[i] : eatingEndHour(false) * 60 }));
+    const all = NORMAL_MEALS.map((m, i) => ({ ...m, endMinutes: i < NORMAL_ENDS_MIN.length ? NORMAL_ENDS_MIN[i] : eatingEndHour(false) * 60 }));
+    if (!skipBreakfast) return all;
+    const kept = all.filter((m) => m.id !== 'breakfast');
+    const total = kept.reduce((sum, m) => sum + m.weight, 0);
+    return kept.map((m) => ({ ...m, weight: m.weight / total }));
   }
   const endOfDay = eatingEndHour(true) * 60;
   return planMeals.map((m, i) => {
@@ -93,7 +99,11 @@ export function coveredMealIds(fasting: boolean, defs: MealSlotDef[], planMeals:
     return covered;
   }
   const kcal = { breakfast: 0, lunch: 0, dinner: 0 };
-  for (const item of log.extraItems ?? []) kcal[periodOfItem(item)] += item.calories;
+  for (const item of log.extraItems ?? []) {
+    kcal[periodOfItem(item)] += item.calories;
+    // The diary's "Không ăn" mark (0 kcal) says the meal was skipped: taken care of, not missing.
+    if (item.calories === 0 && item.name.trim() === SKIPPED_MEAL_NAME) covered.add(periodOfItem(item));
+  }
   planMeals.forEach((m, i) => {
     if (log.mealsEaten[m.slot]) kcal[i === planMeals.length - 1 ? 'dinner' : 'lunch'] += m.calories;
   });

@@ -23,6 +23,8 @@ export interface GameInputs {
   bonusXp?: number;
   /** The daily deficit target (sizes the meals still to come in today's estimate). */
   targetDeficitKcal?: number;
+  /** Meals skipped on purpose, by date: no longer missing or still to come (so a day with only skipped meals left is settled). */
+  skippedMeals?: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface GameState {
@@ -89,6 +91,7 @@ export function computeGameState(input: GameInputs): GameState {
         limits,
         cheat: cheatDays.has(dateKey),
         targetDeficitKcal: input.targetDeficitKcal,
+        skippedMealIds: input.skippedMeals?.[dateKey],
       })
     );
   }

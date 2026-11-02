@@ -49,6 +49,10 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useHistoryViewStore } from '../../store/useHistoryViewStore';
+import { useMealModeStore } from '../../store/useMealModeStore';
+import { useSkippedMealStore } from '../../store/useSkippedMealStore';
+import { DEFAULT_MEAL_TEMPLATES, getDayType } from '../../constants/plan';
+import { quest } from '../../theme/quest';
 import { formatDateVi, toDateKey } from '../../utils/date';
 
 const dayKey = (back: number) => {
@@ -122,6 +126,34 @@ describe('History screen (FitQuest)', () => {
     const out = text(r);
     expect(out).toContain('1200ml nước (mục tiêu 4500ml)');
     expect(out).toContain('1200ml nước (mục tiêu 3500ml)');
+  });
+
+  it('flags a past day with a meal not logged: number without the level colour, ⚠ and the missing meals read out; "Skipped" clears it', async () => {
+    useMealModeStore.setState({ fasting: true, skipBreakfast: false });
+    useSkippedMealStore.setState({ days: {} });
+    const k = dayKey(1);
+    useNutritionStore.setState({ logs: { [k]: log(k) } }); // only meal 1 of the plan is ticked
+    const r = await render();
+    // On the 1st of a month yesterday sits in last month's group, which starts folded.
+    for (const header of r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && /ngày/.test(String(n.props.accessibilityLabel)))) {
+      await act(async () => {
+        header.props.onPress();
+      });
+    }
+    const flagged = () => r.root.findAll((n) => (n.type as unknown) === 'Text' && /⚠ Chưa ghi /.test(String(n.props.accessibilityLabel ?? '')));
+    expect(flagged()).toHaveLength(1);
+    const line = flagged()[0];
+    expect(String(line.props.accessibilityLabel)).toMatch(/^(Thâm hụt|Ăn dư)[^:]*: \d+ kcal\. ⚠ Chưa ghi .+/);
+    expect([line.props.children].flat().join('')).toMatch(/ ⚠$/);
+    expect([line.props.style].flat(Infinity)).toContainEqual(expect.objectContaining({ color: quest.textSecondary }));
+
+    // Every meal not logged marked "Bỏ bữa": the day is complete again, no flag.
+    const slots = DEFAULT_MEAL_TEMPLATES[getDayType(new Date(`${k}T12:00:00`))].map((m) => m.slot).filter((s) => s !== 'meal1');
+    await act(async () => {
+      useSkippedMealStore.setState({ days: { [k]: slots } });
+    });
+    expect(flagged()).toHaveLength(0);
+    useSkippedMealStore.setState({ days: {} });
   });
 
   it('counts the meals that were logged (4 meal times = 4/3) and folds the day\'s workouts into one line that opens', async () => {
@@ -261,12 +293,13 @@ describe('History screen (FitQuest)', () => {
       expect(useHistoryViewStore.getState().layout).toBe('calendar');
       expect(text(r)).toContain('T2 | T3 | T4 | T5 | T6 | T7 | CN');
       expect(text(r)).toContain(viMonth(today));
-      const cell = byLabel(r, new RegExp(`^${formatDateVi(today)}\\. (Thâm hụt|Ăn dư): \\d+ kcal$`));
+      // Today may still have meals to come (then its estimate, "~"), or be settled with a meal not logged (⚠).
+      const cell = byLabel(r, new RegExp(`^${formatDateVi(today)}\\. (Thâm hụt|Ăn dư): ~?\\d+ kcal( \\(dự kiến\\))?(\\. ⚠ Chưa ghi .*)?$`));
       expect(cell).toBeDefined();
       // The cell shows the day number and the deficit as text.
       const cellText = cell.findAll((n) => (n.type as unknown) === 'Text').map((n) => [n.props.children].flat().join(''));
       expect(cellText[0]).toBe(String(Number(today.slice(8))));
-      expect(cellText[1]).toMatch(/^\+?\d+$/);
+      expect(cellText[1]).toMatch(/^~?\+?\d+⚠?$/);
       // A day with nothing logged has no deficit.
       expect(labels(r)).toContain(formatDateVi(`${today.slice(0, 8)}${today.slice(8) === '01' ? '02' : '01'}`));
       await act(async () => cell.props.onPress());

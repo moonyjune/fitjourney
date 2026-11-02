@@ -138,6 +138,8 @@ export default function ProfileScreen() {
   const isAiAdmin = useIsAiAdmin();
   const fasting = useMealModeStore((s) => s.fasting);
   const setFasting = useMealModeStore((s) => s.setFasting);
+  const skipBreakfast = useMealModeStore((s) => s.skipBreakfast);
+  const setSkipBreakfast = useMealModeStore((s) => s.setSkipBreakfast);
   const setAiEnabled = useAiPhotoStore((s) => s.setAiEnabled);
   const coachId = useSettingsStore((s) => s.coachId);
   const linkedCoachEmail = useSettingsStore((s) => s.linkedCoachEmail);
@@ -352,6 +354,25 @@ export default function ProfileScreen() {
           thumbColor={quest.text}
         />
       </View>
+      {/* Normal (three-meal) days only: breakfast is then not an expected meal. */}
+      {!fasting && (
+        <View style={styles.settingRow}>
+          <QuestIcon name="clock" size={20} color={quest.gold} />
+          <View style={styles.flex}>
+            <HudText size={15}>{g('fasting.skipBreakfast')}</HudText>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {g('fasting.skipBreakfastHint')}
+            </HudText>
+          </View>
+          <Switch
+            accessibilityLabel={g('fasting.skipBreakfast')}
+            value={!!skipBreakfast}
+            onValueChange={setSkipBreakfast}
+            trackColor={{ false: quest.raised2, true: quest.gold }}
+            thumbColor={quest.text}
+          />
+        </View>
+      )}
 
       <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
         {g('profile.group.play').toUpperCase()}
