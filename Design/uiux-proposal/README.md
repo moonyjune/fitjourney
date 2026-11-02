@@ -240,12 +240,13 @@ Không cần thay đổi `schema.sql`. Phía server chỉ cần đổi nếu mu�
 
 ---
 
-## 6. Câu hỏi cần bạn chốt
-1. Đồng ý đổi tên tab "Bản đồ" thành **"Hành trình"**?
-2. Ô "Tập 18′" ở Trại nên **mở thẳng buổi tập** (1 chạm) hay mở màn Tập?
-3. "Ăn lại" 1 chạm thì **ghi luôn** (có Hoàn tác) hay mở bước Kiểm tra?
-4. Check-in cảm giác chỉ để trong (+) (Trại bớt 1 nút), hay giữ thêm lối tắt buổi tối?
-5. Làm theo thứ tự GĐ 0 → 1 → 2 trước?
+## 6. Đã chốt (2026-11-02)
+Câu 3, 4 bạn trả lời (qua `dialogs.md` Q1, Q2); câu 1, 2, 5 là đề xuất của Claude, có thể đổi lại.
+1. *(đề xuất)* Đổi tên tab "Bản đồ" thành **"Hành trình"**: nói đúng nội dung (cân nặng theo thời gian, mốc, boss), "Bản đồ" dễ hiểu nhầm là bản đồ địa lý.
+2. *(đề xuất)* Ô "Tập 18′" ở Trại **mở thẳng buổi tập** (1 chạm); mũi tên › nhỏ bên phải mở màn Tập để chọn bài khác.
+3. "Ăn lại" 1 chạm **ghi luôn** + Hoàn tác, nhấn giữ mở menu.
+4. Check-in trong (+) **và có lối tắt buổi tối** trên Trại (sau 19:00, khi chưa check-in).
+5. *(đề xuất)* **Làm theo thứ tự GĐ 0 → 1 → 2**, mỗi giai đoạn là một bản phát hành riêng để dễ kiểm tra và quay lại.
 
 ---
 

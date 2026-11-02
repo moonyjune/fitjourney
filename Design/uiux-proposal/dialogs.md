@@ -89,17 +89,19 @@ Ký hiệu cột cuối: **✔** = đủ chức năng · **dời → …** = ch�
 
 Tổng: **45 mockup** (01–45) + pop-up nước ở màn chính 09. Không có chức năng nào bị bỏ hẳn; những gì bỏ là **bản trùng** (công tắc, ngôn ngữ, đăng xuất ở Kế hoạch; chip −250/−500; 2 ô lặp trong check-in) và **màn cũ** (`today-classic`, `/journal`, `/text-meal`, `workout-classic`, tab Dinh dưỡng / Cân nặng / Lịch sử).
 
-## ⚠ Câu hỏi cần bạn chốt
+## Đã chốt (2026-11-02)
 
-1. (README Q3) **Ăn lại 1 chạm**: ghi luôn + Hoàn tác, nhấn giữ mở menu (đang vẽ ở 04). Đồng ý?
-2. (README Q4) **Check-in** chỉ còn trong (+), Trại bỏ link "Nghỉ ở lửa trại". Có cần lối tắt buổi tối không?
-3. **Hai hộp xác nhận còn giữ** vì không hoàn tác được: Xoá nhật ký trước ngày (38) và Đăng xuất (37). Các xoá khác đều thành Hoàn tác. Đồng ý?
-4. **Xoá lần cân** chỉ còn ở màn Cân nặng (31) bằng vuốt trái. Có cần nút xoá trong sheet cân (02) không?
-5. **Sheet và màn**: Chi tiết bữa, Chi tiết buổi tập, Cám dỗ đổi từ hộp giữa màn sang bottom sheet. Công thức (22) đổi thành trang cuộn. Đồng ý?
-6. (17) **Chạm nhiệm vụ Đạm / Purine / Muối / Đường / Ăn vặt** trước mở tab Dinh dưỡng (sẽ xoá). Nay mở Nhật ký › Ngày (bảng bữa), hay Cook book lọc sẵn (vd "Nhiều đạm")?
-7. (18) **Boss tuần**: là sheet (đề xuất) hay màn riêng như `/boss` hiện tại? Log 7 ngày giữ ở cả sheet lẫn Nhật ký › Tuần, hay chỉ ở Nhật ký?
-8. (29) **Phân tích** vẫn là màn riêng (mở từ Nhật ký › Tháng). Có muốn gộp tab Tổng quan vào Nhật ký › Tháng luôn không?
-9. (36) **Tách công tắc "Pop-up uống nước"** khỏi "Nhắc nhở" (hiện dùng chung)?
-10. (37) Thêm dòng **"n thay đổi chưa đồng bộ sẽ được gửi trước"** khi đăng xuất (đề xuất mới, cần sửa luồng đăng xuất)?
-11. (45) **Tên vai trò**: giữ "Fatty" hay đổi thành "Tôi tự tập"? Hồ sơ đang gọi coach là "Hiệp sĩ dẫn đường", màn chọn vai trò gọi là "Coach".
-12. (13) Chip **"Bài kế hoạch"** trong Tập khác thay cho danh sách "Bài tập gợi ý · + Ghi nhận" của `workout-classic`. Bạn còn dùng các bài trong kế hoạch (Cardio sáng…) không, hay chỉ dùng nhóm A / B / C?
+Câu 1–5, 11, 12 do bạn trả lời; câu 6–10 là đề xuất của Claude (bạn bảo tự chọn), có thể đổi lại.
+
+1. **Ăn lại 1 chạm**: ghi luôn + Hoàn tác, nhấn giữ mở menu. ✔ Đồng ý.
+2. **Check-in** nằm trong (+) **và có lối tắt buổi tối trên Trại** (thẻ nhỏ chỉ hiện sau 19:00 khi hôm nay chưa check-in, ẩn khi đã check-in).
+3. **Chỉ giữ 2 hộp xác nhận** (Xoá nhật ký trước ngày, Đăng xuất); các xoá khác thành Hoàn tác. ✔ Đồng ý.
+4. **Sheet cân (02) không có nút xoá**; xoá lần cân chỉ ở màn Cân nặng (vuốt trái).
+5. **Chi tiết bữa / buổi tập / Cám dỗ** thành bottom sheet, **Công thức** thành trang cuộn. ✔ Đồng ý.
+6. *(đề xuất)* Chạm nhiệm vụ Đạm / Purine / Muối / Đường / Ăn vặt mở **Nhật ký › Ngày**, cuộn tới bảng dinh dưỡng và tô sáng dòng đó (nhiệm vụ nói về cái đã ăn hôm nay). Dưới dòng có link phụ "Gợi ý món …" mở Cook book lọc sẵn (vd "Nhiều đạm").
+7. *(đề xuất)* **Boss tuần là sheet** (xem nhanh: HP, đòn hôm nay "chờ chốt ~X", dải 7 chấm theo ngày). Log 7 ngày đầy đủ **chỉ ở Nhật ký › Tuần**; sheet có nút "Xem cả tuần" mở tới đó. `/boss` giữ làm đường dẫn cũ, chuyển hướng sang Nhật ký › Tuần.
+8. *(đề xuất)* **Không gộp**. Nhật ký › Tháng giữ thẻ tóm tắt ngắn + nút mở Phân tích, để Tháng không dài thêm.
+9. *(đề xuất)* **Tách** công tắc "Pop-up uống nước" khỏi "Nhắc nhở": pop-up hiện trong app và dày hơn, nhiều người muốn nhắc nhở nhưng không muốn pop-up.
+10. *(đề xuất)* **Có** báo "còn n thay đổi chưa đồng bộ sẽ được gửi trước" khi đăng xuất, và gửi xong mới đăng xuất (n = 0 thì không hiện). Tránh mất dữ liệu khi đăng xuất lúc mạng chập chờn.
+11. **Giữ tên "Fatty"**.
+12. **Còn dùng bài tập riêng trong kế hoạch**: chip "Bài kế hoạch" giữ lại cạnh nhóm A / B / C.
