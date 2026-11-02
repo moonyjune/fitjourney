@@ -3,6 +3,7 @@
 > Bổ sung cho `README.md`. Bản đề xuất trước chỉ vẽ màn chính, nên chưa thấy các hộp thoại bên trong. File này liệt kê **mọi hộp thoại, sheet và màn con app đang có** (theo code 0.22.1), chỉ ra mỗi cái mở từ đâu trong thiết kế mới và chức năng có còn đủ không.
 > Ảnh: `png/dialogs/NN-*.png` (rộng 390, chụp 2x, cả chiều dài). Tổng hợp: `dialogs-overview.png`. Mã HTML: `html/dialogs/`.
 > Trong mỗi ảnh, khung viền xanh lá ghi rõ: giữ gì, chức năng nào chuyển sang đâu.
+> Mockup đã cập nhật theo **0.23.0** (dòng "0.23.0:" trong khung xanh): hôm nay còn bữa chưa ăn thì thâm hụt là số dự kiến "~X" và đòn boss tuần "chờ chốt" (phần mờ trên thanh HP, nhiệm vụ Thâm hụt chưa xong), ngày cũ thiếu bữa có dòng ⚠ "Chưa ghi …" + nút Ghi bổ sung, chưa ghi bữa nào thì không có số. Ảnh đổi: 03, 09, 17, 18, 19, 20, 28, 33.
 
 Ký hiệu cột cuối: **✔** = đủ chức năng · **dời → …** = chức năng vẫn còn nhưng nằm ở chỗ khác · **⚠** = cần bạn chốt (xem cuối file).
 
