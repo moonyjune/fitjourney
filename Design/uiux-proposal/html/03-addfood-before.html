@@ -1,0 +1,27 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Thêm món hiện tại</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css"><script src="kit.js"></script></head><body>
+<div data-status="before"></div>
+<div class="content">
+  <div class="header"><div class="iconbtn"><i data-i="back"></i></div><span class="h2">Món ngoài kế hoạch</span></div>
+  <div class="t13 c2 med mt4">Mô tả bằng chữ, chụp ảnh, tra cơ sở dữ liệu hoặc tự nhập. Bạn kiểm tra, sửa lượng rồi mới lưu.</div>
+  <div class="t13 mt12">Bạn đã ăn gì?</div>
+  <div class="raised mt6" style="padding:12px;height:78px;border:1.5px solid var(--border)"><span class="t14 c2 med">Ví dụ: 2 bát phở bò, 1 ly trà đá ít đường</span></div>
+  <div class="t15 bold mt12">Đính kèm ảnh</div>
+  <div class="dense mt4">Không bắt buộc. Tối đa 4 ảnh bữa ăn (hoặc bao bì, thực đơn) để AI nhận món và khẩu phần chính xác hơn. Có ảnh thì có thể để trống phần chữ.</div>
+  <div class="row gap8 mt8"><span class="chip" style="flex:1"><i data-i="camera"></i>Chụp ảnh</span><span class="chip" style="flex:1">Chọn ảnh</span></div>
+  <div class="row gap8 mt12"><div class="btn mana sm" style="flex:1"><i data-i="chart"></i>Hỏi AI</div><div class="btn ghost sm" style="flex:1"><i data-i="tag"></i>Đọc nhãn</div></div>
+  <div class="dense mt8">Viết mô tả, thêm ảnh, hoặc cả hai rồi bấm Hỏi AI: AI tách từng món kèm khối lượng. Món đã có trong cơ sở dữ liệu thì không cần hỏi AI.</div>
+  <div class="raised mt12" style="padding:10px"><span class="t13 c2 med">Tra cơ sở dữ liệu món ăn…</span></div>
+  <div class="t15 bold mt12">Các món</div>
+  <div class="raised mt6" style="padding:10px"><div class="row gap8"><div class="raised2 grow" style="background:var(--raised2);height:40px;border-radius:10px;padding:10px;font-size:13px">Tên món</div><span class="chip s">✕</span></div>
+   <div class="row gap6 mt6"><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Lượng</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">kcal</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Đạm</div></div>
+   <div class="row gap6 mt6"><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Purine</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Muối</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Đường</div></div></div>
+  <div class="scrollhint" style="height:760px"><i style="height:190px"></i></div>
+  <div class="fade-bottom"></div>
+</div>
+<div class="pin" style="left:6px;top:104px">1</div>
+<div class="pin" style="right:8px;top:384px">2</div>
+<div class="pin" style="right:8px;top:560px">3</div>
+<div class="note" style="bottom:20px"><b>① 4 đoạn hướng dẫn</b> (≈90 từ) trước khi làm được gì · <b>② 2 nút AI</b> (Hỏi AI / Đọc nhãn) + tra CSDL + tự nhập = 4 đường cho cùng một việc · <b>③ 6 ô số</b> mỗi món luôn hiện; bữa, giờ ăn, đồ ăn vặt và nút lưu ở cuối trang (≈4 màn). Còn có <b>/text-meal</b> và form món trong Dinh dưỡng trùng chức năng.</div>
+</body></html>

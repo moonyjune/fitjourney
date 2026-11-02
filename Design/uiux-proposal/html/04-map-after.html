@@ -1,0 +1,33 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Hành trình đề xuất</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css"><script src="kit.js"></script>
+<style>.node{display:flex;align-items:center;gap:12px;position:relative;z-index:2}.dot{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid var(--border);background:var(--panel);flex:none}</style></head><body>
+<div data-status="after"></div>
+<div class="content tabbed" style="padding:0">
+  <!-- hero: the boss blocking the road, big -->
+  <div style="position:relative;height:300px;background:radial-gradient(circle at 50% 45%,#4a2a6e 0%,#2A1A3A 45%,#110D22 80%)">
+    <div class="row between" style="position:absolute;left:16px;right:16px;top:6px"><div><div class="t12 c2 med">Vùng 1 · Đồng Khởi Hành</div><div class="h2">Hành trình</div></div><span class="chip"><i data-i="chart"></i>Cân nặng</span></div>
+    <div style="position:absolute;left:0;right:0;top:56px;display:flex;justify-content:center"><div data-boss="#D99BFF" data-size="170" data-acc="tea"></div></div>
+    <div style="position:absolute;left:16px;right:16px;bottom:10px">
+      <div class="row between"><span class="h3">Slime Trà Sữa</span><span class="badge hp">Độ khó 2/5</span></div>
+      <div class="bar mt6" style="height:12px"><i style="width:32%;background:var(--hp)"></i></div>
+      <div class="row between mt4"><span class="t13 chp">còn 1.6 kg nữa để hạ</span><span class="t12 c2 med">80.6 → 79 kg</span></div>
+    </div>
+  </div>
+  <div style="padding:0 16px">
+    <div class="row gap8 mt12">
+      <span class="badge xp" style="padding:6px 10px;font-size:12px">−4.6 kg đã giảm</span><span class="badge gold" style="padding:6px 10px;font-size:12px">0/3 boss</span><span class="badge" style="padding:6px 10px;font-size:12px">còn 7.4 kg</span>
+    </div>
+    <!-- trail: vertical nodes -->
+    <div style="position:relative;margin-top:14px">
+      <div style="position:absolute;left:27px;top:20px;bottom:20px;width:3px;background:repeating-linear-gradient(var(--border) 0 6px,transparent 6px 12px)"></div>
+      <div class="node"><div class="dot" style="border-color:var(--gold);box-shadow:0 0 0 6px rgba(255,200,61,.15)"><div data-boss="#D99BFF" data-size="40" data-acc="tea"></div></div><div class="grow"><b class="t15">Slime Trà Sữa</b><div class="t12 c2 med">Đang đánh · 79 kg</div></div><span class="cg"><i data-i="next"></i></span></div>
+      <div class="node mt12" style="opacity:.75"><div class="dot"><div data-boss="#FFB347" data-size="40" data-acc="beer"></div></div><div class="grow"><b class="t15">Gã Thùng Bia</b><div class="t12 c2 med">Mở khi đạt 79 kg · 74 kg</div></div><span class="c2"><i data-i="lock"></i></span></div>
+      <div class="node mt12" style="opacity:.72"><div class="dot"><div data-boss="#7EE0A1" data-size="40" data-acc="noodle"></div></div><div class="grow"><b class="t15">Ninja Mì Gói</b><div class="t12 c2 med">Boss cuối · 72 kg</div></div><span class="c2"><i data-i="lock"></i></span></div>
+    </div>
+    <!-- last banter, one line -->
+    <div class="panel boss row gap10 mt12" style="padding:10px 12px"><div data-boss="#D99BFF" data-size="32" data-acc="tea"></div><div class="grow t13 med c3">“Hôm qua bạn đánh mất của ta 80 g mỡ… lần sau ta sẽ dụ bằng full topping!”</div></div>
+  </div>
+</div>
+<div data-tabbar="2" data-labels="Trại,Tập,Hành trình,Hồ sơ"></div>
+</body></html>

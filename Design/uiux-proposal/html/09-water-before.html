@@ -1,0 +1,34 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Pop-up nước hiện tại</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css"><script src="kit.js"></script>
+<style>.st{display:flex;justify-content:space-between;font-size:12px;font-weight:500;padding:3px 0;color:var(--text3)}</style></head><body>
+<div data-status="before"></div>
+<div class="scrim" style="top:44px"></div>
+<div class="panel manaPanel" style="position:absolute;left:16px;right:16px;top:70px;padding:16px">
+  <div class="row" style="justify-content:center"><div style="width:72px;height:72px;border-radius:50%;background:rgba(76,201,240,.18);display:flex;align-items:center;justify-content:center;font-size:36px;color:var(--mana)"><i data-i="drop"></i></div></div>
+  <div class="h2 mt8" style="text-align:center">Đến giờ uống nước · 13:00</div>
+  <div class="t18 cm mt4" style="text-align:center">Uống 500 ml ngay nhé!</div>
+  <div class="t12 c3 med mt8" style="text-align:center">Đang thiếu 250 ml so với lịch · bỏ lỡ lúc 11:00</div>
+  <div class="t12 c3 med mt4" style="text-align:center">Gợi ý bù: bây giờ 750 ml, rồi 15:00 uống thêm 500 ml, 17:00 uống thêm 250 ml</div>
+  <div class="t13 bold mt12">Lịch uống nước hôm nay</div>
+  <div class="mt4">
+    <div class="st"><span>06:30 Thức dậy - 1 ly nước ấm</span><span class="cx">✓</span></div>
+    <div class="st"><span>09:00 Giữa buổi sáng</span><span class="cx">✓</span></div>
+    <div class="st"><span>11:00 Trước bữa trưa</span><span class="chp">✗ lỡ</span></div>
+    <div class="st"><span>13:00 Sau bữa trưa</span><span class="cg">• bây giờ</span></div>
+    <div class="st"><span>15:00 Buổi chiều</span><span></span></div>
+    <div class="st"><span>17:00 Quanh giờ tập</span><span></span></div>
+    <div class="st"><span>19:00 Sau bữa tối</span><span></span></div>
+    <div class="st"><span>20:30 Ly cuối ngày (trước khi ngủ ~1 tiếng)</span><span></span></div>
+  </div>
+  <div class="row between mt8"><span class="t12 c2 med">Đã uống 1,000/2,500 ml</span><span class="t12 c2 med">đã xong 2/8 lần</span></div>
+  <div class="bar thin mt4" style="background:#0b1d2a"><i style="width:40%;background:var(--mana)"></i></div>
+  <div class="t12 c3 med mt8" style="text-align:center">Thận và khớp của bạn đang vui đó — nước giúp đào thải axit uric. Cố lên!</div>
+  <div class="btn mana mt12">Đã uống đủ 1,750 ml</div>
+  <div class="btn ghost sm mt8">Để sau</div>
+</div>
+<div class="pin" style="right:24px;top:250px">1</div>
+<div class="pin" style="right:24px;top:330px">2</div>
+<div class="pin" style="right:24px;top:740px">3</div>
+<div class="note" style="bottom:12px"><b>① 4 câu số</b> (uống 500, thiếu 250, bù 750, rồi 15:00…) mâu thuẫn nhau · <b>② Lịch 8 dòng</b> chiếm nửa pop-up · <b>③ Nút chính "Đã uống đủ 1,750 ml"</b> khác con số "Uống 500 ml" ở trên; không chọn được lượng thật đã uống.</div>
+</body></html>

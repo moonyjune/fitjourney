@@ -1,0 +1,36 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Tổng quan đề xuất</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#110D22;color:#F4F1FF;font-family:'Chakra Petch',sans-serif;padding:36px 40px}
+h1{margin:0;font-size:40px} .sub{color:#B3AACF;font-size:18px;margin:6px 0 26px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:28px 40px}
+.pair{background:#1C1636;border:2px solid #3A2F6B;border-radius:20px;padding:14px}
+.pair h2{margin:0 0 10px;font-size:20px;color:#FFC83D}
+.imgs{display:flex;gap:14px}
+.imgs figure{margin:0;flex:1}
+.imgs img{width:100%;border-radius:14px;display:block;border:1px solid #3A2F6B}
+figcaption{font-size:13px;color:#B3AACF;text-align:center;margin-top:6px}
+</style></head><body>
+<h1>FitQuest · Đề xuất UI/UX (bản duyệt)</h1>
+<div class="sub">Mỗi ô: trái = HIỆN TẠI (chấm đỏ = vấn đề) · phải = ĐỀ XUẤT. Giữ nguyên màu, font Chakra Petch và bo góc của quest.ts.</div>
+<div class="grid" id="g"></div>
+<script>
+const pairs = [
+  ['1 · Trại (Camp)', '01-camp-before', '01-camp-after'],
+  ['2 · Ghi nhanh (+)', '02-quickadd-before', '02-quickadd-after'],
+  ['3 · Ghi món (AI ảnh)', '03-addfood-before', '03-addfood-after'],
+  ['4 · Bản đồ → Hành trình', '04-map-before', '04-map-after'],
+  ['5 · Tập', '05-train-before', '05-train-after'],
+  ['6 · Cook book', '06-cookbook-before', '06-cookbook-after'],
+  ['6b · Cheat day & tìm quán', null, '06b-cheatday-after'],
+  ['7 · Lịch sử → Nhật ký', '07-journal-before', '07-journal-after'],
+  ['8 · Hồ sơ', '08-profile-before', '08-profile-after'],
+  ['9 · Pop-up nước', '09-water-before', '09-water-after'],
+];
+const g = document.getElementById('g');
+for (const [t, b, a] of pairs) {
+  const fig = (n, c) => n ? `<figure><img src="../png/${n}.png"><figcaption>${c}</figcaption></figure>` : `<figure style="display:flex;align-items:center;justify-content:center;color:#B3AACF;font-size:15px;text-align:center;border:2px dashed #3A2F6B;border-radius:14px">(nằm trong<br>Cook book ›<br>công tắc Cheat day)</figure>`;
+  g.insertAdjacentHTML('beforeend', `<div class="pair"><h2>${t}</h2><div class="imgs">${fig(b, 'Hiện tại')}${fig(a, 'Đề xuất')}</div></div>`);
+}
+</script>
+</body></html>

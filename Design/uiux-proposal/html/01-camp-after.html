@@ -1,0 +1,60 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Camp đề xuất</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kit.css"><script src="kit.js"></script></head><body>
+<div data-status="after"></div>
+<div class="content">
+  <!-- compact header: level + streak + working-day chip -->
+  <div class="row gap8">
+    <div style="font-size:34px;color:var(--gold)"><i data-i="shield"></i></div>
+    <div class="grow"><div class="t15 bold" style="white-space:nowrap">Cấp 7 <span class="c2 med t12">· 1,720/2,780 XP</span></div><div class="bar thin mt4"><i style="width:62%;background:var(--xp)"></i></div></div>
+    <div class="chip" style="color:var(--gold)"><i data-i="flame"></i>4</div>
+    <div class="chip"><i data-i="calendar"></i>Hôm nay<i data-i="down"></i></div>
+  </div>
+  <!-- hero: today's budget + weekly boss in one card -->
+  <div class="panel mt12" style="padding:14px">
+    <div class="row gap12">
+      <div class="ring" data-ring="0.61,#FFC83D,124,12"><div class="mid"><span class="t11 c2 med">còn ăn</span><span class="t28 bold">620</span><span class="t11 c2 med">/ 1,600 kcal</span></div></div>
+      <div class="grow col gap8">
+        <div class="row between"><span class="t13 c2 med">Đã ăn</span><b class="t15">980</b></div>
+        <div class="row between"><span class="t13 c2 med">Tập luyện</span><b class="t15 chp">−320</b></div>
+        <div class="row between"><span class="t13 c2 med">Thâm hụt</span><span class="row gap4"><b class="t15 cg">640</b><span class="badge xp">Đạt</span></span></div>
+        <div class="row between"><span class="t13 c2 med">Đạm</span><b class="t15">72<span class="c2 t12">/120 g</span></b></div>
+      </div>
+    </div>
+    <div class="divider mt12"></div>
+    <div class="row gap8 mt10">
+      <div data-boss="#FF5470" data-size="40"></div>
+      <div class="grow"><div class="row between"><span class="t13 bold">Quái Một Ký Mỡ</span><span class="t12 chp">−640 HP hôm nay</span></div>
+        <div class="bar thin mt4"><i style="width:68%;background:var(--hp)"></i></div></div>
+      <span class="c2" style="font-size:18px"><i data-i="next"></i></span>
+    </div>
+  </div>
+  <!-- the three things done every day: one tap each -->
+  <div class="row gap8 mt12">
+    <div class="panel col" style="flex:1;padding:10px;align-items:flex-start;border-color:var(--gold)"><span class="cg" style="font-size:24px"><i data-i="camera"></i></span><b class="t14 mt4">Chụp món</b><span class="t11 c2 med">AI tính kcal</span></div>
+    <div class="panel manaPanel col" style="flex:1;padding:10px;align-items:flex-start"><span class="cm" style="font-size:24px"><i data-i="drop"></i></span><b class="t14 mt4">+250 ml</b><span class="t11 cm med">1.2 / 2.5 L</span></div>
+    <div class="panel col" style="flex:1;padding:10px;align-items:flex-start"><span class="cx" style="font-size:24px"><i data-i="dumbbell"></i></span><b class="t14 mt4">Tập 18′</b><span class="t11 c2 med">Nhóm A · +60 XP</span></div>
+  </div>
+  <!-- missions as a glanceable icon row -->
+  <div class="row between mt16"><span class="h3">Nhiệm vụ</span><span class="t12 c2 med">3/7 xong · ▸</span></div>
+  <div class="row mt8" style="justify-content:space-between">
+    <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="1,#8BFF6B,40,4"><div class="mid cx t14"><i data-i="check"></i></div></div><span class="t10 c2 med">Tập</span></div>
+    <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="1,#8BFF6B,40,4"><div class="mid cx t14"><i data-i="check"></i></div></div><span class="t10 c2 med">Thâm hụt</span></div>
+    <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="0.6,#FFC83D,40,4"><div class="mid t10 bold">60%</div></div><span class="t10 c2 med">Đạm</span></div>
+    <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="0.38,#4CC9F0,40,4"><div class="mid t10 bold cm">460</div></div><span class="t10 c2 med">Purine</span></div>
+    <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="0.4,#4CC9F0,40,4"><div class="mid t10 bold cm">2.9</div></div><span class="t10 c2 med">Muối</span></div>
+    <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="0.28,#4CC9F0,40,4"><div class="mid t10 bold cm">7</div></div><span class="t10 c2 med">Đường</span></div>
+    <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="1,#8BFF6B,40,4"><div class="mid cx t14"><i data-i="check"></i></div></div><span class="t10 c2 med">Ăn vặt</span></div>
+  </div>
+  <!-- next meal: one photo suggestion, two actions -->
+  <div class="row between mt16"><span class="h3">Bữa trưa · 12:00</span><span class="t12 c2 med">~460 kcal</span></div>
+  <div class="panel row gap12 mt8" style="padding:10px">
+    <img src="img/buncha.jpg" style="width:84px;height:84px;border-radius:12px;object-fit:cover">
+    <div class="grow"><b class="t15">Bún chả ít bún</b><div class="t12 c2 med mt4">450 kcal · 32 g đạm</div><div class="row gap6 mt8"><span class="chip s on">Ghi món này</span><span class="chip s">Món khác</span></div></div>
+  </div>
+  <div class="row between mt16"><span class="h3">Dòng thời gian</span><span class="t12 c2 med">Nhật ký ▸</span></div>
+  <div class="row gap10 mt8"><span class="t12 c2 med" style="width:40px">07:30</span><img class="thumb" src="img/banhmi.jpg" style="width:44px;height:44px"><div class="grow"><b class="t14">Bánh mì thịt</b><div class="t12 c2 med">420 kcal · 18 g đạm</div></div></div>
+  <div class="fade-bottom" style="height:60px"></div>
+</div>
+<div data-tabbar="0" data-labels="Trại,Tập,Hành trình,Hồ sơ"></div>
+</body></html>
