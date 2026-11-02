@@ -37,7 +37,16 @@ import {
   REFILL_BELOW,
   unseenFitting,
   weatherTagsOf,
+  cleanPictureAnswers,
   cleanWebPhotoPages,
+  genericImageUrl,
+  photoChecked,
+  photoFree,
+  photoKey,
+  pictureHeading,
+  rowsToRepair,
+  takenPhotos,
+  withoutPhoto,
   MAX_PHOTO_TRIES,
   photoStage,
   poolAnswerShape,
@@ -467,5 +476,75 @@ describe('per-feature models (0.26.4)', () => {
     expect(featureConfig(global, [{ key: 'model.photo', value: 'claude-new-9' }], 'photo')).toEqual({ model: 'claude-new-9', priceInPerMtok: 3, priceOutPerMtok: 15 });
     expect(featureConfig(global, [{ key: 'model.photo', value: 'Bad!' }], 'photo').model).toBe('claude-haiku-5-5');
     expect(MODEL_PRICES['claude-haiku-5-5']).toEqual({ in: 0.1, out: 0.5 });
+  });
+});
+
+describe('temptations: one picture, one dish (0.26.5)', () => {
+  const wikiPhoto = { url: 'https://upload.wikimedia.org/x/640px-Nem.jpg', sourceUrl: 'https://commons.wikimedia.org/wiki/File:Nem.jpg', author: 'B', license: 'CC BY 4.0', source: 'wikimedia' as const };
+  const siteBanner = 'https://CDN.Shop.vn/uploads/2025/hero-summer.jpg?v=3#x';
+  const web = (name: string, url = siteBanner) => withWebPhoto(withDishPhoto(poolItem(name), null), { pageUrl: 'https://shop.vn/menu', imageUrl: url });
+
+  it('compares pictures without query or fragment and with the host in lower case', () => {
+    expect(photoKey(siteBanner)).toBe('cdn.shop.vn/uploads/2025/hero-summer.jpg');
+    expect(photoKey('https://cdn.shop.vn/uploads/2025/hero-summer.jpg/')).toBe('cdn.shop.vn/uploads/2025/hero-summer.jpg');
+    expect(photoKey(42)).toBe('');
+  });
+
+  it('refuses generic-looking pictures', () => {
+    for (const u of ['https://a.vn/logo.png', 'https://a.vn/img/og-default.jpg', 'https://a.vn/static/share_image.jpg', 'https://a.vn/banner/top.jpg', 'https://a.vn/x/default.jpg', 'https://a.vn/i.svg', 'https://a.vn/favicon.ico', 'nope'])
+      expect(genericImageUrl(u)).toBe(true);
+    for (const u of ['https://a.vn/uploads/2025/10/nem-nuong-nha-trang.jpg', 'https://upload.wikimedia.org/x/640px-Pho.jpg', 'https://a.vn/products/tra-sua-tran-chau.webp'])
+      expect(genericImageUrl(u)).toBe(false);
+  });
+
+  it('lets a picture belong to one item only, and never back to an item that refused it', () => {
+    const item = poolItem('Nem lụi');
+    const taken = new Set([photoKey('https://a.vn/p/1.jpg')]);
+    expect(photoFree('https://a.vn/p/1.jpg?x=1', item, taken)).toBe(false);
+    expect(photoFree('https://a.vn/p/2.jpg', item, taken)).toBe(true);
+    expect(photoFree('https://a.vn/p/2.jpg', { ...item, badPhotos: ['a.vn/p/2.jpg'] }, taken)).toBe(false);
+    expect(photoFree('https://a.vn/logo.jpg', item, taken)).toBe(false);
+  });
+
+  it('repairs shared pictures: unchecked ones all lose it, one model-checked library photo keeps it', () => {
+    const a = row(web('Xúc xích nướng'), '2026-11-01T00:00:00Z');
+    const b = row(web('Hồng trà cam'), '2026-11-01T00:01:00Z');
+    const c = row(web('Nước long nhãn'), '2026-11-01T00:02:00Z');
+    const lib1 = row(withDishPhoto(poolItem('Nem nướng'), wikiPhoto), '2026-11-01T00:03:00Z');
+    const lib2 = row(withDishPhoto(poolItem('Nem lụi'), wikiPhoto), '2026-11-01T00:04:00Z');
+    const alone = row(web('Bánh flan', 'https://a.vn/uploads/flan.jpg'));
+    const generic = row(web('Bánh tráng', 'https://a.vn/images/logo.png'));
+    const bad = rowsToRepair([a, b, c, lib1, lib2, alone, generic]);
+    expect(bad.map((r) => r.item.name).sort()).toEqual(['Bánh tráng', 'Hồng trà cam', 'Nem lụi', 'Nước long nhãn', 'Xúc xích nướng'].sort());
+    expect(photoChecked(lib1.item)).toBe(true);
+    // A library photo from before the flag counts as checked too.
+    const { photoVerified: _v, ...legacy } = lib1.item;
+    expect(photoChecked(legacy)).toBe(true);
+    expect(photoChecked(a.item)).toBe(false);
+    expect(takenPhotos([a, alone]).has('a.vn/uploads/flan.jpg')).toBe(true);
+  });
+
+  it('a repaired item looks again with a fresh budget, never taking that picture back', () => {
+    const shared = web('Xiên nướng sốt cay');
+    const again = withoutPhoto({ ...shared, photoTries: 2 });
+    expect(again.imageUrl).toBeNull();
+    expect(again.photo).toBeUndefined();
+    expect(again).toMatchObject({ libraryNone: true, badPhotos: ['cdn.shop.vn/uploads/2025/hero-summer.jpg'] });
+    expect(again.webPhotoTried).toBeUndefined();
+    expect(again.photoTries).toBeUndefined();
+    expect(photoStage(again)).toBe('web');
+    expect(needsPhoto(again)).toBe(true);
+    const lib = withoutPhoto(withDishPhoto(poolItem('Nem lụi'), wikiPhoto));
+    expect(photoStage(lib)).toBe('web');
+    const fromSource = withoutPhoto(withOgImage({ ...poolItem('Trà mới'), sourceUrl: 'https://brand.vn/new' }, 'https://brand.vn/img/tra.jpg'));
+    expect(photoStage(fromSource)).toBe('library');
+    expect(cleanStoredPoolItem(JSON.parse(JSON.stringify(again)))!.badPhotos).toEqual(['cdn.shop.vn/uploads/2025/hero-summer.jpg']);
+  });
+
+  it('reads the picture check: yes only where the model said so', () => {
+    expect(pictureHeading(2, 'Trà đào')).toBe('Ảnh 2: món <dish>Trà đào</dish>');
+    expect(cleanPictureAnswers({ answers: [{ n: 1, shows: true }, { n: 2, shows: false }, { n: 7, shows: true }, { n: 3, shows: 'yes' }] }, 3)).toEqual([true, false, false]);
+    expect(cleanPictureAnswers(null, 2)).toEqual([false, false]);
+    expect(withWebPhoto(withDishPhoto(poolItem('X'), null), { pageUrl: 'https://a.vn/x', imageUrl: 'https://a.vn/x.jpg', verified: true }).photoVerified).toBe(true);
   });
 });

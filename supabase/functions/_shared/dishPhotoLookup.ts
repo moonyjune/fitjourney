@@ -76,6 +76,12 @@ export async function thumbBlock(c: PhotoCandidate, problems: string[]): Promise
   return { type: 'image', source: { type: 'base64', media_type: got.mime, data: bytesToBase64(got.bytes) } };
 }
 
+/** Any picture URL as a Claude image block (downloaded here, bounded like a thumbnail), or null. */
+export async function imageBlockOf(url: string): Promise<ImageBlock | null> {
+  const got = await loadThumb(url, fetch as unknown as PhotoFetch, { userAgent: USER_AGENT, maxBytes: THUMB_MAX_BYTES * 2, signal: AbortSignal.timeout(THUMB_TIMEOUT_MS) });
+  return got.ok ? { type: 'image', source: { type: 'base64', media_type: got.mime, data: bytesToBase64(got.bytes) } } : null;
+}
+
 /** Resolves to `fallback` when `work` takes longer than `ms`. */
 export function within<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([work, new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms))]);

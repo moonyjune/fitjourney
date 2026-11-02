@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26.5 | no | tempt-me, dish-photo |
 | 0.26.4 | yes | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
 | 0.26.3 | no | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
 | 0.26.2 | yes | tempt-me, dish-photo |
@@ -77,6 +78,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.26.5
+- Temptation pool pictures: one picture belongs to one item only (compared without query / fragment). A picture another item already has, or one that looks like a site's generic image (logo, banner, default / share image, icon), is refused and the next way to find one is tried.
+- The web photo search asks for a page about that exact dish (not a menu, category or home page), and the AI (Haiku) looks at the pictures found (one call for up to 8): a picture that does not show the dish is dropped.
+- Repair: the next seed step takes away pictures shared by several items or generic (a library photo the AI had checked stays with one item) and those items look again, never taking that picture back; the seed answer says how many (`repaired`).
+- Server: deploy tempt-me (and dish-photo, which shares the photo code). No schema change.
 
 ## 0.26.4
 - Temptation pool: the calls without the web now ask for ~28 items each (6 calls by theme + the trending one with the web). With 55 items the answer ran out of room and came back without a list; a list given as text is now read too, an answer with no list is asked once more, and the seed's notes say how each answer ended (stop reason, what `items` was).
