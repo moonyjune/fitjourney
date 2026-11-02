@@ -571,8 +571,9 @@ const vi = {
   'cookbook.type.cake': 'Bánh',
   // ===== end Cookbook filters =====
   'meals.replacedNote': 'Mỗi lần gợi ý hiện 3 món mới thay cho các món cũ; món cũ được lưu vào cookbook chung (không tốn lượt AI).',
-  'meals.listTitle': 'Gợi ý ({n})',
-  'meals.expand': 'Mở ra gợi ý: {meal}',
+  'meals.showMore': 'Xem thêm {n} món ▾',
+  'meals.showLess': 'Thu gọn ▴',
+  'meals.expand': 'Xem thêm món gợi ý: {meal}',
   'meals.collapse': 'Thu gọn gợi ý: {meal}',
   'photo.none': 'Chưa có ảnh nào.',
   'photo.unavailable': 'Không tải được ảnh này (file nằm trên thiết bị khác). Mở lại ứng dụng để tải từ cloud.',
@@ -1997,8 +1998,9 @@ const en: Record<GameKey, string> = {
   'cookbook.type.cake': 'Cake / bread',
   // ===== end Cookbook filters =====
   'meals.replacedNote': 'Each suggestion shows 3 new dishes in place of the old ones; the old ones go into the shared cookbook (no AI call needed).',
-  'meals.listTitle': 'Suggestions ({n})',
-  'meals.expand': 'Expand suggestions: {meal}',
+  'meals.showMore': 'Show {n} more ▾',
+  'meals.showLess': 'Show less ▴',
+  'meals.expand': 'Show more suggestions: {meal}',
   'meals.collapse': 'Collapse suggestions: {meal}',
   'photo.none': 'No photos yet.',
   'photo.unavailable': 'This photo could not be loaded (the file is on another device). Reopen the app to fetch it from the cloud.',

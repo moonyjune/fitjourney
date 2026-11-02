@@ -28,6 +28,8 @@ import { FlashNotice, useFlash } from './FlashNotice';
 const DB_IDEAS_PER_MEAL = 2;
 /** Dishes listed per meal at a time, whatever their source: the suggestions first, then the user's foods and cook book. */
 const IDEAS_SHOWN = 3;
+/** Dishes shown before "show more": the first one; the rest open on a tap (the user's rule, 2026-11-02: one dish per meal). */
+const IDEAS_FOLDED = 1;
 
 const KIND_KEY: Record<MealKind, GameKey> = {
   breakfast: 'meals.kind.breakfast',
@@ -90,8 +92,8 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
   const [flash, showFlash] = useFlash();
   const [notice, setNotice] = useState<{ id: string; key: 'cookbook.sharedNone' | 'cookbook.sharedFailed' | 'meals.none' } | null>(null);
   const [query, setQuery] = useState('');
-  // Meals whose list of dishes the user folded away (not kept: every list is open when the card is built).
-  const [folded, setFolded] = useState<Record<string, boolean>>({});
+  // Meals whose other dishes the user opened (not kept: each meal shows only its first dish when the card is built).
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
 
   // What is left changes when something is logged or the mode is switched: the failure message no longer applies, and kept AI answers
   // are re-checked against the new share when they are shown (the ones that no longer fit are hidden, not asked for again).
@@ -233,18 +235,7 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
               </HudText>
             )}
 
-            {ideas.length > 0 && (
-              <Pressable
-                style={styles.listHead}
-                accessibilityRole="button"
-                accessibilityState={{ expanded: !folded[meal.slot.id] }}
-                accessibilityLabel={g(folded[meal.slot.id] ? 'meals.expand' : 'meals.collapse', { meal: name })}
-                onPress={() => setFolded((f) => ({ ...f, [meal.slot.id]: !f[meal.slot.id] }))}
-              >
-                <HudText size={13} color={quest.goldLight}>{`${g('meals.listTitle', { n: ideas.length })} ${folded[meal.slot.id] ? '▸' : '▾'}`}</HudText>
-              </Pressable>
-            )}
-            {!folded[meal.slot.id] && ideas.map((idea) => (
+            {(opened[meal.slot.id] ? ideas : ideas.slice(0, IDEAS_FOLDED)).map((idea) => (
               <View key={`${idea.source}-${idea.name}`} style={styles.idea}>
                 <HudText size={13}>{idea.recipe?.emoji ? `${idea.recipe.emoji} ${idea.name}` : idea.name}</HudText>
                 <HudText size={11} color={idea.source === 'db' ? quest.manaText : quest.goldLight}>
@@ -270,6 +261,19 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
                 </View>
               </View>
             ))}
+            {ideas.length > IDEAS_FOLDED && (
+              <Pressable
+                style={styles.listHead}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: !!opened[meal.slot.id] }}
+                accessibilityLabel={g(opened[meal.slot.id] ? 'meals.collapse' : 'meals.expand', { meal: name })}
+                onPress={() => setOpened((o) => ({ ...o, [meal.slot.id]: !o[meal.slot.id] }))}
+              >
+                <HudText size={13} color={quest.goldLight}>
+                  {opened[meal.slot.id] ? g('meals.showLess') : g('meals.showMore', { n: ideas.length - IDEAS_FOLDED })}
+                </HudText>
+              </Pressable>
+            )}
 
             <QuestButton
               variant="ghost"

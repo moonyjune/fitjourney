@@ -86,6 +86,12 @@ function mealText(r: ReactTestRenderer, meal: string): string {
 const find = (r: ReactTestRenderer, label: string): ReactTestInstance | undefined =>
   r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === label)[0];
 
+/** Opens every meal's folded dishes (each meal shows only its first dish until "Xem thêm" is tapped). */
+const openAll = async (r: ReactTestRenderer) => {
+  for (const n of r.root.findAll((x) => typeof x.props.onPress === 'function' && typeof x.props.accessibilityLabel === 'string' && x.props.accessibilityLabel.startsWith('Xem thêm món gợi ý: ')))
+    await act(async () => n.props.onPress());
+};
+
 const saved = (name: string, over: Partial<FoodEntry> = {}): FoodEntry => ({
   id: `c-${name}`, name, group: 'poultry', unit: 'phần', unitG: 100, kcal: 560, proteinG: 55, purineMg: 100, sugarG: 1, sodiumMg: 200, note: '', confidence: 'low', auto: true, ...over,
 });
@@ -193,6 +199,7 @@ describe('Meal suggestions card (Camp)', () => {
     logLunch(900); // 1000 kcal left
     useFoodDbStore.setState({ custom: [saved('Rau luộc nhà làm', { kcal: 120, proteinG: 35, purineMg: 20, sodiumMg: 50, group: 'vegetable' })] });
     const r = await mount(AT(16)); // dinner only: all 1000 kcal
+    await openAll(r);
     const plan = buildMealPlan(AT(16))!;
     const brief = mealBrief(plan.totals, plan.split.meals[0]);
     const expected = dinnerIdeasFromFoods(brief, mergeFoods(useFoodDbStore.getState().custom, useFoodDbStore.getState().overrides)).slice(0, 2);
@@ -296,6 +303,7 @@ describe('Meal suggestions card (Camp)', () => {
     mockDinner.mockClear();
     act(() => renderer?.unmount());
     const next = await mount(AT(8));
+    await openAll(next);
     expect(allText(next)).toContain('Trứng ốp la + bánh mì');
     expect(allText(next)).toContain('Từ cook book');
     expect(mockDinner).not.toHaveBeenCalled();
@@ -328,6 +336,7 @@ describe('Meal suggestions card (Camp)', () => {
     mockDinner.mockResolvedValueOnce(three('Cũ'));
     const r = await mount(AT(8));
     await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
+    await openAll(r);
     for (const n of [1, 2, 3]) expect(allText(r)).toContain(`Cũ ${n}`);
     expect(mockShare).not.toHaveBeenCalled(); // nothing was replaced yet
     mockDinner.mockResolvedValueOnce(three('Mới'));
@@ -339,6 +348,7 @@ describe('Meal suggestions card (Camp)', () => {
     expect((mockShare.mock.calls[0][0] as { name: string }[]).map((i) => i.name)).toEqual(['Cũ 1', 'Cũ 2', 'Cũ 3']);
     act(() => renderer?.unmount());
     const again = await mount(AT(8));
+    await openAll(again);
     for (const n of [1, 2, 3]) expect(allText(again)).toContain(`Mới ${n}`);
     expect(mockDinner).toHaveBeenCalledTimes(2);
   });
@@ -357,7 +367,7 @@ describe('Meal suggestions card (Camp)', () => {
     expect(mockShare).not.toHaveBeenCalled();
   });
 
-  it('lists at most 3 dishes per meal, and one toggle folds and opens the whole list', async () => {
+  it('lists at most 3 dishes per meal; only the first shows until "Xem thêm" opens the rest, and one tap folds them again', async () => {
     useMealModeStore.setState({ fasting: false });
     useNutritionStore.setState({ logs: {} });
     useSettingsStore.setState({ calorieTargetKcal: 2800 });
@@ -365,20 +375,20 @@ describe('Meal suggestions card (Camp)', () => {
     useCookbookStore.setState({ recipes: [{ id: 'mon sach', name: 'Món sách', calories: 600, proteinG: 40, purineMg: 0, saltG: 0, sugarG: 0, source: 'ai', createdAtISO: '2026-10-01T00:00:00Z' }] });
     mockDinner.mockResolvedValueOnce({ ok: true, result: { options: [1, 2, 3].map((n) => ({ name: `Gợi ý ${n}`, calories: 600, proteinG: 30, accuracyPercent: 70 })) } });
     const r = await mount(AT(8));
-    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Xem công thức: Món sách' && typeof n.props.onPress === 'function').length).toBeGreaterThan(0);
     await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
     const shown = () => mealText(r, 'Bữa sáng').match(/Xem công thức/g)?.length ?? 0;
+    expect(shown()).toBe(1);
+    expect(mealText(r, 'Bữa sáng')).toContain('Gợi ý 1');
+    expect(mealText(r, 'Bữa sáng')).not.toContain('Gợi ý 2');
+    expect(mealText(r, 'Bữa sáng')).toContain('Xem thêm 2 món ▾');
+    await act(async () => find(r, 'Xem thêm món gợi ý: Bữa sáng')!.props.onPress());
     expect(shown()).toBe(3);
-    expect(mealText(r, 'Bữa sáng')).toContain('Gợi ý (3) ▾');
     for (const n of [1, 2, 3]) expect(mealText(r, 'Bữa sáng')).toContain(`Gợi ý ${n}`);
     expect(mealText(r, 'Bữa sáng')).not.toContain('Cá hấp nhà làm'); // the user's foods are not a 4th and 5th
+    expect(mealText(r, 'Bữa sáng')).toContain('Thu gọn ▴');
     await act(async () => find(r, 'Thu gọn gợi ý: Bữa sáng')!.props.onPress());
-    expect(shown()).toBe(0);
-    expect(mealText(r, 'Bữa sáng')).not.toContain('Gợi ý 1');
-    expect(mealText(r, 'Bữa sáng')).toContain('Gợi ý (3) ▸');
+    expect(shown()).toBe(1);
     expect(find(r, 'Gợi ý món khác: Bữa sáng')).toBeDefined(); // the buttons stay
-    await act(async () => find(r, 'Mở ra gợi ý: Bữa sáng')!.props.onPress());
-    expect(shown()).toBe(3);
   });
 
   it('suggests 3 dishes from the shared cookbook (with the search text) instead of the AI, and keeps them after a reload', async () => {
@@ -391,6 +401,7 @@ describe('Meal suggestions card (Camp)', () => {
     await act(async () => r.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.accessibilityLabel === 'Tìm trong cookbook chung (tên món, nguyên liệu…)')[0].props.onChangeText('gà'));
     await act(async () => find(r, 'Gợi ý từ cookbook: Bữa sáng')!.props.onPress());
     expect(mockDinner).not.toHaveBeenCalled();
+    await openAll(r);
     expect(mockSearchShared).toHaveBeenCalledTimes(1);
     const [brief, query] = mockSearchShared.mock.calls[0] as [Record<string, unknown>, string];
     expect(brief).toMatchObject({ meal: 'breakfast', budgetKcal: 600 });

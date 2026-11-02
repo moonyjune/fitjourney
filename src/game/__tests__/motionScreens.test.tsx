@@ -97,7 +97,7 @@ describe('motion on the FitQuest screens', () => {
   describe('Camp', () => {
     it('has every card and mission in the tree from the first render, then everything fades in fully', async () => {
       const r = await mount(<CampScreen />);
-      const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false)[0];
+      const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && !String(n.props.accessibilityLabel ?? '').startsWith('Xem thêm món gợi ý'))[0];
       act(() => head.props.onPress()); // missions are folded by default
       const text = allText(r);
       expect(text).toContain('Quái Một Ký Mỡ'); // boss card
@@ -117,7 +117,7 @@ describe('motion on the FitQuest screens', () => {
 
     it('floats "+60 XP" when logging a workout completes the workout mission', async () => {
       const r = await mount(<CampScreen />);
-      const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false)[0];
+      const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && !String(n.props.accessibilityLabel ?? '').startsWith('Xem thêm món gợi ý'))[0];
       act(() => head.props.onPress()); // the float sits on the mission row: open the folded missions
       await advance(2000);
       expect(countText(r, '+60 XP')).toBe(0);

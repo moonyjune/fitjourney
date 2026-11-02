@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.22.1 | no | — |
 | 0.22.0 | no | dish-photo, suggest-cheat-places |
 | 0.21.0 | no | — |
 | 0.20.3 | no | — |
@@ -68,6 +69,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.22.1
+- Meal suggestions: each meal shows one dish; "Xem thêm N món ▾" opens the others and "Thu gọn ▴" folds them again.
 
 ## 0.22.0
 - Cheat-day places are kept: every search goes to "🕘 Lịch sử tìm quán" (30 newest), and "☆ Lưu quán" keeps a place in "⭐ Quán đã lưu" (synced, user_data `cheatPlaces`).
