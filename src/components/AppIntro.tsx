@@ -4,6 +4,7 @@ import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { HudText } from './quest/HudText';
 import { hiddenSvgProps } from './quest/hiddenSvg';
 import { FitJourneyLogo } from './FitJourneyLogo';
+import { VersionTag } from './VersionTag';
 import { useGameText } from '../game/strings';
 import { quest } from '../theme/quest';
 import { useReducedMotion } from '../theme/useReducedMotion';
@@ -81,6 +82,9 @@ export function AppIntro({ durationMs = 1200 }: AppIntroProps) {
             <FitJourneyLogo width={SHIELD} />
           </Animated.View>
         </View>
+        <Animated.View style={{ opacity: rise, marginTop: -20 }}>
+          <VersionTag />
+        </Animated.View>
         <Animated.View style={[styles.textBlock, { opacity: rise, transform: [{ translateY: textShift }] }]}>
           <HudText size={34} style={styles.name}>
             {g('intro.name').toUpperCase()}

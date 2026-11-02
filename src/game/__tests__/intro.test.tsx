@@ -11,6 +11,7 @@ jest.mock('../../sync/cloudSync', () => ({ pushProfile: jest.fn(), ensureCoachCo
 import { AppIntro } from '../../components/AppIntro';
 import { FitJourneyLogo } from '../../components/FitJourneyLogo';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { APP_VERSION } from '../../utils/buildInfo';
 
 function allText(renderer: ReactTestRenderer): string {
   const parts: string[] = [];
@@ -63,6 +64,10 @@ describe('App intro (splash)', () => {
   it('shows the FitJourney logo', async () => {
     const r = await render();
     expect(r.root.findAllByType(FitJourneyLogo)).toHaveLength(1);
+  });
+
+  it('shows the release number under the logo', async () => {
+    expect(allText(await render())).toContain(`v${APP_VERSION}`);
   });
 
   it('settles without error when reduced motion is on and when it is off', async () => {

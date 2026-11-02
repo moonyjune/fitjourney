@@ -6,6 +6,7 @@ import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestField } from '../src/components/quest/QuestField';
 import { QuestSegment } from '../src/components/quest/QuestSegment';
 import { FitJourneyLogo } from '../src/components/FitJourneyLogo';
+import { VersionTag } from '../src/components/VersionTag';
 import { useGameText } from '../src/game/strings';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { quest } from '../src/theme/quest';
@@ -96,6 +97,7 @@ export default function AuthScreen() {
       <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle]} keyboardShouldPersistTaps="handled">
         <View style={styles.brand}>
           <FitJourneyLogo width={76} />
+          <VersionTag />
           <HudText size={26} accessibilityRole="header" style={styles.center}>
             {t('auth.title')}
           </HudText>

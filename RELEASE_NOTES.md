@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26.1 | no | — |
 | 0.26.0 | yes | suggest-cheat-places, tempt-me |
 | 0.25.0 | yes | send-push |
 | 0.24.0 | no | — |
@@ -73,6 +74,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.26.1
+- The release number ("v0.26.1") is shown under the logo on the sign-in screen and the intro, so it is easy to see which version a browser has loaded.
 
 ## 0.26.0
 - AI cost, "Tìm quán" (cheat day): one AI call now runs 2 web searches (was up to 4) and finds a big batch (up to 10 dishes, 10–15 places). The batch is kept on the server for 7 days; searching the same wish / area / dishes again and "Gợi ý tiếp" are answered page by page from it (6 places, 4 dishes, as before) with no AI call. A new call only when the batch is used up or older than 7 days, and it leaves out every place already shown.
