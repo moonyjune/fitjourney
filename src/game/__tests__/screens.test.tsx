@@ -332,8 +332,10 @@ describe('FitQuest logging screens', () => {
     it("summarises today's missions and boss damage", () => {
       const text = allText(render(<CheckinScreen />));
       expect(text).toContain('Nghỉ ở lửa trại');
-      expect(text).toContain('2/7'); // workout and deficit are done in the seeded day
-      expect(text).toContain('−1,885'); // today's boss damage: 1,500 from eating + the day's training
+      // 16:10 with the plan's later meals still to come: the workout is done, the deficit mission and today's boss hit wait for the
+      // day to be settled (the hit is shown as pending).
+      expect(text).toContain('1/7');
+      expect(text).toMatch(/chờ chốt ~[\d,]+/);
       expect(text).toContain('Rất tốt'); // the app's real mood scale
     });
 
@@ -675,13 +677,31 @@ describe('FitQuest logging screens', () => {
       expect(allText(r)).toContain('Bữa này chưa có ảnh.');
     });
 
+    it('a past day with a meal not logged says so, loses its level colour and offers to log the rest for that day', () => {
+      const thursday = '2026-10-22';
+      useNutritionStore.setState({
+        logs: { [thursday]: { dateISO: thursday, mealsEaten: { meal1: true, meal2: true }, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 0 } },
+      });
+      useSelectedDayStore.setState({ selectedKey: thursday });
+      const r = render(<JournalScreen />);
+      const text = allText(r);
+      expect(text).toContain('⚠ Chưa ghi Bữa 3 - Tối (Chốt cửa sổ ăn): nếu đã ăn, thâm hụt thật thấp hơn số này.');
+      expect(text).not.toContain('Dự kiến');
+      act(() => pressable(r, (l) => l.startsWith('Ghi bổ sung món cho')).props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/quick-add');
+      expect(useSelectedDayStore.getState().selectedKey).toBe(thursday); // (+) opens on that day
+    });
+
     it('shows the same deficit on the day strip as in the stats', () => {
       const r = render(<JournalScreen />);
-      const stat = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Thâm hụt '))[0];
-      const value = stat.props.accessibilityLabel.replace('Thâm hụt ', '');
+      // Today still has meals to come: both show the end-of-day estimate ("Dự kiến ~…"), and say how it is worked out.
+      const stat = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Dự kiến '))[0];
+      const value = stat.props.accessibilityLabel.replace('Dự kiến ', '');
+      expect(value.startsWith('~')).toBe(true);
       const today = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('T6 23/10') && n.props.accessibilityState)[0];
-      expect(today.props.accessibilityLabel).toContain(`thâm hụt ${value.replace(/,/g, '')}`);
+      expect(today.props.accessibilityLabel).toContain(`thâm hụt dự kiến ${value.replace(/[~,]/g, '')}`);
       expect(today.findAll((n) => typeof n.props.children === 'string').map((n) => n.props.children)).toContain(value);
+      expect(allText(r)).toContain('Đang tính: đã ăn');
     });
 
     it('includes a feeling check-in logged today', () => {

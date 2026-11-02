@@ -1,6 +1,7 @@
 import type { DailyNutritionLog, DayType, MealTemplate, WorkoutLogEntry } from '../types';
 import { getDayType } from '../constants/plan';
-import { eatingEndHour } from '../utils/mealMode';
+import { eatingEndHour, isFasting } from '../utils/mealMode';
+import { coveredMealIds, mealDefs, remainingMeals, type MealKind } from './mealSlots';
 import { actualDailyDeficitKcal } from '../utils/tdee';
 import { toDateKey } from '../utils/date';
 import { dayHasFood, extraIntake } from '../utils/dayIntake';
@@ -46,6 +47,19 @@ export interface DayInput {
   /** The user marked this date as a cheat day: its food is still logged and summed, but the day has no deficit figure (no boss
    *  damage or heal, no deficit mission, left out of every deficit sum and average). */
   cheat?: boolean;
+  /** The user's daily deficit target: sizes the meals still to come in the end-of-day estimate (normal days; a fasting plan's meals
+   *  carry their own kcal). Defaults to the deficit mission's bar. */
+  targetDeficitKcal?: number;
+}
+
+/** A meal of the day, for the "still to come" and "not logged" lines. */
+export interface DayMeal {
+  id: string;
+  kind: MealKind;
+  /** The plan's own name (fasting mode). */
+  label?: string;
+  /** What it is expected to add (plan kcal, or its usual share of the day's target intake). */
+  kcal: number;
 }
 
 export interface DayEvaluation {
@@ -68,6 +82,16 @@ export interface DayEvaluation {
   eatingClosed: boolean;
   /** True once the whole calendar day is over. */
   dayOver: boolean;
+  /** The deficit is final: the day is over, or none of its meals is still to come (all eaten, skipped or past their time). Until then
+   *  the deficit only counts what is eaten so far, so it is shown as an estimate, deals no boss damage and earns no deficit mission. */
+  settled: boolean;
+  /** Today's meals still to come (empty once settled). */
+  pendingMeals: DayMeal[];
+  /** While not settled: TDEE + exercise − eaten − what the meals still to come are expected to add. Null when settled, a cheat day,
+   *  or nothing is logged yet. */
+  projectedDeficitKcal: number | null;
+  /** A settled day with food: its meals with nothing logged, so the deficit may be higher than what was really eaten. */
+  missingMeals: DayMeal[];
 }
 
 const hasFoodLog = dayHasFood;
@@ -104,6 +128,17 @@ export function evaluateDay(input: DayInput): DayEvaluation {
   const cheat = !!input.cheat;
   const deficitKcal = hasFood && !cheat ? Math.round(actualDailyDeficitKcal(tdeeKcal, burnedKcal, eatenKcal)) : null;
 
+  // Which meals are eaten, still to come or missed: the same reading of the day as the meal suggestions.
+  const fasting = isFasting();
+  const defs = mealDefs(fasting, meals);
+  const covered = coveredMealIds(fasting, defs, meals, log);
+  const intakeTarget = Math.max(0, tdeeKcal - (input.targetDeficitKcal ?? lim.deficitKcal));
+  const toMeal = (d: (typeof defs)[number]): DayMeal => ({ id: d.id, kind: d.kind, ...(d.label ? { label: d.label } : {}), kcal: Math.round(d.plan?.kcal ?? d.weight * intakeTarget) });
+  const pendingMeals = dayOver || dateKey > todayKey ? [] : remainingMeals(defs, covered, now.getHours() * 60 + now.getMinutes()).map(toMeal);
+  const settled = pendingMeals.length === 0;
+  const projectedDeficitKcal = settled || deficitKcal == null ? null : deficitKcal - pendingMeals.reduce((sum, m) => sum + m.kcal, 0);
+  const missingMeals = settled && deficitKcal != null ? defs.filter((d) => !covered.has(d.id)).map(toMeal) : [];
+
   /** "Reach the goal" mission. */
   function reach(id: MissionId, value: number, target: number, reached: boolean, closed: boolean): MissionResult {
     const status: MissionStatus = reached ? 'done' : closed ? 'missed' : 'open';
@@ -127,7 +162,7 @@ export function evaluateDay(input: DayInput): DayEvaluation {
       'deficit',
       deficitKcal ?? 0,
       lim.deficitKcal,
-      deficitKcal != null && deficitKcal >= lim.deficitKcal,
+      settled && deficitKcal != null && deficitKcal >= lim.deficitKcal,
       dayOver
     ),
     protein: reach('protein', proteinG, proteinTargetG, hasFood && proteinG >= proteinTargetG, eatingClosed),
@@ -157,5 +192,9 @@ export function evaluateDay(input: DayInput): DayEvaluation {
     perfect,
     eatingClosed,
     dayOver,
+    settled,
+    pendingMeals,
+    projectedDeficitKcal,
+    missingMeals,
   };
 }

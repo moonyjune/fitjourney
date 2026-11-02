@@ -25,6 +25,10 @@ interface TdeeCardProps {
   dark?: boolean;
   /** The day is a cheat day: its balance is not counted, so it reads "Cheat day · không tính kcal" instead of a figure. */
   cheatDay?: boolean;
+  /** Food is logged for the day. Without any there is no balance to show: eating nothing yet is not a 2,500 kcal deficit. */
+  hasFood?: boolean;
+  /** The day still has meals to come: its end-of-day estimate, shown instead of the balance so far. */
+  projectedDeficitKcal?: number | null;
 }
 
 const ACTIVITY_LABEL_KEY: Record<ActivityLevel, StringKey> = {
@@ -58,6 +62,8 @@ export function TdeeCard({
   caloriesBurnedExerciseToday,
   dark,
   cheatDay,
+  hasFood = true,
+  projectedDeficitKcal = null,
 }: TdeeCardProps) {
   const { t } = useTranslation();
   const g = useGameText();
@@ -71,8 +77,10 @@ export function TdeeCard({
     calorieTargetKcal,
     targetDailyDeficitKcal,
   });
-  const balance = actualDailyDeficitKcal(tdeeKcal, caloriesBurnedExerciseToday, caloriesConsumedToday);
+  const projected = hasFood && projectedDeficitKcal != null;
+  const balance = projected ? projectedDeficitKcal : actualDailyDeficitKcal(tdeeKcal, caloriesBurnedExerciseToday, caloriesConsumedToday);
   const isDeficit = balance >= 0;
+  const label = projected ? t('tdee.projectedLabel') : isDeficit || cheatDay || !hasFood ? t('tdee.deficitLabel') : t('tdee.surplusLabel');
 
   const Wrapper = dark ? View : Card;
   return (
@@ -84,14 +92,19 @@ export function TdeeCard({
           <Text style={styles.value}>{Math.round(tdeeKcal)} kcal</Text>
         </View>
         <View style={styles.column}>
-          <Text style={styles.label}>{isDeficit || cheatDay ? t('tdee.deficitLabel') : t('tdee.surplusLabel')}</Text>
+          <Text style={styles.label}>{label}</Text>
           {cheatDay ? (
             <Text style={[styles.hint, { color: DEFICIT_LEVEL_COLOR.cheat, marginTop: 0 }]}>{g('deficit.level.cheat')}</Text>
+          ) : !hasFood ? (
+            <Text style={[styles.hint, { marginTop: 0 }]}>{`— · ${t('tdee.noFood')}`}</Text>
           ) : (
-            <Text style={[styles.value, { color: isDeficit ? (dark ? quest.xp : colors.success) : dark ? quest.gold : colors.warning }]}>{Math.round(Math.abs(balance))} kcal</Text>
+            <Text style={[styles.value, { color: isDeficit ? (dark ? quest.xp : colors.success) : dark ? quest.gold : colors.warning }]}>
+              {`${projected ? '~' : ''}${Math.round(Math.abs(balance))} kcal`}
+            </Text>
           )}
         </View>
       </View>
+      {projected && !cheatDay && <Text style={styles.hint}>{t('tdee.projectedHint')}</Text>}
       <Text style={styles.hint}>{t('tdee.targetHint', { kcal: targetDailyDeficitKcal })}</Text>
       {bmrKcal != null && <Text style={styles.hint}>{t('tdee.bmrLabel', { kcal: Math.round(bmrKcal) })}</Text>}
       {activityLevel && (

@@ -15,6 +15,10 @@ export interface BossDay {
   /** Kcal burned by exercise that day: the part of the deficit from training (the rest, deficitKcal − burnedKcal, is from eating
    *  below the TDEE, or above it when negative). */
   burnedKcal: number;
+  /** Today while meals are still to come: its damage is not dealt yet ("chờ chốt"). `deficitKcal` is then the end-of-day estimate and
+   *  `pendingDamage` what it would deal; `damage` stays 0 until the day is settled. */
+  pending: boolean;
+  pendingDamage: number;
 }
 
 export interface BossState {
@@ -27,8 +31,10 @@ export interface BossState {
   defeated: boolean;
   /** Days from today until the next reset (1 on Sunday, 7 on Monday). */
   daysUntilReset: number;
-  /** Average damage per day still to come this week needed to defeat it (0 if already beaten). */
+  /** Average damage per day still to come this week needed to defeat it (0 if already beaten). A pending today is one of them. */
   neededPerRemainingDay: number;
+  /** Damage waiting on today being settled (0 when nothing is pending). */
+  pendingDamage: number;
 }
 
 /** Damage for one day: its deficit clamped to [0, DAILY_DAMAGE_CAP + the day's exercise kcal] (eating alone counts for at most
@@ -53,14 +59,16 @@ export function bossClock(now: Date): Date {
 /**
  * Builds the boss for the week containing `now` (as of `bossClock(now)`: until 05:00 on Monday, the week before). Only days up to and including today deal damage;
  * today's damage is live (it grows as the day's deficit grows), matching how the streak treats it.
- * A cheat day (`isCheatDay`) deals nothing and heals nothing.
+ * A cheat day (`isCheatDay`) deals nothing and heals nothing. A day that is not settled yet (`isSettled` false: today, with meals still to
+ * come) deals nothing yet: its damage, from the end-of-day estimate `deficitForDateKey` gives for it, is pending.
  */
 export function bossForWeek(
   now: Date,
   deficitForDateKey: (dateKey: string) => number | null,
   maxHp: number = BOSS_MAX_HP,
   isCheatDay: (dateKey: string) => boolean = () => false,
-  burnedForDateKey: (dateKey: string) => number = () => 0
+  burnedForDateKey: (dateKey: string) => number = () => 0,
+  isSettled: (dateKey: string) => boolean = () => true
 ): BossState {
   now = bossClock(now);
   const weekKey = weekStartKey(now);
@@ -75,7 +83,8 @@ export function bossForWeek(
     const deficitKcal = cheat ? null : deficitForDateKey(dateKey);
     const burnedKcal = Math.max(0, burnedForDateKey(dateKey));
     const { damage, capped } = damageForDeficit(deficitKcal, burnedKcal);
-    days.push({ dateKey, damage, deficitKcal, capped, cheat, burnedKcal });
+    const pending = !cheat && !isSettled(dateKey);
+    days.push({ dateKey, damage: pending ? 0 : damage, deficitKcal, capped, cheat, burnedKcal, pending, pendingDamage: pending ? damage : 0 });
   }
 
   const totalDamage = days.reduce((s, d) => s + d.damage, 0);
@@ -84,10 +93,12 @@ export function bossForWeek(
   const dayIndexToday = days.length; // 1 = Monday … 7 = Sunday
   const daysUntilReset = 8 - dayIndexToday;
   // Today's damage is already counted in hpLeft, so only the days after today still add to it, less the cheat days among them
-  // (they deal nothing); with none left, the whole remainder has to land today.
+  // (they deal nothing); with none left, the whole remainder has to land today. A pending today has not dealt its damage yet: it
+  // still counts as a day to come.
   let cheatAhead = 0;
   for (let i = dayIndexToday; i < 7; i++) if (isCheatDay(toDateKey(addDays(monday, i)))) cheatAhead++;
-  const remainingDays = Math.max(1, 7 - dayIndexToday - cheatAhead);
+  const todayPending = days.length > 0 && days[days.length - 1].pending;
+  const remainingDays = Math.max(1, 7 - dayIndexToday - cheatAhead + (todayPending ? 1 : 0));
   return {
     weekKey,
     maxHp,
@@ -97,5 +108,6 @@ export function bossForWeek(
     defeated,
     daysUntilReset,
     neededPerRemainingDay: defeated ? 0 : Math.ceil(hpLeft / remainingDays),
+    pendingDamage: days.reduce((s, d) => s + d.pendingDamage, 0),
   };
 }

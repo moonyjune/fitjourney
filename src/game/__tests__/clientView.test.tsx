@@ -49,6 +49,8 @@ function snapshot(): ClientSnapshot {
         extraCalories: 0,
         extraProteinG: 0,
         extraItems: [{ id: 'e1', name: 'Phở bò của học viên', calories: 640, proteinG: 33, loggedAtISO: `${today}T05:00:00.000Z`, mealTime: 'lunch' }],
+        // The plan's meals marked skipped: the day is settled whatever the time the test runs at, so its deficit is final.
+        removedMealSlots: ['meal1', 'meal2', 'meal3'],
         waterMl: 1500,
       },
     },

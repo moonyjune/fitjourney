@@ -25,7 +25,7 @@ import type { StringKey } from '../../src/i18n/strings';
 import { colors, spacing, typography } from '../../src/theme/tokens';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useAmbientBackground } from '../../src/theme/useAmbientBackground';
-import { extraIntake } from '../../src/utils/dayIntake';
+import { dayHasFood, extraIntake } from '../../src/utils/dayIntake';
 
 export default function TodayScreen() {
   const { t, language } = useTranslation();
@@ -178,6 +178,7 @@ export default function TodayScreen() {
         caloriesConsumedToday={totalCalories}
         caloriesBurnedExerciseToday={caloriesBurnedToday}
         cheatDay={cheatDays.includes(todayKey())}
+        hasFood={dayHasFood(nutritionLog)}
       />
 
       <Card>

@@ -30,6 +30,7 @@ import { selectedDayKey, useSelectedDayStore } from '../store/useSelectedDayStor
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useCheatDayStore } from '../store/useCheatDayStore';
 import { DEFICIT_LEVEL_COLOR, deficitColor, deficitLevel, type DeficitLevel } from '../game/deficitLevel';
+import { mealNames, shownDeficit } from '../game/deficitView';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { quest, questRadius } from '../theme/quest';
 import { screenMaxWidthStyle } from '../theme/responsive';
@@ -392,10 +393,12 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
         const date = addDays(monday, i);
         const key = toDateKey(date);
         const future = key > todayKey;
-        const deficit = future ? null : evaluate(key).deficitKcal;
+        // Today with meals still to come shows its end-of-day estimate; a day with a meal not logged loses its level colour.
+        const shown = future ? null : shownDeficit(evaluate(key));
+        const deficit = shown?.kcal ?? null;
         // A cheat day has no deficit figure (its kcal are not counted); the strip says "Cheat" instead.
         const cheat = !future && cheatDays.includes(key);
-        return { key, date, future, deficit, cheat };
+        return { key, date, future, deficit, cheat, projected: !!shown?.projected, incomplete: !!shown?.incomplete };
       }),
     [monday, todayKey, evaluate, cheatDays]
   );
@@ -555,13 +558,20 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
     week: isoWeekNumber(selectedDate),
   });
 
+  // Today with meals still to come: the end-of-day estimate (no boss damage yet). A settled day with a meal not logged: no level colour.
+  const shown = shownDeficit(day);
+  const dayLevel = shown.incomplete ? null : levelOf(selectedKey, shown.kcal);
   const stats = [
     { label: g('journal.eaten'), value: Math.round(day.eatenKcal).toLocaleString('en-US'), color: quest.text, accent: false },
     { label: g('journal.burned'), value: Math.round(day.burnedKcal).toLocaleString('en-US'), color: quest.hpText, accent: false },
     {
-      label: g('journal.deficit'),
-      value: cheatDays.includes(selectedKey) ? g('deficit.cheatShort') : day.deficitKcal == null ? '—' : Math.round(day.deficitKcal).toLocaleString('en-US'),
-      color: deficitColor(levelOf(selectedKey, day.deficitKcal), quest.gold),
+      label: g(shown.projected ? 'journal.deficitProjected' : 'journal.deficit'),
+      value: cheatDays.includes(selectedKey)
+        ? g('deficit.cheatShort')
+        : shown.kcal == null
+          ? '—'
+          : `${shown.projected ? '~' : ''}${Math.round(shown.kcal).toLocaleString('en-US')}`,
+      color: shown.incomplete ? quest.textSecondary : deficitColor(dayLevel, quest.gold),
       accent: true,
     },
     { label: g('journal.xp'), value: `+${day.earnedXp}`, color: quest.xp, accent: false },
@@ -602,7 +612,8 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
                   ? g('journal.dayCheat', { weekday: wd, date: dl })
                   : d.deficit == null
                     ? g('journal.dayNoData', { weekday: wd, date: dl })
-                    : g('journal.day', { weekday: wd, date: dl, deficit: Math.round(d.deficit ?? 0) });
+                    : g(d.projected ? 'journal.dayPending' : 'journal.day', { weekday: wd, date: dl, deficit: Math.round(d.deficit ?? 0) });
+              const level = d.incomplete ? null : levelOf(d.key, d.deficit);
               return (
                 <Pressable
                   key={d.key}
@@ -623,11 +634,11 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
                   <HudText size={18} color={selected ? quest.onGold : quest.text}>
                     {d.date.getDate()}
                   </HudText>
-                  <HudText size={10} weight="medium" color={selected ? quest.onGold : deficitColor(levelOf(d.key, d.deficit), quest.hpText)}>
-                    {d.future ? '·' : d.cheat ? g('deficit.cheatShort') : d.deficit == null ? '–' : Math.round(d.deficit).toLocaleString('en-US')}
+                  <HudText size={10} weight="medium" color={selected ? quest.onGold : deficitColor(level, d.incomplete ? quest.textSecondary : quest.hpText)}>
+                    {d.future ? '·' : d.cheat ? g('deficit.cheatShort') : d.deficit == null ? '–' : `${d.projected ? '~' : ''}${Math.round(d.deficit).toLocaleString('en-US')}`}
                   </HudText>
                   {/* The deficit level as a bar, still readable on the selected (gold) day. */}
-                  <View style={[styles.levelBar, { backgroundColor: d.future ? 'transparent' : deficitColor(levelOf(d.key, d.deficit), 'transparent') }]} />
+                  <View style={[styles.levelBar, { backgroundColor: d.future ? 'transparent' : deficitColor(level, 'transparent') }]} />
                 </Pressable>
               );
             })}
@@ -660,11 +671,39 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
         </View>
 
         <DeficitLevelRow
-          level={levelOf(selectedKey, day.deficitKcal)}
+          level={dayLevel}
           target={deficitTarget}
           cheat={cheatDays.includes(selectedKey)}
           onToggleCheat={client || selectedKey > todayKey ? undefined : () => toggleCheat(selectedKey)}
         />
+        {shown.projected && (
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('deficit.pendingLine', {
+              eaten: Math.round(day.eatenKcal).toLocaleString('en-US'),
+              rest: day.pendingMeals.reduce((sum, m) => sum + m.kcal, 0).toLocaleString('en-US'),
+              meals: mealNames(day.pendingMeals, g),
+            })}
+          </HudText>
+        )}
+        {shown.incomplete && (
+          <View style={styles.missingRow}>
+            <HudText size={12} weight="medium" color={quest.goldLight} style={styles.flex}>
+              {g('deficit.missingLine', { meals: mealNames(day.missingMeals, g) })}
+            </HudText>
+            {!client && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={g('deficit.addMissingLabel', { day: `${weekdayLabel(selectedDate)} ${dateLabel(selectedDate)}` })}
+                onPress={() => router.push('/quick-add')}
+                style={[styles.levelChip, { borderColor: quest.gold }]}
+              >
+                <HudText size={12} color={quest.gold}>
+                  {g('deficit.addMissing')}
+                </HudText>
+              </Pressable>
+            )}
+          </View>
+        )}
 
         <View
           accessible
@@ -726,6 +765,7 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 8, marginTop: 12 },
   stat: { flex: 1, minWidth: 0, padding: 10, gap: 2, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center' },
   levelBar: { width: '60%', height: 3, borderRadius: 2, marginTop: 2 },
+  missingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   levelRow: { marginTop: 10, gap: 6 },
   levelHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1.5 },

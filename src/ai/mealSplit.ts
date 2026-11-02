@@ -1,29 +1,13 @@
 import { getDayType } from '../constants/plan';
-import type { DailyNutritionLog, ExtraMealTime, MealTemplate } from '../types';
+import type { ExtraMealTime } from '../types';
 import { toDateKey } from '../utils/date';
 import { eatingEndHour, eatingStartHour, isFasting } from '../utils/mealMode';
 import { makeDayEvaluator } from './coachContext';
 import { NO_MEAL_PREFS, type MealPrefs } from '../store/useMealPrefStore';
 import { LIGHT_BUDGET_KCAL, type DinnerBrief, type Room } from './dinner';
+import { coveredMealIds, mealDefs, remainingMeals, type MealKind, type MealSlotDef } from '../game/mealSlots';
 
-/** What kind of meal a slot is, for the words around it (and the AI prompt). */
-export type MealKind = 'breakfast' | 'lunch' | 'dinner' | 'meal';
-
-/** One meal of the day that could still be eaten. */
-export interface MealSlotDef {
-  id: string;
-  kind: MealKind;
-  /** The plan's own name for it (fasting mode); absent for the ordinary breakfast / lunch / dinner. */
-  label?: string;
-  startHour: number;
-  startMinute: number;
-  /** Minutes from midnight at which it is too late for this meal. */
-  endMinutes: number;
-  /** How big a share of what is left this meal should get, relative to the others. */
-  weight: number;
-  /** The plan's own meal for this slot (fasting mode), to compare with what is left. */
-  plan?: { kcal: number; proteinG: number };
-}
+export { COVER_MIN_KCAL, coveredMealIds, mealDefs, periodOfItem, remainingMeals, type MealKind, type MealSlotDef } from '../game/mealSlots';
 
 /** Today so far against the targets: what is left to eat, in total. */
 export interface DayTotals {
@@ -55,15 +39,6 @@ export interface MealSplit {
   merged: MealSlotDef[];
 }
 
-/** Ordinary three-meal day. Weights follow the usual split of a day's food. */
-const NORMAL_MEALS: Omit<MealSlotDef, 'endMinutes'>[] = [
-  { id: 'breakfast', kind: 'breakfast', startHour: 7, startMinute: 0, weight: 0.25 },
-  { id: 'lunch', kind: 'lunch', startHour: 12, startMinute: 0, weight: 0.35 },
-  { id: 'dinner', kind: 'dinner', startHour: 18, startMinute: 30, weight: 0.4 },
-];
-/** A normal day's meals stop being possible at these times (dinner at the end of the day's eating). */
-const NORMAL_ENDS_MIN = [10 * 60 + 30, 15 * 60];
-
 /** No meal is sized above this when the user has not set their own figure: one meal of a ~1600 kcal day averages 530 kcal. */
 export const MAX_MEAL_KCAL = 600;
 /** The day's intake aims at the target minus up to this much (a 1400-1600 kcal day for a 1600 kcal target). */
@@ -71,67 +46,7 @@ export const DAY_BAND_KCAL = 200;
 
 /** A share smaller than this is not a meal: it is folded into the others. */
 export const MIN_MEAL_KCAL = 250;
-/** Below this much logged for a period of a normal day, the period still counts as not eaten. */
-export const COVER_MIN_KCAL = 150;
-
 const r1 = (n: number) => Math.round(n * 10) / 10;
-
-/** The meals of a day. Fasting on: the plan's own meals at the plan's times, each until the next starts (the last until the window
- *  closes), sized like the plan sized them. Fasting off: breakfast, lunch and dinner. */
-export function mealDefs(fasting: boolean, planMeals: MealTemplate[]): MealSlotDef[] {
-  if (!fasting) {
-    return NORMAL_MEALS.map((m, i) => ({ ...m, endMinutes: i < NORMAL_ENDS_MIN.length ? NORMAL_ENDS_MIN[i] : eatingEndHour(false) * 60 }));
-  }
-  const endOfDay = eatingEndHour(true) * 60;
-  return planMeals.map((m, i) => {
-    const next = planMeals[i + 1];
-    const kind: MealKind = i === planMeals.length - 1 ? 'dinner' : i === 0 ? 'lunch' : 'meal';
-    return {
-      id: m.slot,
-      kind,
-      label: m.label,
-      startHour: m.startHour,
-      startMinute: m.startMinute,
-      endMinutes: next ? next.startHour * 60 + next.startMinute : endOfDay,
-      weight: m.calories > 0 ? m.calories : 1,
-      plan: { kcal: m.calories, proteinG: m.proteinG },
-    };
-  });
-}
-
-/** Which period of a normal day a logged food belongs to: by the meal time the user chose, else by the hour it was logged. */
-export function periodOfItem(item: { mealTime?: ExtraMealTime | null; loggedAtISO: string }): 'breakfast' | 'lunch' | 'dinner' {
-  const t = item.mealTime;
-  if (t === 'breakfast' || t === 'morning_snack') return 'breakfast';
-  if (t === 'lunch' || t === 'afternoon_snack') return 'lunch';
-  if (t === 'late_afternoon_snack' || t === 'dinner' || t === 'evening_snack') return 'dinner';
-  const h = new Date(item.loggedAtISO).getHours() + new Date(item.loggedAtISO).getMinutes() / 60;
-  return h < 10.5 ? 'breakfast' : h < 15 ? 'lunch' : 'dinner';
-}
-
-/** The meals of today that are already taken care of. Fasting: a plan meal that is ticked eaten or removed. Normal day: a period
- *  with at least 150 kcal logged (what was eaten as off-plan food, by its meal time, plus the plan's meals ticked eaten: the
- *  first two count as lunch, the last as dinner). */
-export function coveredMealIds(fasting: boolean, defs: MealSlotDef[], planMeals: MealTemplate[], log: DailyNutritionLog | undefined): Set<string> {
-  const covered = new Set<string>();
-  if (!log) return covered;
-  if (fasting) {
-    for (const d of defs) if (log.mealsEaten[d.id as keyof typeof log.mealsEaten] || (log.removedMealSlots ?? []).includes(d.id as never)) covered.add(d.id);
-    return covered;
-  }
-  const kcal = { breakfast: 0, lunch: 0, dinner: 0 };
-  for (const item of log.extraItems ?? []) kcal[periodOfItem(item)] += item.calories;
-  planMeals.forEach((m, i) => {
-    if (log.mealsEaten[m.slot]) kcal[i === planMeals.length - 1 ? 'dinner' : 'lunch'] += m.calories;
-  });
-  for (const k of ['breakfast', 'lunch', 'dinner'] as const) if (kcal[k] >= COVER_MIN_KCAL) covered.add(k);
-  return covered;
-}
-
-/** The meals still to come: not taken care of and not yet too late. */
-export function remainingMeals(defs: MealSlotDef[], covered: Set<string>, nowMinutes: number): MealSlotDef[] {
-  return defs.filter((d) => !covered.has(d.id) && d.endMinutes > nowMinutes);
-}
 
 /** Splits what is left over the meals still to come, so the number of meals suggested follows the day: with 150 kcal or less in
  *  total there is one light meal; otherwise the budget is shared by weight, and while a share would be under 250 kcal the

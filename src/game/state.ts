@@ -21,6 +21,8 @@ export interface GameInputs {
   cheatDays?: readonly string[];
   /** XP earned outside the replayed logs (the temptation challenge's resisted pop-ups). */
   bonusXp?: number;
+  /** The daily deficit target (sizes the meals still to come in today's estimate). */
+  targetDeficitKcal?: number;
 }
 
 export interface GameState {
@@ -35,6 +37,9 @@ export interface GameState {
   /** Every replayed day, oldest first — the raw material for the achievements. */
   days: DayEvaluation[];
 }
+
+/** The deficit a day brings to the boss: the real one once the day is settled, the end-of-day estimate (pending damage) before. */
+export const bossDeficitOf = (e: DayEvaluation): number | null => (e.settled ? e.deficitKcal : e.projectedDeficitKcal);
 
 /** Hard cap on how far back we replay, so a corrupt start date can never loop for years. */
 const MAX_REPLAY_DAYS = 1100;
@@ -83,11 +88,17 @@ export function computeGameState(input: GameInputs): GameState {
         proteinTargetG,
         limits,
         cheat: cheatDays.has(dateKey),
+        targetDeficitKcal: input.targetDeficitKcal,
       })
     );
   }
 
-  const deficitFor = (dateKey: string) => evaluations.get(dateKey)?.deficitKcal ?? null;
+  // A day still being eaten into (today, meals to come) gives the boss its end-of-day estimate, as pending damage.
+  const deficitFor = (dateKey: string) => {
+    const e = evaluations.get(dateKey);
+    return e == null ? null : bossDeficitOf(e);
+  };
+  const isSettled = (dateKey: string) => evaluations.get(dateKey)?.settled ?? true;
   const isCheatDay = (dateKey: string) => cheatDays.has(dateKey);
   const burnedFor = (dateKey: string) => evaluations.get(dateKey)?.burnedKcal ?? 0;
 
@@ -109,7 +120,7 @@ export function computeGameState(input: GameInputs): GameState {
     if (seenWeeks.has(week)) continue;
     seenWeeks.add(week);
     const asOf = week === currentWeek ? now : addDays(new Date(`${week}T12:00:00`), 6);
-    const weekBoss = bossForWeek(asOf, deficitFor, undefined, isCheatDay, burnedFor);
+    const weekBoss = bossForWeek(asOf, deficitFor, undefined, isCheatDay, burnedFor, isSettled);
     if (weekBoss.defeated) bossesDefeated += 1;
     bossHistory.push(weekBoss);
   }
@@ -117,7 +128,7 @@ export function computeGameState(input: GameInputs): GameState {
   totalXp += bossesDefeated * BOSS_DEFEAT_XP;
   totalXp += Math.max(0, Math.round(input.bonusXp ?? 0));
 
-  const boss = bossForWeek(now, deficitFor, undefined, isCheatDay, burnedFor);
+  const boss = bossForWeek(now, deficitFor, undefined, isCheatDay, burnedFor, isSettled);
   return {
     today: evaluations.get(toDateKey(today))!,
     boss,

@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.23.0 | no | — |
 | 0.22.1 | no | — |
 | 0.22.0 | no | dish-photo, suggest-cheat-places |
 | 0.21.0 | no | — |
@@ -69,6 +70,13 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.23.0
+- Deficit without food: a day with nothing eaten has no deficit figure anywhere ("— · Chưa ghi bữa nào"), not the whole TDEE (~2,500 kcal). The TDEE card and the History deficit chart read it the same way as Camp (a day with only water is a gap).
+- Today while meals are still to come: the deficit shows the end-of-day estimate, "Dự kiến ~640", with a line saying how it is worked out (eaten so far + the remaining meals as planned). It becomes the real figure once every meal is logged, skipped, or past its time. The deficit mission waits for that too.
+- Boss: today's hit is "chờ chốt" until the day is settled. The HP bar shows the part it will take, faded, and the battle log shows "~−X". The boss no longer loses 1,500 HP in the morning just because nothing has been eaten yet.
+- A past day with a meal not logged: "⚠ Chưa ghi Bữa tối: nếu đã ăn, thâm hụt thật thấp hơn số này", without the level colour, and "Ghi bổ sung" opens (+) on that day.
+- Fasting mode: food logged on its own during a plan meal's time now counts as that meal once it is half the plan meal's kcal (a snack does not).
 
 ## 0.22.1
 - Meal suggestions: each meal shows one dish; "Xem thêm N món ▾" opens the others and "Thu gọn ▴" folds them again.

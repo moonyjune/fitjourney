@@ -24,6 +24,7 @@ import { getDayType, WATER_QUICK_ADD_ML } from '../../src/constants/plan';
 import { usePlanStore } from '../../src/store/usePlanStore';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { useGameText } from '../../src/game/strings';
+import { useDayEvaluator, useNow } from '../../src/game/useGameState';
 import type { StringKey } from '../../src/i18n/strings';
 import { toDateKey } from '../../src/utils/date';
 import type { ExtraMealTime } from '../../src/types';
@@ -62,6 +63,9 @@ export default function NutritionScreen() {
   useLightStatusBar();
   const [viewDate, setViewDate] = useState(new Date());
   const dateKey = toDateKey(viewDate);
+  // The game's reading of the day: whether food is logged, and its end-of-day estimate while meals are still to come.
+  const evaluate = useDayEvaluator(useNow(60_000));
+  const dayEval = useMemo(() => evaluate(dateKey), [evaluate, dateKey]);
   const dayType = useMemo(() => getDayType(viewDate), [viewDate]);
   const isToday = isSameDay(viewDate, new Date());
   const mealTemplates = usePlanStore((s) => s.plan.mealTemplates);
@@ -162,6 +166,8 @@ export default function NutritionScreen() {
         caloriesConsumedToday={totalCalories}
         caloriesBurnedExerciseToday={caloriesBurnedOnViewDate}
         cheatDay={cheatDay}
+        hasFood={dayEval.eatenKcal > 0 || dayEval.deficitKcal != null}
+        projectedDeficitKcal={dayEval.projectedDeficitKcal}
       />
 
       <View style={styles.card}>

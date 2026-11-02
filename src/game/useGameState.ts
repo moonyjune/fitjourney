@@ -12,6 +12,7 @@ import { useFeelingStore } from '../store/useFeelingStore';
 import { useProofStore } from '../store/useProofStore';
 import { useTrainingStore } from '../store/useTrainingStore';
 import { useCheatDayStore } from '../store/useCheatDayStore';
+import { useMealModeStore } from '../store/useMealModeStore';
 import {
   computeAchievementStats,
   evaluateAchievements,
@@ -82,14 +83,17 @@ export function useTodayInput(now: Date, dateKeyOverride?: string): DayInput {
   const mealTemplatesByDayType = usePlanStore((s) => s.plan.mealTemplates);
   const limits = useLimits();
   const cheat = useCheatDayStore((s) => s.days.includes(dateKey));
+  const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  // The evaluation reads the meal mode (fasting or not) to know which meals are still to come: a switch re-evaluates.
+  const fasting = useMealModeStore((s) => s.fasting);
   const workouts = useMemo(
     () => workoutEntries.filter((e) => toDateKey(new Date(e.dateISO)) === dateKey),
     [workoutEntries, dateKey]
   );
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   return useMemo(
-    () => ({ dateKey, now: new Date(minuteStamp * 60_000), log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat }),
-    [dateKey, minuteStamp, log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat]
+    () => ({ dateKey, now: new Date(minuteStamp * 60_000), log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat, targetDeficitKcal }),
+    [dateKey, minuteStamp, log, mealTemplatesByDayType, workouts, tdeeKcal, proteinTargetG, limits, cheat, targetDeficitKcal, fasting] // eslint-disable-line react-hooks/exhaustive-deps
   );
 }
 
@@ -103,10 +107,12 @@ export function useDayEvaluator(now: Date): (dateKey: string) => DayEvaluation {
   const mealTemplatesByDayType = usePlanStore((s) => s.plan.mealTemplates);
   const limits = useLimits();
   const cheatDays = useCheatDayStore((s) => s.days);
+  const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const fasting = useMealModeStore((s) => s.fasting);
   const minuteStamp = Math.floor(now.getTime() / 60_000);
   return useMemo(
-    () => buildDayEvaluator({ now: new Date(minuteStamp * 60_000), logs, workouts: workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays }),
-    [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays]
+    () => buildDayEvaluator({ now: new Date(minuteStamp * 60_000), logs, workouts: workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays, targetDeficitKcal }),
+    [minuteStamp, logs, workoutEntries, mealTemplatesByDayType, tdeeKcal, proteinTargetG, limits, cheatDays, targetDeficitKcal, fasting] // eslint-disable-line react-hooks/exhaustive-deps
   );
 }
 
@@ -121,6 +127,8 @@ export function useGameState(now: Date): GameView {
   const limits = useLimits();
   const bonusXp = useTemptationStore((s) => temptationXp(s.stats));
   const cheatDays = useCheatDayStore((s) => s.days);
+  const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const fasting = useMealModeStore((s) => s.fasting);
 
   // Re-evaluate once per minute rather than on every 30 s tick: nothing in the rules changes
   // faster than the eating-window cut-off, and the replay walks every day since the start date.
@@ -138,9 +146,10 @@ export function useGameState(now: Date): GameView {
       limits,
       cheatDays,
       bonusXp,
+      targetDeficitKcal,
     });
     return { ...state, streak: computeCurrentStreak(logs, mealTemplates, workoutEntries, tdeeKcal, at, cheatDays) };
-  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, cheatDays, bonusXp]);
+  }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, cheatDays, bonusXp, targetDeficitKcal, fasting]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Stickers and banners for the signed-in user, derived from every log store. */

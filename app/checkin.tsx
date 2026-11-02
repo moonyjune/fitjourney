@@ -99,6 +99,8 @@ export default function CheckinScreen() {
   // The boss tile shows the day's damage while that day is in the boss's week.
   const bossDay = isToday ? game.boss.days[game.boss.days.length - 1] : game.boss.days.find((d) => d.dateKey === dateKey);
   const dayDamage = bossDay?.damage ?? 0;
+  // Today with meals still to come: its hit is an estimate, dealt once the day is settled.
+  const dayValue = bossDay?.pending ? g('checkin.bossPending', { n: bossDay.pendingDamage.toLocaleString('en-US') }) : `−${dayDamage.toLocaleString('en-US')}`;
   const bossLabel = g(isToday ? 'checkin.boss' : 'checkin.bossDay');
   const shownDate = isToday ? now : dateOfKey(dateKey);
   const date = shownDate.toLocaleDateString(language === 'en' ? 'en-US' : 'vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' });
@@ -159,7 +161,7 @@ export default function CheckinScreen() {
           {bossDay && (
           <View
             accessible
-            accessibilityLabel={`${bossLabel} −${dayDamage}, ${g('checkin.bossLeft', { n: game.boss.hpLeft })}`}
+            accessibilityLabel={`${bossLabel} ${dayValue}, ${g('checkin.bossLeft', { n: game.boss.hpLeft })}`}
             style={[styles.sumTile, { borderColor: quest.bossBorder, backgroundColor: quest.bossPanel }]}
           >
             <HudText size={11} color={quest.hpText} style={styles.eyebrow}>
@@ -167,8 +169,8 @@ export default function CheckinScreen() {
             </HudText>
             <View style={styles.bossLine}>
               <DefaultBossArt size={28} defeated={game.boss.defeated} />
-              <HudText size={22} color={quest.text}>
-                {`−${dayDamage.toLocaleString('en-US')}`}
+              <HudText size={bossDay.pending ? 15 : 22} color={bossDay.pending ? quest.textSecondary : quest.text}>
+                {dayValue}
               </HudText>
             </View>
             <HudText size={11} weight="medium" color={quest.textSecondary}>

@@ -426,7 +426,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
 
   // Daily deficit trend, one point per calendar day from the plan's start date through today
   // (not just days with logged data) — a fixed grid like the Weight tab's chart. A day with no
-  // nutrition log at all (nobody entered anything) is a genuine gap, not a 0-kcal-eaten deficit —
+  // food logged (no log at all, or only water) is a genuine gap, not a 0-kcal-eaten deficit —
   // returning null here breaks the line there instead of drawing a fabricated slope through it. A cheat day is not counted,
   // so it is a gap too.
   const deficitTrendChart = useMemo(
@@ -434,7 +434,7 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
       buildDeficitChartData(
         settings.startDateISO,
         (dateKey) => {
-          if (!nutritionLogs[dateKey] || cheatDays.includes(dateKey)) return null;
+          if (!dayHasFood(nutritionLogs[dateKey]) || cheatDays.includes(dateKey)) return null;
           const { calories, caloriesBurned } = computeDayCaloriesBurn(dateKey, nutritionLogs, mealTemplates, workoutEntries);
           return actualDailyDeficitKcal(currentTdeeKcal, caloriesBurned, calories);
         },

@@ -99,10 +99,12 @@ const x = (name: string, kcal: number, mealTime: ExtraFoodItem['mealTime'], hour
 const log = (over: Partial<DailyNutritionLog>): DailyNutritionLog => ({ dateISO: '2026-10-23', mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 0, ...over });
 
 describe('coveredMealIds', () => {
-  it('fasting: a plan meal ticked eaten or removed is covered; off-plan food does not cover a plan meal', () => {
+  it('fasting: a plan meal ticked eaten or removed is covered; off-plan food covers the plan meal of its time only when it is a meal\'s worth', () => {
     const defs = mealDefs(true, planMeals);
     expect([...coveredMealIds(true, defs, planMeals, log({ mealsEaten: { meal1: true }, removedMealSlots: ['meal2'] }))].sort()).toEqual(['meal1', 'meal2']);
-    expect(coveredMealIds(true, defs, planMeals, log({ extraItems: [{ ...x('Cơm', 900, 'lunch'), proteinG: 60 }] })).size).toBe(0);
+    // A 900 kcal lunch at 12:00 eaten instead of the plan's meal 1 covers it; a 160 kcal snack at that time does not.
+    expect([...coveredMealIds(true, defs, planMeals, log({ extraItems: [{ ...x('Cơm', 900, 'lunch'), proteinG: 60 }] }))]).toEqual([defs[0].id]);
+    expect(coveredMealIds(true, defs, planMeals, log({ extraItems: [x('Chuối', 160, 'lunch')] })).size).toBe(0);
     expect(coveredMealIds(true, defs, planMeals, undefined).size).toBe(0);
   });
 

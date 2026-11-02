@@ -116,6 +116,8 @@ describe('Nutrition screen (FitQuest)', () => {
     expect(text).toContain('0 / 2500 ml');
     expect(text).toMatch(/\d+ kcal/);
     expect(text).toContain(meals()[0].label);
+    // Nothing eaten yet is not a TDEE-sized deficit: the card has no figure until food is logged.
+    expect(text).toContain('— · No meal logged yet'); // the test renders in English
   });
 
   it('ticks a meal on and off and counts its calories in the total', async () => {

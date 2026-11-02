@@ -117,7 +117,19 @@ describe('Boss detail screen', () => {
     expect(text.replace(/\s+/g, ' ')).toContain(`${(7700 - dealt).toLocaleString('en-US')} / 7,700`);
   });
 
+  it('a hit while meals are still to come is pending: an estimate shown, no HP taken until the day is settled', () => {
+    useNutritionStore.setState({ logs: { '2026-10-23': log('2026-10-23') } });
+    useWorkoutStore.setState({ entries: [bigBurn('2026-10-23')] });
+    const text = allText(render()); // Friday 16:10: the plan's later meals are still to come
+    expect(text).toMatch(/Thâm hụt dự kiến [\d,]+ kcal → ~[\d,]+ sát thương, chờ chốt/);
+    expect(text).toContain('chỉ trừ máu boss khi ghi đủ bữa hoặc hết giờ ăn');
+    expect(text).toMatch(/~−[\d,]+/);
+    expect(text.replace(/\s+/g, ' ')).toContain('7,700 / 7,700');
+    expect(text).toContain('Còn 2 ngày nữa · cần trung bình 2,567 kcal/ngày'); // today still counts as a day to come: 7,700 / 3
+  });
+
   it('shows the daily cap and explains it when a day exceeds it', () => {
+    jest.setSystemTime(new Date('2026-10-23T20:30:00')); // the eating window is over: the day is settled
     useNutritionStore.setState({ logs: { '2026-10-23': log('2026-10-23') } });
     useWorkoutStore.setState({ entries: [bigBurn('2026-10-23')] });
     const text = allText(render());
@@ -135,6 +147,7 @@ describe('Boss detail screen', () => {
   });
 
   it('tells how much damage per day is still needed, and switches wording on the last day', () => {
+    jest.setSystemTime(new Date('2026-10-23T20:30:00')); // settled
     useNutritionStore.setState({ logs: { '2026-10-23': log('2026-10-23') } });
     useWorkoutStore.setState({ entries: [bigBurn('2026-10-23')] });
     const text = allText(render());

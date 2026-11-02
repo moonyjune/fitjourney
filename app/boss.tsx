@@ -12,6 +12,7 @@ import type { BossDay } from '../src/game/boss';
 import { useGameText, type GameKey } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
 import { DEFICIT_LEVEL_COLOR } from '../src/game/deficitLevel';
+import { mealNames } from '../src/game/deficitView';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
@@ -47,7 +48,7 @@ export default function BossScreen() {
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow(60_000);
-  const { boss } = useGameState(now);
+  const { boss, today: todayEval } = useGameState(now);
 
   const today = boss.days[boss.days.length - 1];
   const weekNo = isoWeekNumber(new Date(`${boss.weekKey}T12:00:00`));
@@ -55,6 +56,7 @@ export default function BossScreen() {
 
   let hit: string;
   if (today?.cheat) hit = g('boss.detail.hitCheat');
+  else if (today?.pending && today.deficitKcal != null && today.deficitKcal > 0) hit = g('boss.detail.hitPendingNote', { meals: mealNames(todayEval.pendingMeals, g) });
   else if (!today || today.deficitKcal == null) hit = g('boss.detail.hitNone');
   else if (today.deficitKcal <= 0) hit = g('boss.detail.hitSurplus');
   else if (today.capped) hit = g('boss.detail.hitCap', { cap: num(DAILY_DAMAGE_CAP_KCAL) });
@@ -108,7 +110,11 @@ export default function BossScreen() {
           {g('boss.detail.hitTitle').toUpperCase()}
         </HudText>
         {today && today.deficitKcal != null && today.deficitKcal > 0 ? (
-          <HudText size={16}>{g('boss.detail.hit', { def: num(today.deficitKcal), dmg: num(today.damage) })}</HudText>
+          <HudText size={16}>
+            {today.pending
+              ? g('boss.detail.hitPending', { def: num(today.deficitKcal), dmg: num(today.pendingDamage) })
+              : g('boss.detail.hit', { def: num(today.deficitKcal), dmg: num(today.damage) })}
+          </HudText>
         ) : null}
         {hit ? (
           <HudText size={13} weight="medium" color={quest.textTertiary}>
@@ -128,12 +134,13 @@ export default function BossScreen() {
           const dow = new Date(`${d.dateKey}T12:00:00`).getDay();
           const name = isToday ? g('boss.detail.today') : g(`weekday.${dow}` as GameKey);
           const noData = d.deficitKcal == null;
-          const amount = noData ? '—' : `−${num(d.damage)}`;
+          // Today with meals still to come: its hit is an estimate, not dealt yet.
+          const amount = noData ? '—' : d.pending ? `~−${num(d.pendingDamage)}` : `−${num(d.damage)}`;
           const sub = d.cheat
             ? g('boss.detail.cheat')
             : noData
               ? g('boss.detail.noData')
-              : [d.deficitKcal! > 0 ? g('boss.detail.deficit', { n: num(d.deficitKcal!) }) : '', splitText(d)].filter(Boolean).join(' · ');
+              : [d.deficitKcal! > 0 ? g(d.pending ? 'boss.detail.pending' : 'boss.detail.deficit', { n: num(d.deficitKcal!) }) : '', splitText(d)].filter(Boolean).join(' · ');
           return (
             <View
               key={d.dateKey}
@@ -151,7 +158,7 @@ export default function BossScreen() {
                   </HudText>
                 ) : null}
               </View>
-              <HudText size={17} color={noData ? quest.textSecondary : isToday ? quest.gold : quest.hpText}>
+              <HudText size={17} color={noData || d.pending ? quest.textSecondary : isToday ? quest.gold : quest.hpText}>
                 {amount}
               </HudText>
             </View>

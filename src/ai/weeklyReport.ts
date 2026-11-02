@@ -1,3 +1,4 @@
+import { bossDeficitOf } from '../game/state';
 import { getDayType } from '../constants/plan';
 import { lateMealHour } from '../utils/mealMode';
 import { bossForWeek, type BossState } from '../game/boss';
@@ -167,7 +168,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     lateMealDays: count((d) => d.lastMealHour !== undefined && d.lastMealHour >= lateMealHour()),
   };
 
-  const boss = bossForWeek(now, (key) => evaluate(key).deficitKcal, undefined, isCheatDay, (key) => evaluate(key).burnedKcal);
+  const boss = bossForWeek(now, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled);
 
   // Weight: from the last weigh-in before the week (else the first of the week) to the latest, against what the deficit predicts.
   const points = weights
@@ -190,7 +191,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
   // Last week, for comparison: the same rules, ended on its Sunday.
   const prevSunday = addDays(monday, -1);
   prevSunday.setHours(12, 0, 0, 0);
-  const prevBoss = bossForWeek(prevSunday, (key) => evaluate(key).deficitKcal, undefined, isCheatDay, (key) => evaluate(key).burnedKcal);
+  const prevBoss = bossForWeek(prevSunday, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled);
   const prevDeficits = prevBoss.days.map((d) => d.deficitKcal).filter((v): v is number => v !== null);
   const previousWeek: WeekInput['previousWeek'] =
     prevDeficits.length > 0 ? { damage: Math.round(prevBoss.totalDamage), daysLogged: prevDeficits.length, avgDeficitKcal: avg(prevDeficits) } : undefined;

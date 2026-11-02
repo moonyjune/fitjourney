@@ -95,10 +95,11 @@ describe('buildWeeklyReportInput', () => {
 
   it('reports the boss: damage so far, HP left and the status from the numbers', () => {
     const { boss } = buildWeeklyReportInput(NOW);
-    expect(boss).toMatchObject({ maxHp: 7700, damageSoFar: 1900 + 0 + 1200 + 1500, defeated: false });
-    expect(boss.hpLeft).toBe(7700 - 4600);
-    expect(boss.neededPerRemainingDay).toBe(Math.ceil(3100 / 2)); // two days left after today: Saturday, Sunday
-    expect(boss.status).toBe('far'); // 1550 a day is more than eating alone can deal
+    // Friday 16:10 still has meals to come: its hit (1,500) is pending, not dealt yet.
+    expect(boss).toMatchObject({ maxHp: 7700, damageSoFar: 1900 + 0 + 1200, defeated: false });
+    expect(boss.hpLeft).toBe(7700 - 3100);
+    expect(boss.neededPerRemainingDay).toBe(Math.ceil(4600 / 3)); // today (pending) and two days after: Saturday, Sunday
+    expect(boss.status).toBe('far'); // 1534 a day is more than eating alone can deal
   });
 
   it('compares the weight with what the deficit predicts (3,500-ish kcal per 0.45 kg is kcal / 7,700 per kg)', () => {

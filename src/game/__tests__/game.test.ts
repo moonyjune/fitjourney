@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { DEFAULT_MEAL_TEMPLATES } from '../../constants/plan';
+import { DEFAULT_MEAL_TEMPLATES, getDayType } from '../../constants/plan';
 import type { DailyNutritionLog, MealTemplate, WorkoutLogEntry } from '../../types';
 import { BOSS_MAX_HP, DAILY_DAMAGE_CAP_KCAL } from '../constants';
 import { bossForWeek, damageForDeficit } from '../boss';
@@ -75,6 +75,17 @@ describe('boss', () => {
     expect(boss.neededPerRemainingDay).toBe(825);
   });
 
+  it("a day not settled yet (today, meals to come) deals no damage: it is pending, and today still counts as a day to come", () => {
+    const deficits: Record<string, number> = { '2026-10-19': 1050, '2026-10-20': 1200, '2026-10-21': 980, '2026-10-22': 1320, '2026-10-23': 900 };
+    const boss = bossForWeek(FRIDAY_16_10, (k) => deficits[k] ?? null, undefined, undefined, undefined, (k) => k !== '2026-10-23');
+    const today = boss.days[boss.days.length - 1];
+    expect(today).toMatchObject({ pending: true, damage: 0, pendingDamage: 900, deficitKcal: 900 });
+    expect(boss.totalDamage).toBe(4550);
+    expect(boss.pendingDamage).toBe(900);
+    expect(boss.hpLeft).toBe(7700 - 4550);
+    expect(boss.neededPerRemainingDay).toBe(Math.ceil((7700 - 4550) / 3)); // Friday, Saturday, Sunday
+  });
+
   it('only counts days up to today, and defeats at 0 HP', () => {
     const boss = bossForWeek(new Date('2026-10-24T09:00:00'), () => 1500); // Saturday
     expect(boss.days).toHaveLength(6);
@@ -119,22 +130,38 @@ describe('daily missions', () => {
   const base = { mealTemplatesByDayType: plan, tdeeKcal: 2694, proteinTargetG: 200 };
   const friday = '2026-10-23';
 
-  it('Friday 16:10 after meals 1+2 and a workout: deficit 1,873, workout + deficit done, protein still open', () => {
-    const day = evaluateDay({
-      ...base,
-      dateKey: friday,
-      now: FRIDAY_16_10,
-      log: log(friday, { meal1: true, meal2: true }),
-      workouts: [workout(friday, 14, 420)],
-    });
+  it('Friday 16:10 after meals 1+2 and a workout: deficit 1,873 so far, but meal 3 is still to come, so the deficit is an estimate and its mission waits', () => {
+    const input = { ...base, dateKey: friday, now: FRIDAY_16_10, log: log(friday, { meal1: true, meal2: true }), workouts: [workout(friday, 14, 420)] };
+    const day = evaluateDay(input);
     expect(day.eatenKcal).toBe(1241);
     expect(day.proteinG).toBe(117);
     expect(day.deficitKcal).toBe(2694 + 420 - 1241);
+    const meal3 = plan[getDayType(new Date(`${friday}T12:00:00`))].find((m) => m.slot === 'meal3')!;
+    expect(day.settled).toBe(false);
+    expect(day.pendingMeals.map((m) => m.id)).toEqual(['meal3']);
+    expect(day.projectedDeficitKcal).toBe(2694 + 420 - 1241 - meal3.calories);
     const status = Object.fromEntries(day.missions.map((m) => [m.id, m.status]));
-    expect(status).toMatchObject({ workout: 'done', deficit: 'done', protein: 'open' });
+    expect(status).toMatchObject({ workout: 'done', deficit: 'open', protein: 'open' });
     expect(day.eatingClosed).toBe(false);
-    expect(day.earnedXp).toBeGreaterThanOrEqual(110); // workout 60 + deficit 50, plus any limits already earned
+    expect(day.earnedXp).toBeGreaterThanOrEqual(60); // workout 60, plus any limits already earned; the deficit waits for the day to settle
     expect(day.missions.find((m) => m.id === 'junk')?.status).toBe('holding'); // not earned until the window closes
+
+    // Meal 3 marked as skipped: nothing is left to come, the deficit is final and its mission is done.
+    const skipped = evaluateDay({ ...input, log: { ...log(friday, { meal1: true, meal2: true }), removedMealSlots: ['meal3'] } });
+    expect(skipped.settled).toBe(true);
+    expect(skipped.projectedDeficitKcal).toBeNull();
+    expect(skipped.missingMeals).toEqual([]);
+    expect(skipped.missions.find((m) => m.id === 'deficit')?.status).toBe('done');
+  });
+
+  it('a day with nothing logged has no deficit, and a past day with a meal not logged is flagged', () => {
+    const empty = evaluateDay({ ...base, dateKey: friday, now: FRIDAY_16_10, log: undefined, workouts: [] });
+    expect(empty.deficitKcal).toBeNull();
+    expect(empty.projectedDeficitKcal).toBeNull();
+    const thursday = '2026-10-22';
+    const past = evaluateDay({ ...base, dateKey: thursday, now: FRIDAY_16_10, log: log(thursday, { meal1: true, meal2: true }), workouts: [] });
+    expect(past.settled).toBe(true);
+    expect(past.missingMeals.map((m) => m.id)).toEqual(['meal3']);
   });
 
   it('limit missions are only earned once the eating window closes, and never on an empty day', () => {
