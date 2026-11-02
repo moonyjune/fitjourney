@@ -5,6 +5,8 @@
 > Dựa trên: code ở bản 0.21.0, `Design/screens-current.md` (mục 4, 16 chỗ chưa nhất quán) và `Design/v4-fitquest`.
 > Mockup "ĐỀ XUẤT" và hộp thoại theo luật thâm hụt của **0.23.0**: thâm hụt hôm nay là số dự kiến "~X" tới khi chốt, đòn boss tuần chờ chốt, ngày thiếu bữa có dòng ⚠ + "Ghi bổ sung", chưa ghi bữa thì không có số. Nay theo **0.25.0**: thêm "Tôi không ăn sáng", Bỏ bữa + Hoàn tác, ⚠ ở lịch / danh sách tháng (0.24.0), "Thông báo khi đóng app" và lock screen (0.25.0), màn mở app (xem `dialogs.md`, 46–47). Chưa vẽ 0.26.0. Ảnh "HIỆN TẠI" vẽ app trước 0.23.0.
 
+**PDF:** `FitQuest-UIUX-proposal.pdf` gom toàn bộ đề xuất (sơ đồ chuyển màn, thay đổi chung, từng màn trước / sau kèm mô tả, 47 hộp thoại, xoá / gộp, kế hoạch, đã chốt). **Sơ đồ chuyển màn hình:** `flow.png` (mã `html/flow.html`): mỗi tab / màn chính một cột, nhãn trên mỗi ô là thao tác mở nó.
+
 **Ảnh:** `overview.png` là bảng tổng hợp. Từng màn nằm trong `png/`, rộng 390 pt và chụp ở 2x. Mỗi ảnh là **cả màn hình theo chiều cuộn**, từ đầu tới cuối trang, không còn cắt ở 844 pt. Thanh tab và nút lưu cố định được vẽ ở cuối trang. Mã HTML nằm trong `html/` và mở được trực tiếp trong trình duyệt.
 Ảnh "HIỆN TẠI" vẽ lại màn hiện có, kèm chấm đỏ đánh số đúng vấn đề nêu dưới đây. Ảnh "ĐỀ XUẤT" là thiết kế mới.
 
