@@ -37,10 +37,20 @@ import {
   REFILL_BELOW,
   unseenFitting,
   weatherTagsOf,
+  MAX_PHOTO_TRIES,
+  needsPhoto,
+  photoQueue,
+  poolSeedStatus,
+  SEED_ENOUGH,
+  seedChunks,
+  seedGenerated,
+  withDishPhoto,
+  withOgImage,
   type PoolRow,
   type TemptPoolItem,
   type TemptRequest,
 } from '../../../supabase/functions/_shared/tempt';
+import { itemFromAi } from '../../temptation/item';
 
 // ----- places: one big search, served page by page -----
 
@@ -316,5 +326,69 @@ describe('temptations: the shared pool (0.26)', () => {
     const answer = poolAnswer(poolItem('Trà đào'), true);
     expect(answer).toMatchObject({ name: 'Trà đào', pitch: 'Ngon lắm nè~', web: 'pool', repeat: true, imageUrl: null });
     expect(answer).not.toHaveProperty('times');
+  });
+});
+
+describe('temptations: seeded once with real photos (0.26.2)', () => {
+  const wiki = { url: 'https://upload.wikimedia.org/x/640px-Pho.jpg', sourceUrl: 'https://commons.wikimedia.org/wiki/File:Pho.jpg', author: 'An', license: 'CC BY-SA 4.0', source: 'wikimedia' as const };
+
+  it('gives a web item its page picture with the host as credit, or marks it checked', () => {
+    const web = poolItem('Trà mới');
+    const withPic = withOgImage({ ...web, sourceUrl: 'https://www.brand.vn/new' }, 'https://cdn.brand.vn/a.jpg');
+    expect(withPic).toMatchObject({ imageUrl: 'https://cdn.brand.vn/a.jpg', imageChecked: true, photo: { pageUrl: 'https://www.brand.vn/new', credit: 'brand.vn' } });
+    expect(withOgImage({ ...web, sourceUrl: 'https://www.brand.vn/new' }, null)).toMatchObject({ imageChecked: true });
+    expect(needsPhoto(withOgImage({ ...web, sourceUrl: 'https://www.brand.vn/new' }, null))).toBe(true);
+  });
+
+  it('takes a checked dish photo with its credit, marks "no photo", and gives up after a few undecided tries', () => {
+    const item = poolItem('Phở bò');
+    const got = withDishPhoto({ ...item, photoTries: 1 }, wiki);
+    expect(got.imageUrl).toBe(wiki.url);
+    expect(got.photo).toEqual({ url: wiki.url, pageUrl: wiki.sourceUrl, credit: 'An · CC BY-SA 4.0 · Wikimedia' });
+    expect(got.photoTries).toBeUndefined();
+    expect(withDishPhoto(item, null).noPhoto).toBe(true);
+    let tried = item;
+    for (let i = 0; i < MAX_PHOTO_TRIES; i++) tried = withDishPhoto(tried, undefined);
+    expect(tried).toMatchObject({ photoTries: MAX_PHOTO_TRIES, noPhoto: true });
+    expect(withDishPhoto(item, undefined).noPhoto).toBeUndefined();
+    // Kept through the store.
+    const back = cleanStoredPoolItem(JSON.parse(JSON.stringify(got)))!;
+    expect(back.photo).toEqual(got.photo);
+    expect(cleanStoredPoolItem(JSON.parse(JSON.stringify(withDishPhoto(item, null))))!.noPhoto).toBe(true);
+  });
+
+  it('serves items with a photo first, the others only when none fits', () => {
+    const now = fitNow(reqAt('15:00'));
+    const at = new Date('2026-11-04T08:00:00Z');
+    const bare = row(poolItem('Không ảnh', { times: ['afternoon'] }));
+    const none = row({ ...poolItem('Chẳng có ảnh', { times: ['afternoon'] }), noPhoto: true });
+    const pic = row(withDishPhoto(poolItem('Có ảnh'), wiki));
+    expect(pickPoolItem([bare, none, pic], new Map(), now, at, [], () => 0)!.row).toBe(pic);
+    expect(pickPoolItem([bare, none], new Map(), now, at, [], () => 0)!.row).toBe(bare);
+    const shown = new Map([[pic.id, '2026-11-03T00:00:00Z'], [bare.id, '2026-11-02T00:00:00Z'], [none.id, '2026-11-01T00:00:00Z']]);
+    expect(pickPoolItem([bare, none, pic], shown, now, at)).toEqual({ row: pic, repeat: true });
+    expect(photoQueue([bare, none, pic], 5)).toEqual([bare]);
+  });
+
+  it('reports the seed and plans its generation', () => {
+    const rows = [row(withDishPhoto(poolItem('A'), wiki)), row({ ...poolItem('B'), noPhoto: true }), row(poolItem('C'))];
+    expect(poolSeedStatus(rows, true)).toEqual({ total: 3, withPhoto: 1, missingPhoto: 1, remaining: 1, done: false });
+    expect(poolSeedStatus(rows.slice(0, 2), true).done).toBe(true);
+    expect(poolSeedStatus(rows.slice(0, 2), false).done).toBe(false);
+    expect(seedChunks(0)).toEqual(POOL_CHUNKS);
+    expect(seedChunks(150).map((c) => c.id)).toEqual(['trend', 'drinks']);
+    expect(seedChunks(200)).toEqual([]);
+    expect(seedGenerated(SEED_ENOUGH, null)).toBe(true);
+    expect(seedGenerated(100, 50)).toBe(false);
+    expect(seedGenerated(100, 5)).toBe(true);
+  });
+
+  it('answers with the photo credit, which the app keeps', () => {
+    const answer = poolAnswer(withDishPhoto(poolItem('Phở bò'), wiki), false);
+    expect(answer.photo?.credit).toBe('An · CC BY-SA 4.0 · Wikimedia');
+    const item = itemFromAi(answer)!;
+    expect(item.imageUrl).toBe(wiki.url);
+    expect(item.photo).toMatchObject({ pageUrl: wiki.sourceUrl, credit: 'An · CC BY-SA 4.0 · Wikimedia' });
+    expect(itemFromAi({ ...answer, imageUrl: undefined })!.photo).toBeUndefined();
   });
 });

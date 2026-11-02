@@ -1054,6 +1054,13 @@ create table if not exists public.tempt_pool_meta (
 insert into public.tempt_pool_meta (id) values (1) on conflict (id) do nothing;
 alter table public.tempt_pool_meta enable row level security;
 revoke all on public.tempt_pool_meta from public, anon, authenticated;
+-- 0.26.2: kho được AI soạn sẵn một lần (seed) kèm ảnh thật cho từng món. seeded_at = lúc soạn xong; photos_started_at = đang tìm ảnh
+-- (mỗi lúc một việc); system_* = chi phí các lần gọi AI cho kho (seed, kiểm tra ảnh), không tính vào hạn mức của người dùng nào.
+alter table public.tempt_pool_meta add column if not exists seeded_at timestamptz;
+alter table public.tempt_pool_meta add column if not exists photos_started_at timestamptz;
+alter table public.tempt_pool_meta add column if not exists system_cost_usd numeric not null default 0;
+alter table public.tempt_pool_meta add column if not exists system_tokens_in bigint not null default 0;
+alter table public.tempt_pool_meta add column if not exists system_tokens_out bigint not null default 0;
 
 -- Giành quyền nạp kho: MỘT câu UPDATE có điều kiện, nên hai yêu cầu cùng lúc không bao giờ cùng nạp. Đúng = được nạp. Chỉ service role.
 create or replace function public.tempt_pool_claim_refill(p_running_before timestamptz, p_done_before timestamptz, p_failed_before timestamptz)
@@ -1077,3 +1084,39 @@ end;
 $$;
 revoke all on function public.tempt_pool_claim_refill(timestamptz, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.tempt_pool_claim_refill(timestamptz, timestamptz, timestamptz) to service_role;
+
+-- Giành quyền tìm ảnh cho kho (0.26.2): một câu UPDATE có điều kiện, chỉ một yêu cầu tìm ảnh mỗi lúc. Chỉ service role.
+create or replace function public.tempt_pool_claim_photos(p_running_before timestamptz)
+returns boolean
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  claimed integer;
+begin
+  insert into public.tempt_pool_meta (id) values (1) on conflict (id) do nothing;
+  update public.tempt_pool_meta
+     set photos_started_at = now()
+   where id = 1 and (photos_started_at is null or photos_started_at < p_running_before);
+  get diagnostics claimed = row_count;
+  return claimed > 0;
+end;
+$$;
+revoke all on function public.tempt_pool_claim_photos(timestamptz) from public, anon, authenticated;
+grant execute on function public.tempt_pool_claim_photos(timestamptz) to service_role;
+
+-- Cộng chi phí một lần gọi AI cho kho (seed, kiểm tra ảnh) vào tempt_pool_meta. Chỉ service role.
+create or replace function public.tempt_pool_add_cost(p_in bigint, p_out bigint, p_cost numeric)
+returns void
+language sql
+security definer set search_path = public
+as $$
+  insert into public.tempt_pool_meta (id) values (1) on conflict (id) do nothing;
+  update public.tempt_pool_meta
+     set system_tokens_in = system_tokens_in + coalesce(p_in, 0),
+         system_tokens_out = system_tokens_out + coalesce(p_out, 0),
+         system_cost_usd = system_cost_usd + coalesce(p_cost, 0)
+   where id = 1;
+$$;
+revoke all on function public.tempt_pool_add_cost(bigint, bigint, numeric) from public, anon, authenticated;
+grant execute on function public.tempt_pool_add_cost(bigint, bigint, numeric) to service_role;

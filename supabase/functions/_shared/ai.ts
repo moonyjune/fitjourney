@@ -427,22 +427,44 @@ export type AiCallResult = { input: Record<string, unknown>; usage?: TokenUsage;
 
 /** One Claude call, made and logged (under `feature`, for this user) the way serveAi makes its call. No quota or budget check: the
  *  caller asks `aiAllowance` first. For a function that makes several calls in one request (tempt-me's bulk refill). */
-export async function runAiCall(ctx: AiContext, feature: AiFeature, call: AiCall): Promise<AiCallResult | { error: string; status: number }> {
+export async function runAiCall(
+  ctx: AiContext,
+  feature: AiFeature,
+  call: AiCall,
+  opts: {
+    /** Logs the call somewhere else than the user's ai_usage (a call made for nobody in particular, e.g. the temptation pool's seed);
+     *  then it counts against no user's quota or budget. */
+    record?: (usage: TokenUsage | undefined, costUsd: number, model: string) => Promise<void>;
+  } = {}
+): Promise<AiCallResult | { error: string; status: number }> {
   if (!ANTHROPIC_API_KEY) return { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.', status: 500 };
   const config = await loadConfig(ctx.admin);
   const outcome = call.webSearch ? await callClaudeWithSearch(call, config.model) : await callClaude(call, config.model);
   if ('error' in outcome) return outcome;
-  await recordUsage(ctx.admin, ctx.userId, feature, outcome.usage, config);
+  if (opts.record) await opts.record(outcome.usage, estimateCostUsd(outcome.usage, config.priceInPerMtok, config.priceOutPerMtok), config.model).catch((e) => console.warn('[ai] usage not recorded:', e));
+  else await recordUsage(ctx.admin, ctx.userId, feature, outcome.usage, config);
   return { input: outcome.input, usage: outcome.usage, findings: 'findings' in outcome ? outcome.findings : null, web: 'web' in outcome ? outcome.web : undefined };
 }
 
 /** Wraps a feature: `plan` receives the parsed JSON body and the context, and returns the Claude call (or a Response). */
-export function serveAi(feature: AiFeature, plan: (body: Record<string, unknown>, ctx: AiContext) => Promise<AiPlan>) {
+export function serveAi(
+  feature: AiFeature,
+  plan: (body: Record<string, unknown>, ctx: AiContext) => Promise<AiPlan>,
+  options: {
+    /** Runs before the sign-in check with a service-role client: a Response answers the request (e.g. a maintenance call checked
+     *  with a secret instead of a user), null goes on as usual. */
+    preAuth?: (req: Request, admin: SupabaseClient) => Promise<Response | null>;
+  } = {}
+) {
   Deno.serve(async (req) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
     try {
       if (Deno.env.get('AI_DISABLED') === '1') return jsonResponse({ error: 'Tính năng AI đang tạm tắt.' }, 503);
       if (!ANTHROPIC_API_KEY) return jsonResponse({ error: 'Server chưa cấu hình ANTHROPIC_API_KEY.' }, 500);
+      if (options.preAuth && SERVICE_ROLE_KEY) {
+        const early = await options.preAuth(req, createClient(SUPABASE_URL, SERVICE_ROLE_KEY));
+        if (early) return early;
+      }
       const authHeader = req.headers.get('Authorization');
       if (!authHeader) return jsonResponse({ error: 'Thiếu Authorization header.' }, 401);
 

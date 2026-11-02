@@ -1,3 +1,4 @@
+import { cleanPlacePhoto, type PlacePhoto } from '../../supabase/functions/_shared/places';
 import { OPENERS, TEMPT_CATALOG, isWeekendMood, slotOfHour, type BossKind, type CatalogItem } from './catalog';
 
 /** One temptation as the pop-up shows it, whichever level made it. */
@@ -17,6 +18,8 @@ export interface TemptItem {
   description?: string;
   imageUrl?: string;
   sourceDomain?: string;
+  /** The credit of `imageUrl` when the server found it (a pool item's real photo, 0.26.2): "Ảnh: <credit>", opening its page. */
+  photo?: PlacePhoto;
   /** Where it came from: the bundled list, the AI, or the dev account's sample. */
   source: 'easy' | 'ai' | 'sample';
   /** AI answered without web search (the key may not use it), or Hard fell back to Easy (AI unavailable). */
@@ -92,6 +95,7 @@ export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai'): TemptI
   const description = text(r.description, 300);
   const imageUrl = httpsUrl(r.imageUrl);
   const domain = text(r.sourceDomain, 80);
+  const photo = imageUrl ? cleanPlacePhoto(r.photo) : null;
   return {
     id: `ai:${name.toLowerCase()}`,
     name,
@@ -105,6 +109,7 @@ export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai'): TemptI
     ...(whyNow ? { whyNow } : {}),
     ...(description ? { description } : {}),
     ...(imageUrl ? { imageUrl } : {}),
+    ...(photo ? { photo } : {}),
     ...(domain && /^[a-z0-9.-]+$/i.test(domain) ? { sourceDomain: domain } : {}),
     source,
     ...(r.web === 'unavailable' ? { note: 'noWeb' as const } : {}),

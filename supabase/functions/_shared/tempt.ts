@@ -197,6 +197,19 @@ export interface TemptPoolItem extends TemptItemOut {
   trending: boolean;
   /** The og:image of its source page was looked for already (found or not), so it is not fetched again. */
   imageChecked?: boolean;
+  /** The picture's credit (0.26.2): the page it comes from and who / what licence, shown under it. */
+  photo?: PoolPhoto;
+  /** No real photo shows it (searched and checked): served only when nothing with a photo fits. */
+  noPhoto?: boolean;
+  /** Photo lookups that could not decide (a library did not answer, the check failed); after MAX_PHOTO_TRIES it counts as no photo. */
+  photoTries?: number;
+}
+
+/** A pool item's picture with its credit, as the app shows a web photo ("Ảnh: <credit>", opening `pageUrl`). */
+export interface PoolPhoto {
+  url: string;
+  pageUrl: string;
+  credit: string;
 }
 
 /** A pool row as the function reads it. */
@@ -289,6 +302,13 @@ export function cleanStoredPoolItem(raw: unknown): TemptPoolItem | null {
   if (!item) return null;
   const r = raw as Record<string, unknown>;
   if (r.imageChecked === true) item.imageChecked = true;
+  if (r.noPhoto === true) item.noPhoto = true;
+  const tries = typeof r.photoTries === 'number' && Number.isFinite(r.photoTries) ? Math.max(0, Math.min(9, Math.round(r.photoTries))) : 0;
+  if (tries > 0) item.photoTries = tries;
+  const ph = r.photo as Record<string, unknown> | null | undefined;
+  const phUrl = ph ? publicHttpsUrl(ph.url) : null;
+  const phPage = ph ? publicHttpsUrl(ph.pageUrl) : null;
+  if (phUrl && phPage) item.photo = { url: phUrl, pageUrl: phPage, credit: cleanText(ph!.credit, 120) || new URL(phPage).hostname.replace(/^www\./, '') };
   if (!item.sourceDomain && typeof r.sourceDomain === 'string' && /^[a-z0-9.-]+$/i.test(r.sourceDomain)) item.sourceDomain = r.sourceDomain.toLowerCase();
   return item;
 }
@@ -400,7 +420,10 @@ export function pickPoolItem(
   avoid: string[] = [],
   rand: () => number = Math.random
 ): { row: PoolRow; repeat: boolean } | null {
-  const fresh = unseenFitting(rows, shown, now, at, avoid);
+  const unseen = unseenFitting(rows, shown, now, at, avoid);
+  // Items with a real photo first; the others only when none of those fits.
+  const withPhoto = unseen.filter((r) => !!r.item.imageUrl);
+  const fresh = withPhoto.length > 0 ? withPhoto : unseen;
   if (fresh.length > 0) {
     const scored = fresh.map((row) => ({ row, score: poolItemScore(row, now, at) }));
     const best = Math.max(...scored.map((s) => s.score));
@@ -409,7 +432,9 @@ export function pickPoolItem(
   }
   const usable = servable(rows, at);
   const fitting = usable.filter((r) => poolItemFits(r.item, now));
-  const list = fitting.length > 0 ? fitting : usable.length > 0 ? usable : rows;
+  const any = fitting.length > 0 ? fitting : usable.length > 0 ? usable : rows;
+  const pictured = any.filter((r) => !!r.item.imageUrl);
+  const list = pictured.length > 0 ? pictured : any;
   if (list.length === 0) return null;
   // Never shown sorts first ('' < any date), then the oldest showing.
   const oldest = [...list].sort((a, b) => (shown.get(a.id) ?? '').localeCompare(shown.get(b.id) ?? ''));
@@ -499,7 +524,7 @@ export const POOL_TOOL = {
 };
 
 /** What a pop-up gets for a pool item: the old answer's fields (the app reads those), `web: 'pool'`, and whether it is a repeat. */
-export function poolAnswer(item: TemptPoolItem, repeat: boolean): TemptItemOut & { web: 'pool'; repeat?: true } {
+export function poolAnswer(item: TemptPoolItem, repeat: boolean): TemptItemOut & { web: 'pool'; repeat?: true; photo?: PoolPhoto } {
   return {
     name: item.name,
     emoji: item.emoji,
@@ -514,5 +539,84 @@ export function poolAnswer(item: TemptPoolItem, repeat: boolean): TemptItemOut &
     imageUrl: item.imageUrl,
     web: 'pool',
     ...(repeat ? { repeat: true as const } : {}),
+    ...(item.photo && item.imageUrl ? { photo: item.photo } : {}),
   };
+}
+
+// ----- the pool's pictures (0.26.2) -----
+// Every pool item gets a real photo on the server before it is served: an item from the web first tries its page's og:image (no
+// tokens), then any item the dish-photo search (Wikimedia Commons / Openverse, checked by the model, cached in dish_photos). One that
+// no real photo shows is marked `noPhoto` and served only when nothing with a photo fits. Never a generated picture.
+
+export const MAX_PHOTO_TRIES = 3;
+/** Pictures looked for per seed call, and per pop-up in the background. */
+export const SEED_PHOTOS_PER_CALL = 30;
+export const POPUP_PHOTOS = 6;
+
+/** Whether an item still needs its picture looked for. */
+export const needsPhoto = (item: TemptPoolItem): boolean => !item.imageUrl && !item.noPhoto;
+
+/** The rows to look a picture for, newest first, at most `max`. */
+export const photoQueue = (rows: PoolRow[], max: number): PoolRow[] => rows.filter((r) => needsPhoto(r.item)).slice(0, max);
+
+/** The item after its source page's og:image was looked for: the picture with the page's host as credit, or just "checked". */
+export function withOgImage(item: TemptPoolItem, imageUrl: string | null): TemptPoolItem {
+  const url = imageUrl ? publicHttpsUrl(imageUrl) : null;
+  if (!url || !item.sourceUrl) return { ...item, imageChecked: true };
+  const host = new URL(item.sourceUrl).hostname.replace(/^www\./, '');
+  return { ...item, imageChecked: true, imageUrl: url, photo: { url, pageUrl: item.sourceUrl, credit: host }, sourceDomain: item.sourceDomain ?? host };
+}
+
+/** A dish-photo result (the shape of dishPhoto.ts's DishPhotoInfo). */
+export interface FoundDishPhoto {
+  url: string;
+  sourceUrl: string;
+  author: string;
+  license: string;
+  source: 'wikimedia' | 'openverse';
+}
+
+/** The item after a dish-photo lookup: the photo (credit "author · licence · library"), `noPhoto` when none shows the dish, or one
+ *  more try when it could not be decided (undefined), `noPhoto` after MAX_PHOTO_TRIES. */
+export function withDishPhoto(item: TemptPoolItem, found: FoundDishPhoto | null | undefined): TemptPoolItem {
+  if (found) {
+    const url = publicHttpsUrl(found.url);
+    const pageUrl = publicHttpsUrl(found.sourceUrl);
+    if (url && pageUrl) {
+      const credit = [cleanText(found.author, 60), cleanText(found.license, 30), found.source === 'wikimedia' ? 'Wikimedia' : 'Openverse'].filter(Boolean).join(' · ');
+      const { noPhoto: _n, photoTries: _t, ...rest } = item;
+      return { ...rest, imageUrl: url, photo: { url, pageUrl, credit } };
+    }
+  }
+  if (found === null) return { ...item, noPhoto: true };
+  const tries = (item.photoTries ?? 0) + 1;
+  return { ...item, photoTries: tries, ...(tries >= MAX_PHOTO_TRIES ? { noPhoto: true } : {}) };
+}
+
+/** Where the seed stands: items, with a photo, without one (none found), still to look for, and whether it is finished. */
+export function poolSeedStatus(rows: PoolRow[], generated: boolean): { total: number; withPhoto: number; missingPhoto: number; remaining: number; done: boolean } {
+  const withPhoto = rows.filter((r) => !!r.item.imageUrl).length;
+  const missingPhoto = rows.filter((r) => !r.item.imageUrl && r.item.noPhoto).length;
+  const remaining = rows.length - withPhoto - missingPhoto;
+  return { total: rows.length, withPhoto, missingPhoto, remaining, done: generated && remaining === 0 };
+}
+
+/** The seed's generation is over when the pool holds 90% of POOL_TARGET, or a generation step added fewer than 20 new items (the
+ *  model only repeats what is there). */
+export const SEED_ENOUGH = Math.round(POOL_TARGET * 0.9);
+export const seedGenerated = (total: number, lastAdded: number | null): boolean => total >= SEED_ENOUGH || (lastAdded !== null && lastAdded < 20);
+
+/** The refill calls a seed step makes for `total` items in the pool: all of them for an empty pool, else enough to reach POOL_TARGET
+ *  (the web one first: what is trending changes). */
+export function seedChunks(total: number): PoolChunk[] {
+  const missing = POOL_TARGET - total;
+  if (missing <= 0) return [];
+  const out: PoolChunk[] = [];
+  let planned = 0;
+  for (const c of POOL_CHUNKS) {
+    if (planned >= missing) break;
+    out.push(c);
+    planned += c.count;
+  }
+  return out;
 }

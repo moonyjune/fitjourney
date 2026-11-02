@@ -7,7 +7,7 @@ import type { TemptItem } from '../../temptation/item';
 import type { TemptOutcome } from '../../temptation/stats';
 import { quest, questRadius } from '../../theme/quest';
 import { useDishPhoto } from '../../ai/useDishPhotos';
-import { DishPhoto, DishPhotoCredit } from './DishPhoto';
+import { DishPhoto, DishPhotoCredit, WebPhotoCredit } from './DishPhoto';
 import { HudText } from './HudText';
 import { FadeInUp } from './motion/FadeInUp';
 import { PopIn } from './motion/PopIn';
@@ -95,7 +95,7 @@ function ItemCard({ item }: { item: TemptItem }) {
             {g('tempt.source', { d: item.sourceDomain })}
           </HudText>
         ) : null}
-        {item.imageUrl ? null : <DishPhotoCredit name={item.name} />}
+        {item.imageUrl ? item.photo ? <WebPhotoCredit photo={item.photo} name={item.name} /> : null : <DishPhotoCredit name={item.name} />}
       </View>
     </View>
   );

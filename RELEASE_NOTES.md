@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26.2 | yes | tempt-me, dish-photo |
 | 0.26.1 | no | — |
 | 0.26.0 | yes | suggest-cheat-places, tempt-me |
 | 0.25.0 | yes | send-push |
@@ -74,6 +75,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.26.2
+- Temptation pool (Hard level) is seeded once, up front: the AI writes the ~200 items and every item gets a REAL photo on the server before anyone sees it (a web item's own page picture, else a Wikimedia Commons / Openverse photo the AI checked shows that dish; never a generated picture). The pop-up shows the photo's credit ("Ảnh: tác giả · giấy phép · Wikimedia"). An item no real photo shows is offered only when nothing with a photo fits.
+- The seed runs step by step (each call fits the server's time limit and says how far it is): POST {"action":"seed"} to tempt-me with the cron secret. Its cost is kept on the pool (tempt_pool_meta), not on any player's AI quota or budget.
+- Later refills get their photos the same way right after they are written; a pop-up that finds items still without one looks for a few in the background.
+- Server: run schema.sql (new columns on tempt_pool_meta, functions tempt_pool_claim_photos and tempt_pool_add_cost), deploy tempt-me and dish-photo (its photo search is now shared code).
 
 ## 0.26.1
 - The release number ("v0.26.1") is shown under the logo on the sign-in screen and the intro, so it is easy to see which version a browser has loaded.
