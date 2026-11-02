@@ -7,9 +7,22 @@
   <div class="header"><div class="iconbtn"><i data-i="back"></i></div><div class="grow"><div class="t12 c2 med">Hồ sơ › Cài đặt</div><span class="h2">Nhắc nhở & cám dỗ</span></div></div>
   <div class="panel" style="padding:0">
     <div class="mr"><div class="grow"><b class="t14">Nhắc nhở</b><div class="t12 c2 med">Giờ ăn, giờ tập, uống nước (cả trên web)</div></div><span class="sw on"></span></div>
+    <div class="mr" style="padding-top:10px;padding-bottom:10px"><div class="grow"><b class="t14">Thông báo khi đóng app</b><div class="t12 c2 med" style="line-height:1.4">Nhắc uống nước, giờ ăn, giờ tập vẫn đến khi app và trình duyệt đã đóng</div><div class="t12 c2 med mt4">Đã bật trên thiết bị này.</div></div><span class="sw on"></span></div>
     <div class="mr"><div class="grow"><b class="t14">Pop-up uống nước</b><div class="t12 c2 med">theo lịch nước · 5 lần</div></div><span class="sw on"></span></div>
   </div>
   <div class="t12 chp mt6">Chưa cấp quyền thông báo → dòng đỏ + nút "Mở cài đặt" (thay Alert)</div>
+  <div class="lbl"><span class="badge gold">0.25.0 · "Thông báo khi đóng app": các trạng thái</span></div>
+  <div class="panel" style="padding:0">
+    <div class="mr" style="padding-top:10px;padding-bottom:10px"><div class="grow"><b class="t14">Tắt</b><div class="t12 c2 med">Chỉ nhắc khi app đang mở (như trước)</div></div><span class="sw"></span></div>
+    <div class="mr" style="padding-top:10px;padding-bottom:10px"><div class="grow"><b class="t14">"Nhắc nhở" đang tắt</b><div class="t12 cg med mt4">Bật "Nhắc nhở" trước để nhận thông báo.</div></div><span class="sw"></span></div>
+    <div class="mr" style="padding-top:10px;padding-bottom:10px"><div class="grow"><b class="t14">Thông báo bị chặn</b><div class="t12 cg med mt4">Thông báo đang bị chặn. Bật lại trong Cài đặt → Thông báo → FitJourney.</div></div><span class="sw"></span></div>
+  </div>
+  <div class="panel manaPanel mt8" style="padding:12px">
+    <div class="row gap10"><img src="../img/icon-192.png" style="width:40px;height:40px;border-radius:10px;flex:none"><div class="grow"><b class="t14">iPhone · đang mở trong tab Safari</b><div class="t12 c2 med">Bấm công tắc → hiện hướng dẫn, công tắc vẫn tắt</div></div></div>
+    <div class="t13 c3 med mt8" style="line-height:1.45">Trên iPhone: mở trang này bằng Safari, bấm Chia sẻ → "Thêm vào MH chính", rồi mở FitJourney từ biểu tượng trên màn hình chính và bật lại (cần iOS 16.4 trở lên).</div>
+    <div class="row gap6 mt10 t12 cm med wrap"><span class="chip s mana">① Chia sẻ ⬆</span><span>→</span><span class="chip s mana">② Thêm vào MH chính ⊞</span><span>→</span><span class="chip s mana">③ Mở FitJourney</span></div>
+  </div>
+  <div class="t12 c2 med mt6">Trình duyệt không hỗ trợ: "Trình duyệt này không hỗ trợ thông báo đẩy." · lỗi mạng: "Chưa bật được thông báo. Kiểm tra mạng rồi thử lại." · Lock screen: 46</div>
   <div class="row between mt16"><div><b class="t15">Thử thách cám dỗ</b><div class="t12 c2 med">Từ chối +15 XP · thua chỉ mất chuỗi</div></div><span class="sw on"></span></div>
   <div class="panel mt8" style="padding:12px">
     <div class="t12 c2 med">Độ khó</div><div class="seg mt6"><div>Dễ</div><div class="on">Khó (AI)</div></div>
@@ -26,6 +39,6 @@
     <div class="hl"><span>🧋</span><span class="grow">Trà sữa · hôm nay 15:20</span><span class="cx">đã kháng</span></div>
     <div class="hl"><span>🍜</span><span class="grow">Mì cay · CN 23:10</span><span class="chp">đã thua</span></div>
   </div>
-  <div class="note ok in"><b>Giữ</b> công tắc Nhắc nhở (xin quyền, web cũng bật được) và <b>TemptationSettings</b> đủ: bật / tắt, Dễ / Khó (AI) + giải thích, 1/3/5 lần, giờ yên tĩnh (sớm / muộn hơn), ghi chú 16:8, thành phố, thống kê, Thử ngay, Gần đây. Tắt → chỉ còn công tắc. <b>Mới</b>: công tắc riêng cho pop-up nước (trước dùng chung Nhắc nhở) — ⚠ cần chốt có tách không. Bản trùng "không hoạt động trên web" ở plan.tsx bỏ.</div>
+  <div class="note ok in"><b>Giữ</b> công tắc Nhắc nhở (xin quyền, web cũng bật được) và <b>TemptationSettings</b> đủ: bật / tắt, Dễ / Khó (AI) + giải thích, 1/3/5 lần, giờ yên tĩnh (sớm / muộn hơn), ghi chú 16:8, thành phố, thống kê, Thử ngay, Gần đây. Tắt → chỉ còn công tắc. <b>Mới</b>: công tắc riêng cho pop-up nước (trước dùng chung Nhắc nhở) — ⚠ cần chốt có tách không. Bản trùng "không hoạt động trên web" ở plan.tsx bỏ.<br><b>0.25.0:</b> công tắc <b>"Thông báo khi đóng app"</b> (chỉ bản web) ngay dưới Nhắc nhở: nước, giờ ăn, giờ tập được đẩy tới cả khi app đã đóng, tới mọi thiết bị đã bật. Cần "Nhắc nhở" bật. iPhone chỉ nhận khi mở app từ màn hình chính (iOS 16.4+), mở trong tab Safari thì hiện hướng dẫn thêm vào MH chính. Trong app, các ghi chú trạng thái là một dòng chữ vàng dưới công tắc; đề xuất giữ như vậy (lỗi quyền vẫn có nút "Mở cài đặt" như 43).</div>
 </div>
 </body></html>

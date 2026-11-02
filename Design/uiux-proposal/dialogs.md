@@ -4,6 +4,8 @@
 > Ảnh: `png/dialogs/NN-*.png` (rộng 390, chụp 2x, cả chiều dài). Tổng hợp: `dialogs-overview.png`. Mã HTML: `html/dialogs/`.
 > Trong mỗi ảnh, khung viền xanh lá ghi rõ: giữ gì, chức năng nào chuyển sang đâu.
 > Mockup đã cập nhật theo **0.23.0** (dòng "0.23.0:" trong khung xanh): hôm nay còn bữa chưa ăn thì thâm hụt là số dự kiến "~X" và đòn boss tuần "chờ chốt" (phần mờ trên thanh HP, nhiệm vụ Thâm hụt chưa xong), ngày cũ thiếu bữa có dòng ⚠ "Chưa ghi …" + nút Ghi bổ sung, chưa ghi bữa nào thì không có số. Ảnh đổi: 03, 09, 17, 18, 19, 20, 28, 33.
+> Mockup nay theo **0.25.0** (dòng "0.24.0:" / "0.25.0:" trong khung xanh). **0.24.0**: "Tôi không ăn sáng" (35), nút Bỏ bữa / Bỏ {bữa} + toast Hoàn tác (07, 28, 43), ngày thiếu bữa số xám + ⚠ trong danh sách và lịch tháng, hôm nay "~X kcal · dự kiến" (07, 28), bữa "Không ăn" từ nhật ký tính là đủ (28). **0.25.0**: công tắc "Thông báo khi đóng app" và các trạng thái (36), thông báo trên lock screen (46 mới). Thêm 47 (màn mở app). Ảnh đổi: 07 (màn chính), 28, 35, 36, 43, 46, 47.
+> **Chưa vẽ 0.26.0** (kho món cám dỗ, tìm quán theo đợt).
 
 Ký hiệu cột cuối: **✔** = đủ chức năng · **dời → …** = chức năng vẫn còn nhưng nằm ở chỗ khác · **⚠** = cần bạn chốt (xem cuối file).
 
@@ -61,7 +63,7 @@ Ký hiệu cột cuối: **✔** = đủ chức năng · **dời → …** = ch�
 
 | # | Hộp thoại / màn con | Mở từ (hiện tại) | Mở từ (thiết kế mới) | Mockup | Còn đủ? |
 |---|---|---|---|---|---|
-| 28 | Phần còn lại của Lịch sử (cảm giác, biểu đồ, mốc, danh sách ngày) | `(tabs)/history` (Hồ sơ) | Cuối Nhật ký › Tuần / Tháng | `28-journal-more` | ✔ |
+| 28 | Phần còn lại của Lịch sử (cảm giác, biểu đồ, mốc, danh sách ngày) | `(tabs)/history` (Hồ sơ) | Cuối Nhật ký › Tuần / Tháng | `28-journal-more` | ✔ · 0.24.0 |
 | 29 | Phân tích | `/insights` (Hồ sơ) | Nhật ký › Tháng › "Phân tích sâu ▸" | `29-insights` | ✔ · ⚠ Q8 |
 | 31 | Cân nặng (biểu đồ duy nhất + lần cân) | Tab Cân nặng; Bản đồ › Biểu đồ | Nhật ký › Tháng › Cân nặng; chip Cân nặng ở Hành trình | `31-weight-log` | ✔ · "Boss theo tuần" dời → Nhật ký › Tuần |
 
@@ -71,8 +73,8 @@ Ký hiệu cột cuối: **✔** = đủ chức năng · **dời → …** = ch�
 |---|---|---|---|---|---|
 | 33 | Mục tiêu & kế hoạch (mục tiêu, cơ thể / TDEE, ngày bắt đầu) | `(tabs)/plan`; `TdeeCard` ở Dinh dưỡng | Hồ sơ › Mục tiêu & kế hoạch | `33-settings-goals` | ✔ · bản trùng (ngôn ngữ, nhắc nhở, coach, đăng xuất) bỏ, còn ở 36 / 37 |
 | 34 | Thực đơn, đổi món, Trợ lý AI, đi chợ | `(tabs)/plan` (giữa trang); "Sửa bằng AI" ở Tập cũ | Mục tiêu & kế hoạch › Thực đơn / Đi chợ / Trợ lý AI | `34-plan-ai-shopping` | ✔ |
-| 35 | Nước uống · Giới hạn & 16:8 · ⓘ "Vì sao?" | Khối mở sẵn trong Hồ sơ | Hồ sơ › Nước uống; Hồ sơ › Giới hạn & 16:8 | `35-settings-water-limits` | ✔ · Axit uric dời vào đây |
-| 36 | Nhắc nhở & cám dỗ | Công tắc + `TemptationSettings` trong Hồ sơ; công tắc trùng ở Kế hoạch | Hồ sơ › Nhắc nhở & cám dỗ | `36-settings-reminders-tempt` | ✔ · ⚠ Q9 |
+| 35 | Nước uống · Giới hạn & 16:8 · ⓘ "Vì sao?" | Khối mở sẵn trong Hồ sơ | Hồ sơ › Nước uống; Hồ sơ › Giới hạn & 16:8 | `35-settings-water-limits` | ✔ · Axit uric dời vào đây · 0.24.0: Tôi không ăn sáng |
+| 36 | Nhắc nhở & cám dỗ | Công tắc + `TemptationSettings` trong Hồ sơ; công tắc trùng ở Kế hoạch | Hồ sơ › Nhắc nhở & cám dỗ | `36-settings-reminders-tempt` | ✔ · ⚠ Q9 · 0.25.0: Thông báo khi đóng app |
 | 37 | AI · Coach & tài khoản · xác nhận đăng xuất | Khối AI, Tài khoản & dữ liệu trong Hồ sơ; `AiUsageCard` | Hồ sơ › AI; Hồ sơ › Coach & tài khoản | `37-settings-ai-account` | ✔ · ⚠ Q10 |
 | 38 | Nhập nhật ký + xoá trước ngày | `/import-diary` (Hồ sơ) | Coach & tài khoản › Nhập nhật ký | `38-import-diary` | ✔ |
 | 39 | AI & chi phí (admin) | `/ai-admin` (Hồ sơ, chỉ admin) | Hồ sơ › AI › AI & chi phí | `39-ai-admin` | ✔ |
@@ -84,11 +86,13 @@ Ký hiệu cột cuối: **✔** = đủ chức năng · **dời → …** = ch�
 
 | # | Hộp thoại / màn con | Mở từ (hiện tại) | Mở từ (thiết kế mới) | Mockup | Còn đủ? |
 |---|---|---|---|---|---|
-| 43 | Xác nhận, xin quyền, toast, lỗi nhập, lỗi AI | `Alert.alert` (≈25 chỗ), `window.confirm`, `FlashNotice`, "bấm lần nữa để xoá" | Hộp trong app (chỉ khi không hoàn tác được), toast Hoàn tác, dòng đỏ dưới ô | `43-confirms-toasts` | ✔ (đổi hình thức) |
+| 43 | Xác nhận, xin quyền, toast, lỗi nhập, lỗi AI | `Alert.alert` (≈25 chỗ), `window.confirm`, `FlashNotice`, "bấm lần nữa để xoá" | Hộp trong app (chỉ khi không hoàn tác được), toast Hoàn tác, dòng đỏ dưới ô | `43-confirms-toasts` | ✔ (đổi hình thức) · 0.24.0: toast Bỏ bữa |
 | 44 | Màn Coach: học viên, tóm tắt AI, chi tiết, nhận xét | `(tabs)/clients`, `/client/[id]`, `/client-journal`, `/client-history`, `coach-account` | Như cũ; xem nhật ký học viên = tab Ngày / Tuần / Tháng chỉ xem | `44-coach` | ✔ |
 | 45 | Đăng nhập, chọn vai trò, bắt đầu 4 bước | `/auth`, `/role-select`, `/onboarding` | Như cũ | `45-onboarding-auth` | ✔ · ⚠ Q11 |
+| 46 | Thông báo khi đóng app (lock screen) | `send-push` + service worker `public/sw.js` (0.25.0, chỉ web) | Tự đến; bật ở Nhắc nhở & cám dỗ (36) | `46-push-notifications` | ✔ · mới 0.25.0 |
+| 47 | Màn mở app (splash + AppIntro) | splash hệ thống (`app.json`, `assets/splash-icon.png`) rồi `AppIntro` (`app/_layout.tsx`, tối thiểu 1,2 s) | Như cũ, ≤ 1,5 s chỉ khi khởi động lạnh | `47-splash` | ✔ (đổi cách chạy) |
 
-Tổng: **45 mockup** (01–45) + pop-up nước ở màn chính 09. Không có chức năng nào bị bỏ hẳn; những gì bỏ là **bản trùng** (công tắc, ngôn ngữ, đăng xuất ở Kế hoạch; chip −250/−500; 2 ô lặp trong check-in) và **màn cũ** (`today-classic`, `/journal`, `/text-meal`, `workout-classic`, tab Dinh dưỡng / Cân nặng / Lịch sử).
+Tổng: **47 mockup** (01–47) + pop-up nước ở màn chính 09. Không có chức năng nào bị bỏ hẳn; những gì bỏ là **bản trùng** (công tắc, ngôn ngữ, đăng xuất ở Kế hoạch; chip −250/−500; 2 ô lặp trong check-in) và **màn cũ** (`today-classic`, `/journal`, `/text-meal`, `workout-classic`, tab Dinh dưỡng / Cân nặng / Lịch sử).
 
 ## Đã chốt (2026-11-02)
 

@@ -1,0 +1,47 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Thông báo khi đóng app</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>
+.lock{margin:0 -16px;padding:18px 10px 26px;background:radial-gradient(120% 70% at 30% 10%,#3b2a7a 0,#1b1440 45%,#0d0a1d 100%);font-family:-apple-system,'SF Pro Text','Helvetica Neue',system-ui,sans-serif;color:#fff}
+.lock .date{text-align:center;font-size:19px;font-weight:600;opacity:.92}
+.lock .clock{text-align:center;font-size:86px;font-weight:700;line-height:1;letter-spacing:-1px;margin-top:2px}
+.nt{background:rgba(245,242,255,.2);backdrop-filter:blur(20px);border-radius:20px;padding:11px 13px;display:flex;gap:10px;margin-top:8px}
+.nt img{width:38px;height:38px;border-radius:9px;flex:none}
+.nt .h{display:flex;justify-content:space-between;gap:8px;font-size:15px;font-weight:600}
+.nt .h span{font-weight:400;font-size:13px;opacity:.7;white-space:nowrap}
+.nt .b{font-size:15px;line-height:1.3;font-weight:400;margin-top:1px}
+.stack{height:10px;margin:0 14px;border-radius:0 0 16px 16px;background:rgba(245,242,255,.12)}
+.lockfoot{display:flex;justify-content:space-between;padding:22px 34px 0}
+.lockfoot i{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:20px}
+.k{font-family:'Chakra Petch',sans-serif;font-size:11px;font-weight:600;color:var(--goldL);margin:10px 4px 0}
+</style></head><body>
+<div data-status="after"></div>
+<div class="screen" style="padding-top:0">
+  <div class="lock">
+    <div class="date">Thứ Hai, 2 tháng 11</div>
+    <div class="clock">17:05</div>
+    <div style="height:36px"></div>
+    <div class="k">tập · 17:00, ngày tập</div>
+    <div class="nt"><img src="../img/icon-192.png"><div class="grow"><div class="h">Đến giờ tập: Tập chiều - Cardio máy tập<span>5 phút trước</span></div><div class="b">25 phút đi bộ dốc Incline 10-12% (4.0 km/h) + 20 phút Elliptical hoặc xe đạp tựa lưng.</div></div></div>
+    <div class="k">nước · lỡ 13:30 và 17:00 → 1 tin</div>
+    <div class="nt"><img src="../img/icon-192.png"><div class="grow"><div class="h">Nhắc uống nước 💧<span>5 phút trước</span></div><div class="b">Uống 800 ml — Quanh giờ tập (cộng dồn 2000 ml).</div></div></div>
+    <div class="k">bữa · giờ bắt đầu</div>
+    <div class="nt"><img src="../img/icon-192.png"><div class="grow"><div class="h">Đến giờ Bữa 2 - Chiều (Trước tập)<span>2 giờ trước</span></div><div class="b">Mở app để xem thực đơn hôm nay và ghi nhận bữa ăn.</div></div></div>
+    <div class="stack"></div>
+    <div class="lockfoot"><i>🔦</i><i>📷</i></div>
+  </div>
+
+  <div class="panel mt12" style="padding:12px">
+    <b class="t15">Khi nào có thông báo</b>
+    <div class="t13 c3 med mt8" style="line-height:1.5">
+      <div>• Chỉ khi <b>Nhắc nhở</b> bật và <b>Thông báo khi đóng app</b> bật (36).</div>
+      <div class="mt4">• <span class="cm">Nước</span>: ở mỗi giờ uống chưa đạt. Lỡ nhiều lần → 1 tin, số ml = phần còn thiếu tới mốc mới nhất (2000 − 1200 đã uống). Đã uống đủ mốc thì không gửi. Tin nước mới thay tin nước cũ.</div>
+      <div class="mt4">• <span class="cg">Bữa</span>: giờ bắt đầu mỗi bữa, mỗi ngày. <span class="chp">Tập</span>: chỉ ngày tập, ở buổi có giờ nhắc.</div>
+      <div class="mt4">• Mỗi nhắc nhở <b>1 lần / ngày</b>, gửi tới <b>mọi thiết bị</b> đã bật; trễ quá 30′ (nước 2 giờ) thì bỏ.</div>
+      <div class="mt4">• Đang bật thông báo đẩy → trang web không tự hiện thông báo trình duyệt nữa (tránh trùng). Pop-up nước trong app (09) vẫn giữ.</div>
+      <div class="mt4">• iPhone: chỉ app mở từ màn hình chính, iOS 16.4+.</div>
+    </div>
+  </div>
+  <div class="note ok in"><b>0.25.0 (mới):</b> Web Push. Chữ trong thông báo đúng như app soạn: tiêu đề nước "Nhắc uống nước 💧", thân "Uống {ml} ml — {nhãn} (cộng dồn {tổng} ml)."; bữa "Đến giờ {tên bữa}" + "Mở app để xem thực đơn hôm nay và ghi nhận bữa ăn."; tập "Đến giờ tập: {tên buổi}" + mô tả buổi. Tên bữa / buổi lấy từ kế hoạch (ảnh dùng kế hoạch mặc định của app). Chạm thông báo mở app ở Trại. Khung lock screen, giờ "5 phút trước" và cách iOS xếp chồng là của hệ điều hành, vẽ minh hoạ.</div>
+</div>
+</body></html>
