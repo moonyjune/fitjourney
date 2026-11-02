@@ -336,6 +336,24 @@ describe('AI & cost screen', () => {
       expect(allText(r)).toContain('Giá không hợp lệ');
     });
 
+    it('per-feature models: shows the saved one and the default, sends only what changed', async () => {
+      mockSettings.mockResolvedValue({ model: 'claude-sonnet-5-5', price_in: '3', 'model.places': 'claude-opus-5-5' });
+      const r = await mount();
+      expect(input(r, 'Tìm quán (cheat day)').props.value).toBe('claude-opus-5-5');
+      expect(input(r, 'Kho món cám dỗ').props.placeholder).toBe('claude-haiku-5-5');
+      expect(input(r, 'Tìm quán (cheat day)').props.placeholder).toBe('Model chung ở trên');
+      await act(async () => input(r, 'Kiểm tra / tìm ảnh món').props.onChangeText('claude-sonnet-5-5'));
+      await act(async () => input(r, 'Tìm quán (cheat day)').props.onChangeText(''));
+      await act(async () => saveButton(r).props.onPress());
+      expect(mockSave.mock.calls.slice(3)).toEqual([
+        ['model.places', ''],
+        ['model.photo', 'claude-sonnet-5-5'],
+      ]);
+      mockSave.mockClear();
+      await act(async () => saveButton(r).props.onPress());
+      expect(mockSave.mock.calls).toHaveLength(3);
+    });
+
     it('says why when the server refuses, and when the settings cannot be read', async () => {
       mockSave.mockResolvedValue({ ok: false, message: 'Không có quyền đổi.' });
       const r = await mount();

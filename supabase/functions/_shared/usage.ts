@@ -75,6 +75,41 @@ export function resolveAiConfig(
   };
 }
 
+/** List prices (USD per million input / output tokens, prompts up to 100K) of the models the app may use, for a call made with a
+ *  feature's own model (`model.<group>`) that is not the global one, whose prices are the admin's. */
+export const MODEL_PRICES: Partial<Record<string, { in: number; out: number }>> = {
+  'claude-sonnet-5-5': { in: 2, out: 10 },
+  'claude-opus-5-5': { in: 4, out: 20 },
+  'claude-haiku-5-5': { in: 0.1, out: 0.5 },
+  'claude-fable-5-1': { in: 10, out: 50 },
+};
+
+/** Features that may run on their own model (ai_settings key `model.<group>`), and the model each uses when none is saved (null:
+ *  the global model). `photo` covers the dish photo checks (dish-photo, the temptation pool's pictures) and the pool's web photo search. */
+export const MODEL_GROUPS = ['places', 'tempt', 'photo'] as const;
+export type ModelGroup = (typeof MODEL_GROUPS)[number];
+export const GROUP_DEFAULT_MODEL: Record<ModelGroup, string | null> = { places: null, tempt: 'claude-haiku-5-5', photo: 'claude-haiku-5-5' };
+export const modelKey = (group: ModelGroup): string => `model.${group}`;
+
+/** The group whose model a feature's calls use, or null (the global model). */
+export function modelGroupOf(feature: AiFeature): ModelGroup | null {
+  if (feature === 'places') return 'places';
+  if (feature === 'tempt') return 'tempt';
+  if (feature === 'dishphoto') return 'photo';
+  return null;
+}
+
+/** The model and prices of one feature: its group's saved model (`model.<group>`), else the group's default, else the global
+ *  config. A model other than the global one is priced from MODEL_PRICES (unknown: the global prices). */
+export function featureConfig(global: AiConfig, rows: { key: string; value: string }[] | null | undefined, group: ModelGroup | null): AiConfig {
+  if (!group) return global;
+  const saved = (rows ?? []).find((r) => r.key === modelKey(group))?.value?.trim();
+  const model = isModelId(saved) ? saved : (GROUP_DEFAULT_MODEL[group] ?? global.model);
+  if (model === global.model) return global;
+  const price = MODEL_PRICES[model];
+  return { model, priceInPerMtok: price?.in ?? global.priceInPerMtok, priceOutPerMtok: price?.out ?? global.priceOutPerMtok };
+}
+
 /** Estimated dollars for one call from the `usage` block of the API response, web searches included. Rounded to 1e-6. */
 export function estimateCostUsd(usage: TokenUsage | undefined, priceInPerMtok: number, priceOutPerMtok: number): number {
   const cost =

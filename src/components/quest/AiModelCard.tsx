@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { checkModel, checkPrice, forecastPerUser, MODEL_PRESETS, PRESET_PRICES, pricingFrom } from '../../ai/aiSettings';
+import { GROUP_DEFAULT_MODEL, MODEL_GROUPS, modelKey, type ModelGroup } from '../../../supabase/functions/_shared/usage';
 import { tokensText, usdText } from './AiUsageCard';
 import type { AiDayTotal } from '../../sync/cloudSync';
 import { useGameText } from '../../game/strings';
@@ -18,6 +19,9 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
   const [priceIn, setPriceIn] = useState('');
   const [priceOut, setPriceOut] = useState('');
   const [busy, setBusy] = useState(false);
+  // Per-feature models (0.26.4): what was loaded, and what is typed now. Empty = the feature's default.
+  const [groupSaved, setGroupSaved] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '' });
+  const [groupModel, setGroupModel] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '' });
   const pricing = pricingFrom(model, priceIn, priceOut);
   const forecast = pricing && usage ? forecastPerUser(usage, pricing) : null;
   const [message, setMessage] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
@@ -33,6 +37,9 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
       setModel(s.model ?? '');
       setPriceIn(s.price_in ?? '');
       setPriceOut(s.price_out ?? '');
+      const groups = Object.fromEntries(MODEL_GROUPS.map((k) => [k, s[modelKey(k)] ?? ''])) as Record<ModelGroup, string>;
+      setGroupSaved(groups);
+      setGroupModel(groups);
       setLoaded('ready');
     });
     return () => {
@@ -47,9 +54,12 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
     const po = checkPrice(priceOut);
     if (!m.ok) return setMessage({ kind: 'bad', text: g('aiModel.badModel') });
     if (!pi.ok || !po.ok) return setMessage({ kind: 'bad', text: g('aiModel.badPrice') });
+    const groupChecks = MODEL_GROUPS.map((k) => [k, checkModel(groupModel[k])] as const);
+    if (groupChecks.some(([, c]) => !c.ok)) return setMessage({ kind: 'bad', text: g('aiModel.badModel') });
+    const changedGroups = groupChecks.flatMap(([k, c]) => (c.ok && c.value !== groupSaved[k] ? [[modelKey(k) as 'model.places' | 'model.tempt' | 'model.photo', c.value] as const] : []));
     setBusy(true);
     setMessage(null);
-    for (const [key, value] of [['model', m.value], ['price_in', pi.value], ['price_out', po.value]] as const) {
+    for (const [key, value] of [['model', m.value], ['price_in', pi.value], ['price_out', po.value], ...changedGroups] as const) {
       const result = await saveAiSetting(key, value);
       if (!result.ok) {
         setBusy(false);
@@ -60,6 +70,10 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
     setModel(m.value);
     setPriceIn(pi.value);
     setPriceOut(po.value);
+    const nextGroups = { ...groupSaved };
+    for (const [key, value] of changedGroups) nextGroups[key.slice(6) as ModelGroup] = value;
+    setGroupSaved(nextGroups);
+    setGroupModel(nextGroups);
     setMessage({ kind: 'ok', text: g('aiModel.saved') });
   }
 
@@ -163,6 +177,32 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
           <HudText size={11} weight="medium" color={quest.textSecondary}>
             {g('aiModel.priceHint')}
           </HudText>
+          <HudText size={13} color={quest.manaText}>
+            {g('aiModel.groupsTitle')}
+          </HudText>
+          <HudText size={11} weight="medium" color={quest.textSecondary}>
+            {g('aiModel.groupsHint')}
+          </HudText>
+          {MODEL_GROUPS.map((k) => (
+            <View key={k} style={styles.price}>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {g(`aiModel.group.${k}`)}
+              </HudText>
+              <TextInput
+                accessibilityLabel={g(`aiModel.group.${k}`)}
+                value={groupModel[k]}
+                onChangeText={(t) => {
+                  setGroupModel((prev) => ({ ...prev, [k]: t }));
+                  setMessage(null);
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                placeholder={GROUP_DEFAULT_MODEL[k] ?? g('aiModel.groupGlobal')}
+                placeholderTextColor={quest.textSecondary}
+                style={styles.input}
+              />
+            </View>
+          ))}
           <View style={styles.forecast} accessibilityLabel={g('aiModel.forecastTitle')}>
             <HudText size={13} color={quest.manaText}>
               {g('aiModel.forecastTitle')}

@@ -37,7 +37,14 @@ import {
   REFILL_BELOW,
   unseenFitting,
   weatherTagsOf,
+  cleanWebPhotoPages,
   MAX_PHOTO_TRIES,
+  photoStage,
+  poolAnswerShape,
+  poolItemsOf,
+  webPhotoPrompt,
+  WEB_PHOTO_TOOL,
+  withWebPhoto,
   needsPhoto,
   photoQueue,
   poolSeedStatus,
@@ -51,6 +58,7 @@ import {
   type TemptRequest,
 } from '../../../supabase/functions/_shared/tempt';
 import { itemFromAi } from '../../temptation/item';
+import { featureConfig, MODEL_PRICES, modelGroupOf } from '../../../supabase/functions/_shared/usage';
 
 // ----- places: one big search, served page by page -----
 
@@ -308,7 +316,8 @@ describe('temptations: the shared pool (0.26)', () => {
 
   it('plans a refill of ~200 items in a few calls, one with the web, and guards it in time', () => {
     expect(POOL_CHUNKS.reduce((n, c) => n + c.count, 0)).toBeGreaterThanOrEqual(POOL_TARGET);
-    expect(POOL_CHUNKS.length).toBeLessThanOrEqual(4);
+    expect(POOL_CHUNKS.length).toBeLessThanOrEqual(7);
+    POOL_CHUNKS.filter((c) => !c.web).forEach((c) => expect(c.count).toBeLessThanOrEqual(30));
     expect(POOL_CHUNKS.filter((c) => c.web)).toHaveLength(1);
     const p = poolPrompt(POOL_CHUNKS[0], '2026-11-04', ['Bánh mì chảo']);
     expect(p).toContain('tối đa 2 lần tìm kiếm web');
@@ -346,15 +355,17 @@ describe('temptations: seeded once with real photos (0.26.2)', () => {
     expect(got.imageUrl).toBe(wiki.url);
     expect(got.photo).toEqual({ url: wiki.url, pageUrl: wiki.sourceUrl, credit: 'An · CC BY-SA 4.0 · Wikimedia' });
     expect(got.photoTries).toBeUndefined();
-    expect(withDishPhoto(item, null).noPhoto).toBe(true);
+    // Not in the libraries: the web search is next, it is not "no photo" yet.
+    expect(withDishPhoto(item, null)).toMatchObject({ libraryNone: true });
+    expect(withDishPhoto(item, null).noPhoto).toBeUndefined();
     let tried = item;
     for (let i = 0; i < MAX_PHOTO_TRIES; i++) tried = withDishPhoto(tried, undefined);
-    expect(tried).toMatchObject({ photoTries: MAX_PHOTO_TRIES, noPhoto: true });
-    expect(withDishPhoto(item, undefined).noPhoto).toBeUndefined();
+    expect(tried).toMatchObject({ photoTries: MAX_PHOTO_TRIES, libraryNone: true });
+    expect(withDishPhoto(item, undefined).libraryNone).toBeUndefined();
     // Kept through the store.
     const back = cleanStoredPoolItem(JSON.parse(JSON.stringify(got)))!;
     expect(back.photo).toEqual(got.photo);
-    expect(cleanStoredPoolItem(JSON.parse(JSON.stringify(withDishPhoto(item, null))))!.noPhoto).toBe(true);
+    expect(cleanStoredPoolItem(JSON.parse(JSON.stringify(withDishPhoto(item, null))))!.libraryNone).toBe(true);
   });
 
   it('serves items with a photo first, the others only when none fits', () => {
@@ -391,5 +402,70 @@ describe('temptations: seeded once with real photos (0.26.2)', () => {
     expect(item.imageUrl).toBe(wiki.url);
     expect(item.photo).toMatchObject({ pageUrl: wiki.sourceUrl, credit: 'An · CC BY-SA 4.0 · Wikimedia' });
     expect(itemFromAi({ ...answer, imageUrl: undefined })!.photo).toBeUndefined();
+  });
+});
+
+describe('temptations: answers without a list, web photos, per-feature models (0.26.4)', () => {
+  it('finds the list however the model gave it, and says what it looked like', () => {
+    const one = { name: 'Xôi gà', pitch: 'Thơm phức' };
+    expect(poolItemsOf({ items: [one] })).toEqual([one]);
+    expect(poolItemsOf({ items: JSON.stringify([one]) })).toEqual([one]);
+    expect(poolItemsOf([one])).toEqual([one]);
+    expect(poolItemsOf({ items: { items: [one] } })).toEqual([one]);
+    expect(poolItemsOf({})).toEqual([]);
+    expect(poolItemsOf({ items: '[{"name": "cut' })).toEqual([]);
+    expect(newPoolItems({ items: JSON.stringify([one]) }, () => false, new Set()).map((i) => i.name)).toEqual(['Xôi gà']);
+    expect(poolAnswerShape({}, 'max_tokens')).toEqual({ stop: 'max_tokens', keys: [], items: 'undefined', parsed: 0 });
+    expect(poolAnswerShape({ items: JSON.stringify([one]) }, 'tool_use')).toMatchObject({ items: expect.stringMatching(/^string/), parsed: 1 });
+  });
+
+  it('looks for a picture in order: source page, photo libraries, the web; "no photo" only after the web', () => {
+    const plain = poolItem('Bánh tráng nướng');
+    expect(photoStage({ ...plain, sourceUrl: 'https://a.vn/x' })).toBe('source');
+    expect(photoStage(plain)).toBe('library');
+    const notInLibrary = withDishPhoto(plain, null);
+    expect(photoStage(notInLibrary)).toBe('web');
+    const failed = withWebPhoto(notInLibrary, null);
+    expect(failed).toMatchObject({ webPhotoTried: true, noPhoto: true });
+    expect(photoStage(failed)).toBeNull();
+    const found = withWebPhoto(notInLibrary, { pageUrl: 'https://www.monngon.vn/banh-trang-nuong', imageUrl: 'https://cdn.monngon.vn/btn.jpg' });
+    expect(found).toMatchObject({ imageUrl: 'https://cdn.monngon.vn/btn.jpg', photo: { credit: 'monngon.vn' }, webPhotoTried: true });
+    expect(found.noPhoto).toBeUndefined();
+    expect(photoStage(found)).toBeNull();
+    // An item marked "no photo" before 0.26.4 gets the web search once.
+    const old = cleanStoredPoolItem({ ...plain, noPhoto: true })!;
+    expect(old.noPhoto).toBeUndefined();
+    expect(photoStage(old)).toBe('web');
+    expect(cleanStoredPoolItem(JSON.parse(JSON.stringify(failed)))!.noPhoto).toBe(true);
+  });
+
+  it('asks the web for a page per dish and keeps only pages the search showed', () => {
+    const p = webPhotoPrompt(['Phở bò', 'Trà sữa']);
+    expect(p).toContain('1. <dish>Phở bò</dish>');
+    expect(p).toContain(WEB_PHOTO_TOOL.name);
+    const seen = (u: string) => u.startsWith('https://seen.vn/');
+    const pages = cleanWebPhotoPages(
+      { pages: [{ n: 1, url: 'https://seen.vn/pho' }, { n: 2, url: 'https://made.up/tra' }, { n: 1, url: 'https://seen.vn/other' }, { n: 9, url: 'https://seen.vn/x' }] },
+      2,
+      seen
+    );
+    expect(pages).toEqual(['https://seen.vn/pho', null]);
+  });
+});
+
+describe('per-feature models (0.26.4)', () => {
+  const global = { model: 'claude-sonnet-5-5', priceInPerMtok: 3, priceOutPerMtok: 15 };
+  it('runs the pool and the photo checks on Haiku by default, places on the global model, and prices Haiku from the list', () => {
+    expect(featureConfig(global, [], modelGroupOf('tempt'))).toEqual({ model: 'claude-haiku-5-5', priceInPerMtok: 0.1, priceOutPerMtok: 0.5 });
+    expect(featureConfig(global, [], modelGroupOf('dishphoto')).model).toBe('claude-haiku-5-5');
+    expect(featureConfig(global, [], modelGroupOf('places'))).toBe(global);
+    expect(featureConfig(global, [], modelGroupOf('photo'))).toBe(global);
+    expect(featureConfig(global, [{ key: 'model.places', value: 'claude-haiku-5-5' }], 'places').model).toBe('claude-haiku-5-5');
+    // Set to the global model: the admin's prices.
+    expect(featureConfig(global, [{ key: 'model.tempt', value: 'claude-sonnet-5-5' }], 'tempt')).toBe(global);
+    // An unknown model keeps the global prices; a bad id is ignored.
+    expect(featureConfig(global, [{ key: 'model.photo', value: 'claude-new-9' }], 'photo')).toEqual({ model: 'claude-new-9', priceInPerMtok: 3, priceOutPerMtok: 15 });
+    expect(featureConfig(global, [{ key: 'model.photo', value: 'Bad!' }], 'photo').model).toBe('claude-haiku-5-5');
+    expect(MODEL_PRICES['claude-haiku-5-5']).toEqual({ in: 0.1, out: 0.5 });
   });
 });

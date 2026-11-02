@@ -26,6 +26,8 @@ import {
   budgetReached,
   dayKey,
   estimateCostUsd,
+  featureConfig,
+  modelGroupOf,
   quotaFrom,
   quotaKey,
   quotaMessage,
@@ -61,21 +63,22 @@ const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const ENV_CONFIG = { model: Deno.env.get('AI_MODEL') ?? undefined, priceIn: Deno.env.get('AI_PRICE_IN_PER_MTOK') ?? undefined, priceOut: Deno.env.get('AI_PRICE_OUT_PER_MTOK') ?? undefined };
 const CONFIG_TTL_MS = 30_000;
-let configCache: { at: number; config: AiConfig } | null = null;
+let configCache: { at: number; config: AiConfig; rows: { key: string; value: string }[] } | null = null;
 
-/** The model and prices in force: the admin's saved choice (ai_settings), else the environment. Read at most every 30 s per instance. */
-async function loadConfig(admin: SupabaseClient): Promise<AiConfig> {
-  if (configCache && Date.now() - configCache.at < CONFIG_TTL_MS) return configCache.config;
-  let rows: { key: string; value: string }[] | null = null;
-  try {
-    const { data } = await admin.from('ai_settings').select('key,value');
-    rows = data;
-  } catch (error) {
-    console.warn('[ai] settings not read, using the environment:', error);
+/** The model and prices in force for `feature`: the admin's saved choice (ai_settings), else the environment; a feature with its own
+ *  model (`model.<group>`, see featureConfig) gets that one. Read at most every 30 s per instance. */
+async function loadConfig(admin: SupabaseClient, feature?: AiFeature): Promise<AiConfig> {
+  if (!configCache || Date.now() - configCache.at >= CONFIG_TTL_MS) {
+    let rows: { key: string; value: string }[] | null = null;
+    try {
+      const { data } = await admin.from('ai_settings').select('key,value');
+      rows = data;
+    } catch (error) {
+      console.warn('[ai] settings not read, using the environment:', error);
+    }
+    configCache = { at: Date.now(), config: resolveAiConfig(rows, ENV_CONFIG), rows: rows ?? [] };
   }
-  const config = resolveAiConfig(rows, ENV_CONFIG);
-  configCache = { at: Date.now(), config };
-  return config;
+  return feature ? featureConfig(configCache.config, configCache.rows, modelGroupOf(feature)) : configCache.config;
 }
 let quotaCache: { at: number; rows: { key: string; value: unknown }[] } | null = null;
 
@@ -209,7 +212,7 @@ const MAX_TOOL_CONTINUATIONS = 2;
 async function callClaude(
   call: AiCall,
   model: string
-): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; web: WebOutcome } | { error: string; status: number }> {
+): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; web: WebOutcome; stopReason?: string } | { error: string; status: number }> {
   let serverTools = call.serverTools ? call.serverTools(model) : [];
   const web: WebOutcome = { offered: serverTools.length > 0, available: serverTools.length > 0, searches: 0, evidence: emptyEvidence() };
   let messages = call.messages;
@@ -274,7 +277,7 @@ async function callClaude(
       }
       web.searches = searches;
       const usage: TokenUsage = { input_tokens: inTokens, output_tokens: outTokens, ...(searches > 0 ? { server_tool_use: { web_search_requests: searches } } : {}) };
-      return { input: toolUse.input as Record<string, unknown>, usage, web };
+      return { input: toolUse.input as Record<string, unknown>, usage, web, stopReason: data.stop_reason };
     }
     const retryable = response === null || shouldRetry(response.status);
     if (response) {
@@ -329,7 +332,7 @@ const searchThenReport = (toolName: string) =>
 async function callClaudeWithSearch(
   call: AiCall,
   model: string
-): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings } | { error: string; status: number }> {
+): Promise<{ input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings; stopReason?: string } | { error: string; status: number }> {
   const started = Date.now();
   // withLocation only when there is a location left to send (VN is never sent), so a refusal is not retried for nothing.
   let how: WebSearchAttempt = { variant: webSearchVariantFor(model), withLocation: searchLocation(call.webSearch!.userLocation) !== null };
@@ -388,7 +391,7 @@ async function callClaudeWithSearch(
     usage = addUsage(usage, data.usage);
     findings.push(collectWebFindings(blocks));
     const toolUse = blocks.find((b) => b.type === 'tool_use' && b.name === call.tool.name);
-    if (toolUse) return { input: toolUse.input as Record<string, unknown>, usage, findings: mergeFindings(findings) };
+    if (toolUse) return { input: toolUse.input as Record<string, unknown>, usage, findings: mergeFindings(findings), stopReason: data.stop_reason };
     if (data.stop_reason === 'pause_turn' && continuations < MAX_CONTINUATIONS) {
       // Send the paused turn back unchanged; the API resumes it.
       continuations++;
@@ -425,7 +428,7 @@ export async function aiAllowance(ctx: AiContext, feature: AiFeature): Promise<{
 
 /** What one call gave: the tool input, the usage, and what the web showed (`findings` of a `webSearch` call, `web` of a
  *  `serverTools` call). */
-export type AiCallResult = { input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings | null; web?: WebOutcome };
+export type AiCallResult = { input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings | null; web?: WebOutcome; model: string; stopReason?: string };
 
 /** One Claude call, made and logged (under `feature`, for this user) the way serveAi makes its call. No quota or budget check: the
  *  caller asks `aiAllowance` first. For a function that makes several calls in one request (tempt-me's bulk refill). */
@@ -440,12 +443,12 @@ export async function runAiCall(
   } = {}
 ): Promise<AiCallResult | { error: string; status: number }> {
   if (!ANTHROPIC_API_KEY) return { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.', status: 500 };
-  const config = await loadConfig(ctx.admin);
+  const config = await loadConfig(ctx.admin, feature);
   const outcome = call.webSearch ? await callClaudeWithSearch(call, config.model) : await callClaude(call, config.model);
   if ('error' in outcome) return outcome;
   if (opts.record) await opts.record(outcome.usage, estimateCostUsd(outcome.usage, config.priceInPerMtok, config.priceOutPerMtok), config.model).catch((e) => console.warn('[ai] usage not recorded:', e));
   else await recordUsage(ctx.admin, ctx.userId, feature, outcome.usage, config);
-  return { input: outcome.input, usage: outcome.usage, findings: 'findings' in outcome ? outcome.findings : null, web: 'web' in outcome ? outcome.web : undefined };
+  return { input: outcome.input, usage: outcome.usage, findings: 'findings' in outcome ? outcome.findings : null, web: 'web' in outcome ? outcome.web : undefined, model: config.model, stopReason: outcome.stopReason };
 }
 
 /** Wraps a feature: `plan` receives the parsed JSON body and the context, and returns the Claude call (or a Response). */

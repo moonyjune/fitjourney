@@ -1225,7 +1225,7 @@ export async function fetchAiSettings(): Promise<Record<string, string> | null> 
 }
 
 /** Saves one AI setting (admins only; the server checks and validates). An empty value clears it, back to the server's own setting. */
-export async function saveAiSetting(key: 'model' | 'price_in' | 'price_out', value: string): Promise<{ ok: true } | { ok: false; message: string }> {
+export async function saveAiSetting(key: 'model' | 'price_in' | 'price_out' | 'model.places' | 'model.tempt' | 'model.photo', value: string): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
     const { error } = await supabase.rpc('ai_admin_set_setting', { p_key: key, p_value: value });
     if (error) throw error;

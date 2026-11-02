@@ -525,6 +525,11 @@ create table if not exists public.ai_settings (
 );
 alter table public.ai_settings enable row level security;
 revoke all on public.ai_settings from public, anon, authenticated;
+-- 0.26.4: model riêng cho từng nhóm tính năng (model.places = Tìm quán, model.tempt = kho cám dỗ, model.photo = kiểm tra / tìm ảnh món).
+-- Không đặt thì: places dùng model chung; tempt và photo dùng claude-haiku-5-5 (giá tính theo bảng MODEL_PRICES trong _shared/usage.ts).
+alter table public.ai_settings drop constraint if exists ai_settings_key_check;
+alter table public.ai_settings add constraint ai_settings_key_check
+  check (key in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo'));
 
 create or replace function public.ai_admin_get_settings()
 returns table (key text, value text)
@@ -554,14 +559,14 @@ begin
   if not public.is_ai_admin() then
     raise exception 'Không có quyền đổi.';
   end if;
-  if p_key not in ('model', 'price_in', 'price_out') then
+  if p_key not in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo') then
     raise exception 'Cài đặt không hợp lệ.';
   end if;
   if v = '' then
     delete from public.ai_settings where key = p_key;
     return;
   end if;
-  if p_key = 'model' and v !~ '^[a-z0-9][a-z0-9._-]{2,59}$' then
+  if p_key like 'model%' and v !~ '^[a-z0-9][a-z0-9._-]{2,59}$' then
     raise exception 'Tên model không hợp lệ.';
   end if;
   if p_key in ('price_in', 'price_out') and (v !~ '^[0-9]+(\.[0-9]+)?$' or v::numeric > 1000) then

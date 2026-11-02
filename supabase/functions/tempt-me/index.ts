@@ -23,6 +23,9 @@
 // the anon key as Bearer). Each call does one step and says where it stands ({ total, withPhoto, missingPhoto, remaining, done }):
 // first the generation of ~200 items (the refill calls at once), then pictures for up to 30 items per call. Call it until `done`.
 // Its cost is added to tempt_pool_meta.system_cost_usd (tempt_pool_add_cost), never to a player's usage or budget.
+// 0.26.4: the pool calls and the photo checks / web photo search run on the `tempt` / `photo` model (ai_settings model.tempt /
+// model.photo, default claude-haiku-5-5). After the libraries, a web search (3 searches per 8 dishes) finds a page showing the dish
+// and its og:image is used; "no photo" only after that.
 // Without the tables (schema.sql not run yet) the function answers the old way: one AI call with up to 2 searches and 1 fetch.
 // Cost: a refill ~$0.5 (logged under the feature `tempt` for the player who triggered it); a pop-up from the pool $0.
 // Calls per user per day: app_settings key `ai_quota.tempt` (default 6; a refill counts its calls).
@@ -43,8 +46,18 @@ import {
   POOL_CHUNKS,
   POOL_SYSTEM,
   POOL_TOOL,
+  cleanWebPhotoPages,
   needsPhoto,
   photoQueue,
+  photoStage,
+  poolAnswerShape,
+  poolItemsOf,
+  WEB_PHOTO_GROUP,
+  WEB_PHOTO_SEARCHES,
+  WEB_PHOTO_SYSTEM,
+  WEB_PHOTO_TOOL,
+  webPhotoPrompt,
+  withWebPhoto,
   POPUP_PHOTOS,
   poolAnswer,
   poolNameKey,
@@ -193,30 +206,37 @@ async function finishRefill(admin: SupabaseClient, added: number): Promise<void>
 const refillNotes: Record<string, unknown>[] = [];
 
 async function refillChunk(ctx: AiContext, chunk: PoolChunk, known: Set<string>, knownNames: string[], date: string, record?: Record_): Promise<PoolRow[]> {
-  const outcome = await runAiCall(
-    ctx,
-    'tempt',
-    {
-      tool: POOL_TOOL,
-      system: POOL_SYSTEM,
-      maxTokens: 14000,
-      attemptTimeoutMs: REFILL_CALL_MS,
-      messages: [{ role: 'user', content: `<request>${poolPrompt(chunk, date, knownNames)}</request>` }],
-      ...(chunk.web ? { serverTools: (model: string) => webToolsFor(model, { maxSearches: 2, maxFetches: 0 }) } : {}),
-    },
-    { record }
-  );
-  if ('error' in outcome) {
-    console.warn('[tempt-me] refill call failed:', chunk.id, outcome.error);
-    refillNotes.push({ chunk: chunk.id, error: String(outcome.error).slice(0, 300) });
-    return [];
-  }
-  const evidence = outcome.web?.evidence;
-  const items = newPoolItems(outcome.input, (url) => !!evidence && seenInEvidence(url, evidence), known, chunk.count + 5);
-  const rawItems = (outcome.input as { items?: unknown } | null)?.items;
-  const note: Record<string, unknown> = { chunk: chunk.id, raw: Array.isArray(rawItems) ? rawItems.length : typeof rawItems, kept: items.length };
-  if (Array.isArray(rawItems) && rawItems.length > 0 && items.length === 0) note.sample = JSON.stringify(rawItems[0]).slice(0, 400);
+  const note: Record<string, unknown> = { chunk: chunk.id };
   refillNotes.push(note);
+  let items: TemptPoolItem[] = [];
+  // An answer with no list (cut short, or the list not given as one) is asked once more.
+  for (let attempt = 0; attempt < 2 && items.length === 0; attempt++) {
+    const outcome = await runAiCall(
+      ctx,
+      'tempt',
+      {
+        tool: POOL_TOOL,
+        system: POOL_SYSTEM,
+        maxTokens: 16000,
+        attemptTimeoutMs: REFILL_CALL_MS,
+        messages: [{ role: 'user', content: `<request>${poolPrompt(chunk, date, knownNames)}</request>` }],
+        ...(chunk.web ? { serverTools: (model: string) => webToolsFor(model, { maxSearches: 2, maxFetches: 0 }) } : {}),
+      },
+      { record }
+    );
+    if ('error' in outcome) {
+      console.warn('[tempt-me] refill call failed:', chunk.id, outcome.error);
+      note[`try${attempt + 1}`] = { error: String(outcome.error).slice(0, 300) };
+      break;
+    }
+    const evidence = outcome.web?.evidence;
+    const raw = poolItemsOf(outcome.input);
+    items = newPoolItems(outcome.input, (url) => !!evidence && seenInEvidence(url, evidence), known, chunk.count + 5);
+    note[`try${attempt + 1}`] = { model: outcome.model, ...poolAnswerShape(outcome.input, outcome.stopReason), kept: items.length };
+    if (raw.length > 0 && items.length === 0) note.sample = JSON.stringify(raw[0]).slice(0, 300);
+    // A list whose names are all known already is not worth asking again.
+    if (raw.length > 0) break;
+  }
   if (items.length === 0) return [];
   const { data, error } = await ctx.admin
     .from(POOL)
@@ -273,32 +293,63 @@ async function saveItem(admin: SupabaseClient, id: string, item: TemptPoolItem):
   if (error) console.warn('[tempt-me] pool item not saved:', JSON.stringify(error));
 }
 
-/** Real pictures for up to `max` rows without one (the newest first): the source page's og:image for a web item, then the dish-photo
- *  search and check (6 dishes per check, the checks at once), each row saved as soon as it is decided. Calls are logged on the pool.
- *  Stops waiting after `budgetMs` (what is not decided by then is looked for next time). The number of rows decided. */
+/** The web photo search for up to WEB_PHOTO_GROUP rows: one call (up to 3 searches) for a page showing each dish, then each page's
+ *  og:image read here. Every row is saved (a photo, or "no photo" for good). */
+async function webPhotos(admin: SupabaseClient, group: PoolRow[], record: Record_): Promise<void> {
+  const outcome = await runAiCall(
+    systemContext(admin),
+    'dishphoto',
+    {
+      tool: WEB_PHOTO_TOOL,
+      system: WEB_PHOTO_SYSTEM,
+      maxTokens: 3000,
+      attemptTimeoutMs: 90_000,
+      messages: [{ role: 'user', content: `<request>${webPhotoPrompt(group.map((r) => r.item.name))}</request>` }],
+      serverTools: (model: string) => webToolsFor(model, { maxSearches: WEB_PHOTO_SEARCHES, maxFetches: 0 }),
+    },
+    { record }
+  );
+  if ('error' in outcome) {
+    // Not decided: tried again by a later step.
+    console.warn('[tempt-me] web photo search failed:', outcome.error);
+    return;
+  }
+  const evidence = outcome.web?.evidence;
+  const pages = cleanWebPhotoPages(outcome.input, group.length, (url) => !!evidence && seenInEvidence(url, evidence));
+  await Promise.all(
+    group.map(async (row, i) => {
+      const page = pages[i];
+      const imageUrl = page ? await ogImageOf(page) : null;
+      await saveItem(admin, row.id, withWebPhoto(row.item, page && imageUrl ? { pageUrl: page, imageUrl } : null));
+    })
+  );
+}
+
+/** Real pictures for up to `max` rows without one (the newest first), each row saved as soon as it is decided: a web item's source
+ *  page og:image; then the photo libraries + the model's check (6 dishes per check); then, for what the libraries do not have, a web
+ *  search for a page showing the dish and that page's og:image (8 dishes per search call). All at once, calls logged on the pool.
+ *  Stops waiting after `budgetMs` (what is not decided by then is looked for next time). The number of rows worked on. */
 async function backfillPhotos(admin: SupabaseClient, rows: PoolRow[], max: number, budgetMs: number): Promise<number> {
   const queue = photoQueue(rows, max);
   if (queue.length === 0) return 0;
-  let decided = 0;
+  const ctx = systemContext(admin);
+  const record = systemRecord(admin);
   const work = (async () => {
     // 1. Web items: their page's picture (no tokens).
-    const afterOg = await Promise.all(
+    const afterSource = await Promise.all(
       queue.map(async (row) => {
-        if (!row.item.sourceUrl || row.item.imageChecked) return row;
-        const item = withOgImage(row.item, await ogImageOf(row.item.sourceUrl));
+        if (photoStage(row.item) !== 'source') return row;
+        const item = withOgImage(row.item, await ogImageOf(row.item.sourceUrl!));
         await saveItem(admin, row.id, item);
-        if (item.imageUrl) decided++;
         return { ...row, item };
       })
     );
-    // 2. The rest: a real photo of the dish, checked by the model, 6 dishes per check.
-    const left = afterOg.filter((r) => needsPhoto(r.item));
-    const groups: PoolRow[][] = [];
-    for (let i = 0; i < left.length; i += 6) groups.push(left.slice(i, i + 6));
-    const ctx = systemContext(admin);
-    const record = systemRecord(admin);
-    await Promise.all(
-      groups.map(async (group) => {
+    const library = afterSource.filter((r) => photoStage(r.item) === 'library');
+    const web = afterSource.filter((r) => photoStage(r.item) === 'web');
+    const groups = (list: PoolRow[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size));
+    await Promise.all([
+      // 2. The photo libraries, checked by the model.
+      ...groups(library, 6).map(async (group) => {
         const dishes = group.map((r) => cleanDishPhotoRequest({ dishes: [{ name: r.item.name }] })?.[0] ?? null);
         const found = await lookupDishPhotos(
           admin,
@@ -312,19 +363,14 @@ async function backfillPhotos(admin: SupabaseClient, rows: PoolRow[], max: numbe
             return outcome.input;
           }
         );
-        await Promise.all(
-          group.map(async (row, i) => {
-            const d = dishes[i];
-            const item = withDishPhoto(row.item, d ? found.get(d.key) : null);
-            await saveItem(admin, row.id, item);
-            decided++;
-          })
-        );
-      })
-    );
+        await Promise.all(group.map((row, i) => saveItem(admin, row.id, withDishPhoto(row.item, dishes[i] ? found.get(dishes[i]!.key) : null))));
+      }),
+      // 3. What the libraries do not have: a page on the web.
+      ...groups(web, WEB_PHOTO_GROUP).map((group) => webPhotos(admin, group, record)),
+    ]);
   })().catch((error) => console.warn('[tempt-me] pictures failed:', error instanceof Error ? error.message : error));
   await within(work, budgetMs, undefined);
-  return decided;
+  return queue.length;
 }
 
 /** Runs a picture backfill when no other one is running (tempt_pool_claim_photos), then frees the claim. */

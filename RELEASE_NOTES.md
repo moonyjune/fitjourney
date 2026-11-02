@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26.4 | yes | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
 | 0.26.3 | no | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
 | 0.26.2 | yes | tempt-me, dish-photo |
 | 0.26.1 | no | — |
@@ -76,6 +77,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.26.4
+- Temptation pool: the calls without the web now ask for ~28 items each (6 calls by theme + the trending one with the web). With 55 items the answer ran out of room and came back without a list; a list given as text is now read too, an answer with no list is asked once more, and the seed's notes say how each answer ended (stop reason, what `items` was).
+- Real photo for every pool item: after the item's own page and the photo libraries (Wikimedia / Openverse), a web search (up to 3 searches per 8 dishes) finds a page showing that dish and its page picture is used, credited with the site. An item is "no photo" only after the web search also found nothing; items marked "no photo" before get this search once.
+- Per-feature models: the temptation pool and the dish photo checks / search run on Claude Haiku 5.5 by default (its cost logged at Haiku's price); "Tìm quán" stays on the global model. AI & cost > Model has a box per feature (Tìm quán, Kho món cám dỗ, Kiểm tra / tìm ảnh món) to set another one (ai_settings `model.places`, `model.tempt`, `model.photo`).
+- Server: run schema.sql (ai_settings accepts the new keys), redeploy every AI function (the shared model choice changed).
 
 ## 0.26.3
 - AI calls made at the same time no longer fail when the model refuses a forced tool call: each request remembers how it was sent, so every one of them switches to "tool_choice auto" and goes again (two of the four pool calls had failed this way).
