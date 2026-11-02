@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.25.0 | yes | send-push |
 | 0.24.0 | no | — |
 | 0.23.0 | no | — |
 | 0.22.1 | no | — |
@@ -71,6 +72,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.25.0
+- Web Push: reminders arrive while the app is closed. Profile › "Thông báo khi đóng app" (web only, next to "Nhắc nhở"). On iPhone it works only in the Home Screen app (Safari › Share › Add to Home Screen, iOS 16.4+); tapped in a Safari tab it shows how to add it.
+- Pushed (only while "Nhắc nhở" is on): water at each drink time not yet reached (several missed times = one message), meal starts, and workouts on training days (same rules as on the phone). Each reminder once a day per user, to every device of that user. While push is on, the page no longer shows its own browser notification (the in-app water pop-up stays).
+- The app is installable (manifest, icons, Home Screen metadata) and has a service worker for push only (no offline cache).
+- Server: tables `push_subscriptions` / `push_sent`, a pg_cron job every 15 min calling the new function `send-push` (deploy with `--no-verify-jwt`; vault secrets `push_function_url`, `push_cron_secret`; function secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `PUSH_CRON_SECRET`).
 
 ## 0.24.0
 - History: a day with a meal not logged shows its deficit without the level colour and with "⚠" (list and calendar); a screen reader reads "⚠ Chưa ghi …" with the meals. Today while meals are still to come shows its estimate, "~X · dự kiến", like the Journal.

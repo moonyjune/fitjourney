@@ -918,3 +918,65 @@ grant select on public.dish_photos to authenticated;
 drop policy if exists "dish_photos_select_signed_in" on public.dish_photos;
 create policy "dish_photos_select_signed_in" on public.dish_photos for select
   to authenticated using (true);
+
+-- ===== Web Push: nhắc nhở khi đã đóng app (0.25) =====
+-- Mỗi thiết bị bật "Thông báo khi đóng app" lưu một dòng: endpoint + khóa của trình duyệt, kèm kế hoạch nhắc (plan: giờ uống nước,
+-- giờ bữa ăn, giờ tập, chữ thông báo theo ngôn ngữ của user; app tự tính và cập nhật khi cài đặt đổi) và múi giờ (tz). Hàm
+-- send-push (gọi bởi pg_cron mỗi 15 phút) đọc bằng service role, gửi, và ghi push_sent để không gửi trùng. User chỉ thấy/sửa dòng của mình.
+-- Chạy lại nhiều lần vẫn an toàn.
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  endpoint text not null unique check (char_length(endpoint) between 10 and 2000),
+  p256dh text not null check (char_length(p256dh) between 20 and 200),
+  auth text not null check (char_length(auth) between 8 and 100),
+  user_agent text check (user_agent is null or char_length(user_agent) <= 400),
+  plan jsonb check (plan is null or (jsonb_typeof(plan) = 'object' and pg_column_size(plan) <= 20000)),
+  plan_updated_at timestamptz,
+  tz text check (tz is null or char_length(tz) <= 64),
+  created_at timestamptz not null default now(),
+  last_ok_at timestamptz,
+  failures integer not null default 0
+);
+create index if not exists push_subscriptions_user on public.push_subscriptions (user_id);
+alter table public.push_subscriptions enable row level security;
+revoke all on public.push_subscriptions from public, anon;
+grant select, insert, update, delete on public.push_subscriptions to authenticated;
+drop policy if exists "push_subscriptions_own" on public.push_subscriptions;
+create policy "push_subscriptions_own" on public.push_subscriptions for all
+  to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Nhắc đã gửi (khóa dạng water@2026-11-02@09:00, meal@..., workout@...). Chỉ send-push (service role) đọc/ghi.
+create table if not exists public.push_sent (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  key text not null check (char_length(key) <= 80),
+  sent_at timestamptz not null default now(),
+  primary key (user_id, key)
+);
+alter table public.push_sent enable row level security;
+revoke all on public.push_sent from public, anon, authenticated;
+
+-- Lịch chạy: pg_cron gọi send-push mỗi 15 phút qua pg_net, kèm header x-cron-secret.
+-- URL hàm và secret nằm trong Supabase Vault (KHÔNG ghi vào file này). Tạo MỘT LẦN bằng SQL riêng (thay chỗ <...>):
+--   select vault.create_secret('https://<project-ref>.supabase.co/functions/v1/send-push', 'push_function_url');
+--   select vault.create_secret('<chuỗi ngẫu nhiên dài, giống secret PUSH_CRON_SECRET của Edge Functions>', 'push_cron_secret');
+-- Đổi sau này: select vault.update_secret((select id from vault.secrets where name = 'push_cron_secret'), '<giá trị mới>');
+-- Chưa tạo secret thì job vẫn chạy nhưng không gọi được hàm (không gửi gì).
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+select cron.schedule(
+  'send-push-every-15-min',
+  '*/15 * * * *',
+  $cron$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'push_function_url'),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'push_cron_secret')
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 30000
+  )
+  where exists (select 1 from vault.decrypted_secrets where name = 'push_function_url');
+  $cron$
+);

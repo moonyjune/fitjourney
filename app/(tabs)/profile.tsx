@@ -16,6 +16,8 @@ import { LIMIT_RANGE, useLimitsStore, type LimitKey } from '../../src/store/useL
 import { useAchievementStore } from '../../src/store/useAchievementStore';
 import { useAchievements, useGameState, useNow } from '../../src/game/useGameState';
 import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
+import { disableWebPush, enableWebPush, refreshPushPlan } from '../../src/notifications/webPush';
+import { usePushStore } from '../../src/store/usePushStore';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { usePlanStore } from '../../src/store/usePlanStore';
 import { useUricText } from '../../src/uric/strings';
@@ -132,6 +134,9 @@ export default function ProfileScreen() {
   const session = useAuthStore((s) => s.session);
   const language = useSettingsStore((s) => s.language);
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
+  const pushEnabled = usePushStore((s) => s.enabled);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushNote, setPushNote] = useState<string | null>(null);
   const aiFullHd = useAiPhotoStore((s) => s.fullHd);
   const setAiFullHd = useAiPhotoStore((s) => s.setFullHd);
   const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
@@ -177,6 +182,30 @@ export default function ProfileScreen() {
       console.warn('[notifications] unavailable in this runtime:', error);
     }
     updateSettings({ remindersEnabled: value });
+    // The server sends nothing while reminders are off: save the (empty) plan now rather than after the debounce.
+    refreshPushPlan().catch(() => undefined);
+  }
+
+  // Web Push for this device. Called straight from the tap: the permission prompt (iPhone) only opens from a user gesture.
+  async function togglePush(value: boolean) {
+    setPushNote(null);
+    if (!value) {
+      setPushBusy(true);
+      await disableWebPush().catch(() => undefined);
+      setPushBusy(false);
+      return;
+    }
+    if (!remindersEnabled) {
+      setPushNote(g('push.remindersOff'));
+      return;
+    }
+    setPushBusy(true);
+    const result = await enableWebPush();
+    setPushBusy(false);
+    if (!result.ok) {
+      const key = result.reason === 'needsHomeScreen' ? 'push.needsHomeScreen' : result.reason === 'unsupported' ? 'push.unsupported' : result.reason === 'denied' ? 'push.denied' : 'push.failed';
+      setPushNote(g(key));
+    }
   }
 
   async function connectCoach() {
@@ -393,6 +422,35 @@ export default function ProfileScreen() {
           thumbColor={quest.text}
         />
       </View>
+
+      {Platform.OS === 'web' && (
+        <View style={styles.settingRow}>
+          <QuestIcon name="bell" size={20} color={quest.gold} />
+          <View style={styles.flex}>
+            <HudText size={15}>{g('push.title')}</HudText>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {g('push.hint')}
+            </HudText>
+            {pushNote ? (
+              <HudText size={12} weight="medium" color={quest.gold} accessibilityLiveRegion="polite">
+                {pushNote}
+              </HudText>
+            ) : pushEnabled ? (
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {g('push.on')}
+              </HudText>
+            ) : null}
+          </View>
+          <Switch
+            accessibilityLabel={g('push.title')}
+            value={pushEnabled}
+            disabled={pushBusy}
+            onValueChange={togglePush}
+            trackColor={{ false: quest.raised2, true: quest.gold }}
+            thumbColor={quest.text}
+          />
+        </View>
+      )}
 
       <TemptationSettings />
 
