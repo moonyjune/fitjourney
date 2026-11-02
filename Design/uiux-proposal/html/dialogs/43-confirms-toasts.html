@@ -1,0 +1,34 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Xác nhận và thông báo</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script></head><body>
+<div data-status="after"></div>
+<div class="screen">
+  <div class="h2">Xác nhận, quyền, thông báo</div>
+  <div class="t13 c2 med mt4">Một kiểu hộp trong app thay mọi Alert / window.confirm. Chỉ hỏi khi không hoàn tác được.</div>
+
+  <div class="lbl"><span class="badge hp">hộp xác nhận (4 chỗ còn lại)</span></div>
+  <div class="dlg"><b class="h3">Thoát buổi tập?</b><div class="t13 c2 med mt4">Buổi tập này sẽ không được ghi lại.</div><div class="row gap8 mt12"><div class="btn ghost sm" style="flex:1">Tiếp tục tập</div><div class="btn danger sm" style="flex:1">Thoát</div></div></div>
+  <div class="t12 c2 med mt6">Cũng dùng cho: Đăng xuất (37) · Xoá nhật ký trước ngày (38) · Xoá lịch sử tìm quán (26)</div>
+
+  <div class="lbl"><span class="badge mana">xin quyền (thay Alert "Chưa cấp quyền")</span></div>
+  <div class="dlg"><div class="row gap10"><span class="ic" style="background:rgba(76,201,240,.15);color:var(--mana)"><i data-i="camera"></i></span><b class="t15 grow">Cho phép dùng camera</b></div><div class="t13 c2 med mt6">Để chụp món và ảnh đồng hồ tập.</div><div class="row gap8 mt12"><div class="btn ghost sm" style="flex:1">Chọn từ thư viện</div><div class="btn mana sm" style="flex:1">Mở cài đặt</div></div></div>
+  <div class="t12 c2 med mt6">Tương tự: thư viện ảnh · thông báo (36) · vị trí (26)</div>
+
+  <div class="lbl"><span class="badge xp">toast (thay Alert "Đã lưu" và FlashNotice)</span></div>
+  <div class="toast gold"><span class="t14 cgl">Đã lưu mục tiêu</span><span class="undo"><i data-i="undo"></i>Hoàn tác</span></div>
+  <div class="toast gold mt8"><span class="t14 cgl">Đã xoá Bún chả khỏi cook book</span><span class="undo"><i data-i="undo"></i>Hoàn tác</span></div>
+  <div class="toast mt8"><span class="t14 cm">Coach vừa cập nhật thực đơn mới</span><span class="undo">Xem</span></div>
+  <div class="toast mt8" style="background:#2a1220;border-color:var(--bossB)"><span class="t14 chp">Chưa lưu được ảnh</span><span class="undo">Thử lại</span></div>
+  <div class="toast mt8"><span class="t14 cm">💧 Uống đủ nước giúp đỡ thèm ăn vặt</span><span class="undo">Đóng</span></div>
+
+  <div class="lbl"><span class="badge gold">lỗi nhập (thay Alert "Lỗi")</span></div>
+  <div class="flabel" style="margin-top:0">Calo đốt</div>
+  <div class="field" style="border-color:var(--hp)"><span class="ph">kcal</span></div>
+  <div class="t12 chp mt4">Nhập calo đốt (số)</div>
+
+  <div class="lbl"><span class="badge">lỗi AI (thay 7 câu dài)</span></div>
+  <div class="panel row gap10" style="padding:10px 12px"><span class="chp"><i data-i="info"></i></span><span class="t13 c3 med grow">Không có mạng.</span><span class="chip s">Thử lại</span><span class="chip s">Tự nhập</span></div>
+  <div class="t12 c2 med mt6">Lý do đầy đủ (chưa thiết lập / phiên / dịch vụ / hết lượt / AI tắt) trong ⓘ</div>
+  <div class="note ok in"><b>Gom mọi hộp thoại hệ thống hiện có</b>: Alert thiếu thông tin / lỗi (auth, plan, nutrition, workout, client), Alert "Đã lưu" (plan ×4, client), quyền camera / thư viện / thông báo (ProofCapture, plan, profile), thiếu ảnh, Alert coach cập nhật kế hoạch (usePlanStore), xác nhận thoát buổi tập, đăng xuất (Alert + window.confirm), FlashNotice, "bấm lần nữa để xoá" (CSDL, uric, import, lịch sử quán), cổ vũ nước. Không mất chức năng; chỉ đổi hình thức.</div>
+</div>
+</body></html>

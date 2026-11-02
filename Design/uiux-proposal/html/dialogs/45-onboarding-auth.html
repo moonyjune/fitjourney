@@ -1,0 +1,31 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Đăng nhập và bắt đầu</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.rc{display:flex;align-items:center;gap:12px;min-height:76px;padding:0 14px;border-radius:16px;background:var(--panel);margin-top:8px}.dots{display:flex;gap:6px;justify-content:center}.dots i{width:28px;height:6px;border-radius:3px;background:var(--raised2)}.dots i.on{background:var(--gold)}</style></head><body>
+<div data-status="after"></div>
+<div class="screen">
+  <div class="center mt8"><div style="color:var(--gold);font-size:64px;display:inline-block"><i data-i="shield"></i></div><div class="h1">FitQuest</div><div class="t13 c2 med">Giảm cân như chơi game</div></div>
+  <div class="seg mt16"><div class="on">Đăng nhập</div><div>Đăng ký</div></div>
+  <div class="flabel">Email</div><div class="field"><span>ban@vidu.vn</span></div>
+  <div class="flabel">Mật khẩu</div><div class="field"><span>••••••••</span></div>
+  <div class="t12 chp mt4">Thiếu / sai → 1 dòng đỏ dưới ô (thay Alert)</div>
+  <div class="btn mt12">Đăng nhập</div>
+  <div class="t13 cg center mt10">Quên mật khẩu?</div>
+  <div class="t12 c2 med center mt4">Đăng ký xong: "Kiểm tra email" hiện ngay trong màn · 24 giờ không mở thì đăng nhập lại</div>
+
+  <div class="lbl"><span class="badge gold">Bạn là ai?</span></div>
+  <div class="rc" style="border:1.5px solid var(--gold)"><span class="cg t28"><i data-i="flame"></i></span><div class="grow"><b class="t15">Tôi tự tập</b><div class="t12 c2 med">Ghi bữa, đánh boss, giảm cân</div></div><span class="c2"><i data-i="next"></i></span></div>
+  <div class="rc" style="border:1.5px solid var(--manaB)"><span class="cm t28"><i data-i="user"></i></span><div class="grow"><b class="t15">Tôi là Coach</b><div class="t12 c2 med">Theo dõi học viên</div></div><span class="c2"><i data-i="next"></i></span></div>
+
+  <div class="lbl"><span class="badge gold">bắt đầu · 4 bước</span></div>
+  <div class="dots"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+  <div class="center mt12"><div data-boss="#f6c0d8" data-acc="tea" data-size="96" style="display:inline-block"></div></div>
+  <div class="t12 c2 med center">BƯỚC 2/4</div><div class="h2 center">Cơ thể của bạn</div>
+  <div class="flabel">Chiều cao</div><div class="field"><b class="t18">172</b><span class="grow"></span><span class="c2">cm</span></div>
+  <div class="row gap8"><div class="grow"><div class="flabel">Tuổi · tuỳ chọn</div><div class="field"><span>38</span></div></div><div class="grow"><div class="flabel">Giới tính</div><div class="seg"><div class="on">Nam</div><div>Nữ</div></div></div></div>
+  <div class="flabel">Mức vận động</div><div class="row gap6 wrap"><span class="chip s">Ít</span><span class="chip s on">Vừa</span><span class="chip s">Nhiều</span></div>
+  <div class="row gap8 mt16"><div class="btn ghost" style="flex:1">Quay lại</div><div class="btn" style="flex:2">Tiếp tục</div></div>
+  <div class="t12 c2 med mt8">Bước 1: cân hiện tại, cân mục tiêu (kiểm tra mục tiêu &lt; hiện tại) · bước 3: mã Coach (tuỳ chọn, lỗi → 1 dòng, vẫn vào app) · bước 4: xem lại, "Bắt đầu"</div>
+  <div class="note ok in"><b>Giữ</b> auth (Đăng nhập / Đăng ký, email, mật khẩu, quên mật khẩu chỉ báo câu chung, điền sẵn sau khi phiên hết hạn, nút Login Dev khi dev), role-select (2 thẻ, busy), onboarding 4 bước (cân, cơ thể + QuestDemographics + gợi ý Mifflin, mã Coach, xem lại "Chưa nhập"). Đổi: "FitJourney" → FitQuest, minh hoạ boss ở mỗi bước, Alert liên kết coach (chuỗi cứng) → dòng i18n. "Fatty" → "Tôi tự tập" ⚠ cần chốt tên vai trò.</div>
+</div>
+</body></html>

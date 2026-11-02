@@ -1,0 +1,33 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Sửa từng số</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g2 .field{min-height:52px;flex-direction:column;align-items:flex-start;justify-content:center;gap:0;padding:4px 12px}.g2 .field span{font-size:11px;color:var(--text2);font-weight:500}</style></head><body>
+<div data-status="after"></div>
+<div class="ghost" style="min-height:140px"><div class="gin">
+  <div class="row"><div class="iconbtn"><i data-i="back"></i></div><span class="h2 grow">Kiểm tra món</span></div>
+  <div class="row gap10 mt12"><img class="thumb" src="../img/pho.jpg"><b class="grow">Phở bò tái</b></div>
+</div></div>
+<div class="sheet in">
+  <div class="grab"></div>
+  <div class="row gap10"><img class="thumb" src="../img/pho.jpg"><div class="grow"><div class="t12 c2 med">Sửa món · nút ✎</div><div class="h2">Phở bò tái</div></div><div class="iconbtn"><i data-i="x"></i></div></div>
+  <div class="flabel">Tên món</div>
+  <div class="field"><span class="t15">Phở bò tái</span></div>
+  <div class="flabel">Lượng</div>
+  <div class="row gap8"><div class="step" style="flex:1;justify-content:space-between"><span>−</span><b class="t15">1.5</b><span>+</span></div><span class="chip big on">bát</span><span class="chip big">g</span><span class="chip big">ml</span></div>
+  <div class="t12 c2 med mt6">Đổi lượng thì các số tự tính lại (không gọi AI)</div>
+  <div class="g2 mt12">
+    <div class="field"><span>Kcal</span><b class="t18">720</b></div>
+    <div class="field"><span>Đạm (g)</span><b class="t18">42</b></div>
+    <div class="field"><span>Purine (mg)</span><b class="t18">345</b></div>
+    <div class="field"><span>Muối (g)</span><b class="t18">5.7</b></div>
+    <div class="field"><span>Đường (g)</span><b class="t18">3</b></div>
+    <div class="field" style="border-style:dashed"><span>Nguồn</span><b class="t13 cm">AI ~85% · đã sửa tay</b></div>
+  </div>
+  <div class="row between mt12" style="min-height:44px"><div><div class="t14">Đồ ăn vặt</div><div class="t12 c2 med">tính vào nhiệm vụ "Ăn vặt"</div></div><div class="sw"></div></div>
+  <div class="row between" style="min-height:44px"><span class="t14">Lưu vào CSDL của tôi</span><div class="sw on"></div></div>
+  <div class="row gap8 mt12"><div class="btn ghost danger" style="width:120px;border-color:var(--bossB)">Xoá món</div><div class="btn grow">Lưu · 720 kcal</div></div>
+  <div class="lbl"><span class="badge hp">khi số không hợp lệ</span></div>
+  <div class="t13 chp med">Lượng phải lớn hơn 0 và các số không được âm.</div>
+  <div class="note ok in"><b>Một sheet dùng chung</b> cho: nút ✎ ở bước Kiểm tra món, dòng món trong <b>MealDetailDialog</b> (thay <b>PartEditForm</b> mở trong dialog), dòng món ở bảng bữa của Nhật ký › Ngày (thay <b>DailyMealBreakdownTable</b> sửa trực tiếp + "Lưu thay đổi"). Giữ đủ: lượng, kcal, đạm, purine, muối, đường, Lưu / Huỷ (vuốt xuống hoặc ✕), kiểm tra lỗi. "Xoá món" có Hoàn tác thay cho "↺ Khôi phục n bữa đã xoá". "Lưu vào CSDL" là hành vi tự lưu hiện có (<b>remember</b>), nay hiện ra để tắt được.</div>
+</div>
+</body></html>

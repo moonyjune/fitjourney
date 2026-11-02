@@ -1,0 +1,34 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Cảm giác</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.mood{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}.mood span{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;background:var(--raised);border:2px solid var(--border)}.mood.on span{border-color:var(--gold);background:rgba(255,200,61,.15)}.sl{display:flex;gap:6px}.sl div{flex:1;height:44px;border-radius:10px;background:var(--raised);display:flex;align-items:center;justify-content:center;font-size:15px;border:1.5px solid var(--border)}.sl .on{background:var(--gold);color:var(--onGold);border-color:var(--gold)}.sl .f{background:rgba(255,200,61,.25)}</style></head><body>
+<div data-status="after"></div>
+<div class="ghost" style="min-height:110px"><div class="gin">
+  <div class="row"><div class="grow h2">Ghi nhanh</div><span class="chip"><i data-i="calendar"></i>Hôm nay<i data-i="down"></i></span></div>
+</div></div>
+<div class="sheet in">
+  <div class="grab"></div>
+  <div class="row"><div class="grow"><div class="t12 c2 med">21:05 · Thứ hai 2/11</div><div class="h2">Nghỉ ở lửa trại</div></div><span class="chip s"><i data-i="calendar"></i>Hôm nay<i data-i="down"></i></span></div>
+  <div class="flabel">Tâm trạng</div>
+  <div class="row gap4">
+    <div class="mood"><span>😄</span><span class="t11 c2 med" style="width:auto;height:auto;background:none;border:none;font-size:11px">Rất tốt</span></div>
+    <div class="mood on"><span>🙂</span><span class="t11 cg med" style="width:auto;height:auto;background:none;border:none;font-size:11px">Tốt</span></div>
+    <div class="mood"><span>😐</span><span class="t11 c2 med" style="width:auto;height:auto;background:none;border:none;font-size:11px">Bình thường</span></div>
+    <div class="mood"><span>😣</span><span class="t11 c2 med" style="width:auto;height:auto;background:none;border:none;font-size:11px">Căng thẳng</span></div>
+    <div class="mood"><span>😴</span><span class="t11 c2 med" style="width:auto;height:auto;background:none;border:none;font-size:11px">Mệt mỏi</span></div>
+  </div>
+  <div class="row between"><div class="flabel">Mức thèm ăn</div><span class="t11 c2 med">1 không thèm · 5 rất thèm</span></div>
+  <div class="sl"><div class="f">1</div><div class="f">2</div><div class="on">3</div><div>4</div><div>5</div></div>
+  <div class="row between"><div class="flabel">Mức đói</div><span class="t11 c2 med">1 no · 5 rất đói</span></div>
+  <div class="sl"><div class="f">1</div><div class="on">2</div><div>3</div><div>4</div><div>5</div></div>
+  <div class="row between"><div class="flabel">Tình trạng tập</div><span class="t11 c2 med">tuỳ chọn</span></div>
+  <div class="row gap6 wrap"><span class="chip">Tràn năng lượng</span><span class="chip on">Bình thường</span><span class="chip">Mệt</span><span class="chip">Đau cơ</span><span class="chip">Bỏ tập</span></div>
+  <div class="row between"><div class="flabel">Ghi chú</div><span class="t11 c2 med">tuỳ chọn</span></div>
+  <div class="field area"><span class="ph">Hôm nay thế nào?</span></div>
+  <div class="btn mt16">Ghi lại & nghỉ ngơi</div>
+  <div class="t12 c2 med center mt8">Nút bật khi đã chọn tâm trạng, thèm và đói</div>
+  <div class="lbl"><span class="badge gold">mở ngày cũ đã có check-in</span></div>
+  <div class="panel row gap8" style="padding:10px 12px;border-color:#6b5420"><span class="cgl"><i data-i="edit"></i></span><span class="t13 cgl med">Ngày này đã có check-in — bạn đang sửa nó.</span></div>
+  <div class="note ok in"><b>Giữ đủ chức năng</b> của <b>/checkin</b>: 5 mặt tâm trạng, thèm 1–5, đói 1–5, tình trạng tập, ghi chú, chọn ngày, sửa check-in ngày cũ, hôm nay thì mỗi lần lưu thêm 1 check-in, không cho XP. <b>Bỏ</b> 2 ô "Nhiệm vụ x/7" và "Boss hôm nay" (đã có ở Trại). <b>Lối vào:</b> (+) › Cảm giác (thay link "Nghỉ ở lửa trại" ở Trại).</div>
+</div>
+</body></html>

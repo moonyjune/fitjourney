@@ -1,0 +1,44 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Buổi tập đang chạy</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.tile3{flex:1;background:var(--raised);border-radius:12px;padding:10px 4px;text-align:center}.rate{display:flex;align-items:center;gap:8px;min-height:52px;border-bottom:1px solid var(--border)}</style></head><body>
+<div data-status="after"></div>
+<div class="screen">
+  <div class="row"><div class="iconbtn"><i data-i="x"></i></div><div class="grow center"><div class="t12 c2 med">BÀI 1 / 3 · +60 XP</div><b class="t15">Squat ngồi ghế</b></div><div class="iconbtn cm" style="border-color:var(--manaB)"><i data-i="bell"></i></div></div>
+  <div class="center mt16"><div class="ring" data-ring="0.6,#FFC83D,220,16" style="display:inline-block"><div class="mid"><span class="t12 c2 med">SỐ LẦN</span><b class="t34" style="font-size:56px">9</b><span class="t13 c2 med">/ 15</span></div></div></div>
+  <div class="center t15 mt8">Set 2 / 3 <span class="c2 t13 med">· đã tập 4:12</span></div>
+  <div class="row gap8 mt16"><div class="btn ghost" style="width:72px;font-size:22px">−</div><div class="btn ghost grow">+1 lần</div><div class="btn ghost grow"><i data-i="play"></i>Tự đếm</div></div>
+  <div class="btn mt12" style="min-height:64px;font-size:18px">Xong set</div>
+  <div class="panel mt16" style="padding:10px 12px">
+    <div class="row between"><span class="t13 c3">Giọng HLV</span><span class="sw on"></span></div>
+    <div class="row gap6 mt8 wrap"><span class="chip s on">Tiếng Việt</span><span class="chip s">English</span><span class="chip s on">Nữ</span><span class="chip s">Nam</span></div>
+    <div class="t11 c2 med mt6">Giọng máy: Linh (vi-VN)</div>
+    <div class="row between mt8"><span class="t13 c3">Tự bắt đầu set mới khi hết nghỉ</span><span class="sw on"></span></div>
+  </div>
+  <div class="t12 c2 med mt8 center">Màn hình giữ sáng suốt buổi · không vuốt lui</div>
+
+  <div class="lbl"><span class="badge mana">khi nghỉ</span></div>
+  <div class="dlg center"><span class="t12 cm med">NGHỈ</span><div class="t34">0:42</div><div class="t13 c3 med">Tiếp theo: Plank chống gối · 3 × 30″</div><div class="btn ghost sm mt10">Bỏ qua nghỉ</div></div>
+
+  <div class="lbl"><span class="badge hp">bấm ✕ · xác nhận</span></div>
+  <div class="dlg"><b class="h3">Thoát buổi tập?</b><div class="t13 c2 med mt6">Buổi tập này sẽ không được ghi lại.</div><div class="row gap8 mt12"><div class="btn ghost sm" style="flex:1">Tiếp tục tập</div><div class="btn danger sm" style="flex:1">Thoát</div></div></div>
+
+  <div class="lbl"><span class="badge xp">hoàn thành</span></div>
+  <div class="dlg center">
+    <span class="cx" style="font-size:56px"><i data-i="check"></i></span>
+    <div class="t12 c2 med">Nhóm A · T2 2/11</div><div class="h2">Nhiệm vụ hoàn thành</div>
+    <div class="t22 cx mt4">+60 XP</div>
+    <div class="row gap8 mt12"><div class="tile3"><b class="t18">18</b><div class="t11 c2 med">phút</div></div><div class="tile3"><b class="t18">9</b><div class="t11 c2 med">set</div></div><div class="tile3"><b class="t18">120</b><div class="t11 c2 med">kcal ước tính</div></div></div>
+    <div class="row gap8 mt10 chp t12 med" style="text-align:left">(nếu chưa đủ 10′: "Mới 8 phút, chưa nhận XP. Buổi tập vẫn được ghi.")</div>
+  </div>
+  <div class="dlg mt8">
+    <div class="row between"><b class="t15">Bài nào thấy thế nào?</b><span class="t11 c2 med">tuỳ chọn</span></div>
+    <div class="rate"><b class="t13 grow">Squat ngồi ghế</b><span class="chip s on">Dễ</span><span class="chip s">Vừa</span><span class="chip s">Khó</span></div>
+    <div class="rate"><b class="t13 grow">Plank chống gối</b><span class="chip s">Dễ</span><span class="chip s on">Vừa</span><span class="chip s">Khó</span></div>
+    <div class="rate" style="border:none"><b class="t13 grow">Cầu mông</b><span class="chip s">Dễ</span><span class="chip s">Vừa</span><span class="chip s">Khó</span></div>
+    <div class="t12 cg mt4">LẦN SAU · Squat ngồi ghế lên Cấp 4</div>
+  </div>
+  <div class="btn mt12">Về trại</div>
+  <div class="note ok in"><b>Giữ nguyên /train/session</b> (README: đã tốt): vòng đếm NGHỈ / GIÂY / SỐ LẦN, set s/t, −, +1 lần, Tự đếm / Dừng đếm, Bắt đầu đếm (bài giữ), Xong set (to lên 64 pt), Bỏ qua nghỉ, "Tiếp theo", "làm đủ cả hai bên", loa bật/tắt, ngôn ngữ / giọng nữ-nam / tên giọng / cảnh báo thiếu giọng, tự bắt đầu set, giữ màn hình sáng, xác nhận thoát (đổi từ Alert / window.confirm sang hộp trong app), màn hoàn thành (XP hoặc lý do không có XP, 3 ô, đánh giá Dễ/Vừa/Khó, LẦN SAU, Về trại). Diễn biến từng set (timeline) giữ trong vòng đếm.</div>
+</div>
+</body></html>

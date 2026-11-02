@@ -1,0 +1,48 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Ghi bữa: phần thêm</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script></head><body>
+<div data-status="after"></div>
+<div class="screen">
+  <div class="header"><div class="iconbtn"><i data-i="back"></i></div><span class="h2 grow">Kiểm tra món</span><span class="badge gold">Bước 2/2</span></div>
+  <div class="t12 c2 med">Các phần hiện thêm ở bước 2 (đầu trang như mockup 03)</div>
+
+  <div class="lbl"><span class="badge">chạm chip Bữa / Giờ</span></div>
+  <div class="dlg">
+    <div class="h3">Bữa nào?</div>
+    <div class="row gap6 mt10 wrap"><span class="chip">Sáng</span><span class="chip">Phụ sáng</span><span class="chip on">Trưa</span><span class="chip">Phụ chiều</span><span class="chip">Xế</span><span class="chip">Tối</span><span class="chip">Đêm</span></div>
+    <div class="flabel">Giờ ăn</div>
+    <div class="row gap8"><div class="field" style="width:120px"><b class="t18">12:40</b></div><span class="t12 c2 med grow">dạng 19:30 · mặc định là giờ hiện tại</span></div>
+    <div class="btn ghost sm mt12 danger" style="border-color:var(--bossB)">Không ăn bữa trưa (0 kcal)</div>
+  </div>
+
+  <div class="lbl"><span class="badge mana">ảnh là nhãn dinh dưỡng</span></div>
+  <div class="panel" style="padding:12px">
+    <div class="row gap6"><span class="badge mana"><i data-i="tag"></i>Đọc từ nhãn</span><b class="t14 grow">Sữa chua Hy Lạp</b></div>
+    <div class="seg mt10"><div class="on">Theo phần</div><div>Theo khối lượng</div></div>
+    <div class="row between mt10"><span class="t13 c2 med">Số phần</span><div class="step"><span>−</span><b>1 hộp</b><span>+</span></div></div>
+    <div class="t12 c2 med mt8">1 hộp 100 g · 97 kcal · 9 g đạm · đường 4 g</div>
+    <div class="t12 c2 med">Nhãn không ghi purine · app ước tính theo tên món</div>
+  </div>
+
+  <div class="lbl"><span class="badge hp">khi vượt giới hạn</span></div>
+  <div class="panel boss" style="padding:12px">
+    <div class="row gap6"><span class="badge hp">Muối vượt 0.8 g</span><b class="t14">Món thay gợi ý</b></div>
+    <div class="lrow" style="padding:0"><img src="../img/goicuon.jpg" class="thumb" style="width:40px;height:40px"><div class="grow"><b class="t13">Phở gà ít nước dùng</b><div class="t12 c2 med">CSDL · 410 kcal · muối 2.1 g</div></div><span class="chip s">Đổi</span></div>
+    <div class="lrow" style="padding:0"><div class="thumb row" style="width:40px;height:40px;justify-content:center;font-size:20px">🥗</div><div class="grow"><b class="t13">Bún trộn rau, ít mắm</b><div class="t12 c2 med">AI ~70% · 380 kcal · muối 1.6 g</div></div><span class="chip s">Đổi</span></div>
+    <div class="t11 c2 med mt6">Số liệu món thay do AI ước tính; kiểm tra trước khi lưu</div>
+  </div>
+
+  <div class="lbl"><span class="badge mana">ⓘ Lời khuyên (gập sẵn)</span></div>
+  <div class="panel" style="padding:12px;border-color:var(--manaB)">
+    <div class="row gap8"><span class="cm"><i data-i="ai"></i></span><b class="t14 grow">Cho phần còn lại của ngày</b><span class="c2"><i data-i="down"></i></span></div>
+    <div class="t13 c3 med mt6">Tối nên ≤ 450 kcal, thêm rau và đạm nạc; uống thêm 500 ml nước vì bữa này mặn.</div>
+    <div class="divider mt10"></div>
+    <div class="t12 c2 med mt8">Nhận xét món: trà sữa đã xuất hiện 3 lần trong 3 ngày · nên thay bằng trà ít đường</div>
+    <div class="t11 c2 med mt6">Gợi ý AI, không thay bác sĩ</div>
+  </div>
+
+  <div class="lbl"><span class="badge">tự nhập mà để trống kcal</span></div>
+  <div class="panel" style="padding:12px"><div class="t13 c3 med">"Bánh cuốn" chưa có số. <b class="cg">Đã điền 320 kcal từ CSDL</b></div><div class="btn ghost sm mt8"><i data-i="sparkle"></i>Nhờ AI phân tích món này</div></div>
+  <div class="note ok in"><b>Giữ từ /add-food:</b> chip "Thuộc bữa" + nút "Không ăn {bữa}", Giờ ăn (kiểm tra dạng 19:30), Đọc nhãn (Theo phần / Theo khối lượng), <b>SwapSuggestions</b>, <b>AiAdviceCard</b>, <b>DraftFeedback</b>, điền từ CSDL khi để trống kcal. "Đồ ăn vặt", nguồn số liệu, purine/muối/đường, <b>NutrientTiles</b> + <b>ImpactNote</b> đã có ở mockup 03 (phần Chi tiết + thẻ tác động). Lỗi lưu ảnh: toast đỏ "Chưa lưu được ảnh · Thử lại", món không bị thêm.</div>
+</div>
+</body></html>

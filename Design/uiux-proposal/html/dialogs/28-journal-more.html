@@ -1,0 +1,35 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Nhật ký: phần mở rộng</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.bars{display:flex;align-items:flex-end;gap:6px;height:80px;border-bottom:1px solid var(--border)}.bars i{flex:1;display:block;border-radius:4px 4px 0 0}.mo{display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid var(--border);font-size:13px}.mo:last-child{border:none}.dc{background:var(--panel);border:1.5px solid var(--border);border-radius:14px;padding:10px 12px;margin-top:8px}</style></head><body>
+<div data-status="after"></div>
+<div class="screen">
+  <div class="header"><div class="iconbtn"><i data-i="back"></i></div><div class="grow"><span class="h2">Nhật ký</span></div><div class="iconbtn"><i data-i="calendar"></i></div></div>
+  <div class="seg"><div>Ngày</div><div class="on">Tuần</div><div>Tháng</div></div>
+  <div class="t12 c2 med mt8">Các khối dưới nằm ở cuối tab Tuần / Tháng (07 chỉ vẽ phần đầu). Khối rỗng thì ẩn.</div>
+
+  <div class="lbl"><span class="badge gold">Tuần · cảm giác</span></div>
+  <div class="panel" style="padding:0 12px">
+    <div class="mo"><span class="t22">🙂</span><div class="grow"><b>CN 1/11 · 21:10</b><div class="t12 c2 med">thèm 3/5 · đói 2/5 · "đi ăn cưới về"</div></div><span class="c2"><i data-i="next"></i></span></div>
+    <div class="mo"><span class="t22">😐</span><div class="grow"><b>T5 29/10 · 22:00</b><div class="t12 c2 med">thèm 4/5 · đói 3/5</div></div><span class="c2"><i data-i="next"></i></span></div>
+  </div>
+  <div class="dc row gap12"><div style="width:64px;height:64px;border-radius:50%;background:conic-gradient(var(--xp) 0 45%,var(--gold) 0 75%,var(--mana) 0 90%,var(--hp) 0);flex:none"></div><div class="t12 c3 med">Tâm trạng (toàn bộ): 😄 45% · 🙂 30% · 😐 15% · 😞 10%</div></div>
+  <div class="dc"><div class="row between"><b class="t14">Nhận định tuần (AI)</b><span class="chip s mana">Lấy gợi ý</span></div><div class="t13 c3 med mt6">Thèm nhiều vào tối T5 – CN. Thử ăn tối sớm hơn và để sẵn trái cây.</div><div class="t11 c2 med mt4">Ít dữ liệu: "Ghi thêm cảm giác để có gợi ý"</div></div>
+
+  <div class="lbl"><span class="badge gold">Tháng · biểu đồ ngày</span></div>
+  <div class="dc"><div class="row between"><b class="t14">Kcal nạp / đốt theo ngày</b><span class="t11 c2 med">trống = chưa ghi / cheat</span></div>
+    <div class="bars mt8" id="b"></div>
+    <div class="row gap10 t11 c2 med mt6"><span class="row gap4"><i style="width:10px;height:10px;background:var(--gold);border-radius:3px"></i>nạp</span><span class="row gap4"><i style="width:10px;height:10px;background:var(--mana);border-radius:3px"></i>đốt</span></div></div>
+  <div class="dc"><b class="t14">Theo tuần</b>
+    <div class="mo"><div class="grow"><b>Tuần 44</b><div class="t12 c2 med">TB 1,560 kcal/ngày · 4 buổi tập</div></div><b class="cx">−0.6 kg</b></div>
+    <div class="mo"><div class="grow"><b>Tuần 43</b><div class="t12 c2 med">TB 1,610 kcal/ngày · 3 buổi tập</div></div><b class="cx">−0.4 kg</b></div>
+  </div>
+  <div class="dc"><b class="t14">Mốc tiến trình</b><div class="mo"><span class="badge xp">đã qua</span><span class="grow">Mốc 1 · 79 kg</span><span class="c2">12/10</span></div><div class="mo"><span class="badge gold">sắp tới</span><span class="grow">Mốc 2 · 74 kg</span><span class="c2">còn 38 ngày</span></div><div class="mo"><span class="badge">đích</span><span class="grow">72 kg</span><span class="c2">hạn 31/1/2027</span></div></div>
+
+  <div class="lbl"><span class="badge gold">Tháng · danh sách ngày (thay "Danh sách | Lịch")</span></div>
+  <div class="dc"><div class="row between"><b class="t14">T5 29/10</b><span class="badge hp">Dư 150</span></div><div class="t12 c2 med mt4">1,850 kcal · 96 g đạm · nước 2.0 / 2.5 L · 3/3 bữa · 1 buổi tập</div><div class="row gap8 mt6 t12"><span class="cm">📷 4 ảnh</span><span class="cg">Bảng bữa ▾</span><span class="cg">Tập ▾</span></div></div>
+  <div class="t12 c2 med mt6">Lưới lịch tháng = heatmap ở 07 (‹ tháng ›, chọn tháng / năm, chạm ngày → tab Ngày của ngày đó).</div>
+  <div class="note ok in"><b>Gộp HistoryView</b> (Lịch sử) vào Nhật ký: Thành tích chuỗi → "Mốc lửa trại" (07); nhật ký cảm giác tuần, biểu đồ cảm xúc, nhận định AI tuần (+ lỗi, ít dữ liệu), phản hồi Coach (07), mốc tiến trình, biểu đồ thâm hụt (07, cột), biểu đồ kcal nạp / đốt, tổng kết theo tuần, nhật ký hằng ngày (danh sách theo tháng: kcal, đạm, nước theo mục tiêu ngày đó, bữa n/3, tập gập / mở, 📷 n ảnh → 11, bảng bữa sửa được → 08) và Lịch (heatmap 07). Coach xem bản chỉ đọc (44). Chú giải màu thâm hụt → ⓘ ở dải tuần.</div>
+</div>
+<script>document.getElementById('b').innerHTML=[60,72,55,80,0,68,58,74,62,0,70,66,52,78].map((v,i)=>v?`<i style="height:${v}%;background:${i%2?'var(--mana)':'var(--gold)'};${i%2?'height:'+(v/3)+'%':''}"></i>`:'<i style="height:2px;background:var(--border)"></i>').join('')</script>
+</body></html>

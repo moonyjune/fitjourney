@@ -1,0 +1,37 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Chọn ngày</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal div{height:44px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:14px;background:var(--raised)}.cal .h{background:none;height:22px;font-size:11px;color:var(--text2)}.cal .off{background:none;color:#5d5480}.cal .on{background:var(--gold);color:var(--onGold)}.cal .today{border:1.5px solid var(--gold)}.cal i{width:5px;height:5px;border-radius:50%;margin-top:3px}</style></head><body>
+<div data-status="after"></div>
+<div class="ghost"><div class="gin">
+  <div class="row"><div class="grow h2">Ghi nhanh</div><span class="chip"><i data-i="calendar"></i>Hôm nay<i data-i="down"></i></span></div>
+  <div class="panel mt12" style="height:70px;background:var(--gold);border-color:var(--gold)"></div>
+</div></div>
+<div class="sheet in">
+  <div class="grab"></div>
+  <div class="row"><div class="grow"><div class="h2">Ghi cho ngày</div><div class="t12 c2 med">Áp dụng cho bữa, nước, cân, tập, cảm giác</div></div><div class="iconbtn"><i data-i="x"></i></div></div>
+  <div class="row gap6 mt12"><span class="chip">Hôm nay</span><span class="chip on">Hôm qua</span><span class="chip">2 ngày trước</span></div>
+  <div class="row between mt12"><div class="iconbtn"><i data-i="back"></i></div><b class="t15">Tháng 10 – 11 / 2026</b><div class="iconbtn" style="opacity:.4"><i data-i="next"></i></div></div>
+  <div class="cal mt8" id="cal"></div>
+  <div class="row gap10 mt8 t11 c2 med wrap"><span class="row gap4"><i style="width:6px;height:6px;border-radius:50%;background:var(--xp)"></i>đã ghi</span><span>· xám = ngoài 30 ngày hoặc tương lai</span></div>
+  <div class="flabel">Ngày xa hơn (chỉ dùng cho ngày bắt đầu kế hoạch)</div>
+  <div class="field"><span class="c2"><i data-i="edit"></i></span><span class="ph">DD/MM/YYYY</span></div>
+  <div class="btn mt16">Ghi cho Hôm qua · CN 1/11</div>
+  <div class="note ok in"><b>Thay cho</b> <code>LogDayPicker</code> ‹ › (Ghi nhanh, Check-in) và <code>DateOffsetPicker</code> (Cân nặng, Dinh dưỡng, Tập cũ, Kế hoạch). Giữ đủ: lùi / tới từng ngày, "Về hôm nay", không cho chọn tương lai, lùi tối đa 30 ngày, ô nhập ngày tuỳ ý. <b>Mới:</b> cân nặng và tập cũng theo ngày đã chọn (trước đây luôn là hôm nay). Ngày ≠ hôm nay thì chip đổi màu vàng "Hôm qua ▾" ở mọi màn ghi (thay <code>LogDateBanner</code>).</div>
+</div>
+<script>
+const c = document.getElementById('cal');
+c.innerHTML = ['T2','T3','T4','T5','T6','T7','CN'].map(d => `<div class="h">${d}</div>`).join('');
+// Mon 28/9 .. Sun 8/11; window = 3/10 .. 2/11 (today)
+const start = new Date(2026, 8, 28);
+for (let i = 0; i < 42; i++) {
+  const d = new Date(start); d.setDate(start.getDate() + i);
+  const t = new Date(2026, 10, 2), lo = new Date(2026, 9, 3);
+  let cls = d < lo || d > t ? 'off' : '';
+  if (+d === +new Date(2026, 10, 1)) cls = 'on';
+  if (+d === +t) cls += ' today';
+  const logged = !cls.includes('off') && d.getDate() % 5 !== 0;
+  c.insertAdjacentHTML('beforeend', `<div class="${cls}">${d.getDate()}${logged && !cls.includes('on') ? '<i style="background:var(--xp)"></i>' : ''}</div>`);
+}
+</script>
+</body></html>

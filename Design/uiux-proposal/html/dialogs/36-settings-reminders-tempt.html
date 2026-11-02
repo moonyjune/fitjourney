@@ -1,0 +1,31 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Nhắc nhở và cám dỗ</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.mr{display:flex;align-items:center;gap:12px;min-height:56px;padding:0 12px;border-bottom:1px solid var(--border)}.mr:last-child{border:none}.hl{display:flex;align-items:center;gap:8px;min-height:40px;font-size:13px;border-bottom:1px solid var(--border)}.hl:last-child{border:none}</style></head><body>
+<div data-status="after"></div>
+<div class="screen">
+  <div class="header"><div class="iconbtn"><i data-i="back"></i></div><div class="grow"><div class="t12 c2 med">Hồ sơ › Cài đặt</div><span class="h2">Nhắc nhở & cám dỗ</span></div></div>
+  <div class="panel" style="padding:0">
+    <div class="mr"><div class="grow"><b class="t14">Nhắc nhở</b><div class="t12 c2 med">Giờ ăn, giờ tập, uống nước (cả trên web)</div></div><span class="sw on"></span></div>
+    <div class="mr"><div class="grow"><b class="t14">Pop-up uống nước</b><div class="t12 c2 med">theo lịch nước · 5 lần</div></div><span class="sw on"></span></div>
+  </div>
+  <div class="t12 chp mt6">Chưa cấp quyền thông báo → dòng đỏ + nút "Mở cài đặt" (thay Alert)</div>
+  <div class="row between mt16"><div><b class="t15">Thử thách cám dỗ</b><div class="t12 c2 med">Từ chối +15 XP · thua chỉ mất chuỗi</div></div><span class="sw on"></span></div>
+  <div class="panel mt8" style="padding:12px">
+    <div class="t12 c2 med">Độ khó</div><div class="seg mt6"><div>Dễ</div><div class="on">Khó (AI)</div></div>
+    <div class="t12 c2 med mt6">AI tìm món đang hot, hợp thời tiết, kèm ảnh thật (tối đa 3 lần/ngày)</div>
+    <div class="t12 c2 med mt12">Tần suất</div><div class="seg mt6"><div>Ít (1)</div><div class="on">Vừa (3)</div><div>Nhiều (5)</div></div>
+    <div class="t12 c2 med mt12">Giờ yên tĩnh (từ – đến)</div><div class="row gap8 mt6"><div class="step grow" style="justify-content:space-between"><span>−</span><b>22:00</b><span>+</span></div><div class="step grow" style="justify-content:space-between"><span>−</span><b>07:00</b><span>+</span></div></div>
+    <div class="t12 cm med mt6">Đang 16:8: chỉ cám dỗ trong 12:00–20:00</div>
+    <div class="flabel">Thành phố (tuỳ chọn)</div><div class="field"><span>TP.HCM</span></div>
+  </div>
+  <div class="panel row gap10 mt8" style="padding:10px 12px"><span class="cg t22"><i data-i="shield"></i></span><span class="t13 c3 med grow">Đã kháng 12 · Thua 3 · Chuỗi 5 (kỷ lục 7) · +180 XP</span></div>
+  <div class="btn ghost sm mt8"><i data-i="play"></i>Thử ngay (luyện tập, không tính điểm)</div>
+  <div class="row between mt12"><b class="t14">Gần đây</b></div>
+  <div class="panel mt6" style="padding:0 12px">
+    <div class="hl"><span>🧋</span><span class="grow">Trà sữa · hôm nay 15:20</span><span class="cx">đã kháng</span></div>
+    <div class="hl"><span>🍜</span><span class="grow">Mì cay · CN 23:10</span><span class="chp">đã thua</span></div>
+  </div>
+  <div class="note ok in"><b>Giữ</b> công tắc Nhắc nhở (xin quyền, web cũng bật được) và <b>TemptationSettings</b> đủ: bật / tắt, Dễ / Khó (AI) + giải thích, 1/3/5 lần, giờ yên tĩnh (sớm / muộn hơn), ghi chú 16:8, thành phố, thống kê, Thử ngay, Gần đây. Tắt → chỉ còn công tắc. <b>Mới</b>: công tắc riêng cho pop-up nước (trước dùng chung Nhắc nhở) — ⚠ cần chốt có tách không. Bản trùng "không hoạt động trên web" ở plan.tsx bỏ.</div>
+</div>
+</body></html>

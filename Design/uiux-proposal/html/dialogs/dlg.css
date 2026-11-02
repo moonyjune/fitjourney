@@ -1,0 +1,38 @@
+/* Dialog / sheet mockups: small helpers on top of ../kit.css (kit.css itself is untouched). */
+body { display: flex; flex-direction: column; min-height: 844px; }
+/* the parent screen, dimmed behind a sheet; grows so the sheet always sits at the bottom of the page */
+body > .ghost { flex: 1; position: relative; overflow: hidden; min-height: 150px; padding: 4px 16px 0; }
+body > .ghost > .gin { opacity: .45; }
+body > .ghost::after { content: ''; position: absolute; inset: 0; background: rgba(8,6,18,.72); }
+body > .ghost.center { display: flex; align-items: center; justify-content: center; padding: 24px 20px; }
+body > .ghost.center::after { z-index: 0; }
+body > .ghost.center > .dlg { position: relative; z-index: 2; }
+.sheet.in { position: relative; left: auto; right: auto; bottom: auto; }
+.screen { flex: 1; padding: 4px 16px 32px; }
+.dlg { background: var(--panel); border: 1.5px solid var(--border); border-radius: 20px; padding: 16px; width: 100%; }
+.note.in { position: relative; left: auto; right: auto; bottom: auto; margin-top: 12px; }
+.lbl { display: flex; align-items: center; gap: 8px; margin: 22px 0 10px; }
+.lbl::before, .lbl::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.flabel { font-size: 12px; color: var(--text2); font-weight: 500; margin: 12px 0 6px; }
+.field { min-height: 48px; border-radius: 12px; background: var(--raised); border: 1.5px solid var(--border); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 15px; }
+.field .ph { color: var(--text2); font-weight: 500; }
+.field.area { min-height: 76px; align-items: flex-start; padding-top: 12px; }
+.sw { width: 48px; height: 28px; border-radius: 99px; background: var(--raised2); border: 1.5px solid var(--border); position: relative; flex: none; }
+.sw::after { content: ''; position: absolute; left: 4px; top: 4px; width: 17px; height: 17px; border-radius: 50%; background: var(--text2); }
+.sw.on { background: var(--xp); border-color: var(--xp); }
+.sw.on::after { left: 23px; background: var(--onGold); }
+.step { display: flex; align-items: center; border: 1.5px solid var(--border); border-radius: 12px; height: 44px; flex: none; }
+.step span { width: 40px; text-align: center; font-size: 18px; }
+.step b { min-width: 54px; text-align: center; font-size: 13px; }
+.lrow { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 12px; border-bottom: 1px solid var(--border); }
+.lrow:last-child { border-bottom: none; }
+.lrow .v { color: var(--text2); font-size: 13px; font-weight: 500; }
+.toast { background: #0b1d2a; border: 1.5px solid var(--manaB); border-radius: 14px; padding: 0 6px 0 14px; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.toast.gold { background: #2a2210; border-color: #6b5420; }
+.undo { display: inline-flex; align-items: center; gap: 6px; color: var(--gold); font-size: 13px; padding: 0 10px; min-height: 44px; white-space: nowrap; }
+.ic { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex: none; }
+.wrap { flex-wrap: wrap; }
+.center { text-align: center; }
+.danger { color: var(--hpT); }
+.btn.danger { background: var(--bossP); color: var(--hpT); border: 1.5px solid var(--bossB); box-shadow: none; }
+.sq { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }

@@ -1,0 +1,36 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Kế hoạch, AI, đi chợ</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../kit.css"><link rel="stylesheet" href="dlg.css"><script src="../kit.js"></script>
+<style>.bub{background:var(--raised);border-radius:14px 14px 14px 4px;padding:8px 10px;font-size:13px;font-weight:500;color:var(--text3);max-width:85%}.bub.me{background:#2a2210;border-radius:14px 14px 4px 14px;color:var(--goldL);margin-left:auto}.sl{display:flex;align-items:center;gap:10px;min-height:48px;border-bottom:1px solid var(--border);font-size:14px}.sl:last-child{border:none}.cb{width:26px;height:26px;border-radius:8px;border:1.5px solid var(--border);flex:none;display:flex;align-items:center;justify-content:center}.cb.on{background:var(--xp);border-color:var(--xp);color:var(--onGold)}</style></head><body>
+<div data-status="after"></div>
+<div class="screen">
+  <div class="header"><div class="iconbtn"><i data-i="back"></i></div><div class="grow"><div class="t12 c2 med">Mục tiêu & kế hoạch › Thực đơn & lịch tập</div><span class="h2">Kế hoạch hiện tại</span></div></div>
+  <div class="seg"><div class="on">Ngày tập</div><div>Ngày nghỉ</div></div>
+  <div class="panel mt10" style="padding:0 12px">
+    <div class="sl"><span class="t12 c2 med" style="width:44px">07:00</span><span class="grow">Bữa sáng · Bánh mì trứng + sữa</span><span class="c2 t12">420</span></div>
+    <div class="sl"><span class="t12 c2 med" style="width:44px">12:00</span><span class="grow">Bữa trưa · Cơm gạo lứt, ức gà, rau</span><span class="c2 t12">540</span></div>
+    <div class="sl"><span class="t12 c2 med" style="width:44px">18:30</span><span class="grow">Bữa tối · Canh chua cá</span><span class="c2 t12">460</span></div>
+    <div class="sl"><span class="t12 c2 med" style="width:44px">06:00</span><span class="grow">Tập · Cardio sáng 30′</span><span class="chp t12">−250</span></div>
+  </div>
+  <div class="t12 c2 med mt6">Lịch nước hôm nay: 5 ly × 500 ml, 06:00–21:00</div>
+  <div class="row between mt12"><b class="t14">Đổi món (giữ kcal & đạm)</b><span class="c2"><i data-i="down"></i></span></div>
+  <div class="t12 c2 med mt4">Tinh bột ~120–140 kcal: cơm gạo lứt · bún · khoai lang · Đạm ~30–35 g: ức gà · cá · đậu phụ</div>
+
+  <div class="lbl"><span class="badge mana">Trợ lý AI sửa kế hoạch</span></div>
+  <div class="dlg">
+    <div class="row between"><b class="t15">Cuộc trò chuyện</b><span class="chip s"><i data-i="plus"></i>Mới</span></div>
+    <div class="col gap6 mt10"><div class="bub me">Chỉnh sửa bài tập "Cardio sáng": đổi thành đi bộ nhanh 40 phút</div><div class="bub">Mình đổi Cardio sáng → Đi bộ nhanh 40′ (~260 kcal). Áp dụng?</div></div>
+    <div class="panel mt8" style="padding:8px 10px;border-color:#6b5420"><div class="t12 cgl med">Thay đổi chờ áp dụng · 1 bài tập</div><div class="row gap8 mt6"><span class="chip s">Xem chi tiết ▾</span><span class="grow"></span><span class="chip s">Huỷ</span><span class="chip s on">Áp dụng</span></div></div>
+    <div class="row gap8 mt10"><div class="field grow"><span class="ph">Bạn muốn đổi gì?</span></div><div class="sq" style="background:var(--mana);color:var(--onGold)"><i data-i="next"></i></div></div>
+  </div>
+  <div class="lbl"><span class="badge gold">Danh sách đi chợ (tuần này)</span></div>
+  <div class="dlg">
+    <div class="sl"><span class="cb on"><i data-i="check"></i></span><span class="grow">Ức gà · 1 kg</span><span class="t12 c2 med">95k → 92k</span></div>
+    <div class="sl"><span class="cb"></span><span class="grow">Gạo lứt · 2 kg</span><span class="t12 c2 med">~70k</span></div>
+    <div class="sl"><span class="cb"></span><span class="grow">Rau cải · 3 bó</span><span class="t12 c2 med">~30k</span></div>
+    <div class="t12 c2 med mt6">Chạm dòng: số lượng / giá thực tế · tự đặt lại đầu tuần</div>
+    <div class="btn ghost sm mt8"><i data-i="plus"></i>Thêm nguyên liệu khác</div>
+  </div>
+  <div class="note ok in"><b>Giữ từ plan.tsx</b>: QuestPlanPreview (bữa, giờ, món, tập, lịch nước hôm nay), Tùy biến món (nhóm tinh bột / đạm), <b>PlanChatAssistant</b> (phiên mới, câu điền sẵn khi mở từ "Sửa bằng AI" ở Tập khác, gửi, chi tiết thay đổi, Áp dụng / Huỷ, lỗi), <b>QuestShoppingList / ShoppingListEditor</b> (tick, số lượng + giá thực tế, thêm nguyên liệu: tên, nhóm, số lượng, giá dự kiến, đặt lại đầu tuần). Alert "Coach vừa cập nhật thực đơn" → toast + chấm đỏ ở dòng Thực đơn.</div>
+</div>
+</body></html>

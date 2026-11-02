@@ -1,0 +1,68 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Tổng quan hộp thoại</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#110D22;color:#F4F1FF;font-family:'Chakra Petch',sans-serif;padding:36px 40px}
+h1{margin:0;font-size:40px} .sub{color:#B3AACF;font-size:18px;margin:6px 0 26px}
+.grid{display:grid;grid-template-columns:repeat(6,1fr);gap:28px 24px;align-items:start}
+.card{background:#1C1636;border:2px solid #3A2F6B;border-radius:20px;padding:12px}
+.card h2{margin:0 0 8px;font-size:17px;color:#FFC83D;line-height:1.25}
+.card h2 span{color:#B3AACF;font-weight:500}
+.card img{width:100%;border-radius:12px;display:block;border:1px solid #3A2F6B}
+.water{border-color:#1F5A78}
+</style></head><body>
+<h1>FitQuest · Hộp thoại, sheet và màn con (đề xuất)</h1>
+<div class="sub">Mọi hộp thoại app đang có, đặt đúng chỗ mở trong thiết kế mới. Khung xanh lá trong từng ảnh ghi chức năng nào giữ, chức năng nào dời đi đâu. Bảng đầy đủ: dialogs.md. Ảnh là cả chiều dài, 390 pt.</div>
+<div class="grid" id="g"></div>
+<script>
+const items = [
+  ['01-date-sheet', 'Chọn ngày'],
+  ['02-weight-sheet', 'Ghi cân nặng'],
+  ['03-checkin-sheet', 'Cảm giác'],
+  ['04-water-undo', 'Nước và Hoàn tác'],
+  ['05-meal-input', 'Ghi bữa: nhập'],
+  ['06-saved-foods-sheet', 'Món đã lưu'],
+  ['07-meal-review-more', 'Ghi bữa: phần thêm'],
+  ['08-item-edit-sheet', 'Sửa từng số'],
+  ['09-plan-meal', 'Bữa theo kế hoạch'],
+  ['10-meal-detail-sheet', 'Chi tiết bữa'],
+  ['11-photo-viewer', 'Xem ảnh'],
+  ['12-workout-detail-sheet', 'Chi tiết buổi tập'],
+  ['13-other-workout-sheet', 'Tập khác'],
+  ['14-train-detail', 'Cách tập'],
+  ['15-train-session', 'Buổi tập đang chạy'],
+  ['16-level-up', 'Lên cấp'],
+  ['17-missions-sheet', 'Nhiệm vụ hôm nay'],
+  ['18-weekly-boss-sheet', 'Boss tuần'],
+  ['19-weekly-report', 'Tổng kết tuần'],
+  ['20-stage-boss-detail', 'Chi tiết boss chặng'],
+  ['21-meal-budget-prefs', 'Phần của bữa'],
+  ['22-recipe', 'Công thức'],
+  ['23-cookbook-filter-sheet', 'Bộ lọc Cook book'],
+  ['24-cookbook-suggest', 'Gợi ý món mới'],
+  ['25-cheat-place-info', 'Thông tin quán'],
+  ['26-cheat-location-history', 'Vị trí và lịch sử tìm quán'],
+  ['27-temptation-popup', 'Thử thách cám dỗ'],
+  ['28-journal-more', 'Nhật ký: phần mở rộng'],
+  ['29-insights', 'Phân tích'],
+  ['30-food-db', 'CSDL món'],
+  ['31-weight-log', 'Cân nặng trong Nhật ký'],
+  ['32-achievements', 'Thành tích'],
+  ['33-settings-goals', 'Mục tiêu và kế hoạch'],
+  ['34-plan-ai-shopping', 'Kế hoạch, AI, đi chợ'],
+  ['35-settings-water-limits', 'Nước, giới hạn, 16:8'],
+  ['36-settings-reminders-tempt', 'Nhắc nhở và cám dỗ'],
+  ['37-settings-ai-account', 'AI, Coach và tài khoản'],
+  ['38-import-diary', 'Nhập nhật ký'],
+  ['39-ai-admin', 'AI và chi phí'],
+  ['40-habits', 'Thói quen'],
+  ['41-uric', 'Axit uric'],
+  ['42-learn', 'Kiến thức'],
+  ['43-confirms-toasts', 'Xác nhận và thông báo'],
+  ['44-coach', 'Màn Coach'],
+  ['45-onboarding-auth', 'Đăng nhập và bắt đầu']
+];
+const g = document.getElementById('g');
+for (const [n, t] of items) g.insertAdjacentHTML('beforeend', `<div class="card"><h2>${n.slice(0,2)} <span>·</span> ${t}</h2><img src="../png/dialogs/${n}.png"></div>`);
+g.insertAdjacentHTML('beforeend', `<div class="card water"><h2>09 <span>·</span> Pop-up nước (màn chính)</h2><img src="../png/09-water-after.png"></div>`);
+</script>
+</body></html>
