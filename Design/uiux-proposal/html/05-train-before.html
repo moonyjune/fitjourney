@@ -1,24 +1,34 @@
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Tập hiện tại</title>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="kit.css"><script src="kit.js"></script>
-<style>.ex{display:flex;align-items:center;gap:10px;padding:8px 10px;margin-top:8px}.box{width:24px;height:24px;border-radius:7px;border:2px solid var(--border)}</style></head><body>
+<style>.grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:8px}.tile{width:calc(50% - 5px);position:relative;background:var(--panel);border:1.5px solid var(--border);border-radius:16px;padding:10px 10px 12px}.tile.on{border-color:var(--gold);background:var(--raised)}.tile .fig{height:84px;display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:12px}.tile .chk{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:12px;background:var(--gold);color:var(--onGold);display:flex;align-items:center;justify-content:center;font-size:14px}.tile .inf{position:absolute;bottom:8px;right:8px;width:28px;height:28px;border-radius:14px;background:var(--bg);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:14px}.tile b{display:block;margin-top:8px}</style></head><body>
 <div data-status="before"></div>
 <div class="content tabbed">
   <div class="row gap8"><span class="cx t22"><i data-i="dumbbell"></i></span><div class="grow"><div class="t12 c2 med">Thứ hai · Nhóm A</div><div class="h2">Nhiệm vụ Tập luyện</div></div><span class="badge xp">+60 XP</span></div>
   <div class="t12 c2 med mt12">Chọn nhóm bài</div>
   <div class="seg mt6"><div class="on">A · Thân dưới</div><div>B · Thân trên</div><div>C · Đốt calo</div></div>
-  <div class="t12 c2 med mt8">Hôm nay gợi ý nhóm A</div>
-  <div class="row between mt12"><span class="h3">Chọn từ 2 bài trở lên</span><span class="t12 c2 med">0 đã chọn</span></div>
-  <div class="panel ex"><div class="box"></div><div data-ex="squat" data-size="40"></div><div class="grow"><b class="t14">Squat</b><div class="t12 c2 med">Cấp 3</div></div><div class="iconbtn" style="width:36px;height:36px;font-size:16px"><i data-i="info"></i></div></div>
-  <div class="panel ex"><div class="box"></div><div data-ex="lunge" data-size="40"></div><div class="grow"><b class="t14">Lunge</b><div class="t12 c2 med">Cấp 2</div></div><div class="iconbtn" style="width:36px;height:36px;font-size:16px"><i data-i="info"></i></div></div>
-  <div class="panel ex"><div class="box"></div><div data-ex="glute" data-size="40"></div><div class="grow"><b class="t14">Glute bridge</b><div class="t12 c2 med">Cấp 4</div></div><div class="iconbtn" style="width:36px;height:36px;font-size:16px"><i data-i="info"></i></div></div>
-  <div class="panel ex" style="opacity:.8"><div class="box" style="background:var(--raised2)"></div><div data-ex="plank" data-size="40"></div><div class="grow"><b class="t14">Cằm lùi</b><div class="t12 c2 med">luôn kèm</div></div></div>
-  <div class="row mt12 t13 c2 med" style="justify-content:center;gap:6px">Ghi buổi tập khác (màn hình cũ) <i data-i="next"></i></div>
-  <div class="panel row between mt12" style="padding:10px 12px"><div><div class="t13">Chọn ít nhất 2 bài</div><div class="t12 c2 med">≈ 0 phút</div></div><div class="btn sm" style="opacity:.45;padding:0 22px">Bắt đầu</div></div>
+  <div class="t12 cm med mt8">⇄ Hôm nay gợi ý nhóm A</div>
+  <div class="row between mt12"><span class="h3">Chọn từ 2 bài trở lên</span><span class="t13 cg">3 đã chọn</span></div>
+  <div class="grid">
+    <div class="tile on"><div class="fig" data-ex="squat" data-size="76"></div><div class="chk"><i data-i="check"></i></div><b class="t14">Squat ngồi ghế</b><div class="t12 c2 med">3×15 · Cấp 3</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile"><div class="fig" data-ex="pushup" data-size="76"></div><b class="t14">Chống đẩy tường</b><div class="t12 c2 med">3×12 · Cấp 2</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile on"><div class="fig" data-ex="plank" data-size="76"></div><div class="chk"><i data-i="check"></i></div><b class="t14">Plank chống gối</b><div class="t12 c2 med">3×30″ · Cấp 2</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile on"><div class="fig" data-ex="glute" data-size="76"></div><div class="chk"><i data-i="check"></i></div><b class="t14">Cầu mông</b><div class="t12 c2 med">3×10/bên · Cấp 4</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile"><div class="fig" data-ex="plank" data-size="76"></div><b class="t14">Dead bug</b><div class="t12 c2 med">3×8/bên · Cấp 2</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile"><div class="fig" data-ex="lunge" data-size="76"></div><b class="t14">Lunge lùi vịn ghế</b><div class="t12 c2 med">2×6/bên · Cấp 1</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile"><div class="fig" data-ex="pushup" data-size="76"></div><b class="t14">Dip ghế co gối</b><div class="t12 c2 med">2×6 · Cấp 1</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile"><div class="fig" data-ex="run" data-size="76"></div><b class="t14">Nâng gối tại chỗ</b><div class="t12 c2 med">3×40″ · Cấp 2</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile"><div class="fig" data-ex="plank" data-size="76"></div><b class="t14">Bird-dog</b><div class="t12 c2 med">3×8/bên · Cấp 1</div><div class="inf"><i data-i="next"></i></div></div>
+    <div class="tile" style="border-style:dashed"><div class="fig" data-ex="squat" data-size="76"></div><b class="t14">Cằm lùi</b><div class="t12 cm med">2×10 · luôn kèm</div></div>
+  </div>
+  <div class="row mt16 t13 c2 med" style="justify-content:center;gap:6px">Ghi buổi tập khác (màn hình cũ) <i data-i="next"></i></div>
+  <div class="panel row between mt16" style="padding:10px 12px;background:var(--raised)"><div><div class="t12 c2 med">3 bài + cằm lùi</div><div class="t18 bold">≈ 18 phút</div></div><div class="btn sm" style="padding:0 22px;width:150px">Bắt đầu <i data-i="next"></i></div></div>
+  <div class="t11 c2 med mt4" style="text-align:center">thanh này dính đáy, nằm trên thanh tab</div>
+  <div style="height:96px"></div>
 </div>
 <div data-tabbar="1"></div>
-<div class="pin" style="left:6px;top:160px">1</div>
-<div class="pin" style="right:8px;top:260px">2</div>
-<div class="pin" style="left:6px;top:640px">3</div>
+<div class="pin" style="left:6px;top:174px">1</div>
+<div class="pin" style="right:8px;top:262px">2</div>
+<div class="pin" style="left:6px;top:1042px">3</div>
 <div class="note"><b>① Chọn nhóm + chọn bài + bắt đầu</b>: tối thiểu 4 chạm dù app đã biết hôm nay gợi ý nhóm A · <b>② Checkbox 24 px</b> &lt; 44 pt, nút ⓘ 36 px · <b>③ "màn hình cũ"</b> là nơi duy nhất ghi chạy/bơi/ảnh đồng hồ và AI ước tính kcal — gọi là "cũ" khiến người dùng ngại bấm.</div>
 </body></html>

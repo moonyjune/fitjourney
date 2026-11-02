@@ -1,35 +1,108 @@
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Bản đồ hiện tại</title>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="kit.css"><script src="kit.js"></script></head><body>
+<link rel="stylesheet" href="kit.css"><script src="kit.js"></script>
+<style>
+.rel { position: relative; }
+.pin.in { left: -14px; top: -10px; }
+.bnode { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; background: var(--raised); margin-top: 8px; }
+.bnode .av { width: 52px; height: 52px; border-radius: 12px; background: var(--raised2); display: flex; align-items: center; justify-content: center; flex: none; position: relative; }
+.flag { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; border: 1.5px dashed var(--border); margin-top: 8px; font-size: 13px; }
+.drow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.drow:last-child { border-bottom: none; }
+.drow .d { width: 54px; flex: none; font-size: 12px; font-weight: 700; }
+.drow .d span { display: block; font-size: 10px; color: var(--text2); font-weight: 500; }
+.lv { width: 4px; align-self: stretch; border-radius: 4px; flex: none; }
+.bub { border-radius: 14px; padding: 8px 10px; font-size: 12px; line-height: 1.45; font-weight: 500; max-width: 82%; }
+.bub.boss { background: var(--bossP); border: 1.5px solid var(--bossB); color: var(--text3); }
+.bub.me { background: var(--raised2); color: var(--text); margin-left: auto; }
+</style></head><body>
 <div data-status="before"></div>
 <div class="content">
-  <div class="seg"><div class="on">Bản đồ</div><div>Biểu đồ</div></div>
+  <div class="seg rel"><div class="pin in">1</div><div class="on">Bản đồ</div><div>Biểu đồ</div></div>
+  <div class="mt12"><div class="h2">Bản đồ</div><div class="t13 c2 med">79.4 kg · Vùng 1</div></div>
   <div class="row gap8 mt12">
     <div class="panel col" style="flex:1;padding:10px;align-items:center"><b class="t18 cx">4.6 kg</b><span class="t11 c2 med">đã giảm</span></div>
     <div class="panel col" style="flex:1;padding:10px;align-items:center"><b class="t18 cg">0</b><span class="t11 c2 med">boss đã hạ</span></div>
     <div class="panel col" style="flex:1;padding:10px;align-items:center"><b class="t18">7.4 kg</b><span class="t11 c2 med">còn lại</span></div>
   </div>
-  <div class="panel boss row gap12 mt12" style="padding:12px">
-    <div data-boss="#D99BFF" data-size="64" data-acc="tea"></div>
-    <div class="grow"><div class="t11 c2 med">Boss đang chặn đường · Độ khó 2/5</div><b>Slime Trà Sữa</b><div class="bar thin mt6"><i style="width:68%;background:var(--hp)"></i></div><div class="t12 c2 med mt4">HP 1.6 / 5 kg</div></div>
+  <!-- current stage boss -->
+  <div class="panel boss mt12 rel" style="padding:12px">
+    <div class="pin in">2</div>
+    <div class="row gap12">
+      <div data-boss="#D99BFF" data-size="64" data-acc="tea"></div>
+      <div class="grow"><div class="t11 c2 med">Boss đang chặn đường · Độ khó 2/5</div><b>Slime Trà Sữa</b> <span class="t11 c2 med">· Tinh anh ★★</span><div class="bar thin mt6"><i style="width:68%;background:var(--hp)"></i></div><div class="t12 c2 med mt4">HP 1.6 / 5 kg</div></div>
+    </div>
+    <div class="row gap6 mt8" style="flex-wrap:wrap"><span class="chip s">Trà sữa full topping</span><span class="chip s">Ăn vặt vô thức</span></div>
   </div>
-  <div class="panel mt12" style="padding:12px;height:120px">
+  <!-- zone panel -->
+  <div class="panel mt12" style="padding:12px">
     <div class="t12 c2 med">Vùng 1 · Đồng Khởi Hành · 84 → 79 kg</div>
     <svg width="330" height="70" class="mt8"><path d="M10 50 C80 0 150 70 220 30 S300 20 320 40" stroke="#3A2F6B" stroke-width="6" fill="none" stroke-dasharray="2 10" stroke-linecap="round"/><circle cx="240" cy="28" r="9" fill="#FFC83D"/></svg>
+    <div class="row between mt8"><span class="t12 c2 med">MỐC KẾ TIẾP</span><span class="t13">79 kg · còn 0.4 kg</span></div>
+    <div class="bar thin mt6"><i style="width:92%;background:var(--gold)"></i></div>
   </div>
-  <div class="row between mt12"><span class="t13 c2 med">Mốc kế tiếp</span><span class="t13">79 kg · còn 0.4 kg</span></div>
+  <!-- journey -->
   <div class="h3 mt16">Hành trình diệt boss</div>
   <div class="t12 c2 med">Mỗi 5 kg là một boss. Vùng càng xa, boss càng mạnh.</div>
-  <div class="panel mt8" style="padding:10px"><div class="row between"><b class="t14">Vùng 1</b><span class="t12 c2 med">0/1 boss · 92%</span></div></div>
-  <div class="panel mt8" style="padding:10px;opacity:.6"><div class="row between"><b class="t14">Vùng 2</b><span class="t12 c2 med">Mở khi đạt 79 kg</span></div></div>
-  <div class="h3 mt16">Nhật ký sát thương</div>
+  <div class="flag"><span class="cg"><i data-i="trophy"></i></span><b>Đích · 72 kg</b></div>
+  <div class="panel mt8" style="padding:10px;opacity:.6">
+    <div class="row between"><b class="t14">Vùng 2 · Rừng Kỷ Luật</b><span class="t12 c2 med">Mở khi đạt 79 kg</span></div>
+    <div class="t11 c2 med">Độ khó 3/5 · 79 → 72 kg</div>
+    <div class="bar thin mt6"><i style="width:0%"></i></div>
+    <div class="bnode"><div class="av"><div data-boss="#7EE0A1" data-size="44" data-acc="noodle"></div></div><div class="grow"><b class="t13">Ninja Mì Gói</b> <span class="badge">Boss cuối</span><div class="t12 c2 med">Mở khi đạt 74 kg</div></div><span class="c2"><i data-i="lock"></i></span></div>
+    <div class="bnode"><div class="av"><div data-boss="#FFB347" data-size="44" data-acc="beer"></div></div><div class="grow"><b class="t13">Gã Thùng Bia</b><div class="t12 c2 med">Mở khi đạt 79 kg</div></div><span class="c2"><i data-i="lock"></i></span></div>
+  </div>
+  <div class="panel mt8" style="padding:10px">
+    <div class="row between"><b class="t14">Vùng 1 · Đồng Khởi Hành</b><span class="t12 c2 med">0/1 boss · 92%</span></div>
+    <div class="t11 c2 med">Độ khó 2/5 · 84 → 79 kg</div>
+    <div class="bar thin mt6"><i style="width:92%;background:var(--gold)"></i></div>
+    <div class="bnode" style="border:1.5px solid var(--gold)"><div class="av"><div data-boss="#D99BFF" data-size="44" data-acc="tea"></div></div><div class="grow"><b class="t13">Slime Trà Sữa</b><div class="t12 chp">Đang đánh · còn 0.4 kg</div><span class="badge gold mt4">Bạn ở đây · 79.4 kg</span></div></div>
+  </div>
+  <div class="flag"><span class="c2"><i data-i="pin"></i></span><b>Xuất phát · 84 kg</b></div>
+
+  <!-- BossDamageLog -->
+  <div class="h3 mt16 rel"><div class="pin" style="right:-12px;top:0">3</div>Nhật ký sát thương</div>
   <div class="dense">Mỗi ngày: sát thương ước tính từ thâm hụt calo (7,700 kcal ≈ 1 kg mỡ) so với sát thương thật trên cân.</div>
-  <div class="scrollhint" style="height:700px"><i style="height:120px"></i></div>
-  <div class="fade-bottom"></div>
+  <div class="seg mt8"><div class="on">Theo ngày</div><div>Nhật ký cân</div></div>
+  <div class="row gap8 mt8">
+    <div class="panel col" style="flex:1;padding:8px 10px"><b class="t15 cg">−0.52 kg</b><span class="t11 c2 med">ước tính (thâm hụt)</span></div>
+    <div class="panel col" style="flex:1;padding:8px 10px"><b class="t15 cx">−0.60 kg</b><span class="t11 c2 med">thực tế (cân)</span></div>
+  </div>
+  <div class="panel mt8" style="padding:4px 12px">
+    <div class="drow"><div class="d">T2 02/11<span>đánh Slime</span></div><i class="lv" style="background:var(--xp)"></i><div class="grow t12 med c3">thâm hụt 640 kcal</div><div class="col" style="align-items:flex-end"><span class="t12 cg">Ước tính −0.08</span><span class="t11 c2 med">Cân 79.4</span></div></div>
+    <div class="drow"><div class="d">CN 01/11<span>đánh Slime</span></div><i class="lv" style="background:var(--xp)"></i><div class="grow t12 med c3">thâm hụt 880 kcal</div><div class="col" style="align-items:flex-end"><span class="t12 cg">Ước tính −0.11</span><span class="t11 c2 med">chưa cân</span></div></div>
+    <div class="drow"><div class="d">T7 31/10<span>đánh Slime</span></div><i class="lv" style="background:var(--hp)"></i><div class="grow t12 med chp">dư 120 kcal</div><div class="col" style="align-items:flex-end"><span class="t12 chp">+0.02 hồi máu</span><span class="t11 c2 med">Cân 79.6</span></div></div>
+    <div class="drow"><div class="d">T6 30/10<span>đánh Slime</span></div><i class="lv" style="background:var(--gold)"></i><div class="grow t12 med c3">thâm hụt 700 kcal</div><div class="col" style="align-items:flex-end"><span class="t12 cg">Ước tính −0.09</span><span class="t11 c2 med">chưa cân</span></div></div>
+    <div class="drow"><div class="d">T5 29/10<span>cheat day</span></div><i class="lv" style="background:var(--text2)"></i><div class="grow t12 med c2">Cheat day · không tính kcal</div><div class="col" style="align-items:flex-end"><span class="t12 c2">—</span><span class="t11 c2 med">Cân 79.9</span></div></div>
+    <div class="drow"><div class="d">T4 28/10<span>đánh Slime</span></div><i class="lv" style="background:var(--gold)"></i><div class="grow t12 med c3">thâm hụt 410 kcal</div><div class="col" style="align-items:flex-end"><span class="t12 cg">Ước tính −0.05</span><span class="t11 c2 med">chưa cân</span></div></div>
+    <div class="drow"><div class="d">T3 27/10<span>đánh Slime</span></div><i class="lv" style="background:var(--xp)"></i><div class="grow t12 med c3">thâm hụt 820 kcal</div><div class="col" style="align-items:flex-end"><span class="t12 cg">Ước tính −0.11</span><span class="t11 c2 med">Cân 80.0</span></div></div>
+  </div>
+  <div class="t13 cg mt8" style="text-align:center">Xem thêm</div>
+
+  <!-- BanterSection -->
+  <div class="h3 mt16 rel"><div class="pin" style="right:-12px;top:0">3</div>Hội thoại chiến đấu</div>
+  <div class="dense">Mỗi ngày có ghi bữa ăn, boss chặng và bạn đấu khẩu: ngày thâm hụt bạn tung chiêu đánh mất mỡ của boss, ngày ăn dư boss hồi máu và khiêu khích bạn. Chỉ dùng số liệu thật của ngày đó.</div>
+  <div class="dense mt4">Mỗi lần AI viết dùng 1 lượt (tối đa 3 lượt mỗi ngày). Hội thoại của hôm qua được AI tự viết một lần khi bạn mở Bản đồ.</div>
+  <div class="panel mt8" style="padding:10px 12px">
+    <div class="row between"><b class="t13">Hôm nay · tạm tính</b><span class="badge xp">−83 g mỡ</span></div>
+    <div class="row gap8 mt8" style="align-items:flex-end"><div data-boss="#D99BFF" data-size="28" data-acc="tea"></div><div class="bub boss">Mới trưa mà đã 980 kcal… chiều nay ta mang trà sữa tới thăm nhé!</div></div>
+    <div class="bub me mt6">Chiêu: Cú đấm 45 phút tập! Sáng nay đốt 320 kcal rồi.</div>
+    <div class="row gap6 mt8"><span class="t11 c2 med">Thoại có sẵn</span><span class="chip s mana" style="margin-left:auto">Nhờ AI viết</span></div>
+  </div>
+  <div class="panel mt8" style="padding:10px 12px">
+    <div class="row between"><b class="t13">Chủ nhật, 01/11</b><span class="badge xp">−114 g mỡ</span></div>
+    <div class="row gap8 mt8" style="align-items:flex-end"><div data-boss="#D99BFF" data-size="28" data-acc="tea" data-mood="sad"></div><div class="bub boss">Hôm qua bạn đánh mất của ta 80 g mỡ… lần sau ta sẽ dụ bằng full topping!</div></div>
+    <div class="bub me mt6">Chiêu: Bữa tối toàn rau! Thâm hụt 880 kcal.</div>
+    <div class="row gap6 mt8"><span class="badge mana">AI viết</span><span class="chip s" style="margin-left:auto">AI viết lại</span></div>
+  </div>
+  <div class="panel mt8" style="padding:10px 12px">
+    <div class="row between"><b class="t13">Thứ bảy, 31/10</b><span class="badge hp">+16 g hồi máu</span></div>
+    <div class="row gap8 mt8" style="align-items:flex-end"><div data-boss="#D99BFF" data-size="28" data-acc="tea"></div><div class="bub boss">Ha! Dư 120 kcal, ta hồi máu rồi. Cuối tuần của ta mà!</div></div>
+    <div class="bub me mt6">Mai mình sẽ lấy lại.</div>
+  </div>
+  <div class="t12 c2 med mt8" style="text-align:center">… 11 ngày nữa (14 ngày gần nhất)</div>
+  <div style="height:104px"></div>
 </div>
 <div data-tabbar="2"></div>
-<div class="pin" style="left:6px;top:60px">1</div>
-<div class="pin" style="left:6px;top:250px">2</div>
-<div class="pin" style="left:6px;top:600px">3</div>
 <div class="note"><b>① Hai chế độ</b> Bản đồ/Biểu đồ, biểu đồ cân thứ hai (khác màn Cân nặng) · <b>② Hai hệ boss</b>: boss chặng 5 kg ở đây, boss tuần ở Trại — cùng gọi "nhật ký trận" · <b>③ Trang ≈6 màn</b>: vùng, nhật ký sát thương, hội thoại boss, boss theo tuần… Ảnh boss nhỏ (64 px) dù là phần "game" hấp dẫn nhất.</div>
 </body></html>

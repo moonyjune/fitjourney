@@ -46,15 +46,31 @@
     <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="0.28,#4CC9F0,40,4"><div class="mid t10 bold cm">7</div></div><span class="t10 c2 med">Đường</span></div>
     <div class="col" style="align-items:center;gap:4px"><div class="ring" data-ring="1,#8BFF6B,40,4"><div class="mid cx t14"><i data-i="check"></i></div></div><span class="t10 c2 med">Ăn vặt</span></div>
   </div>
-  <!-- next meal: one photo suggestion, two actions -->
+  <!-- next meal: one photo suggestion (0.22.1: one dish per meal, the rest behind "Xem thêm") -->
   <div class="row between mt16"><span class="h3">Bữa trưa · 12:00</span><span class="t12 c2 med">~460 kcal</span></div>
   <div class="panel row gap12 mt8" style="padding:10px">
     <img src="img/buncha.jpg" style="width:84px;height:84px;border-radius:12px;object-fit:cover">
     <div class="grow"><b class="t15">Bún chả ít bún</b><div class="t12 c2 med mt4">450 kcal · 32 g đạm</div><div class="row gap6 mt8"><span class="chip s on">Ghi món này</span><span class="chip s">Món khác</span></div></div>
   </div>
+  <div class="row between" style="min-height:44px"><span class="t13 cg">Xem thêm 2 món ▾</span><span class="t12 c2 med">Cook book ▸</span></div>
+  <!-- Monday only: weekly AI recap, shown once after the weekly boss resets -->
+  <div class="panel boss row gap10 mt4" style="padding:10px 12px">
+    <div data-boss="#FF5470" data-size="40" data-mood="sad"></div>
+    <div class="grow"><div class="row gap6"><b class="t14">Tổng kết tuần 44</b><span class="badge xp">Đã hạ</span></div><div class="t12 c2 med">Thâm hụt 4,080 kcal · cân −0.6 kg</div></div>
+    <span class="chip s mana"><i data-i="ai"></i>Xem</span>
+  </div>
+  <!-- today's timeline with photos -->
   <div class="row between mt16"><span class="h3">Dòng thời gian</span><span class="t12 c2 med">Nhật ký ▸</span></div>
+  <div class="row gap10 mt8"><span class="t12 c2 med" style="width:40px">06:00</span><div class="thumb row" style="width:44px;height:44px;justify-content:center;font-size:22px;color:var(--hp)"><i data-i="dumbbell"></i></div><div class="grow"><b class="t14">Tập nhóm A · 45′</b><div class="t12 c2 med">−320 kcal · +60 XP</div></div></div>
   <div class="row gap10 mt8"><span class="t12 c2 med" style="width:40px">07:30</span><img class="thumb" src="img/banhmi.jpg" style="width:44px;height:44px"><div class="grow"><b class="t14">Bánh mì thịt</b><div class="t12 c2 med">420 kcal · 18 g đạm</div></div></div>
-  <div class="fade-bottom" style="height:60px"></div>
+  <div class="row gap10 mt8"><span class="t12 c2 med" style="width:40px">10:15</span><div class="thumb row" style="width:44px;height:44px;justify-content:center;font-size:22px;background:#3a2b1a">☕</div><div class="grow"><b class="t14">Cà phê sữa ít đường</b><div class="t12 c2 med">120 kcal · 3 g đạm</div></div></div>
+  <div class="row gap10 mt8"><span class="t12 c2 med" style="width:40px">11:00</span><div class="thumb row" style="width:44px;height:44px;justify-content:center;font-size:22px;color:var(--mana);background:var(--manaP)"><i data-i="drop"></i></div><div class="grow"><b class="t14 cm">Nước · 1.2 L</b><div class="t12 c2 med">4 lần · đúng lịch</div></div></div>
+  <div class="row gap10 mt8" style="align-items:center"><span class="t12 cg bold" style="width:40px">11:40</span><div class="grow" style="height:2px;background:var(--gold);border-radius:2px"></div><span class="t12 cg bold">bây giờ</span></div>
+  <div class="row gap10 mt8" style="opacity:.75"><span class="t12 c2 med" style="width:40px">12:00</span><div class="thumb row" style="width:44px;height:44px;justify-content:center;font-size:22px;color:var(--gold);border:1.5px dashed var(--border);background:transparent"><i data-i="camera"></i></div><div class="grow"><b class="t14">Bữa trưa</b><div class="t12 c2 med">chưa ghi · chạm để chụp</div></div></div>
+  <div class="row gap10 mt8" style="opacity:.75"><span class="t12 c2 med" style="width:40px">18:30</span><div class="thumb row" style="width:44px;height:44px;justify-content:center;font-size:22px;color:var(--gold);border:1.5px dashed var(--border);background:transparent"><i data-i="bowl"></i></div><div class="grow"><b class="t14">Bữa tối</b><div class="t12 c2 med">sắp tới · ~460 kcal</div></div></div>
+  <div class="btn ghost sm mt12"><i data-i="book"></i>Xem cả ngày trong Nhật ký</div>
+  <div style="height:118px"></div>
 </div>
+<div class="note ok"><b>Phần còn lại của Trại cũ đi đâu:</b> dải tuần, 4 ô số, chú thích màu và đánh dấu cheat day → <b>Nhật ký › Tuần</b>; chọn ngày làm việc → chip <b>📅 Hôm nay</b> ở đầu; check-in → <b>(+) › Cảm giác</b>; mốc nước chi tiết → pop-up nước. Trang kết thúc ở đây (≈1,5 màn thay vì ≈5).</div>
 <div data-tabbar="0" data-labels="Trại,Tập,Hành trình,Hồ sơ"></div>
 </body></html>

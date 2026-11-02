@@ -4,7 +4,7 @@
 > Giữ nguyên: màu, màu chữ và bảng màu trong `src/theme/quest.ts`, font Chakra Petch (`questFonts`), bo góc (`questRadius`: 12 / 16 / 14).
 > Dựa trên: code ở bản 0.21.0, `Design/screens-current.md` (mục 4, 16 chỗ chưa nhất quán) và `Design/v4-fitquest`.
 
-**Ảnh:** `overview.png` là bảng tổng hợp. Từng màn nằm trong `png/` (390×844 pt, chụp ở 2x). Mã HTML nằm trong `html/` và mở được trực tiếp trong trình duyệt.
+**Ảnh:** `overview.png` là bảng tổng hợp. Từng màn nằm trong `png/`, rộng 390 pt và chụp ở 2x. Mỗi ảnh là **cả màn hình theo chiều cuộn**, từ đầu tới cuối trang, không còn cắt ở 844 pt. Thanh tab và nút lưu cố định được vẽ ở cuối trang. Mã HTML nằm trong `html/` và mở được trực tiếp trong trình duyệt.
 Ảnh "HIỆN TẠI" vẽ lại màn hiện có, kèm chấm đỏ đánh số đúng vấn đề nêu dưới đây. Ảnh "ĐỀ XUẤT" là thiết kế mới.
 
 | # | Màn | Hiện tại | Đề xuất |

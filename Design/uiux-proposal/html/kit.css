@@ -89,3 +89,8 @@ body {
 .badge.mana { background: rgba(76,201,240,.14); color: var(--manaT); }
 .badge.xp { background: rgba(139,255,107,.13); color: var(--xp); }
 .dense { font-size: 11px; line-height: 1.4; font-weight: 500; color: var(--text2); }
+/* Full-length screens (the user's ask, 2026-11-02: see the whole screen, not just the first 844 px). The page grows with its content,
+   the tab bar sits at the end of it, and the "more below" hints are gone. A sheet still covers the screen behind it. */
+html, body { height: auto; min-height: 844px; overflow: visible; }
+.content { height: auto; min-height: calc(844px - 44px); overflow: visible; padding-bottom: 112px; }
+.scrollhint, .fade-bottom { display: none; }

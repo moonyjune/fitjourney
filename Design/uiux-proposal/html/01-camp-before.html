@@ -1,43 +1,150 @@
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Camp hiện tại</title>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="kit.css"><script src="kit.js"></script></head><body>
+<link rel="stylesheet" href="kit.css"><script src="kit.js"></script>
+<style>
+.rel { position: relative; }
+.pin.in { left: -14px; top: -10px; }
+.day { flex: 1; height: 62px; border-radius: 10px; background: var(--raised); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; font-size: 10px; color: var(--text2); font-weight: 500; position: relative; overflow: hidden; }
+.day b { font-size: 12px; color: var(--text); }
+.day .v { font-size: 10px; font-weight: 700; }
+.day .lv { position: absolute; left: 6px; right: 6px; bottom: 4px; height: 3px; border-radius: 3px; }
+.day.on { background: var(--gold); color: var(--onGold); }
+.day.on b, .day.on .v { color: var(--onGold); }
+.day.fut { background: transparent; border: 1.5px dashed var(--border); opacity: .55; }
+.tile4 { flex: 1; padding: 8px 6px; border-radius: 12px; background: var(--panel); border: 1.5px solid var(--border); text-align: center; }
+.tl { display: flex; gap: 8px; }
+.tl .tm { width: 40px; font-size: 11px; color: var(--text2); font-weight: 500; padding-top: 6px; flex: none; }
+.tl .rail { width: 14px; flex: none; position: relative; display: flex; justify-content: center; }
+.tl .rail::before { content: ''; position: absolute; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.tl .mk { position: relative; width: 11px; height: 11px; transform: rotate(45deg); margin-top: 8px; border: 2px solid; border-radius: 2px; }
+.tl .body { flex: 1; min-width: 0; padding-bottom: 10px; }
+.mrow { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.mrow:last-child { border-bottom: none; }
+.box { width: 22px; height: 22px; border-radius: 6px; border: 2px solid var(--border); flex: none; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+</style></head><body>
 <div data-status="before"></div>
 <div class="content">
+  <!-- 1. PlayerHeader -->
   <div class="row gap12">
     <div style="width:52px;height:58px;color:var(--gold);font-size:52px"><i data-i="shield"></i></div>
     <div class="grow"><div class="row between"><span class="h3">Hiệp sĩ Kỷ luật</span><span class="t13 c2">Cấp 7</span></div>
       <div class="bar mt6"><i style="width:62%;background:var(--xp)"></i></div><div class="t12 c2 med mt4">1,720 / 2,780 XP tới cấp 8</div></div>
     <div class="raised row gap4" style="padding:10px 12px;color:var(--gold)"><i data-i="flame"></i><b>4</b></div>
   </div>
-  <div class="panel boss row gap12 mt12" style="padding:12px">
+  <!-- 2. WindowCard (16:8 on) -->
+  <div class="panel manaPanel row gap10 mt12" style="padding:10px 12px">
+    <span class="cm t22"><i data-i="clock"></i></span>
+    <div class="grow"><b class="t14">Giờ tiếp tế đang mở</b><div class="t12 cm med">11:00 – 19:00 · còn 6 giờ 40 phút</div></div>
+  </div>
+  <!-- 3. BossCard -->
+  <div class="panel boss row gap12 mt12 rel" style="padding:12px">
+    <div class="pin in">1</div>
     <div data-boss="#FF5470" data-size="56"></div>
     <div class="grow"><div class="t11 c2 med">Boss tuần</div><div class="row between"><b>Quái Một Ký Mỡ</b><span class="t12 chp">5,210 / 7,700 HP</span></div>
     <div class="bar thin mt6"><i style="width:68%;background:var(--hp)"></i></div><div class="t12 c2 med mt6">Đòn hôm nay −640 · reset sau 3 ngày</div></div>
   </div>
-  <div class="panel mt12" style="padding:12px">
+  <!-- 4. MealSuggestionsCard (0.22.1: one dish per meal + "Xem thêm N món") -->
+  <div class="panel mt12 rel" style="padding:12px">
+    <div class="pin in">2</div>
     <div class="h3">Gợi ý các bữa còn lại</div>
     <div class="dense mt6">Còn ~920 kcal và thiếu ~48 g đạm trong hôm nay.<br>Giới hạn còn lại: purine 740 mg · muối 4.1 g · đường 18 g<br>Mục tiêu cả ngày: 1,450–1,750 kcal. Mỗi bữa tối đa 800 kcal, hoặc ít hơn theo phần còn lại.</div>
     <div class="raised mt8" style="padding:8px 10px"><span class="t12 c2 med">Tìm trong cookbook chung (tên món, nguyên liệu…)</span></div>
     <div class="dense mt8">Chia ~920 kcal còn lại cho 2 bữa.</div>
-    <div class="raised mt8" style="padding:10px"><div class="t14 bold">Bữa trưa ▸ Gợi ý (3)</div><div class="dense mt4">Phần của bữa này: ~460 kcal · ~24 g đạm · purine 370 mg · muối 2 g · đường 9 g</div>
-    <div class="row gap8 mt8"><span class="chip s">Nhờ AI gợi ý Bữa trưa</span><span class="chip s">Gợi ý từ cookbook</span></div></div>
-    <div class="dense mt8">Mỗi lần gợi ý hiện 3 món mới thay cho các món cũ; món cũ được lưu vào cookbook chung (không tốn lượt AI).</div>
-  </div>
-  <div class="panel row mt12" style="justify-content:center;min-height:48px;padding:0"><span class="cg"><i data-i="smile"></i></span>&nbsp;<span class="t13">Nghỉ ở lửa trại</span></div>
-  <div class="row between mt16"><span class="h3">Nhật ký trận</span><span class="t11 c2">thứ hai, 02/11 · Tuần 45</span></div>
-  <div class="row gap4 mt8">
-    <div class="iconbtn" style="width:28px;height:56px;font-size:14px"><i data-i="back"></i></div>
-    <div class="grow row gap4" style="gap:3px">
-      <div class="raised" style="flex:1;height:56px"></div><div class="raised" style="flex:1;height:56px"></div><div class="raised" style="flex:1;height:56px"></div><div class="raised" style="flex:1;height:56px"></div><div class="raised" style="flex:1;height:56px"></div><div class="raised" style="flex:1;height:56px"></div><div class="raised" style="flex:1;height:56px"></div>
+    <div class="raised mt8" style="padding:10px">
+      <div class="t14 bold">Bữa trưa ▾ Gợi ý (3)</div>
+      <div class="dense mt4">Phần của bữa này: ~460 kcal · ~24 g đạm · purine 370 mg · muối 2 g · đường 9 g</div>
+      <div class="row gap8 mt8" style="align-items:flex-start;background:var(--raised2);border-radius:10px;padding:8px">
+        <img class="thumb" src="img/buncha.jpg" style="width:44px;height:44px">
+        <div class="grow"><b class="t13">Bún chả ít bún</b><div class="dense">cook book · 1 phần (bún 100 g)</div><div class="dense">450 kcal · 32 g đạm · purine 210 mg · muối 1.9 g · đường 8 g</div></div>
+      </div>
+      <div class="t12 cg mt6">Xem thêm 2 món ▾</div>
+      <div class="row gap8 mt8"><span class="chip s">Gợi ý món khác</span><span class="chip s">Gợi ý từ cookbook</span></div>
     </div>
+    <div class="raised mt8" style="padding:10px">
+      <div class="t14 bold">Bữa tối ▾ Gợi ý (3)</div>
+      <div class="dense mt4">Phần của bữa này: ~460 kcal · ~24 g đạm · purine 370 mg · muối 2.1 g · đường 9 g</div>
+      <div class="row gap8 mt8" style="align-items:flex-start;background:var(--raised2);border-radius:10px;padding:8px">
+        <img class="thumb" src="img/salad.jpg" style="width:44px;height:44px">
+        <div class="grow"><b class="t13">Salad ức gà sốt mè</b><div class="dense">AI · chính xác ~80% · 1 đĩa (gà 150 g)</div><div class="dense">410 kcal · 38 g đạm · purine 190 mg · muối 1.4 g · đường 6 g</div></div>
+      </div>
+      <div class="t12 cg mt6">Xem thêm 2 món ▾</div>
+      <div class="row gap8 mt8"><span class="chip s">Nhờ AI gợi ý Bữa tối</span><span class="chip s">Gợi ý từ cookbook</span></div>
+    </div>
+    <div class="dense mt8">Mỗi lần gợi ý hiện 3 món mới thay cho các món cũ; món cũ được lưu vào cookbook chung (không tốn lượt AI).</div>
+    <div class="btn ghost sm mt8"><i data-i="book"></i>cook book (24)</div>
   </div>
-  <div class="scrollhint" style="height:700px"><i style="height:140px"></i></div>
-  <div class="fade-bottom" style="bottom:0"></div>
+  <!-- 5. check-in link -->
+  <div class="panel row mt12 rel" style="justify-content:center;min-height:48px;padding:0"><div class="pin in">3</div><span class="cg"><i data-i="smile"></i></span>&nbsp;<span class="t13">Nghỉ ở lửa trại</span></div>
+
+  <!-- 6. Nhật ký trận (JournalView embedded) -->
+  <div class="row between mt16 rel"><div class="pin" style="right:-12px;top:-14px">4</div><span class="h3">Nhật ký trận</span><span class="t11 c2">thứ hai, 02/11 · Tuần 45</span></div>
+  <div class="row gap4 mt8">
+    <div class="iconbtn" style="width:28px;height:62px;font-size:14px"><i data-i="back"></i></div>
+    <div class="grow row" style="gap:3px">
+      <div class="day on">T2<b>02</b><span class="v">640</span><i class="lv" style="background:var(--onGold)"></i></div>
+      <div class="day fut">T3<b>03</b><span class="v">·</span></div>
+      <div class="day fut">T4<b>04</b><span class="v">·</span></div>
+      <div class="day fut">T5<b>05</b><span class="v">·</span></div>
+      <div class="day fut">T6<b>06</b><span class="v">·</span></div>
+      <div class="day fut">T7<b>07</b><span class="v">·</span></div>
+      <div class="day fut">CN<b>08</b><span class="v">·</span></div>
+    </div>
+    <div class="iconbtn" style="width:28px;height:62px;font-size:14px;opacity:.4"><i data-i="next"></i></div>
+  </div>
+  <div class="t11 c2 med mt6">Tuần trước: T2 590 · T3 820 · T4 410 · T5 Cheat · T6 700 · T7 −120 · CN 880 (vuốt ngang)</div>
+  <!-- 4 stat tiles -->
+  <div class="row gap6 mt10">
+    <div class="tile4"><div class="t11 c2 med">Ăn</div><b class="t15">980</b></div>
+    <div class="tile4"><div class="t11 c2 med">Tập</div><b class="t15 chp">320</b></div>
+    <div class="tile4" style="border-color:var(--gold)"><div class="t11 c2 med">Thâm hụt</div><b class="t15 cx">640</b></div>
+    <div class="tile4"><div class="t11 c2 med">XP ngày</div><b class="t15 cx">+110</b></div>
+  </div>
+  <!-- level row + cheat checkbox + legend -->
+  <div class="row gap8 mt10"><span class="badge xp">● Đạt</span><span class="row gap4 t12 med c3"><span class="box" style="width:18px;height:18px"></span>Cheat day</span></div>
+  <div class="t10 c2 med mt6" style="line-height:1.4">Màu thâm hụt so với mục tiêu 550 kcal: ⚠ cảnh báo (không cấm) khi thâm hụt chỉ nhờ ăn ít &gt; 1500 kcal, hoặc cả ngày (ăn + tập) &gt; 1800 kcal (2000 nếu TDEE ≥ 2600) — dễ mất cơ, dễ lên gout · đạt ≥ 90% · tạm chấp nhận 50–90% · không đạt 10–50% · duy trì 0–10% · ăn dư &lt; 0 · cheat day: không tính vào thâm hụt (món và ảnh vẫn được lưu)</div>
+  <!-- water -->
+  <div class="row between mt12"><span class="t14 bold">Nước cả ngày</span><span class="chip s mana">1.25 / 2.5 L</span></div>
+  <div class="bar thin mt6"><i style="width:50%;background:var(--mana)"></i></div>
+  <!-- timeline -->
+  <div class="row between mt16"><span class="t15 bold">Dòng thời gian</span><span class="t11 c2 med">kcal · đạm · XP</span></div>
+  <div class="mt8">
+    <div class="tl"><span class="tm">06:00</span><div class="rail"><i class="mk" style="border-color:var(--hp);background:var(--hp)"></i></div><div class="body"><div class="raised" style="padding:8px 10px"><div class="row between"><b class="t13">Buổi tập · 06:00–06:45</b><span class="badge xp">+60 XP</span></div><div class="t12 c2 med">45 phút · đốt 320 kcal</div></div></div></div>
+    <div class="tl"><span class="tm">06:30</span><div class="rail"><i class="mk" style="border-color:var(--mana);background:var(--mana)"></i></div><div class="body"><div class="row between" style="padding-top:4px"><span class="t13 cm">Nước +250 ml</span><span class="chip s mana" style="min-height:24px">0.25 L · đã đạt</span></div></div></div>
+    <div class="tl"><span class="tm">07:30</span><div class="rail"><i class="mk" style="border-color:var(--gold);background:var(--gold)"></i></div><div class="body"><div class="raised row gap8" style="padding:8px 10px"><img class="thumb" src="img/banhmi.jpg" style="width:44px;height:44px"><div class="grow"><div class="row between"><b class="t13">Bữa sáng</b><span class="badge gold">Xong</span></div><div class="t12 c2 med">560 kcal · 24 g đạm · 2 món</div><div class="t11 c2 med">đạm 24/120</div></div></div></div></div>
+    <div class="tl"><span class="tm">09:00</span><div class="rail"><i class="mk" style="border-color:var(--mana);background:var(--mana)"></i></div><div class="body"><div class="row between" style="padding-top:4px"><span class="t13 cm">Nước +500 ml</span><span class="chip s mana" style="min-height:24px">0.75 L · đã đạt</span></div></div></div>
+    <div class="tl"><span class="tm">10:15</span><div class="rail"><i class="mk" style="border-color:var(--gold);background:var(--gold)"></i></div><div class="body"><div class="raised row gap8" style="padding:8px 10px"><img class="thumb" src="img/goicuon.jpg" style="width:44px;height:44px"><div class="grow"><div class="row gap6"><b class="t13">Chả giò ×3</b><span class="badge hp">đồ ăn vặt</span></div><div class="t12 c2 med">300 kcal · 9 g đạm</div><div class="t11 c2 med">purine 60 mg · đường 2 g · muối 0.9 g</div></div></div></div></div>
+    <div class="tl"><span class="tm">11:00</span><div class="rail"><i class="mk" style="border-color:var(--mana);background:var(--mana)"></i></div><div class="body"><div class="row between" style="padding-top:4px"><span class="t13 cm">Nước +500 ml</span><span class="chip s" style="min-height:24px">1.25 L</span></div></div></div>
+    <div class="tl"><span class="tm">11:20</span><div class="rail"><i class="mk" style="border-color:var(--xp);background:var(--xp)"></i></div><div class="body"><div class="raised row gap8" style="padding:8px 10px"><span style="font-size:22px">🙂</span><div class="grow"><b class="t13">Check-in cảm giác</b><div class="t12 c2 med">Ổn · thèm 2/5 · đói 3/5</div></div></div></div></div>
+    <div class="tl"><span class="tm">11:40</span><div class="rail"><i class="mk" style="border-color:var(--gold);background:var(--gold);transform:none;width:14px;height:3px;margin-top:12px"></i></div><div class="body"><span class="t12 cg bold" style="line-height:28px">Đang ở đây</span></div></div>
+    <div class="tl"><span class="tm">12:00</span><div class="rail"><i class="mk" style="border-color:var(--gold)"></i></div><div class="body"><div class="raised" style="padding:8px 10px"><div class="row between"><b class="t13">Bữa trưa</b><span class="badge">Chờ ăn</span></div><div class="t12 c2 med">520 kcal · 32 g đạm · 3 món</div><div class="row gap6 mt6"><span class="chip s">✕ Không ăn</span></div></div></div></div>
+    <div class="tl" style="opacity:.6"><span class="tm">13:00</span><div class="rail"><i class="mk" style="border-color:var(--mana)"></i></div><div class="body"><span class="t13 cm" style="line-height:28px">Nước +500 ml</span></div></div>
+    <div class="tl" style="opacity:.6"><span class="tm">15:00</span><div class="rail"><i class="mk" style="border-color:var(--mana)"></i></div><div class="body"><span class="t13 cm" style="line-height:28px">Nước +500 ml</span></div></div>
+    <div class="tl" style="opacity:.6"><span class="tm">17:00</span><div class="rail"><i class="mk" style="border-color:var(--mana)"></i></div><div class="body"><span class="t13 cm" style="line-height:28px">Nước +250 ml</span></div></div>
+    <div class="tl"><span class="tm">18:30</span><div class="rail"><i class="mk" style="border-color:var(--gold)"></i></div><div class="body"><div class="raised" style="padding:8px 10px"><div class="row between"><b class="t13">Bữa tối</b><span class="badge">Chờ ăn</span></div><div class="t12 c2 med">480 kcal · 36 g đạm · 3 món</div><div class="row gap6 mt6"><span class="chip s">✕ Không ăn</span></div></div></div></div>
+    <div class="tl" style="opacity:.6"><span class="tm">19:00</span><div class="rail"><i class="mk" style="border-color:var(--mana)"></i></div><div class="body"><span class="t13 cm" style="line-height:28px">Nước +250 ml</span></div></div>
+    <div class="tl" style="opacity:.6"><span class="tm">20:30</span><div class="rail"><i class="mk" style="border-color:var(--mana)"></i></div><div class="body"><span class="t13 cm" style="line-height:28px">Nước +250 ml</span></div></div>
+  </div>
+  <div class="dense">Nước tính theo tổng cả ngày so với các mốc kế hoạch; bữa ăn theo giờ kế hoạch.</div>
+
+  <!-- 7. Missions, collapsed by default (drawn open here to show the whole list) -->
+  <div class="panel mt16 rel" style="padding:12px">
+    <div class="pin in">4</div>
+    <div class="t14 bold">▾ Nhiệm vụ hôm nay <span class="t12 c2 med">· 3 xong · 3 đang giữ · 1 mở</span></div>
+    <div class="t11 c2 med mt4">(mặc định gập: chỉ thấy dòng trên)</div>
+    <div class="mt6">
+      <div class="mrow"><span class="box" style="border-color:var(--xp);color:var(--xp)">✓</span><div class="grow t13">Tập luyện</div><span class="t12 cx">+60 XP</span></div>
+      <div class="mrow"><span class="box" style="border-color:var(--xp);color:var(--xp)">✓</span><div class="grow t13">Thâm hụt ≥ 550 kcal</div><span class="t12 cx">+50 XP</span></div>
+      <div class="mrow"><span class="box"></span><div class="grow"><div class="t13">Protein 120 g</div><div class="bar thin mt4"><i style="width:28%;background:var(--gold)"></i></div></div><span class="t12 c2">+40 XP</span></div>
+      <div class="mrow"><span class="box" style="border-color:var(--mana)"></span><div class="grow"><div class="t13">Purine ≤ 1200 mg</div><div class="t11 cm med">đang giữ · 460 mg</div></div><span class="t12 c2">+30 XP</span></div>
+      <div class="mrow"><span class="box" style="border-color:var(--mana)"></span><div class="grow"><div class="t13">Muối ≤ 7 g</div><div class="t11 cm med">đang giữ · 2.9 g</div></div><span class="t12 c2">+30 XP</span></div>
+      <div class="mrow"><span class="box" style="border-color:var(--mana)"></span><div class="grow"><div class="t13">Đường ≤ 25 g</div><div class="t11 cm med">đang giữ · 7 g</div></div><span class="t12 c2">+30 XP</span></div>
+      <div class="mrow"><span class="box" style="border-color:var(--hp);color:var(--hp)">✕</span><div class="grow t13">Không đồ ăn vặt</div><span class="t12 c2">+30 XP</span></div>
+    </div>
+    <div class="dense mt8">Đủ 7/7 hôm nay: thưởng Ngày hoàn hảo +50 XP</div>
+    <div class="dense mt4">Purine và muối là ước tính từ món trong kế hoạch, không thay thế tư vấn y tế.</div>
+  </div>
+  <div style="height:96px"></div>
 </div>
 <div data-tabbar="0"></div>
-<div class="pin" style="left:6px;top:178px">1</div>
-<div class="pin" style="left:6px;top:252px">2</div>
-<div class="pin" style="left:6px;top:592px">3</div>
-<div class="pin" style="right:12px;top:640px">4</div>
-<div class="note" style="bottom:98px"><b>① Ngân sách kcal</b> bị chia ở 3 chỗ (boss, gợi ý bữa, nhật ký) · <b>② 6 dòng chữ số</b> purine/muối/đường lặp lại cho từng bữa · <b>③ Check-in</b> trùng với ô trong (+) · <b>④ Trang dài ≈5 màn hình</b>: dải tuần, 4 ô số, chú thích màu dài, nước, dòng thời gian, nhiệm vụ gập ở cuối.</div>
+<div class="note" style="bottom:100px"><b>① Ngân sách kcal</b> bị chia ở 3 chỗ (boss, gợi ý bữa, 4 ô số của nhật ký) · <b>② Mỗi bữa</b> một dòng purine/muối/đường + 3 đoạn giải thích · <b>③ Check-in</b> trùng với ô trong (+) · <b>④ Trang dài ≈5 màn hình</b>: dải tuần, 4 ô số, chú thích màu dài, nước, dòng thời gian, nhiệm vụ gập ở cuối.</div>
 </body></html>

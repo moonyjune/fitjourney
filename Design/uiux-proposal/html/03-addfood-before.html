@@ -1,27 +1,88 @@
 <!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Thêm món hiện tại</title>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="kit.css"><script src="kit.js"></script></head><body>
+<link rel="stylesheet" href="kit.css"><script src="kit.js"></script>
+<style>
+.rel { position: relative; }
+.pin.in { left: -14px; top: -10px; }
+.fld { flex: 1; min-width: 0; height: 40px; border-radius: 10px; background: var(--raised2); padding: 4px 8px; display: flex; flex-direction: column; justify-content: center; }
+.fld span { font-size: 10px; color: var(--text2); font-weight: 500; line-height: 1.1; }
+.fld b { font-size: 13px; line-height: 1.2; }
+.tog { width: 44px; height: 26px; border-radius: 99px; background: var(--raised2); border: 1.5px solid var(--border); position: relative; flex: none; }
+.tog::after { content: ''; position: absolute; left: 3px; top: 3px; width: 17px; height: 17px; border-radius: 50%; background: var(--text2); }
+.ntile { flex: 1; border-radius: 12px; background: var(--raised); padding: 8px; text-align: center; }
+</style></head><body>
 <div data-status="before"></div>
 <div class="content">
   <div class="header"><div class="iconbtn"><i data-i="back"></i></div><span class="h2">Món ngoài kế hoạch</span></div>
-  <div class="t13 c2 med mt4">Mô tả bằng chữ, chụp ảnh, tra cơ sở dữ liệu hoặc tự nhập. Bạn kiểm tra, sửa lượng rồi mới lưu.</div>
+  <div class="t13 c2 med mt4 rel"><div class="pin in">1</div>Mô tả bằng chữ, chụp ảnh, tra cơ sở dữ liệu hoặc tự nhập. Bạn kiểm tra, sửa lượng rồi mới lưu.</div>
   <div class="t13 mt12">Bạn đã ăn gì?</div>
-  <div class="raised mt6" style="padding:12px;height:78px;border:1.5px solid var(--border)"><span class="t14 c2 med">Ví dụ: 2 bát phở bò, 1 ly trà đá ít đường</span></div>
+  <div class="raised mt6" style="padding:12px;height:78px;border:1.5px solid var(--border)"><span class="t14 med">1 bát phở bò tái, 2 cái quẩy, 1 ly trà đá ít đường</span></div>
   <div class="t15 bold mt12">Đính kèm ảnh</div>
   <div class="dense mt4">Không bắt buộc. Tối đa 4 ảnh bữa ăn (hoặc bao bì, thực đơn) để AI nhận món và khẩu phần chính xác hơn. Có ảnh thì có thể để trống phần chữ.</div>
+  <div class="row gap8 mt8"><img class="thumb" src="img/pho.jpg" style="width:64px;height:64px"><div class="thumb row" style="width:64px;height:64px;justify-content:center;border:1.5px dashed var(--border);background:transparent;color:var(--text2);font-size:22px"><i data-i="plus"></i></div></div>
   <div class="row gap8 mt8"><span class="chip" style="flex:1"><i data-i="camera"></i>Chụp ảnh</span><span class="chip" style="flex:1">Chọn ảnh</span></div>
-  <div class="row gap8 mt12"><div class="btn mana sm" style="flex:1"><i data-i="chart"></i>Hỏi AI</div><div class="btn ghost sm" style="flex:1"><i data-i="tag"></i>Đọc nhãn</div></div>
+  <div class="row gap8 mt12 rel"><div class="pin" style="right:-12px;top:-12px">2</div><div class="btn mana sm" style="flex:1"><i data-i="chart"></i>Hỏi AI</div><div class="btn ghost sm" style="flex:1"><i data-i="tag"></i>Đọc nhãn</div></div>
   <div class="dense mt8">Viết mô tả, thêm ảnh, hoặc cả hai rồi bấm Hỏi AI: AI tách từng món kèm khối lượng. Món đã có trong cơ sở dữ liệu thì không cần hỏi AI.</div>
-  <div class="raised mt12" style="padding:10px"><span class="t13 c2 med">Tra cơ sở dữ liệu món ăn…</span></div>
-  <div class="t15 bold mt12">Các món</div>
-  <div class="raised mt6" style="padding:10px"><div class="row gap8"><div class="raised2 grow" style="background:var(--raised2);height:40px;border-radius:10px;padding:10px;font-size:13px">Tên món</div><span class="chip s">✕</span></div>
-   <div class="row gap6 mt6"><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Lượng</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">kcal</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Đạm</div></div>
-   <div class="row gap6 mt6"><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Purine</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Muối</div><div style="flex:1;height:40px;border-radius:10px;background:var(--raised2);padding:10px" class="t12 c2">Đường</div></div></div>
-  <div class="scrollhint" style="height:760px"><i style="height:190px"></i></div>
-  <div class="fade-bottom"></div>
+  <!-- AI result note -->
+  <div class="panel manaPanel mt8" style="padding:10px 12px">
+    <div class="row gap6"><span class="badge mana">AI ước tính</span><span class="badge xp">chính xác ~85%</span></div>
+    <div class="dense mt6" style="color:var(--text3)">1 món lấy từ CSDL (Trà đá ít đường), AI chỉ ước tính phần còn lại. Ảnh cho thấy bát phở cỡ vừa (~500 g), thịt bò tái ~80 g, 2 cái quẩy. Hãy kiểm tra lại lượng trước khi lưu.</div>
+  </div>
+  <div class="raised mt12" style="padding:10px"><span class="t13 c2 med"><i data-i="search"></i> Tra cơ sở dữ liệu món ăn…</span></div>
+  <div class="t12 cg mt6">Mở CSDL món ▸</div>
+
+  <div class="t15 bold mt16 rel"><div class="pin" style="right:-12px;top:-4px">3</div>Các món</div>
+  <!-- item 1 -->
+  <div class="raised mt6" style="padding:10px">
+    <div class="row gap8"><div class="grow" style="background:var(--raised2);height:40px;border-radius:10px;padding:10px;font-size:13px">Phở bò tái</div><span class="chip s">✕</span></div>
+    <div class="row gap6 mt6"><div class="fld"><span>Lượng</span><b>1 bát (500 g)</b></div><div class="fld"><span>kcal</span><b>480</b></div><div class="fld"><span>Đạm (g)</span><b>28</b></div></div>
+    <div class="row gap6 mt6"><div class="fld"><span>Purine (mg)</span><b>210</b></div><div class="fld"><span>Muối (g)</span><b>3.2</b></div><div class="fld"><span>Đường (g)</span><b>4</b></div></div>
+    <div class="t11 mt6" style="color:#e9c46a">Chính xác ~70%</div>
+  </div>
+  <!-- item 2 -->
+  <div class="raised mt8" style="padding:10px">
+    <div class="row gap8"><div class="grow" style="background:var(--raised2);height:40px;border-radius:10px;padding:10px;font-size:13px">Quẩy</div><span class="chip s">✕</span></div>
+    <div class="row gap6 mt6"><div class="fld"><span>Lượng</span><b>2 cái (80 g)</b></div><div class="fld"><span>kcal</span><b>220</b></div><div class="fld"><span>Đạm (g)</span><b>4</b></div></div>
+    <div class="row gap6 mt6"><div class="fld"><span>Purine (mg)</span><b>20</b></div><div class="fld"><span>Muối (g)</span><b>0.6</b></div><div class="fld"><span>Đường (g)</span><b>2</b></div></div>
+    <div class="t11 mt6" style="color:#e9c46a">Chính xác ~60%</div>
+  </div>
+  <!-- item 3 -->
+  <div class="raised mt8" style="padding:10px">
+    <div class="row gap8"><div class="grow" style="background:var(--raised2);height:40px;border-radius:10px;padding:10px;font-size:13px">Trà đá ít đường</div><span class="chip s">✕</span></div>
+    <div class="row gap6 mt6"><div class="fld"><span>Lượng</span><b>1 ly (300 ml)</b></div><div class="fld"><span>kcal</span><b>40</b></div><div class="fld"><span>Đạm (g)</span><b>0</b></div></div>
+    <div class="row gap6 mt6"><div class="fld"><span>Purine (mg)</span><b>0</b></div><div class="fld"><span>Muối (g)</span><b>0</b></div><div class="fld"><span>Đường (g)</span><b>10</b></div></div>
+    <div class="t11 cx mt6">Từ CSDL của bạn</div>
+  </div>
+  <div class="btn ghost sm mt8"><i data-i="plus"></i>Thêm món tự nhập</div>
+  <div class="t13 mt12">Mô tả bữa ăn (một mô tả chung)</div>
+  <div class="raised mt6" style="padding:10px 12px;border:1.5px solid var(--border)"><span class="t13 med">Phở bò quán đầu ngõ</span></div>
+  <div class="t13 med c3 mt6">Tổng: 740 kcal · 32 g đạm · purine 230 mg · muối 3.8 g · đường 16 g</div>
+  <!-- DraftFeedback -->
+  <div class="panel mt12" style="padding:10px 12px"><div class="t13 bold">Nhận xét nhanh</div><div class="dense mt4">Phở bò đủ đạm nhưng nước dùng nhiều muối; quẩy chiên làm tăng kcal mà ít no. Bỏ quẩy hoặc ăn 1 cái là vừa phần bữa trưa.</div></div>
+
+  <!-- meal, time, junk -->
+  <div class="t15 bold mt16 rel"><div class="pin" style="right:-12px;top:-4px">3</div>Thuộc bữa</div>
+  <div class="row gap8 mt8" style="flex-wrap:wrap"><span class="chip s">Bữa sáng</span><span class="chip s on">Bữa trưa</span><span class="chip s">Bữa tối</span></div>
+  <div class="btn ghost sm mt8">Không ăn Bữa trưa</div>
+  <div class="t13 mt12">Giờ ăn (tuỳ chọn)</div>
+  <div class="raised mt6" style="padding:10px 12px;border:1.5px solid var(--border)"><span class="t13 c2 med">VD: 19:30</span></div>
+  <div class="dense mt4">Để trống: tính theo giờ quen thuộc của bữa đã chọn, hoặc lúc bạn nhập nếu chưa chọn bữa. Ví dụ 19:30.</div>
+  <div class="row between mt12"><div class="grow"><div class="t14">Đồ ăn vặt / junk food</div><div class="dense">Bật nếu là đồ chiên rán, bánh kẹo, nước ngọt…</div></div><div class="tog"></div></div>
+
+  <!-- impact -->
+  <div class="t15 bold mt16">Nếu thêm món này</div>
+  <div class="row gap6 mt8">
+    <div class="ntile"><div class="t11 c2 med">Purine</div><b class="t14">690</b><div class="t10 c2">/ 1200 mg</div></div>
+    <div class="ntile"><div class="t11 c2 med">Muối</div><b class="t14 chp">7.4</b><div class="t10 c2">/ 7 g</div></div>
+    <div class="ntile"><div class="t11 c2 med">Đường</div><b class="t14">23</b><div class="t10 c2">/ 25 g</div></div>
+  </div>
+  <div class="panel mt8" style="padding:10px 12px"><div class="t13 bold">Tác động tới nhiệm vụ</div><div class="dense mt4" style="color:var(--hpT)">Sẽ vượt ngưỡng Muối ≤ 7 g</div><div class="dense" style="color:var(--text3)">Ăn 1,720 / 1,600 kcal: vượt 120 kcal · thâm hụt còn 520 kcal</div></div>
+  <div class="panel manaPanel mt8" style="padding:10px 12px"><div class="row gap6"><span class="cm"><i data-i="ai"></i></span><b class="t13">Lời khuyên AI</b></div><div class="dense mt4" style="color:var(--text3)">Uống bớt nước dùng phở để giảm ~1.5 g muối; bữa tối ưu tiên rau và đạm nạc, hạn chế nước chấm.</div></div>
+  <div style="height:116px"></div>
 </div>
-<div class="pin" style="left:6px;top:104px">1</div>
-<div class="pin" style="right:8px;top:384px">2</div>
-<div class="pin" style="right:8px;top:560px">3</div>
-<div class="note" style="bottom:20px"><b>① 4 đoạn hướng dẫn</b> (≈90 từ) trước khi làm được gì · <b>② 2 nút AI</b> (Hỏi AI / Đọc nhãn) + tra CSDL + tự nhập = 4 đường cho cùng một việc · <b>③ 6 ô số</b> mỗi món luôn hiện; bữa, giờ ăn, đồ ăn vặt và nút lưu ở cuối trang (≈4 màn). Còn có <b>/text-meal</b> và form món trong Dinh dưỡng trùng chức năng.</div>
+<!-- fixed footer, now at the end of the page -->
+<div style="position:absolute;left:0;right:0;bottom:0;padding:12px 16px 28px;background:var(--panel);border-top:1.5px solid var(--border)">
+  <div class="btn">Thêm vào hôm nay</div>
+</div>
+<div class="note" style="bottom:108px"><b>① 4 đoạn hướng dẫn</b> (≈90 từ) trước khi làm được gì · <b>② 2 nút AI</b> (Hỏi AI / Đọc nhãn) + tra CSDL + tự nhập = 4 đường cho cùng một việc · <b>③ 6 ô số</b> mỗi món luôn hiện; bữa, giờ ăn, đồ ăn vặt và nút lưu ở cuối trang (≈4 màn). Còn có <b>/text-meal</b> và form món trong Dinh dưỡng trùng chức năng.</div>
 </body></html>
