@@ -381,6 +381,7 @@ describe('temptations: seeded once with real photos (0.26.2)', () => {
     expect(seedGenerated(SEED_ENOUGH, null)).toBe(true);
     expect(seedGenerated(100, 50)).toBe(false);
     expect(seedGenerated(100, 5)).toBe(true);
+    expect(seedGenerated(0, 0)).toBe(false);
   });
 
   it('answers with the photo credit, which the app keeps', () => {

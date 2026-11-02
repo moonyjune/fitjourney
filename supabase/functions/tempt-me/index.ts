@@ -189,6 +189,9 @@ async function finishRefill(admin: SupabaseClient, added: number): Promise<void>
 }
 
 /** One refill call: its items, cleaned (URLs only when the web showed them), new names only, written to the pool. The rows written. */
+/** What each refill call of this invocation did (returned by the seed so a failure can be read without the function logs). */
+const refillNotes: Record<string, unknown>[] = [];
+
 async function refillChunk(ctx: AiContext, chunk: PoolChunk, known: Set<string>, knownNames: string[], date: string, record?: Record_): Promise<PoolRow[]> {
   const outcome = await runAiCall(
     ctx,
@@ -205,10 +208,15 @@ async function refillChunk(ctx: AiContext, chunk: PoolChunk, known: Set<string>,
   );
   if ('error' in outcome) {
     console.warn('[tempt-me] refill call failed:', chunk.id, outcome.error);
+    refillNotes.push({ chunk: chunk.id, error: String(outcome.error).slice(0, 300) });
     return [];
   }
   const evidence = outcome.web?.evidence;
   const items = newPoolItems(outcome.input, (url) => !!evidence && seenInEvidence(url, evidence), known, chunk.count + 5);
+  const rawItems = (outcome.input as { items?: unknown } | null)?.items;
+  const note: Record<string, unknown> = { chunk: chunk.id, raw: Array.isArray(rawItems) ? rawItems.length : typeof rawItems, kept: items.length };
+  if (Array.isArray(rawItems) && rawItems.length > 0 && items.length === 0) note.sample = JSON.stringify(rawItems[0]).slice(0, 400);
+  refillNotes.push(note);
   if (items.length === 0) return [];
   const { data, error } = await ctx.admin
     .from(POOL)
@@ -219,8 +227,10 @@ async function refillChunk(ctx: AiContext, chunk: PoolChunk, known: Set<string>,
     .select('id,item,created_at');
   if (error) {
     console.warn('[tempt-me] refill not written:', chunk.id, JSON.stringify(error));
+    note.dbError = JSON.stringify(error).slice(0, 300);
     return [];
   }
+  note.written = (data ?? []).length;
   console.log('[tempt-me] refill', chunk.id, 'added', (data ?? []).length);
   return toRows(data);
 }
@@ -376,7 +386,9 @@ async function seedStep(admin: SupabaseClient): Promise<Response> {
   if (!loaded) return jsonResponse({ error: 'Chưa có bảng tempt_pool: hãy chạy supabase/schema.sql.' }, 503);
   let rows = loaded.rows;
   const { data: meta } = await admin.from(META).select('seeded_at,last_added,system_cost_usd').eq('id', 1).maybeSingle();
-  let generated = !!meta?.seeded_at || seedGenerated(rows.length, null);
+  // Generating goes on until the pool is nearly full or a step adds only a few (the model has run out of new items); a failed step
+  // (nothing added) is tried again.
+  let generated = seedGenerated(rows.length, meta?.seeded_at ? (meta.last_added ?? null) : null);
   const report = async (step: string, extra: Record<string, unknown> = {}) => {
     const { data: m } = await admin.from(META).select('system_cost_usd').eq('id', 1).maybeSingle();
     return jsonResponse({ step, ...poolSeedStatus(rows, generated), ...extra, poolCostUsd: Number(m?.system_cost_usd ?? 0) });
@@ -391,7 +403,7 @@ async function seedStep(admin: SupabaseClient): Promise<Response> {
     rows = [...added, ...rows];
     generated = seedGenerated(rows.length, added.length);
     if (generated) await admin.from(META).update({ seeded_at: new Date().toISOString() }).eq('id', 1);
-    return report('generate', { added: added.length });
+    return report('generate', { added: added.length, calls: refillNotes });
   }
   if (!meta?.seeded_at) await admin.from(META).update({ seeded_at: new Date().toISOString() }).eq('id', 1);
   const decided = await backfillClaimed(admin, rows, SEED_PHOTOS_PER_CALL, SEED_PHOTOS_BUDGET_MS);

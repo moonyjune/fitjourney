@@ -604,7 +604,8 @@ export function poolSeedStatus(rows: PoolRow[], generated: boolean): { total: nu
 /** The seed's generation is over when the pool holds 90% of POOL_TARGET, or a generation step added fewer than 20 new items (the
  *  model only repeats what is there). */
 export const SEED_ENOUGH = Math.round(POOL_TARGET * 0.9);
-export const seedGenerated = (total: number, lastAdded: number | null): boolean => total >= SEED_ENOUGH || (lastAdded !== null && lastAdded < 20);
+/** A step that added nothing failed (it is tried again); one that added only a few means the model has run out of new items. */
+export const seedGenerated = (total: number, lastAdded: number | null): boolean => total >= SEED_ENOUGH || (lastAdded !== null && lastAdded > 0 && lastAdded < 20);
 
 /** The refill calls a seed step makes for `total` items in the pool: all of them for an empty pool, else enough to reach POOL_TARGET
  *  (the web one first: what is trending changes). */

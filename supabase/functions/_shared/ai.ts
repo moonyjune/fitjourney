@@ -239,11 +239,13 @@ async function callClaude(
   for (let attempt = 0; ; attempt++) {
     let response: Response | null = null;
     let failure = 'Claude API không phản hồi.';
+    // Read per request: calls running at once may learn that the model refuses a forced tool while this one is in flight.
+    const sentForced = !noForcedTool.has(model);
     try {
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: anthropicHeaders(ANTHROPIC_API_KEY!, Deno.env.get('AI_WORKSPACE_ID')),
-        body: bodyFor(!noForcedTool.has(model)),
+        body: bodyFor(sentForced),
         signal: AbortSignal.timeout(call.attemptTimeoutMs ?? ATTEMPT_TIMEOUT_MS),
       });
     } catch (error) {
@@ -293,7 +295,7 @@ async function callClaude(
         attempt -= 1;
         continue;
       }
-      if (!noForcedTool.has(model) && isToolChoiceUnsupported(response.status, text)) {
+      if (sentForced && isToolChoiceUnsupported(response.status, text)) {
         // This model does not take a forced tool call: switch to letting it choose, and go again at once (not a failed attempt).
         console.warn('[ai] model refuses a forced tool call; switching to tool_choice auto');
         noForcedTool.add(model);

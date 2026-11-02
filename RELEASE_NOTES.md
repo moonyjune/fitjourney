@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26.3 | no | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
 | 0.26.2 | yes | tempt-me, dish-photo |
 | 0.26.1 | no | — |
 | 0.26.0 | yes | suggest-cheat-places, tempt-me |
@@ -75,6 +76,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.26.3
+- AI calls made at the same time no longer fail when the model refuses a forced tool call: each request remembers how it was sent, so every one of them switches to "tool_choice auto" and goes again (two of the four pool calls had failed this way).
+- Temptation seed: a step that adds nothing (all calls failed) no longer counts as "generated", and generating goes on until the pool is nearly full; the seed answer lists what each call did.
 
 ## 0.26.2
 - Temptation pool (Hard level) is seeded once, up front: the AI writes the ~200 items and every item gets a REAL photo on the server before anyone sees it (a web item's own page picture, else a Wikimedia Commons / Openverse photo the AI checked shows that dish; never a generated picture). The pop-up shows the photo's credit ("Ảnh: tác giả · giấy phép · Wikimedia"). An item no real photo shows is offered only when nothing with a photo fits.
