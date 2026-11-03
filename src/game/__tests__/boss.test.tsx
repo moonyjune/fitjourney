@@ -122,7 +122,7 @@ describe('Boss detail screen', () => {
     useWorkoutStore.setState({ entries: [bigBurn('2026-10-23')] });
     const text = allText(render()); // Friday 16:10: the plan's later meals are still to come
     expect(text).toMatch(/Thâm hụt dự kiến [\d,]+ kcal → ~[\d,]+ sát thương, chờ chốt/);
-    expect(text).toContain('chỉ trừ máu boss khi ghi đủ bữa hoặc hết giờ ăn');
+    expect(text).toContain('đòn tính khi ghi đủ bữa hoặc hết giờ ăn');
     expect(text).toMatch(/~−[\d,]+/);
     expect(text.replace(/\s+/g, ' ')).toContain('7,700 / 7,700');
     expect(text).toContain('Còn 2 ngày nữa · cần trung bình 2,567 kcal/ngày'); // today still counts as a day to come: 7,700 / 3

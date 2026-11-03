@@ -208,7 +208,7 @@ export default function TrainScreen() {
           </View>
         </View>
 
-        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/workout-classic')} style={styles.classicLink}>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/workout-classic')} style={styles.classicLink}>
           <HudText size={13} weight="medium" color={quest.textSecondary}>
             {g('train.classicLink')}
           </HudText>

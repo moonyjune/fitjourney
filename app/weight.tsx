@@ -3,22 +3,22 @@ import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 're
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-chart-kit';
-import { HudText } from '../../src/components/quest/HudText';
-import { QuestButton } from '../../src/components/quest/QuestButton';
-import { QuestField } from '../../src/components/quest/QuestField';
-import { QuestHeader } from '../../src/components/quest/QuestHeader';
-import { useGameText } from '../../src/game/strings';
-import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
-import { useWeightStore } from '../../src/store/useWeightStore';
-import { useSettingsStore } from '../../src/store/useSettingsStore';
-import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { buildWeightChartData, buildWeightLossMilestoneViews, computeTodayLineX } from '../../src/utils/weightChart';
-import { useTranslation } from '../../src/i18n/useTranslation';
-import type { StringKey } from '../../src/i18n/strings';
-import { quest, questRadius } from '../../src/theme/quest';
-import { chartWidthFor, screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
-import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
+import { HudText } from '../src/components/quest/HudText';
+import { QuestButton } from '../src/components/quest/QuestButton';
+import { QuestField } from '../src/components/quest/QuestField';
+import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { useGameText } from '../src/game/strings';
+import { DateOffsetPicker } from '../src/components/DateOffsetPicker';
+import { useWeightStore } from '../src/store/useWeightStore';
+import { useSettingsStore } from '../src/store/useSettingsStore';
+import { formatDateVi, toDateKey } from '../src/utils/date';
+import { buildWeightChartData, buildWeightLossMilestoneViews, computeTodayLineX } from '../src/utils/weightChart';
+import { useTranslation } from '../src/i18n/useTranslation';
+import type { StringKey } from '../src/i18n/strings';
+import { quest, questRadius } from '../src/theme/quest';
+import { chartWidthFor, screenMaxWidthStyle } from '../src/theme/responsive';
+import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { useTabBarClearance } from '../src/components/quest/QuestTabBar';
 
 const RANGE_OPTIONS: { key: StringKey; days: number }[] = [
   { key: 'weight.range1w', days: 7 },

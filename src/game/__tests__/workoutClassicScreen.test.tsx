@@ -35,7 +35,7 @@ jest.mock('../../sync/cloudSync', () => ({
   requestPhotoAnalysis: jest.fn(),
 }));
 
-import WorkoutScreen from '../../../app/(tabs)/workout-classic';
+import WorkoutScreen from '../../../app/workout-classic';
 import { usePlanStore } from '../../store/usePlanStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -157,7 +157,7 @@ describe('Classic workout screen (FitQuest)', () => {
     await act(async () => {
       r.root.findAll((n) => n.props.accessibilityLabel === '✏️ Sửa bằng AI' && typeof n.props.onPress === 'function')[0].props.onPress();
     });
-    expect(mockRouter.push).toHaveBeenCalledWith(`/(tabs)/plan?editWorkout=${encodeURIComponent(template.label)}`);
+    expect(mockRouter.push).toHaveBeenCalledWith(`/plan?editWorkout=${encodeURIComponent(template.label)}`);
   });
 
   it('goes back, falling back to the Train tab when there is no history', async () => {

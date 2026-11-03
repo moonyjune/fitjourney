@@ -49,7 +49,7 @@ jest.mock('../../sync/cloudSync', () => ({
   WORKOUT_KCAL_EMPTY: 'empty',
 }));
 
-import WorkoutScreen from '../../../app/(tabs)/workout-classic';
+import WorkoutScreen from '../../../app/workout-classic';
 import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
