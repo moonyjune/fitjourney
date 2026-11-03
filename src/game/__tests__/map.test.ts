@@ -118,4 +118,32 @@ describe('weight series', () => {
     expect(Number.isFinite(s.points[0].x)).toBe(true);
     expect(s.xLabels[1].x).toBeGreaterThan(s.xLabels[0].x);
   });
+
+  it('draws nothing extra unless asked (the default is unchanged)', () => {
+    const s = buildWeightSeries(base);
+    expect(s.predictedPath).toBeNull();
+    expect(s.todayX).toBeNull();
+  });
+
+  it('adds the predicted line and a today marker, with room past today', () => {
+    const s = buildWeightSeries({ ...base, predicted: true, forecastDays: 7 });
+    expect(s.predictedPath).toMatch(/^M/);
+    expect(s.predictedPath!.match(/L/g)).toHaveLength(24);
+    expect(s.todayX).not.toBeNull();
+    // Today sits left of the right edge because the chart runs a week past it.
+    expect(s.todayX!).toBeLessThan(s.xLabels[1].x - 1);
+    expect(s.xLabels[1].label).toBe('02/11'); // the minimum 7-day span (to 26/10) plus the 7 forecast days
+  });
+
+  it('shows only the last n days, starting the line where it crosses the window edge', () => {
+    const s = buildWeightSeries({ ...base, windowDays: 3 }); // window starts 20/10 16:00, between the start (110) and 21/10 (109)
+    expect(s.xLabels[0].label).toBe('20/10');
+    expect(s.points).toHaveLength(3);
+    expect(s.points[0].isStart).toBe(true);
+    expect(s.points[0].kg).toBeGreaterThan(109);
+    expect(s.points[0].kg).toBeLessThan(110);
+    expect(s.points.slice(1).map((p) => p.kg)).toEqual([109, 106.2]);
+    // A window longer than the plan is just the whole plan.
+    expect(buildWeightSeries({ ...base, windowDays: 90 }).points.map((p) => p.kg)).toEqual([110, 109, 106.2]);
+  });
 });

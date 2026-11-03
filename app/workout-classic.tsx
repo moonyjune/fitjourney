@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { stepsOrImplicit } from '../src/components/PlanPreview';
 import { DateOffsetPicker } from '../src/components/DateOffsetPicker';
@@ -229,7 +229,9 @@ export default function WorkoutScreen() {
     const now = new Date();
     return momentOnDay(workingDayKey(useSelectedDayStore.getState().selectedKey, now), now);
   });
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // `?edit=<id>`: opened from the "Tập khác" sheet's "Sửa" on a workout the AI just logged from a photo.
+  const { edit } = useLocalSearchParams<{ edit?: string }>();
+  const [editingId, setEditingId] = useState<string | null>(() => (typeof edit === 'string' && edit ? edit : null));
   const removeEntry = useWorkoutStore((s) => s.removeEntry);
 
   function logTemplate(templateId: string, label: string, durationMin: number, caloriesBurned: number) {

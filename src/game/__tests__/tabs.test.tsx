@@ -49,6 +49,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import MapScreen from '../../../app/(tabs)/map';
+import BossScreen from '../../../app/boss';
 import ProfileScreen from '../../../app/(tabs)/profile';
 import { QuestTabBar } from '../../components/quest/QuestTabBar';
 import { resetIsAiAdminCache } from '../../ai/useIsAiAdmin';
@@ -203,7 +204,11 @@ describe('FitQuest tabs', () => {
         ],
       });
       const r = render(<MapScreen />);
+      expect(allText(r)).not.toContain('Nhật ký sát thương'); // in the boss sheet now (dialogs.md row 20)
+      act(() => pressable(r, (l) => l === 'Toàn bộ khẩu chiến và nhật ký sát thương').props.onPress());
       let text = allText(r);
+      expect(text).toContain('Gã Thùng Bia nói'); // the sheet of the boss being fought
+      expect(text).toContain('Hội thoại chiến đấu');
       expect(text).toContain('Nhật ký sát thương');
       expect(text).toContain('−7.0'); // real total: 110 -> 103
       expect(text).toContain('−5.20 kg'); // the 21/10 weigh-in alone
@@ -230,21 +235,26 @@ describe('FitQuest tabs', () => {
       expect(text).toContain('94.8 kg · Đỉnh cuối');
     });
 
-    it('switches to the chart: real stats, the weight chart and the weekly bosses', () => {
+    it('opens the weight page (the one weight chart) from the "Cân nặng" chip; there is no chart view any more', () => {
       const r = render(<MapScreen />);
-      act(() => pressable(r, (l) => l === 'Biểu đồ').props.onPress());
-      const text = allText(r);
-      expect(text).toContain('Biểu đồ cân nặng');
-      expect(text).toContain('−3.8'); // 110 -> 106.2
-      expect(text).toContain('11.2'); // to the 95 kg goal
-      expect(text).toContain('25%'); // 3.8 / 15
-      expect(text).toContain('Tuần 43');
-      expect(text).toContain('Đang đánh');
-      const chart = r.root.findAll((n) => n.props.accessibilityRole === 'image' && String(n.props.accessibilityLabel).startsWith('Biểu đồ cân nặng từ'))[0];
-      expect(chart.props.accessibilityLabel).toBe('Biểu đồ cân nặng từ 110.0 kg xuống 106.2 kg qua 2 lần ghi');
+      expect(() => pressable(r, (l) => l === 'Biểu đồ')).toThrow();
+      act(() => pressable(r, (l) => l === 'Mở cân nặng: biểu đồ và các lần cân').props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/weight');
     });
 
-    it('never shows a boss week dealing more damage than the boss has HP', () => {
+    it('shows the boss being fought big, with the kg left to defeat it, and the latest line of banter that opens its sheet', () => {
+      const r = render(<MapScreen />);
+      const text = allText(r);
+      expect(text).toContain('còn 1.2 kg nữa để hạ');
+      expect(text).toContain('106.2 → 105 kg');
+      expect(text).toContain('−3.8 kg đã giảm');
+      expect(text).toContain('còn 11.2 kg');
+      expect(text).toContain('Khẩu chiến');
+      act(() => pressable(r, (l) => l === 'Mở chi tiết boss').props.onPress());
+      expect(allText(r)).toContain('Quỷ Bánh Kem nói');
+    });
+
+    it('lists the weekly bosses on the weekly boss page, never more damage than the boss has HP', () => {
       // Last week fully logged: 7 days x the 1,500 cap = 10,500 damage against a 7,700 HP boss.
       const logs: Record<string, unknown> = {};
       for (const d of ['12', '13', '14', '15', '16', '17', '18']) {
@@ -252,21 +262,16 @@ describe('FitQuest tabs', () => {
       }
       useNutritionStore.setState({ logs: logs as never });
       useSettingsStore.setState({ startDateISO: '2026-10-12T08:00:00', activityLevel: 'very_active' }); // big TDEE -> every day hits the cap
-      const r = render(<MapScreen />);
-      act(() => pressable(r, (l) => l === 'Biểu đồ').props.onPress());
+      const r = render(<BossScreen />);
       const text = allText(r);
+      expect(text).toContain('Boss theo tuần');
+      expect(text).toContain('Tuần 43');
+      expect(text).toContain('Đang đánh');
       expect(text).toContain('Tuần 42');
       expect(text).toContain('7,700 sát thương'); // capped at the boss's HP, shown as defeated
       expect(text).not.toContain('10,500');
       const bar = r.root.findAll((n) => n.props.accessibilityRole === 'progressbar' && n.props.accessibilityValue?.now === 100);
       expect(bar.length).toBeGreaterThan(0); // the bar is full, never beyond
-    });
-
-    it('tells you when there is no weigh-in yet instead of drawing a made-up line', () => {
-      useWeightStore.setState({ entries: [] });
-      const r = render(<MapScreen />);
-      act(() => pressable(r, (l) => l === 'Biểu đồ').props.onPress());
-      expect(allText(r)).toContain('Chưa có lần cân nào.');
     });
 
     it('moves to the next region once the first gate is passed', () => {

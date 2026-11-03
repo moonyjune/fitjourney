@@ -365,7 +365,8 @@ describe('FitQuest logging screens', () => {
       act(() => pressable(r, (l) => l === 'Cảm giác').props.onPress());
       expect(mockRouter.replace).toHaveBeenCalledWith('/checkin');
       act(() => pressable(r, (l) => l === 'Tập khác').props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith('/workout-classic');
+      // "Tập khác" is a sheet on the Train tab now (dialogs.md row 13): the tab opens with it up.
+      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/(tabs)/workout', params: { other: expect.any(String) } });
     });
 
     it('closes from the backdrop, falling back to home when there is nothing to go back to', () => {

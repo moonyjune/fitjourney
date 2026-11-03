@@ -12,10 +12,13 @@ interface QuestButtonProps {
   disabled?: boolean;
   loading?: boolean;
   accessibilityLabel?: string;
+  /** `large`: 64 pt high with an 18 pt label, for the one action pressed over and over (the session's "Xong set"). */
+  size?: 'default' | 'large';
 }
 
 /** Full-width 56 px action button. `gold` is the primary call to action. */
-export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, loading, accessibilityLabel }: QuestButtonProps) {
+export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, loading, accessibilityLabel, size = 'default' }: QuestButtonProps) {
+  const large = size === 'large';
   // 'danger' (delete) is outlined in red on a dark red panel, so it never looks like the main action.
   const danger = variant === 'danger';
   const filled = variant === 'gold' || variant === 'mana';
@@ -31,6 +34,7 @@ export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, 
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
+        large && styles.large,
         { backgroundColor: background, borderColor: filled ? background : danger ? quest.hp : quest.border },
         (disabled || loading) && { opacity: 0.5 },
         pressed && { opacity: 0.85 },
@@ -40,8 +44,8 @@ export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, 
         <ActivityIndicator color={foreground} />
       ) : (
         <View style={styles.row}>
-          {icon && <QuestIcon name={icon} size={18} color={foreground} strokeWidth={2.4} />}
-          <HudText size={16} color={foreground}>
+          {icon && <QuestIcon name={icon} size={large ? 20 : 18} color={foreground} strokeWidth={2.4} />}
+          <HudText size={large ? 18 : 16} color={foreground}>
             {title}
           </HudText>
         </View>
@@ -52,5 +56,6 @@ export function QuestButton({ title, onPress, variant = 'gold', icon, disabled, 
 
 const styles = StyleSheet.create({
   base: { minHeight: 56, borderRadius: questRadius.button, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16 },
+  large: { minHeight: 64 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 });

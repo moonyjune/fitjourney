@@ -752,6 +752,7 @@ export default function SessionScreen() {
             <QuestButton
               title={g('train.s.finishSet')}
               icon="check"
+              size="large"
               onPress={() => dispatch({ type: 'finishSet', done: Math.min(step.amount, Math.round((Date.now() - holdStartedAt) / 1000)) })}
             />
           )
@@ -769,10 +770,9 @@ export default function SessionScreen() {
               <View style={styles.flex}>
                 <QuestButton title={g('train.s.plusRep')} variant="ghost" onPress={() => manual({ type: 'addRep' })} />
               </View>
-              <View style={styles.flex}>
-                <QuestButton title={g('train.s.finishSet')} icon="check" onPress={() => manual({ type: 'finishSet' })} />
-              </View>
             </View>
+            {/* The action pressed after every set: 64 pt (Design/uiux-proposal README §3.5). */}
+            <QuestButton title={g('train.s.finishSet')} icon="check" size="large" onPress={() => manual({ type: 'finishSet' })} />
           </View>
         )}
       </View>

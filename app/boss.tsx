@@ -6,6 +6,7 @@ import { DefaultBossArt } from '../src/components/quest/StageBossArt';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { WeeklyBossHistory } from '../src/components/quest/WeeklyBossHistory';
 import { XpBar } from '../src/components/quest/XpBar';
 import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../src/game/constants';
 import type { BossDay } from '../src/game/boss';
@@ -29,7 +30,7 @@ export default function BossScreen() {
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow(60_000);
-  const { boss, today: todayEval } = useGameState(now);
+  const { boss, today: todayEval, bossHistory } = useGameState(now);
 
   const today = boss.days[boss.days.length - 1];
   const weekNo = isoWeekNumber(new Date(`${boss.weekKey}T12:00:00`));
@@ -135,6 +136,8 @@ export default function BossScreen() {
           {g('boss.detail.reward', { xp: BOSS_DEFEAT_XP, max: num(boss.maxHp) })}
         </HudText>
       </View>
+
+      <WeeklyBossHistory history={bossHistory} />
     </ScrollView>
   );
 }

@@ -15,16 +15,23 @@ interface WeightChartProps {
   height?: number;
   /** Stage bosses that fell: a red marker on the boss's weight line on the day it fell. */
   marks?: { kg: number; dateKey: string }[];
+  /** Only the last n days (left out: since the plan started). */
+  windowDays?: number;
+  /** Also the plan's predicted weight (dashed) and a "today" line, `forecastDays` past today. */
+  predicted?: boolean;
+  forecastDays?: number;
+  /** Caption of the "today" line. */
+  todayLabel?: string;
 }
 
 /** Weight over time from the real log only (no predicted or interpolated points), with the 5 kg
  *  checkpoints that fall inside the visible range drawn as dashed lines (each one a stage boss's line) and, when given,
  *  a marker where each boss fell. */
-export function WeightChart({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height = 190, marks }: WeightChartProps) {
+export function WeightChart({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height = 190, marks, windowDays, predicted, forecastDays, todayLabel }: WeightChartProps) {
   const g = useGameText();
   const series = useMemo(
-    () => buildWeightSeries({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height, marks }),
-    [entries, startDateISO, startWeightKg, goalWeightKg, now, width, height, marks]
+    () => buildWeightSeries({ entries, startDateISO, startWeightKg, goalWeightKg, now, width, height, marks, windowDays, predicted, forecastDays }),
+    [entries, startDateISO, startWeightKg, goalWeightKg, now, width, height, marks, windowDays, predicted, forecastDays]
   );
   const first = series.points[0];
   const last = series.points[series.points.length - 1];
@@ -37,6 +44,19 @@ export function WeightChart({ entries, startDateISO, startWeightKg, goalWeightKg
       {series.ticks.map((t) => (
         <CheckpointLine key={t.kg} y={t.y} kg={t.kg} width={width} goal={t.kind === 'goal'} />
       ))}
+      {series.predictedPath && (
+        <Path d={series.predictedPath} fill="none" stroke={quest.textSecondary} strokeWidth={2} strokeDasharray="5 5" strokeLinecap="round" />
+      )}
+      {series.todayX != null && (
+        <G>
+          <Line x1={series.todayX} y1={4} x2={series.todayX} y2={height - 24} stroke={quest.hp} strokeWidth={1.2} opacity={0.8} />
+          {todayLabel ? (
+            <SvgText x={series.todayX + 4} y={14} fill={quest.hpText} fontSize={11} fontFamily={questFonts.medium}>
+              {todayLabel}
+            </SvgText>
+          ) : null}
+        </G>
+      )}
       {series.points.length > 1 && (
         <Path d={series.path} fill="none" stroke={quest.gold} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" />
       )}
