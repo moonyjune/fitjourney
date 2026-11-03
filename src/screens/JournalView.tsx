@@ -1,20 +1,21 @@
-import { useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DailyMealBreakdownTable } from '../components/DailyMealBreakdownTable';
+import { InfoButton } from '../components/quest/InfoButton';
+import { NutrientTable } from '../components/quest/NutrientTable';
 import { FoodThumb } from '../components/quest/FoodPhoto';
 import { HudText } from '../components/quest/HudText';
 import { MealDetailDialog, type MealDetail } from '../components/quest/MealDetailDialog';
 import { WorkoutDetailDialog } from '../components/quest/WorkoutDetailDialog';
 import { MoodFace } from '../components/quest/MoodFace';
-import { QuestHeader } from '../components/quest/QuestHeader';
 import { QuestIcon } from '../components/quest/QuestIcon';
 import { getDayType } from '../constants/plan';
 import { useGameText, type GameKey } from '../game/strings';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
 import { editListedPartPatch, partsOrSelf } from '../food/singlePart';
-import { useDayEvaluator, useNow, useTdeeKcal } from '../game/useGameState';
+import { useDayEvaluator, useLimits, useNow, useTdeeKcal } from '../game/useGameState';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
 import type { StringKey } from '../i18n/strings';
 import { useTranslation } from '../i18n/useTranslation';
@@ -22,6 +23,7 @@ import { useFeelingStore } from '../store/useFeelingStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { usePlanStore } from '../store/usePlanStore';
 import type { MealPart, MealSlot } from '../types';
+import type { MissionId } from '../game/constants';
 import { PLAN_SLOT_MEAL } from '../insights/days';
 import { isSkippedMealItem, logSkippedMeal } from '../food/skipMeal';
 import { deleteExtraWithUndo, logExtraAgain, unmarkPlanMealWithUndo } from '../food/mealActions';
@@ -32,19 +34,14 @@ import { selectedDayKey, useSelectedDayStore } from '../store/useSelectedDayStor
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useCheatDayStore } from '../store/useCheatDayStore';
 import { DEFICIT_LEVEL_COLOR, deficitColor, deficitLevel, type DeficitLevel } from '../game/deficitLevel';
+import { LIMITS } from '../game/constants';
 import { shownDeficit } from '../game/deficitView';
 import { DayDeficitNotes } from '../components/quest/DayDeficitNotes';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { quest, questRadius } from '../theme/quest';
-import { screenMaxWidthStyle } from '../theme/responsive';
-import { useLightStatusBar } from '../theme/useLightStatusBar';
 import { toDateKey } from '../utils/date';
-import { isoWeekNumber } from '../utils/isoWeek';
-import { addDays } from '../utils/milestones';
 import { addExtraPhoto, addSlotPhoto, removeExtraPhoto } from '../utils/mealPhotos';
 import { extraPhotoRefs, slotPhotoRefs, type MealPhotoRef } from '../utils/photoOrder';
-import { weekShiftFor } from '../utils/swipe';
-import { weekStartKey } from '../utils/weekKey';
 import { DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN, dayWaterTargetMl } from '../water/schedule';
 import { useWaterPlan, waterPlanFor } from '../water/useWaterPlan';
 
@@ -64,10 +61,6 @@ function clock(minutes: number): string {
 }
 function dateOf(key: string): Date {
   return new Date(`${key}T12:00:00`);
-}
-function goBack() {
-  if (router.canGoBack()) router.back();
-  else router.replace('/(tabs)');
 }
 
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
@@ -322,33 +315,45 @@ function DeficitLevelRow({ level, target, cheat, onToggleCheat }: { level: Defic
           </Pressable>
         )}
       </View>
-      <HudText size={10} weight="medium" color={quest.textSecondary}>
-        {g('deficit.legend', { target })}
-      </HudText>
+      <View style={styles.legendRow}>
+        <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.flex}>
+          {g('deficit.legend', { target })}
+        </HudText>
+        {/* The full rules (⚠ warnings, the "not met" and "maintenance" bands, cheat day) cut in 0.28.0, behind ⓘ. */}
+        <InfoButton label={g('journal2.legendInfo')} title={g('journal2.legendTitle')} text={g('journal2.legendFull', { target })} />
+      </View>
     </View>
   );
 }
 
-/** The battle log. `embedded`: Camp's "Dòng thời gian" section — only the selected day's timeline (no week strip, figures, colour key
- *  or water rows: Camp's hero card and tiles show those, the full log is a tap away), no own scroll view or back button. */
-export function JournalView({ client, embedded }: { client?: ClientSnapshot; embedded?: boolean }) {
+export interface JournalViewProps {
+  client?: ClientSnapshot;
+  /** Camp's "Dòng thời gian" section: only the selected day's timeline (no figures, colour key, nutrient table or water rows: Camp's
+   *  hero card and tiles show those, the full day is a tap away). */
+  embedded?: boolean;
+  /** The day shown (Journal › Ngày passes the day its date chip picked). Leave out for the app-wide selected day. */
+  dayKey?: string;
+  /** A mission opened from Camp (Đạm, Purine, Muối, Đường, Ăn vặt): its row of the nutrient table is lit, with a cook-book link. */
+  focus?: MissionId;
+  /** Where the nutrient table sits in this view (y in px), so the screen can scroll to it. */
+  onTableLayout?: (y: number) => void;
+}
+
+/** One day of the Journal (Journal › Ngày): the four numbers, the deficit with its rules (estimate, meal missing ⚠, skip, cheat day),
+ *  the day's water, the timeline (meals with photos, water, workouts, check-in), the nutrient table against the limits and the
+ *  editable meal table. `embedded`: Camp's timeline only. Not a screen of its own: `JournalScreen` frames and scrolls it. */
+export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: JournalViewProps) {
   const g = useGameText();
   const { t, language } = useTranslation();
-  const insets = useSafeAreaInsets();
-  useLightStatusBar();
   const now = useNow();
   const ownEvaluate = useDayEvaluator(now);
   const todayKey = toDateKey(now);
-  const locale = language === 'en' ? 'en-US' : 'vi-VN';
 
   // The user's own selected day is shared (the quick-add sheet and the check-in start on it); a coach's view of a client keeps its own.
-  const [clientSelectedKey, setClientSelectedKey] = useState(todayKey);
+  const [clientSelectedKey] = useState(todayKey);
   const storedSelectedKey = useSelectedDayStore((s) => s.selectedKey);
-  const selectStored = useSelectedDayStore((s) => s.select);
-  const selectedKey = client ? (clientSelectedKey > todayKey ? todayKey : clientSelectedKey) : selectedDayKey(storedSelectedKey, now);
-  const setSelectedKey = (key: string) => (client ? setClientSelectedKey(key) : selectStored(key, now));
-  // The strip always shows the week of the selected day (weeks back from this one: 0, -1, …).
-  const weekOffset = Math.round((dateOf(weekStartKey(dateOf(selectedKey))).getTime() - dateOf(weekStartKey(now)).getTime()) / (7 * 86_400_000));
+  const shownKey = dayKey ?? (client ? clientSelectedKey : selectedDayKey(storedSelectedKey, now));
+  const selectedKey = shownKey > todayKey ? todayKey : shownKey;
 
   // A coach looking at a client reads the client's records; otherwise the signed-in user's own.
   const ownLogs = useNutritionStore((s) => s.logs);
@@ -390,31 +395,6 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
         : ownEvaluate,
     [client, minuteStamp, ownEvaluate]
   );
-
-  const monday = useMemo(() => dateOf(weekStartKey(addDays(now, weekOffset * 7))), [now, weekOffset]);
-  const days = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => {
-        const date = addDays(monday, i);
-        const key = toDateKey(date);
-        const future = key > todayKey;
-        // Today with meals still to come shows its end-of-day estimate; a day with a meal not logged loses its level colour.
-        const shown = future ? null : shownDeficit(evaluate(key));
-        const deficit = shown?.kcal ?? null;
-        // A cheat day has no deficit figure (its kcal are not counted); the strip says "Cheat" instead.
-        const cheat = !future && cheatDays.includes(key);
-        return { key, date, future, deficit, cheat, projected: !!shown?.projected, incomplete: !!shown?.incomplete };
-      }),
-    [monday, todayKey, evaluate, cheatDays]
-  );
-
-  function shiftWeek(delta: number) {
-    const nextOffset = Math.min(0, weekOffset + delta);
-    if (nextOffset === weekOffset) return;
-    const nextMonday = dateOf(weekStartKey(addDays(now, nextOffset * 7)));
-    const sameWeekday = toDateKey(addDays(nextMonday, (dateOf(selectedKey).getDay() + 6) % 7));
-    setSelectedKey(sameWeekday > todayKey ? todayKey : sameWeekday);
-  }
 
   const selectedDate = useMemo(() => dateOf(selectedKey), [selectedKey]);
   const isToday = selectedKey === todayKey;
@@ -553,29 +533,8 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
     return false;
   }
 
-  // Dragging the week strip sideways moves a week, like the arrows: right for the week before, left for the one after.
-  const shiftRef = useRef(shiftWeek);
-  shiftRef.current = shiftWeek;
-  const drag = useRef(new Animated.Value(0)).current;
-  const swipe = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g2) => Math.abs(g2.dx) > 12 && Math.abs(g2.dx) > Math.abs(g2.dy) * 1.5,
-      onPanResponderMove: (_, g2) => drag.setValue(Math.max(-80, Math.min(80, g2.dx * 0.5))),
-      onPanResponderRelease: (_, g2) => {
-        const step = weekShiftFor(g2.dx, g2.vx);
-        if (step !== 0) shiftRef.current(step);
-        Animated.spring(drag, { toValue: 0, useNativeDriver: false, bounciness: 0 }).start();
-      },
-      onPanResponderTerminate: () => Animated.spring(drag, { toValue: 0, useNativeDriver: false, bounciness: 0 }).start(),
-    })
-  ).current;
-
   const weekdayLabel = (d: Date) => g(`weekday.${d.getDay()}` as GameKey);
   const dateLabel = (d: Date) => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
-  const eyebrow = g('journal.eyebrow', {
-    date: selectedDate.toLocaleDateString(locale, { weekday: 'long', day: '2-digit', month: '2-digit' }),
-    week: isoWeekNumber(selectedDate),
-  });
 
   // Today with meals still to come: the end-of-day estimate (no boss damage yet). A settled day with a meal not logged: no level colour.
   const shown = shownDeficit(day);
@@ -597,168 +556,140 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
     { label: g('journal.xp'), value: `+${day.earnedXp}`, color: quest.xp, accent: false },
   ];
 
-  const header = embedded ? (
-    <View style={styles.embeddedHead}>
-      <HudText size={17} accessibilityRole="header" style={styles.flex}>
-        {g('journal.timeline')}
-      </HudText>
-      <Pressable accessibilityRole="link" accessibilityLabel={g('camp.journalLink')} onPress={() => router.push('/journal')} hitSlop={8} style={styles.headLink}>
-        <HudText size={13} weight="medium" color={quest.textSecondary}>
-          {g('camp.journalLink')}
+  // The nutrient table (dialogs.md decision 6): the day's energy, protein, purine, salt, sugar and junk food against the goals and limits.
+  const ownLimits = useLimits();
+  const limits = client?.limits ?? ownLimits;
+  const saveDayLog = useNutritionStore((s) => s.saveDayLog);
+  const [mealTableOpen, setMealTableOpen] = useState(false);
+  const dayLog = logs[selectedKey];
+
+  const timelineRows = (embedded ? visibleTimeline.filter((i) => i.kind !== 'water') : visibleTimeline).map((item) => (
+    <TimelineRow
+      key={item.id}
+      item={item}
+      g={g}
+      t={t}
+      proteinTargetG={proteinTargetG}
+      workoutXpFor={workoutXpFor}
+      isToday={isToday && !client}
+      onOpen={openDetail}
+      thumbs={photosOf(item).map((p) => p.uri)}
+      skip={item.kind === 'meal' ? skipFor(item.slot, item.eaten) : undefined}
+    />
+  ));
+
+  const body = embedded ? (
+    <View>
+      <View style={styles.embeddedHead}>
+        <HudText size={17} accessibilityRole="header" style={styles.flex}>
+          {g('journal.timeline')}
         </HudText>
-        <QuestIcon name="chevron" size={14} color={quest.textSecondary} />
+        <Pressable accessibilityRole="link" accessibilityLabel={g('camp.journalLink')} onPress={() => router.push('/journal')} hitSlop={8} style={styles.headLink}>
+          <HudText size={13} weight="medium" color={quest.textSecondary}>
+            {g('camp.journalLink')}
+          </HudText>
+          <QuestIcon name="chevron" size={14} color={quest.textSecondary} />
+        </Pressable>
+      </View>
+      <View style={styles.timeline}>{timelineRows}</View>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={g('camp.journalFullDay')}
+        onPress={() => router.push('/journal')}
+        style={({ pressed }) => [styles.fullDay, pressed && { opacity: 0.85 }]}
+      >
+        <QuestIcon name="list" size={18} color={quest.text} />
+        <HudText size={14}>{g('camp.journalFullDay')}</HudText>
       </Pressable>
     </View>
   ) : (
-    <QuestHeader title={client ? `${g('journal.title')} · ${client.displayName}` : g('journal.title')} eyebrow={eyebrow} onBack={goBack} backLabel={g('common.back')} />
+    <View>
+      <View style={styles.stats}>
+        {stats.map((s) => (
+          <View key={s.label} accessible accessibilityLabel={`${s.label} ${s.value}`} style={[styles.stat, s.accent && { borderColor: quest.gold }]}>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {s.label}
+            </HudText>
+            <HudText size={18} color={s.color}>
+              {s.value}
+            </HudText>
+          </View>
+        ))}
+      </View>
+
+      <DeficitLevelRow
+        level={dayLevel}
+        target={deficitTarget}
+        cheat={cheatDays.includes(selectedKey)}
+        onToggleCheat={client || selectedKey > todayKey ? undefined : () => toggleCheat(selectedKey)}
+      />
+      <DayDeficitNotes day={day} dateKey={selectedKey} dayLabel={dayLabelText} readOnly={!!client} />
+
+      <View
+        accessible
+        accessibilityLabel={`${g('journal.waterTotal')} ${g('journal.waterTotalValue', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })}`}
+        style={styles.waterBar}
+      >
+        <QuestIcon name="drop" size={16} color={quest.mana} />
+        <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.flex}>
+          {g('journal.waterTotal')}
+        </HudText>
+        <Chip tone={waterMl >= waterTargetMl ? 'mana' : 'muted'} label={g('journal.waterTotalValue', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })} />
+      </View>
+
+      <View style={styles.sectionHead}>
+        <HudText size={17} accessibilityRole="header">
+          {g('journal.timeline')}
+        </HudText>
+        <HudText size={12} weight="medium" color={quest.textSecondary}>
+          {g('journal.legend')}
+        </HudText>
+      </View>
+      <View style={styles.timeline}>{timelineRows}</View>
+      <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.note}>
+        {g('journal.waterNote')}
+      </HudText>
+
+      <View onLayout={(e) => onTableLayout?.(e.nativeEvent.layout.y)}>
+        <NutrientTable
+          day={day}
+          budgetKcal={Math.max(0, tdeeKcal + day.burnedKcal - deficitTarget)}
+          limits={{ ...LIMITS, ...limits }}
+          focus={focus}
+          cookbookLinks={!client}
+        />
+      </View>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={g('journal2.mealTableA11y')}
+        accessibilityState={{ expanded: mealTableOpen }}
+        onPress={() => setMealTableOpen((o) => !o)}
+        style={styles.tableToggle}
+      >
+        <HudText size={14} color={quest.gold}>
+          {mealTableOpen ? '▾' : '▸'} {g('journal2.mealTable')}
+        </HudText>
+      </Pressable>
+      {mealTableOpen && (
+        <DailyMealBreakdownTable
+          dark
+          meals={mealTemplates[getDayType(selectedDate)]}
+          mealsEaten={dayLog?.mealsEaten ?? {}}
+          extraItems={dayLog?.extraItems ?? []}
+          legacyTotals={{ kcal: dayLog?.extraCalories ?? 0, proteinG: dayLog?.extraProteinG ?? 0 }}
+          dateKey={selectedKey}
+          removedMealSlots={dayLog?.removedMealSlots ?? []}
+          editable={!client}
+          onSave={(draft) => saveDayLog(selectedKey, draft)}
+        />
+      )}
+    </View>
   );
-  const Outer = embedded ? View : ScrollView;
-  const outerProps = embedded ? {} : { contentContainerStyle: [styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }] };
 
   return (
-    <View style={embedded ? undefined : styles.screen}>
-      <Outer {...outerProps}>
-        {header}
-
-        {!embedded && (
-        <>
-        <View style={styles.stripWrap} {...swipe.panHandlers}>
-          <Pressable accessibilityRole="button" accessibilityLabel={g('journal.prevWeek')} onPress={() => shiftWeek(-1)} style={styles.arrow}>
-            <QuestIcon name="back" size={18} color={quest.text} strokeWidth={2.4} />
-          </Pressable>
-          <Animated.View style={[styles.strip, { transform: [{ translateX: drag }] }]}>
-            {days.map((d) => {
-              const selected = d.key === selectedKey;
-              const wd = weekdayLabel(d.date);
-              const dl = dateLabel(d.date);
-              const a11y = d.future
-                ? `${wd} ${dl}`
-                : d.cheat
-                  ? g('journal.dayCheat', { weekday: wd, date: dl })
-                  : d.deficit == null
-                    ? g('journal.dayNoData', { weekday: wd, date: dl })
-                    : g(d.projected ? 'journal.dayPending' : 'journal.day', { weekday: wd, date: dl, deficit: Math.round(d.deficit ?? 0) });
-              const level = d.incomplete ? null : levelOf(d.key, d.deficit);
-              return (
-                <Pressable
-                  key={d.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={a11y}
-                  accessibilityState={{ selected, disabled: d.future }}
-                  disabled={d.future}
-                  onPress={() => setSelectedKey(d.key)}
-                  style={[
-                    styles.dayCell,
-                    selected ? { backgroundColor: quest.gold, borderColor: quest.gold } : { backgroundColor: quest.panel, borderColor: quest.border },
-                    d.future && { borderStyle: 'dashed', opacity: 0.55 },
-                  ]}
-                >
-                  <HudText size={11} weight="medium" color={selected ? quest.onGold : quest.textSecondary}>
-                    {wd}
-                  </HudText>
-                  <HudText size={18} color={selected ? quest.onGold : quest.text}>
-                    {d.date.getDate()}
-                  </HudText>
-                  <HudText size={10} weight="medium" color={selected ? quest.onGold : deficitColor(level, d.incomplete ? quest.textSecondary : quest.hpText)}>
-                    {d.future ? '·' : d.cheat ? g('deficit.cheatShort') : d.deficit == null ? '–' : `${d.projected ? '~' : ''}${Math.round(d.deficit).toLocaleString('en-US')}`}
-                  </HudText>
-                  {/* The deficit level as a bar, still readable on the selected (gold) day. */}
-                  <View style={[styles.levelBar, { backgroundColor: d.future ? 'transparent' : deficitColor(level, 'transparent') }]} />
-                </Pressable>
-              );
-            })}
-          </Animated.View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={g('journal.nextWeek')}
-            accessibilityState={{ disabled: weekOffset === 0 }}
-            disabled={weekOffset === 0}
-            onPress={() => shiftWeek(1)}
-            style={[styles.arrow, weekOffset === 0 && { opacity: 0.35 }]}
-          >
-            <View style={{ transform: [{ rotate: '180deg' }] }}>
-              <QuestIcon name="back" size={18} color={quest.text} strokeWidth={2.4} />
-            </View>
-          </Pressable>
-        </View>
-
-        <View style={styles.stats}>
-          {stats.map((s) => (
-            <View key={s.label} accessible accessibilityLabel={`${s.label} ${s.value}`} style={[styles.stat, s.accent && { borderColor: quest.gold }]}>
-              <HudText size={11} weight="medium" color={quest.textSecondary}>
-                {s.label}
-              </HudText>
-              <HudText size={18} color={s.color}>
-                {s.value}
-              </HudText>
-            </View>
-          ))}
-        </View>
-
-        <DeficitLevelRow
-          level={dayLevel}
-          target={deficitTarget}
-          cheat={cheatDays.includes(selectedKey)}
-          onToggleCheat={client || selectedKey > todayKey ? undefined : () => toggleCheat(selectedKey)}
-        />
-        <DayDeficitNotes day={day} dateKey={selectedKey} dayLabel={dayLabelText} readOnly={!!client} />
-
-        <View
-          accessible
-          accessibilityLabel={`${g('journal.waterTotal')} ${g('journal.waterTotalValue', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })}`}
-          style={styles.waterBar}
-        >
-          <QuestIcon name="drop" size={16} color={quest.mana} />
-          <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.flex}>
-            {g('journal.waterTotal')}
-          </HudText>
-          <Chip tone={waterMl >= waterTargetMl ? 'mana' : 'muted'} label={g('journal.waterTotalValue', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })} />
-        </View>
-
-        <View style={styles.sectionHead}>
-          <HudText size={17} accessibilityRole="header">
-            {g('journal.timeline')}
-          </HudText>
-          <HudText size={11} weight="medium" color={quest.textSecondary}>
-            {g('journal.legend')}
-          </HudText>
-        </View>
-        </>
-        )}
-
-        <View style={styles.timeline}>
-          {(embedded ? visibleTimeline.filter((i) => i.kind !== 'water') : visibleTimeline).map((item) => (
-            <TimelineRow
-              key={item.id}
-              item={item}
-              g={g}
-              t={t}
-              proteinTargetG={proteinTargetG}
-              workoutXpFor={workoutXpFor}
-              isToday={isToday && !client}
-              onOpen={openDetail}
-              thumbs={photosOf(item).map((p) => p.uri)}
-              skip={item.kind === 'meal' ? skipFor(item.slot, item.eaten) : undefined}
-            />
-          ))}
-        </View>
-
-        {embedded ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={g('camp.journalFullDay')}
-            onPress={() => router.push('/journal')}
-            style={({ pressed }) => [styles.fullDay, pressed && { opacity: 0.85 }]}
-          >
-            <QuestIcon name="list" size={18} color={quest.text} />
-            <HudText size={14}>{g('camp.journalFullDay')}</HudText>
-          </Pressable>
-        ) : (
-          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
-            {g('journal.waterNote')}
-          </HudText>
-        )}
-      </Outer>
+    <View>
+      {body}
       <WorkoutDetailDialog entries={openWorkoutEntries} lang={language === 'en' ? 'en' : 'vi'} onClose={() => setOpenWorkout(null)} editable={!client} />
       <MealDetailDialog
         detail={detail}
@@ -775,20 +706,15 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 32 },
   embeddedHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20, marginBottom: 4 },
   headLink: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 44 },
   fullDay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, marginTop: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   flex: { flex: 1, minWidth: 0 },
-  stripWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
-  arrow: { width: 32, height: 64, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
-  strip: { flex: 1, flexDirection: 'row', gap: 4 },
-  dayCell: { flex: 1, minHeight: 68, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', gap: 1, paddingVertical: 4 },
-  stats: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  stats: { flexDirection: 'row', gap: 8, marginTop: 4 },
   stat: { flex: 1, minWidth: 0, padding: 10, gap: 2, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center' },
-  levelBar: { width: '60%', height: 3, borderRadius: 2, marginTop: 2 },
-  levelRow: { marginTop: 10, gap: 6 },
+  levelRow: { marginTop: 10, gap: 2 },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tableToggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', marginTop: 8 },
   levelHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1.5 },
   levelDot: { width: 8, height: 8, borderRadius: 4 },

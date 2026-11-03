@@ -99,7 +99,8 @@ export function MissionsSheet({ visible, onClose, day }: MissionsSheetProps) {
   };
   const targetOf = (id: MissionId): (() => void) | undefined => {
     if (id === 'workout') return () => go('/(tabs)/workout');
-    if (MISSION_COOKBOOK[id]) return () => go('/journal');
+    // Journal › Ngày, scrolled to the nutrient table with that row lit (dialogs.md decision 6).
+    if (MISSION_COOKBOOK[id]) return () => go({ pathname: '/journal', params: { tab: 'day', focus: id } });
     return undefined;
   };
 

@@ -396,7 +396,7 @@ export default function TrainScreen() {
           </HudText>
           <QuestIcon name="chevron" size={14} color={quest.textSecondary} />
         </Pressable>
-        <Pressable accessibilityRole="link" accessibilityLabel={g('train.weekJournal')} onPress={() => router.push('/journal')} style={styles.link}>
+        <Pressable accessibilityRole="link" accessibilityLabel={g('train.weekJournal')} onPress={() => router.push({ pathname: '/journal', params: { tab: 'month' } })} style={styles.link}>
           <HudText size={13} weight="medium" color={quest.textSecondary}>
             {g('train.weekJournal')}
           </HudText>

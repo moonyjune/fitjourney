@@ -31,8 +31,7 @@ jest.mock('../../sync/cloudSync', () => ({
 
 import type { ClientSnapshot } from '../../coach/clientSnapshot';
 import { DEFAULT_PLAN } from '../../constants/plan';
-import { HistoryView } from '../../screens/HistoryView';
-import { JournalView } from '../../screens/JournalView';
+import { JournalScreen } from '../../screens/journal/JournalScreen';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { toDateKey } from '../../utils/date';
 
@@ -80,9 +79,10 @@ describe('coach view of a client', () => {
   it("Daily log shows the client's meal and numbers, not the coach's own", async () => {
     useNutritionStore.setState({ logs: { [today]: { dateISO: today, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [{ id: 'mine', name: 'Món của huấn luyện viên', calories: 111, proteinG: 1, loggedAtISO: `${today}T05:00:00.000Z`, mealTime: 'lunch' }], waterMl: 0 } } });
     await act(async () => {
-      renderer = create(<JournalView client={snapshot()} />);
+      renderer = create(<JournalScreen client={snapshot()} />);
     });
     const t = text(renderer!);
+    expect(t).toContain('Nhật ký · Học viên An');
     expect(t).toContain('Học viên An');
     expect(t).toContain('Phở bò của học viên');
     expect(t).not.toContain('Món của huấn luyện viên');
@@ -90,15 +90,29 @@ describe('coach view of a client', () => {
     expect(t).toContain('2,260'); // deficit: 2900 - 640
   });
 
-  it('Diary & charts shows the client\'s day, read-only (no save/edit controls)', async () => {
+  it('Diary & charts (Tháng) shows the client\'s day, read-only (no save/edit controls, no links to the user\'s own pages)', async () => {
     useNutritionStore.setState({ logs: {} });
     await act(async () => {
-      renderer = create(<HistoryView client={snapshot()} />);
+      renderer = create(<JournalScreen client={snapshot()} initialTab="month" />);
     });
     const t = text(renderer!);
     expect(t).toContain('Học viên An');
     expect(t).toMatch(/640/);
+    expect(t).toContain('85.0 → 81.2 kg'); // the client's weight, start → latest
+    const day = renderer!.root.findAll((n) => typeof n.props.onPress === 'function' && /Xem chi tiết/.test(String(n.props.accessibilityLabel ?? '')))[0];
+    await act(async () => day.props.onPress());
     const editable = renderer!.root.findAll((n) => n.props?.accessibilityLabel === 'Kcal' && n.props?.keyboardType === 'decimal-pad');
     expect(editable).toHaveLength(0);
+    expect(renderer!.root.findAll((n) => n.props.accessibilityLabel === 'Phân tích sâu')).toHaveLength(0);
+  });
+
+  it("Tuần shows the client's week with its boss, read-only", async () => {
+    await act(async () => {
+      renderer = create(<JournalScreen client={snapshot()} initialTab="week" />);
+    });
+    const t = text(renderer!);
+    expect(t).toContain('Boss tuần');
+    expect(t).toContain('7 ngày · thâm hụt → HP');
+    expect(t).not.toContain('Tổng kết tuần (AI)'); // the AI weekly review is the user's own
   });
 });

@@ -36,6 +36,8 @@ jest.mock('../../notifications/schedule', () => ({
 const mockIsAiAdmin = jest.fn<() => Promise<boolean>>();
 jest.mock('../../sync/cloudSync', () => ({
   fetchIsAiAdmin: () => mockIsAiAdmin(),
+  fetchWeeklySuggestion: async () => null,
+  fetchFeedback: async () => [],
   pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
@@ -49,7 +51,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import MapScreen from '../../../app/(tabs)/map';
-import BossScreen from '../../../app/boss';
+import { JournalScreen } from '../../screens/journal/JournalScreen';
 import ProfileScreen from '../../../app/(tabs)/profile';
 import { QuestTabBar } from '../../components/quest/QuestTabBar';
 import { resetIsAiAdminCache } from '../../ai/useIsAiAdmin';
@@ -254,7 +256,7 @@ describe('FitQuest tabs', () => {
       expect(allText(r)).toContain('Quỷ Bánh Kem nói');
     });
 
-    it('lists the weekly bosses on the weekly boss page, never more damage than the boss has HP', () => {
+    it('lists the weekly bosses in Journal › Tuần, never more damage than the boss has HP', () => {
       // Last week fully logged: 7 days x the 1,500 cap = 10,500 damage against a 7,700 HP boss.
       const logs: Record<string, unknown> = {};
       for (const d of ['12', '13', '14', '15', '16', '17', '18']) {
@@ -262,7 +264,7 @@ describe('FitQuest tabs', () => {
       }
       useNutritionStore.setState({ logs: logs as never });
       useSettingsStore.setState({ startDateISO: '2026-10-12T08:00:00', activityLevel: 'very_active' }); // big TDEE -> every day hits the cap
-      const r = render(<BossScreen />);
+      const r = render(<JournalScreen initialTab="week" />);
       const text = allText(r);
       expect(text).toContain('Boss theo tuần');
       expect(text).toContain('Tuần 43');

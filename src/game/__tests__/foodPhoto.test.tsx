@@ -37,6 +37,7 @@ jest.mock('../../utils/photoStorage', () => ({
   imageUriToBase64: jest.fn(),
 }));
 const mockPushProof = jest.fn();
+jest.mock('../../lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() } } }));
 jest.mock('../../sync/cloudSync', () => ({
   pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),

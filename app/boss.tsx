@@ -6,14 +6,13 @@ import { DefaultBossArt } from '../src/components/quest/StageBossArt';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
-import { WeeklyBossHistory } from '../src/components/quest/WeeklyBossHistory';
+import { InfoButton } from '../src/components/quest/InfoButton';
 import { XpBar } from '../src/components/quest/XpBar';
 import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../src/game/constants';
-import type { BossDay } from '../src/game/boss';
-import { useGameText, type GameKey } from '../src/game/strings';
+import { useGameText } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
-import { DEFICIT_LEVEL_COLOR } from '../src/game/deficitLevel';
-import { bossHitTexts, bossNum as num, bossStatusText, deficitSplitText } from '../src/game/bossView';
+import { mealNames } from '../src/game/deficitView';
+import { bossHitTexts, bossNum as num, bossStatusText } from '../src/game/bossView';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
@@ -26,11 +25,10 @@ function back() {
 
 export default function BossScreen() {
   const g = useGameText();
-  const splitText = (d: BossDay) => deficitSplitText(d, g);
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow(60_000);
-  const { boss, today: todayEval, bossHistory } = useGameState(now);
+  const { boss, today: todayEval } = useGameState(now);
 
   const today = boss.days[boss.days.length - 1];
   const weekNo = isoWeekNumber(new Date(`${boss.weekKey}T12:00:00`));
@@ -82,62 +80,26 @@ export default function BossScreen() {
         </HudText>
         {headline ? <HudText size={16}>{headline}</HudText> : null}
         {hit ? (
-          <HudText size={13} weight="medium" color={quest.textTertiary}>
-            {hit}
-          </HudText>
+          <View style={styles.reasonRow}>
+            <HudText size={13} weight="medium" color={quest.textTertiary} style={styles.flex}>
+              {hit}
+            </HudText>
+            {today?.pending && todayEval.pendingMeals.length > 0 && (
+              <InfoButton label={g('journal2.pendingInfo')} title={g('journal2.pendingTitle')} text={g('journal2.pendingFull', { meals: mealNames(todayEval.pendingMeals, g) })} />
+            )}
+          </View>
         ) : null}
       </View>
 
       <QuestButton icon="chart" variant="ghost" title={g('week.bossButton')} onPress={() => router.push('/weekly-report')} />
-
-      <View style={styles.log}>
-        <HudText size={16} accessibilityRole="header">
-          {g('boss.detail.log')}
-        </HudText>
-        {boss.days.map((d, i) => {
-          const isToday = i === boss.days.length - 1;
-          const dow = new Date(`${d.dateKey}T12:00:00`).getDay();
-          const name = isToday ? g('boss.detail.today') : g(`weekday.${dow}` as GameKey);
-          const noData = d.deficitKcal == null;
-          // Today with meals still to come: its hit is an estimate, not dealt yet.
-          const amount = noData ? '—' : d.pending ? `~−${num(d.pendingDamage)}` : `−${num(d.damage)}`;
-          const sub = d.cheat
-            ? g('boss.detail.cheat')
-            : noData
-              ? g('boss.detail.noData')
-              : [d.deficitKcal! > 0 ? g(d.pending ? 'boss.detail.pending' : 'boss.detail.deficit', { n: num(d.deficitKcal!) }) : '', splitText(d)].filter(Boolean).join(' · ');
-          return (
-            <View
-              key={d.dateKey}
-              accessible
-              accessibilityLabel={`${name}. ${d.cheat ? g('boss.detail.cheat') : noData ? g('boss.detail.noData') : `${amount} HP`}`}
-              style={[styles.logRow, i > 0 && styles.logDivider]}
-            >
-              <View style={styles.flex}>
-                <HudText size={15} color={isToday ? quest.text : quest.textTertiary}>
-                  {name} <HudText size={12} weight="medium" color={quest.textSecondary}>{d.dateKey.slice(8)}/{d.dateKey.slice(5, 7)}</HudText>
-                </HudText>
-                {sub ? (
-                  <HudText size={11} weight="medium" color={d.cheat ? DEFICIT_LEVEL_COLOR.cheat : quest.textSecondary}>
-                    {sub}
-                  </HudText>
-                ) : null}
-              </View>
-              <HudText size={17} color={noData || d.pending ? quest.textSecondary : isToday ? quest.gold : quest.hpText}>
-                {amount}
-              </HudText>
-            </View>
-          );
-        })}
-      </View>
+      {/* The full 7-day log lives in Journal › Tuần (dialogs.md decision 7). */}
+      <QuestButton icon="calendar" variant="ghost" title={g('camp.bossSeeWeek')} onPress={() => router.push({ pathname: '/journal', params: { tab: 'week' } })} />
 
       <View style={styles.reward}>
         <HudText size={14} weight="medium" color={quest.textTertiary}>
           {g('boss.detail.reward', { xp: BOSS_DEFEAT_XP, max: num(boss.maxHp) })}
         </HudText>
       </View>
-
-      <WeeklyBossHistory history={bossHistory} />
     </ScrollView>
   );
 }
@@ -151,8 +113,6 @@ const styles = StyleSheet.create({
   floating: { position: 'absolute', top: 8, right: 0 },
   hpRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 4 },
   hitCard: { gap: 6, padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.gold, backgroundColor: quest.panel },
-  log: { padding: 14, borderRadius: questRadius.panel, backgroundColor: quest.panel, gap: 2 },
-  logRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 48 },
-  logDivider: { borderTopWidth: 1, borderTopColor: quest.border },
+  reasonRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   reward: { padding: 14, borderRadius: questRadius.panel, backgroundColor: quest.bossPanel, borderWidth: 1.5, borderColor: quest.bossBorder },
 });

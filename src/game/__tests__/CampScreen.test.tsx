@@ -199,7 +199,8 @@ describe('FitQuest Camp screen', () => {
   it("a mission row opens where to act: Tập the Train tab, a food mission the day's journal, with a link to the cook book filtered", () => {
     const r = render();
     act(() => button(r, 'Protein').props.onPress());
-    expect(mockPush).toHaveBeenCalledWith('/journal');
+    // Journal › Ngày, scrolled to the nutrient table with the Protein row lit.
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/journal', params: { tab: 'day', focus: 'protein' } });
     openMissions(r);
     act(() => button(r, 'Tập luyện').props.onPress());
     expect(mockPush).toHaveBeenCalledWith('/(tabs)/workout');
@@ -217,7 +218,7 @@ describe('FitQuest Camp screen', () => {
     expect(text).toContain('~−1,172'); // pending: not taken off the HP yet
     expect(text).toContain('phần mờ = ~1,172 chờ chốt, chưa trừ');
     act(() => button(r, 'Xem cả tuần').props.onPress());
-    expect(mockPush).toHaveBeenCalledWith('/boss');
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/journal', params: { tab: 'week' } });
   });
 
   it('+250 ml logs water on the picked day at once, with "Hoàn tác" on the toast', () => {

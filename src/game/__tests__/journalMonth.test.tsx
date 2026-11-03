@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
+const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), setParams: jest.fn() };
 
 jest.mock('expo-router', () => ({
   router: {
@@ -9,6 +9,11 @@ jest.mock('expo-router', () => ({
     replace: (...a: unknown[]) => mockRouter.replace(...a),
     back: () => mockRouter.back(),
     canGoBack: () => mockRouter.canGoBack(),
+    setParams: (...a: unknown[]) => mockRouter.setParams(...a),
+  },
+  Redirect: ({ href }: { href: unknown }) => {
+    const { Text } = require('react-native');
+    return <Text testID="redirect">{JSON.stringify(href)}</Text>;
   },
   useLocalSearchParams: () => ({}),
   useFocusEffect: (cb: () => void) => {
@@ -42,18 +47,20 @@ jest.mock('../../sync/cloudSync', () => ({
   pullProfile: jest.fn(async () => null),
 }));
 
-import HistoryScreen from '../../../app/history';
+import HistoryRedirect from '../../../app/history';
+import { JournalScreen } from '../../screens/journal/JournalScreen';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
-import { useHistoryViewStore } from '../../store/useHistoryViewStore';
+import { useSelectedDayStore } from '../../store/useSelectedDayStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
 import { useSkippedMealStore } from '../../store/useSkippedMealStore';
 import { DEFAULT_MEAL_TEMPLATES, getDayType } from '../../constants/plan';
 import { quest } from '../../theme/quest';
 import { formatDateVi, toDateKey } from '../../utils/date';
+import { monthKeyOf } from '../../utils/historyCalendar';
 
 const dayKey = (back: number) => {
   const d = new Date();
@@ -62,12 +69,12 @@ const dayKey = (back: number) => {
 };
 const log = (k: string) => ({ dateISO: k, mealsEaten: { meal1: true }, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 1200 });
 
-describe('History screen (FitQuest)', () => {
+describe('Journal › Tháng (the old History screen)', () => {
   let renderer: ReactTestRenderer | undefined;
   const render = async () => {
     let r!: ReactTestRenderer;
     await act(async () => {
-      r = create(<HistoryScreen />);
+      r = create(<JournalScreen initialTab="month" />);
     });
     renderer = r;
     return r;
@@ -86,7 +93,21 @@ describe('History screen (FitQuest)', () => {
     useNutritionStore.setState({ logs: {} });
     useWorkoutStore.setState({ entries: [] });
     useWeightStore.setState({ entries: [] });
-    useHistoryViewStore.setState({ layout: 'list' });
+    useSelectedDayStore.setState({ selectedKey: null });
+  });
+  /** The month list shows the calendar's month: on the 1st, yesterday is in last month. */
+  const showMonthOf = async (r: ReactTestRenderer, k: string) => {
+    if (monthKeyOf(k) === monthKeyOf(dayKey(0))) return;
+    await act(async () => byLabel(r, /^Tháng trước$/).props.onPress());
+  };
+
+  it('/history opens Journal › Tháng', () => {
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<HistoryRedirect />);
+    });
+    expect(r.root.findByProps({ testID: 'redirect' }).props.children).toBe(JSON.stringify({ pathname: '/journal', params: { tab: 'month' } }));
+    act(() => r.unmount());
   });
   afterEach(() => {
     act(() => renderer?.unmount());
@@ -117,15 +138,9 @@ describe('History screen (FitQuest)', () => {
     useSettingsStore.setState({ waterTargetMl: 3500 });
     useNutritionStore.setState({ logs: { [dayKey(1)]: { ...log(dayKey(1)), waterTargetMl: 4500 }, [dayKey(0)]: log(dayKey(0)) } });
     const r = await render();
-    // On the 1st of a month yesterday sits in last month's group, which starts folded.
-    for (const header of r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && /ngày/.test(String(n.props.accessibilityLabel)))) {
-      await act(async () => {
-        header.props.onPress();
-      });
-    }
-    const out = text(r);
-    expect(out).toContain('1200ml nước (mục tiêu 4500ml)');
-    expect(out).toContain('1200ml nước (mục tiêu 3500ml)');
+    expect(text(r)).toContain('1200ml nước (mục tiêu 3500ml)'); // today
+    await showMonthOf(r, dayKey(1));
+    expect(text(r)).toContain('1200ml nước (mục tiêu 4500ml)');
   });
 
   it('flags a past day with a meal not logged: number without the level colour, ⚠ and the missing meals read out; "Skipped" clears it', async () => {
@@ -134,12 +149,7 @@ describe('History screen (FitQuest)', () => {
     const k = dayKey(1);
     useNutritionStore.setState({ logs: { [k]: log(k) } }); // only meal 1 of the plan is ticked
     const r = await render();
-    // On the 1st of a month yesterday sits in last month's group, which starts folded.
-    for (const header of r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && /ngày/.test(String(n.props.accessibilityLabel)))) {
-      await act(async () => {
-        header.props.onPress();
-      });
-    }
+    await showMonthOf(r, k);
     const flagged = () => r.root.findAll((n) => (n.type as unknown) === 'Text' && /⚠ Chưa ghi /.test(String(n.props.accessibilityLabel ?? '')));
     expect(flagged()).toHaveLength(1);
     const line = flagged()[0];
@@ -196,6 +206,7 @@ describe('History screen (FitQuest)', () => {
       logs: { [k]: { dateISO: k, mealsEaten: {}, extraCalories: 300, extraProteinG: 10, extraItems: [item('a', 100), item('b', 200)], waterMl: 0 } },
     });
     const r = await render();
+    await showMonthOf(r, k);
     await act(async () => byLabel(r, /Xem chi tiết/).props.onPress());
     const crosses = () => r.root.findAll((n) => n.props.accessibilityLabel === '✕' && typeof n.props.onPress === 'function');
     const save = () => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAll((c) => (c.type as unknown) === 'Text' && [c.props.children].flat().join('').startsWith('Lưu')).length > 0).pop()!;
@@ -221,6 +232,7 @@ describe('History screen (FitQuest)', () => {
     const k = dayKey(1);
     useNutritionStore.setState({ logs: { [k]: { dateISO: k, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 500, removedMealSlots: ['meal1', 'meal2'] } } });
     const r = await render();
+    await showMonthOf(r, k);
     await act(async () => byLabel(r, /Xem chi tiết/).props.onPress());
     const press = (re: RegExp) =>
       r.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAll((c) => (c.type as unknown) === 'Text' && re.test([c.props.children].flat(Infinity).join(''))).length > 0).pop()!;
@@ -243,7 +255,7 @@ describe('History screen (FitQuest)', () => {
     useNutritionStore.setState({ logs: { [k]: log(k) } });
     useProofStore.setState({ photos: [{ id: 'p1', dateISO: `${k}T05:00:00.000Z`, taskType: 'meal', taskRefId: 'extra:1', photoUri: 'file:///a.jpg', note: 'Bữa sáng', createdAtISO: `${k}T05:00:00.000Z` }, { id: 'p2', dateISO: `${k}T06:00:00.000Z`, taskType: 'meal', taskRefId: 'extra:2', photoUri: 'file:///b.jpg', note: 'Bữa trưa', createdAtISO: `${k}T06:00:00.000Z` }] });
     const r = await render();
-    const link = r.root.findAll((n) => n.props.accessibilityRole === 'link' && typeof n.props.onPress === 'function')[0];
+    const link = r.root.findAll((n) => n.props.accessibilityRole === 'link' && typeof n.props.onPress === 'function' && /ảnh minh chứng/.test(String(n.props.accessibilityLabel)))[0];
     expect(link.props.accessibilityLabel).toContain('2 ảnh minh chứng');
     expect(link.findAll((n) => n.props.style && JSON.stringify(n.props.style).includes('underline')).length).toBeGreaterThan(0);
     await act(async () => link.props.onPress());
@@ -258,57 +270,58 @@ describe('History screen (FitQuest)', () => {
     expect(mockRouter.back).toHaveBeenCalled();
     mockRouter.canGoBack.mockReturnValueOnce(false);
     await act(async () => byLabel(r, /^Quay lại$/).props.onPress());
-    expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)/profile');
+    expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)');
   });
 
-  describe('diary layouts', () => {
+  describe('calendar and day list', () => {
     const viMonth = (k: string) => `Tháng ${Number(k.slice(5, 7))}/${k.slice(0, 4)}`;
     const labels = (r: ReactTestRenderer) =>
       r.root.findAll((n) => typeof n.props.onPress === 'function').map((n) => String(n.props.accessibilityLabel ?? ''));
 
-    it('list: groups the days by month, only the current month open, and older months open on tap', async () => {
+    it("lists the shown month's days only; ‹ shows the month before", async () => {
       const today = dayKey(0);
       // Always in an earlier month, and never a Monday: a Monday also shows in the weekly summary ("Tuần bắt đầu …").
       const old = new Date(`${dayKey(40)}T12:00:00`).getDay() === 1 ? dayKey(41) : dayKey(40);
       useNutritionStore.setState({ logs: { [today]: log(today), [old]: log(old) } });
       const r = await render();
-      const header = (k: string) => byLabel(r, new RegExp(`^${viMonth(k)}\\. 1 ngày có ghi chép$`));
-      expect(header(today).props.accessibilityState).toEqual({ expanded: true });
-      expect(header(old).props.accessibilityState).toEqual({ expanded: false });
-      // The day rows only: on a Monday the weekly summary also names today ("Tuần bắt đầu …").
       const rows = () => text(r).replace(/Tuần bắt đầu \S+/g, '');
       expect(rows()).toContain(formatDateVi(today));
       expect(rows()).not.toContain(formatDateVi(old));
-      await act(async () => header(old).props.onPress());
+      for (let m = monthKeyOf(today); m > monthKeyOf(old); ) {
+        await act(async () => byLabel(r, /^Tháng trước$/).props.onPress());
+        const [y, mo] = m.split('-').map(Number);
+        m = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, '0')}`;
+      }
       expect(rows()).toContain(formatDateVi(old));
-      await act(async () => header(today).props.onPress());
       expect(rows()).not.toContain(formatDateVi(today));
     });
 
-    it('calendar: remembered choice, deficit under each logged day, and a tap opens that day', async () => {
+    it('shows the deficit under each logged day, the colour key with ⓘ, and a tap opens that day in the Day tab', async () => {
       const today = dayKey(0);
       useNutritionStore.setState({ logs: { [today]: log(today) } });
       const r = await render();
-      await act(async () => byLabel(r, /^Lịch$/).props.onPress());
-      expect(useHistoryViewStore.getState().layout).toBe('calendar');
       expect(text(r)).toContain('T2 | T3 | T4 | T5 | T6 | T7 | CN');
-      expect(text(r)).toContain(viMonth(today));
+      expect(labels(r)).toContain(`Chọn tháng và năm: ${viMonth(today)}`);
       // Today may still have meals to come (then its estimate, "~"), or be settled with a meal not logged (⚠).
       const cell = byLabel(r, new RegExp(`^${formatDateVi(today)}\\. (Thâm hụt|Ăn dư): ~?\\d+ kcal( \\(dự kiến\\))?(\\. ⚠ Chưa ghi .*)?$`));
       expect(cell).toBeDefined();
-      // The cell shows the day number and the deficit as text.
       const cellText = cell.findAll((n) => (n.type as unknown) === 'Text').map((n) => [n.props.children].flat().join(''));
       expect(cellText[0]).toBe(String(Number(today.slice(8))));
       expect(cellText[1]).toMatch(/^~?\+?\d+⚠?$/);
-      // A day with nothing logged has no deficit.
-      expect(labels(r)).toContain(formatDateVi(`${today.slice(0, 8)}${today.slice(8) === '01' ? '02' : '01'}`));
+      // The full colour rules are one tap away.
+      await act(async () => byLabel(r, /^Màu thâm hụt nghĩa là gì\?$/).props.onPress());
+      expect(text(r)).toContain('không đạt 10–50% · duy trì 0–10%');
+      expect(text(r)).toContain('> 1500 kcal');
+      // A tap on the day opens it in the Day tab.
+      useSelectedDayStore.setState({ selectedKey: dayKey(3) });
       await act(async () => cell.props.onPress());
-      expect(text(r)).toContain('Thu gọn'); // the day's detail is open below the calendar
-      expect(text(r)).toContain('1200ml nước');
+      expect(useSelectedDayStore.getState().selectedKey).toBeNull(); // today
+      expect(mockRouter.setParams).toHaveBeenLastCalledWith({ tab: 'day', focus: undefined });
+      expect(text(r)).toContain('Nước cả ngày');
+      expect(text(r)).toContain('Dinh dưỡng trong ngày');
     });
 
-    it('calendar: < and > change the month, and the picker jumps to any month and year', async () => {
-      useHistoryViewStore.setState({ layout: 'calendar' });
+    it('‹ and › change the month, the picker jumps to any month and year, and a day there opens in the Day tab', async () => {
       const now = new Date();
       const r = await render();
       const title = () => labels(r).find((l) => l.startsWith('Chọn tháng và năm: '))!;
@@ -327,15 +340,16 @@ describe('History screen (FitQuest)', () => {
       await act(async () => byLabel(r, new RegExp(`^Tháng 3/${y}$`)).props.onPress());
       expect(title()).toBe(`Chọn tháng và năm: Tháng 3/${y}`);
       expect(labels(r)).not.toContain('Năm trước'); // the picker closed
-      // Nothing was logged that month: tapping a day says so.
       await act(async () => byLabel(r, new RegExp(`^15/03/${y}$`)).props.onPress());
-      expect(text(r)).toContain(`Ngày 15/03/${y}: chưa có ghi chép.`);
+      expect(useSelectedDayStore.getState().selectedKey).toBe(`${y}-03-15`);
+      expect(text(r)).toContain('Nước cả ngày');
     });
   });
 
   it('follows the app language for the screen title', async () => {
     useSettingsStore.setState({ language: 'en' });
     const r = await render();
-    expect(text(r)).toContain('History');
+    expect(text(r)).toContain('Journal');
+    expect(text(r)).toContain('Month');
   });
 });

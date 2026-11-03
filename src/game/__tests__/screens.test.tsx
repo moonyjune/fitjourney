@@ -10,7 +10,7 @@ const mockRouter = {
   dismissTo: jest.fn(),
   setParams: jest.fn(),
 };
-let mockParams: { slot?: string; date?: string; photo?: string } = { slot: 'meal3' };
+let mockParams: { slot?: string; date?: string; photo?: string; tab?: string; focus?: string } = { slot: 'meal3' };
 
 // The factory runs when the screens import expo-router, before `mockRouter` is initialised, so the
 // router methods defer to it at call time instead of capturing it here.
@@ -41,6 +41,7 @@ jest.mock('../../utils/photoStorage', () => ({
   imageUriToBase64: jest.fn(),
   deletePersistedPhoto: jest.fn(async () => undefined),
 }));
+jest.mock('../../lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() } } }));
 jest.mock('../../sync/cloudSync', () => ({
   pushUserData: jest.fn(),
   fetchMealRecipe: jest.fn(async () => null),
@@ -644,6 +645,7 @@ describe('FitQuest logging screens', () => {
 
   describe('Selected day', () => {
     function pickInStrip(label: string) {
+      mockParams = { tab: 'week' }; // the week strip is in Journal › Tuần
       const journal = render(<JournalScreen />);
       act(() => {
         pressable(journal, (l) => l.startsWith(label)).props.onPress();
@@ -728,8 +730,8 @@ describe('FitQuest logging screens', () => {
   describe('Journal', () => {
     it("shows today's timeline: meals, water, the workout with its XP, and where you are now", () => {
       const text = allText(render(<JournalScreen />));
-      expect(text).toContain('Nhật ký trận');
-      expect(text).toContain('TUẦN 43'); // the eyebrow is set in capitals
+      expect(text).toContain('Nhật ký');
+      expect(text).toContain('Tuần 43'); // the eyebrow: the day and its week
       expect(text).toContain('Bữa 1 - Trưa (Phá cỗ)');
       expect(text).toContain('Nước +500 ml');
       expect(text).toContain('Ngày A');
@@ -1026,16 +1028,17 @@ describe('FitQuest logging screens', () => {
       useSkippedMealStore.setState({ days: {} });
     });
 
-    it('shows the same deficit on the day strip as in the stats', () => {
+    it('shows the same deficit on the week strip (Tuần) as in the stats (Ngày)', () => {
       const r = render(<JournalScreen />);
       // Today still has meals to come: both show the end-of-day estimate ("Dự kiến ~…"), and say how it is worked out.
       const stat = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Dự kiến '))[0];
       const value = stat.props.accessibilityLabel.replace('Dự kiến ', '');
       expect(value.startsWith('~')).toBe(true);
+      expect(allText(r)).toContain('Đang tính: đã ăn');
+      act(() => pressable(r, (l) => l === 'Tuần').props.onPress());
       const today = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('T6 23/10') && n.props.accessibilityState)[0];
       expect(today.props.accessibilityLabel).toContain(`thâm hụt dự kiến ${value.replace(/[~,]/g, '')}`);
       expect(today.findAll((n) => typeof n.props.children === 'string').map((n) => n.props.children)).toContain(value);
-      expect(allText(r)).toContain('Đang tính: đã ăn');
     });
 
     it('includes a feeling check-in logged today', () => {
@@ -1053,8 +1056,10 @@ describe('FitQuest logging screens', () => {
       act(() => pressable(r, (l) => l.includes('Bữa 3') && !l.startsWith('Đánh dấu đã bỏ')).props.onPress());
       expect(mockRouter.push).toHaveBeenCalledWith('/meal/meal3');
 
-      // Thursday 22/10 has no log: the strip says so, "now" disappears and meals are not tappable.
-      act(() => pressable(r, (l) => l.startsWith('T5 22/10')).props.onPress());
+      // Thursday 22/10 has no log: the strip (Tuần) says so; tapped, it opens in Ngày, where "now" disappears and meals are not tappable.
+      act(() => pressable(r, (l) => l === 'Tuần').props.onPress());
+      act(() => pressable(r, (l) => l.startsWith('T5 22/10, chưa có dữ liệu')).props.onPress());
+      expect(mockRouter.setParams).toHaveBeenLastCalledWith({ tab: 'day', focus: undefined });
       const text = allText(r);
       expect(text).not.toContain('ĐANG Ở ĐÂY');
       expect(text).toContain('—'); // no deficit without any food logged
@@ -1064,19 +1069,81 @@ describe('FitQuest logging screens', () => {
 
     it('locks days that have not happened yet', () => {
       const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l === 'Tuần').props.onPress());
       const saturday = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('T7 24/10') && n.props.accessibilityState)[0];
       expect(saturday.props.accessibilityState.disabled).toBe(true);
     });
 
+    it('Ngày: the nutrient table lists the day against the limits; a mission from Camp lights its row with a cook-book link', () => {
+      mockParams = { tab: 'day', focus: 'purine' };
+      const r = render(<JournalScreen />);
+      const text = allText(r);
+      expect(text).toContain('Dinh dưỡng trong ngày');
+      for (const row of ['Năng lượng', 'Đạm', 'Purine', 'Muối', 'Đường', 'Ăn vặt']) expect(text).toContain(row);
+      expect(text).toContain('≤ 1200'); // the purine limit
+      const lit = r.root.findAll((n) => n.props.testID === 'nutrient-focus');
+      expect(lit.length).toBeGreaterThan(0);
+      expect(r.root.findAll((n) => n.props.accessibilityState?.selected === true && /^Purine:/.test(String(n.props.accessibilityLabel))).length).toBeGreaterThan(0);
+      act(() => pressable(r, (l) => l === 'Gợi ý món ít purine').props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/cookbook', params: { quick: 'lowPurine' } });
+      // Without a focus no row is lit and there is no link.
+      act(() => renderer?.unmount());
+      mockParams = { tab: 'day' };
+      const plain = render(<JournalScreen />);
+      expect(plain.root.findAll((n) => n.props.testID === 'nutrient-focus')).toHaveLength(0);
+      expect(() => pressable(plain, (l) => l === 'Gợi ý món ít purine')).toThrow();
+    });
+
+    it('Ngày: ⓘ explains the deficit colours in full, and the meal table opens for editing', () => {
+      const r = render(<JournalScreen />);
+      expect(allText(r)).not.toContain('không đạt 10–50%');
+      act(() => pressable(r, (l) => l === 'Màu thâm hụt nghĩa là gì?').props.onPress());
+      expect(allText(r)).toContain('chỉ nhờ ăn ít > 1500 kcal, hoặc cả ngày (ăn + tập) > 1800 kcal');
+      expect(allText(r)).toContain('không đạt 10–50% · duy trì 0–10%');
+      act(() => pressable(r, (l) => l.startsWith('Bảng bữa của ngày')).props.onPress());
+      expect(allText(r)).toContain('Tổng cộng');
+    });
+
+    it('Tuần: the weekly boss (opens /boss), its 7-day log, deficit bars against the target, weight / water / mood and the AI weekly review', () => {
+      mockParams = { tab: 'week' };
+      const r = render(<JournalScreen />);
+      const text = allText(r);
+      expect(text).toContain('Boss tuần');
+      expect(text).toContain('7 ngày · thâm hụt → HP');
+      expect(text).toContain('Thâm hụt mỗi ngày');
+      expect(text).toContain('mục tiêu 1100');
+      expect(text).toContain('Nước TB');
+      expect(text).toContain('Tâm trạng');
+      act(() => pressable(r, (l) => l.startsWith('Boss tuần.')).props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/boss');
+      act(() => pressable(r, (l) => l === 'Tổng kết tuần (AI)').props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
+    });
+
+    it('Tháng: the short summary opens the deep analysis, and the weight card the weight page', () => {
+      mockParams = { tab: 'month' };
+      const r = render(<JournalScreen />);
+      expect(allText(r)).toContain('Tóm tắt tháng');
+      expect(allText(r)).toContain('Mốc lửa trại');
+      act(() => pressable(r, (l) => l === 'Phân tích sâu').props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/insights');
+      act(() => pressable(r, (l) => l.startsWith('Cân nặng.')).props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/weight');
+    });
+
     it('walks back a week and forward again, never past the current week', () => {
+      mockParams = { tab: 'week' };
       const r = render(<JournalScreen />);
       const next = () => r.root.findAll((n) => n.props.accessibilityLabel === 'Tuần sau' && n.props.accessibilityState)[0];
       expect(next().props.accessibilityState.disabled).toBe(true);
+      expect(allText(r)).toContain('Tuần 43 · 19/10 – 25/10');
       act(() => pressable(r, (l) => l === 'Tuần trước').props.onPress());
-      expect(allText(r)).toContain('TUẦN 42');
+      expect(allText(r)).toContain('Tuần 42 · 12/10 – 18/10');
+      expect(useSelectedDayStore.getState().selectedKey).toBe('2026-10-16'); // the same weekday, a week back
       expect(next().props.accessibilityState.disabled).toBe(false);
       act(() => pressable(r, (l) => l === 'Tuần sau').props.onPress());
-      expect(allText(r)).toContain('TUẦN 43');
+      expect(allText(r)).toContain('Tuần 43');
+      expect(useSelectedDayStore.getState().selectedKey).toBeNull(); // back on today
     });
   });
 });

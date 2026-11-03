@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
+const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true), setParams: jest.fn() };
 jest.mock('expo-router', () => ({
   router: {
     push: (...a: unknown[]) => mockRouter.push(...a),
     replace: (...a: unknown[]) => mockRouter.replace(...a),
     back: () => mockRouter.back(),
     canGoBack: () => mockRouter.canGoBack(),
+    setParams: (...a: unknown[]) => mockRouter.setParams(...a),
   },
   useFocusEffect: () => undefined,
 }));
@@ -18,6 +19,7 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
+jest.mock('../../lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() } } }));
 jest.mock('../../sync/cloudSync', () => ({
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
@@ -31,6 +33,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import BossScreen from '../../../app/boss';
+import { JournalScreen } from '../../screens/journal/JournalScreen';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
@@ -76,11 +79,21 @@ describe('Boss detail screen', () => {
     renderer = r;
     return r;
   };
+  // The full 7-day log is in Journal › Tuần (dialogs.md decision 7).
+  const renderWeek = () => {
+    let r!: ReactTestRenderer;
+    act(() => {
+      r = create(<JournalScreen initialTab="week" />);
+    });
+    renderer = r;
+    return r;
+  };
   // Each View shows up twice in the test tree (composite + host node): keep one per distinct label.
   const rowLabels = (r: ReactTestRenderer) => [
     ...new Set(
       r.root
-        .findAll((n) => n.props.accessible === true && /HP$|chưa có dữ liệu$|no data$/.test(String(n.props.accessibilityLabel)))
+        // (The week strip's cells, "T2 19/10, …", are not log rows.)
+        .findAll((n) => n.props.accessible === true && /HP$|chưa có dữ liệu$|no data$/.test(String(n.props.accessibilityLabel)) && !/\d\d\/\d\d/.test(String(n.props.accessibilityLabel)))
         .map((n) => String(n.props.accessibilityLabel))
     ),
   ];
@@ -99,14 +112,23 @@ describe('Boss detail screen', () => {
     jest.useRealTimers();
   });
 
-  it('lists every day of the week up to today, marks days without data and keeps HP consistent with the log', () => {
+  it('opens the full week in Journal › Tuần', () => {
+    const r = render();
+    act(() => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Xem cả tuần')[0].props.onPress());
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/journal', params: { tab: 'week' } });
+    expect(rowLabels(r)).toHaveLength(0); // the 7-day log is not repeated here
+  });
+
+  it('Journal › Tuần lists every day of the week up to today, marks days without data and keeps HP consistent with the log', () => {
     useNutritionStore.setState({ logs: { '2026-10-20': log('2026-10-20'), '2026-10-22': log('2026-10-22') } });
     useWorkoutStore.setState({ entries: [{ ...bigBurn('2026-10-22'), caloriesBurned: 500 }] }); // keeps the boss alive (training adds on top of the cap)
-    const r = render();
+    const page = allText(render());
+    expect(page).toContain('Quái Một Ký Mỡ');
+    expect(page).toContain('BOSS TUẦN 43'); // the eyebrow is set in capitals
+    expect(page).toContain('RESET 05:00 SÁNG THỨ HAI');
+    act(() => renderer?.unmount());
+    const r = renderWeek();
     const text = allText(r);
-    expect(text).toContain('Quái Một Ký Mỡ');
-    expect(text).toContain('BOSS TUẦN 43'); // the eyebrow is set in capitals
-    expect(text).toContain('RESET 05:00 SÁNG THỨ HAI');
     const labels = rowLabels(r);
     expect(labels).toHaveLength(5); // Mon-Fri
     expect(labels[0]).toMatch(/^T2\. chưa có dữ liệu/); // Monday: no data, not "0 damage"
@@ -123,9 +145,17 @@ describe('Boss detail screen', () => {
     const text = allText(render()); // Friday 16:10: the plan's later meals are still to come
     expect(text).toMatch(/Thâm hụt dự kiến [\d,]+ kcal → ~[\d,]+ sát thương, chờ chốt/);
     expect(text).toContain('đòn tính khi ghi đủ bữa hoặc hết giờ ăn');
-    expect(text).toMatch(/~−[\d,]+/);
     expect(text.replace(/\s+/g, ' ')).toContain('7,700 / 7,700');
     expect(text).toContain('Còn 2 ngày nữa · cần trung bình 2,567 kcal/ngày'); // today still counts as a day to come: 7,700 / 3
+    // ⓘ: why the hit waits, in full.
+    const info = renderer!.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Vì sao đòn hôm nay chờ chốt?')[0];
+    act(() => info.props.onPress());
+    expect(allText(renderer!)).toContain('để boss không mất máu từ sáng chỉ vì chưa ăn');
+    act(() => renderer?.unmount());
+    // The week's log: today's hit is an estimate (~−…), with the same ⓘ.
+    const week = renderWeek();
+    expect(allText(week)).toMatch(/~−[\d,]+/);
+    expect(week.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Vì sao đòn hôm nay chờ chốt?').length).toBeGreaterThan(0);
   });
 
   it('shows the daily cap and explains it when a day exceeds it', () => {
@@ -135,11 +165,13 @@ describe('Boss detail screen', () => {
     const text = allText(render());
     // 1,500 from eating + 5,000 of training: training adds on top of the cap.
     expect(text).toContain('→ 6,500 sát thương');
-    // The battle log splits the deficit: eating below the TDEE (capped at 1,500 for damage) and training.
-    expect(text).toMatch(/🍽 ăn dưới TDEE [\d,]+ \(tính tối đa 1,500\) · 🏃 tập luyện 5,000/);
     expect(text).toContain('chạm mức an toàn 1,500/ngày');
-    expect(text).toContain('−6,500');
     expect(text.replace(/\s+/g, ' ')).toContain('1,200 / 7,700');
+    act(() => renderer?.unmount());
+    // The week's log splits the deficit: eating below the TDEE (capped at 1,500 for damage) and training.
+    const week = allText(renderWeek());
+    expect(week).toMatch(/🍽 ăn dưới TDEE [\d,]+ \(tính tối đa 1,500\) · 🏃 tập luyện 5,000/);
+    expect(week).toContain('−6,500');
   });
 
   it('says so instead of showing a hit when nothing is logged today', () => {
@@ -174,7 +206,7 @@ describe('Boss detail screen', () => {
     useSettingsStore.setState({ language: 'en' });
     const r = render();
     expect(allText(r)).toContain('The One-Kilo Blob');
-    expect(allText(r)).toContain('Battle log');
+    expect(allText(r)).toContain('See the whole week');
     act(() => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Back')[0].props.onPress());
     expect(mockRouter.back).toHaveBeenCalled();
   });
