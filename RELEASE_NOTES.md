@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.30.0 | no | — |
 | 0.29.0 | no | — |
 | 0.28.0 | no | — |
 | 0.27.2 | no | — |
@@ -84,6 +85,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.30.0
+Redesign, phase 2 (logging a meal).
+- "Ghi bữa" is one 2-step flow. Step 1: photos, words or your voice ("Nói", where the browser supports it), or "Món đã lưu", then one "Phân tích" button: a photo only → photo analysis; "Ảnh nhãn dinh dưỡng" → label reading; words → text analysis. Foods your database knows are filled in without AI. Camp's "Chụp món" opens the camera at once.
+- "Kiểm tra món": one line per food with a thumbnail, kcal · protein and − / + amount; ✎ opens a sheet with all the numbers; removing a food can be undone. "Bữa" / "Giờ" / "Ăn vặt" chips at the top; label, swaps, advice and nutrients under "Chi tiết ▸". Sticky "Lưu bữa · N kcal".
+- One hint line + ⓘ; an AI error is one sentence with "Thử lại" / "Tự nhập"; with AI off the screen offers "Tự nhập". "Nhập bằng chữ" (/text-meal, redirected) and the off-plan form in "Dinh dưỡng" are folded into "Ghi bữa".
+- A plan meal opens as its own page: each dish with a photo and "Đã ăn / Không ăn / Thay món", "Muốn đổi món?" with the recipe and "Dùng món này", "Bỏ bữa này", and a fixed "Đã ăn · X kcal" button; a meal eaten differently from the plan is logged as one food of that meal; all of it can be undone.
+- A logged meal opens as a bottom sheet: photos (tap for full screen), totals, ✎ per dish, "Ăn lại món này" and "Xoá bữa", both with "Hoàn tác" instead of a confirm. A workout opens as a bottom sheet with "Sửa", "Ảnh", "Xóa ảnh", "Xoá" (with "Hoàn tác").
+- Photos open full screen on black: swipe between them, "n / total", the dish and when. A deleted meal or workout keeps its photos until the "Hoàn tác" notice is gone.
 
 ## 0.29.0
 Redesign, phase 1 (Camp, Quick add, water pop-up).
