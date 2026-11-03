@@ -789,7 +789,7 @@ export default function AddFoodScreen() {
                   <HudText size={15} numberOfLines={2}>
                     {name || g('meal.item.newTitle')}
                   </HudText>
-                  <HudText size={12} weight="medium" color={figures ? quest.textSecondary : quest.goldLight} numberOfLines={1}>
+                  <HudText size={12} weight="medium" color={figures ? quest.textSecondary : quest.goldLight} numberOfLines={2}>
                     {figures ? g('meal.itemLine', { kcal: Math.round(num(r.calories)), p: Math.round(num(r.protein) * 10) / 10 }) : g('meal.itemNoFigures')}
                   </HudText>
                   {r.fromDb || r.accuracy !== null ? (
@@ -1145,7 +1145,7 @@ const styles = StyleSheet.create({
   badgeMana: { backgroundColor: quest.manaPanel, borderColor: quest.manaBorder },
   badgeXp: { backgroundColor: quest.panel, borderColor: quest.xp },
   photoChip: {
-    minHeight: 40,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -1173,8 +1173,8 @@ const styles = StyleSheet.create({
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: quest.border },
   itemText: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center', gap: 2 },
   portion: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, height: 44 },
-  portionBtn: { width: 34, height: 44, alignItems: 'center', justifyContent: 'center' },
-  portionText: { minWidth: 46, maxWidth: 70, textAlign: 'center' },
+  portionBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  portionText: { minWidth: 36, maxWidth: 70, textAlign: 'center' },
   editBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   linkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   link: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6 },

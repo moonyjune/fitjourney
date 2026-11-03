@@ -116,7 +116,7 @@ flowchart TD
 ```
 
 Ngoài ra:
-- `/journal` (nhật ký trận đứng riêng) và `/text-meal` (chuyển hướng sang `/add-food`) không có link nào trong app.
+- `/journal` (nhật ký trận đứng riêng) không có link nào trong app. `/text-meal` đã bỏ từ 0.30.0 (gộp vào "Ghi bữa" `/add-food`); trên web link cũ được chuyển hướng bằng `vercel.json`.
 - Từ Hồ sơ: "Chuyển sang chế độ Coach" → `/(tabs)/clients`. Từ Tài khoản coach: "Chuyển sang chế độ Fatty" → `/(tabs)`.
 
 ---
@@ -678,13 +678,13 @@ Rỗng: "Cần ít nhất 2 ngày có dữ liệu để vẽ biểu đồ.", "Ch
 | `(tabs)/today-classic` | `app/(tabs)/today-classic.tsx` | Màn "Hôm nay" thời FitJourney, **giao diện sáng** (`Card`, `Text`, `ambientBg`, `src/theme/tokens.ts`): ngày tập/nghỉ, thẻ IF, chuỗi + huy hiệu, cân nặng, mốc kế tiếp, dinh dưỡng (calo/protein/nước), `TdeeCard`, tập luyện hôm nay, `FeelingRecordCard`. Không có link nào dẫn tới. |
 | `(tabs)/workout-classic` | xem 3.4 | Còn dùng để ghi buổi tập tự do. |
 | `/journal` | `app/journal.tsx` | `JournalView` toàn màn; không có link (Trại đã nhúng). |
-| `/text-meal` | `app/text-meal.tsx` | `Redirect` sang `/add-food` (giữ `text`, `date`). |
+| `/text-meal` | — (file đã xoá ở 0.30.0) | Gộp vào "Ghi bữa" (`/add-food`); trên web `vercel.json` chuyển hướng `/text-meal` → `/add-food`. |
 
 ---
 
 ## 4. Lỗ hổng và chỗ chưa nhất quán (chỉ ghi nhận, không sửa)
 
-1. **Màn cũ vẫn truy cập được**: `today-classic` (giao diện sáng, không có link nhưng vẫn là route), `/journal`, `/text-meal`. `workout-classic` được gắn nhãn "(màn hình cũ)" nhưng vẫn là nơi duy nhất để ghi buổi tập tự do và dùng "✨ AI ước tính kcal".
+1. **Màn cũ vẫn truy cập được**: `today-classic` (giao diện sáng, không có link nhưng vẫn là route), `/journal` (`/text-meal` đã gộp vào `/add-food` ở 0.30.0). `workout-classic` được gắn nhãn "(màn hình cũ)" nhưng vẫn là nơi duy nhất để ghi buổi tập tự do và dùng "✨ AI ước tính kcal".
 2. **"Tab" không nằm trên thanh tab**: `weight`, `nutrition`, `history`, `plan` khai báo là tab, có `tabBarIcon` emoji (⚖️ 🍽️ 📊 📋) nhưng `QuestTabBar` bỏ qua chúng; người dùng chỉ vào được qua Hồ sơ. Các emoji `TabIcon` trong `_layout.tsx` cũng không được dùng (thanh tab tự vẽ dùng `QuestIcon`).
 3. **Trùng chức năng giữa Hồ sơ và Kế hoạch**:
    - cả hai có Ngôn ngữ, chuyển sang Coach, liên kết mã Coach; Kế hoạch còn có Đăng xuất

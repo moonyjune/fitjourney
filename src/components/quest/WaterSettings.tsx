@@ -173,6 +173,6 @@ const styles = StyleSheet.create({
   off: { opacity: 0.4 },
   value: { minWidth: 96, textAlign: 'center' },
   presets: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  preset: { minHeight: 40, minWidth: 64, paddingHorizontal: 12, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel, alignItems: 'center', justifyContent: 'center' },
+  preset: { minHeight: 44, minWidth: 64, paddingHorizontal: 12, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel, alignItems: 'center', justifyContent: 'center' },
   presetOn: { backgroundColor: quest.gold, borderColor: quest.gold },
 });

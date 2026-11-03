@@ -24,9 +24,8 @@ function Shimmer({ radius }: { radius: number }) {
   }, [motion, pulse]);
   return (
     <Animated.View
-      pointerEvents="none"
       testID="dish-photo-shimmer"
-      style={[StyleSheet.absoluteFill, { borderRadius: radius, backgroundColor: quest.text, opacity: motion ? pulse.interpolate({ inputRange: [0, 1], outputRange: [0.04, 0.14] }) : 0.08 }]}
+      style={[StyleSheet.absoluteFill, { pointerEvents: 'none', borderRadius: radius, backgroundColor: quest.text, opacity: motion ? pulse.interpolate({ inputRange: [0, 1], outputRange: [0.04, 0.14] }) : 0.08 }]}
     />
   );
 }

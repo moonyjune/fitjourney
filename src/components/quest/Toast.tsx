@@ -68,7 +68,7 @@ export function ToastHost() {
   if (!toast) return null;
   const { hide, undo } = useToastStore.getState();
   return (
-    <View pointerEvents="box-none" style={[styles.host, { bottom: tabBarCover(insets.bottom) + 8 }]}>
+    <View style={[styles.host, { bottom: tabBarCover(insets.bottom) + 8 }]}>
       <FadeInUp key={toast.id} distance={16} duration={DURATION.fast} style={screenMaxWidthStyle}>
         <ToastBar
           toast={toast}
@@ -84,7 +84,7 @@ export function ToastHost() {
 }
 
 const styles = StyleSheet.create({
-  host: { position: 'absolute', left: 16, right: 16, alignItems: 'center' },
+  host: { position: 'absolute', left: 16, right: 16, alignItems: 'center', pointerEvents: 'box-none' },
   bar: {
     minHeight: 48,
     borderRadius: questRadius.button,
@@ -94,11 +94,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    boxShadow: '0px 4px 12px rgba(0,0,0,0.4)',
   },
   textBox: { flex: 1, minWidth: 0, paddingVertical: 10 },
   button: { minHeight: 44, minWidth: 44, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },

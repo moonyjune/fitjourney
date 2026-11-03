@@ -163,7 +163,7 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
         )}
 
         <HudText size={16} color={quest.goldLight}>
-          {detail.kcal} kcal · {round1(detail.proteinG)} g
+          {g('journal.kcalProtein', { kcal: detail.kcal, protein: round1(detail.proteinG) })}
         </HudText>
         {detail.purineMg != null && detail.sugarG != null && detail.saltG != null && (
           <HudText size={12} weight="medium" color={quest.textSecondary}>

@@ -35,11 +35,13 @@ export function DayDeficitNotes({ day, dateKey, dayLabel, readOnly, hidePendingL
             accessibilityRole="button"
             accessibilityLabel={g('deficit.skipLabel', { meal: mealNames([m], g), day: dayLabel })}
             onPress={() => toggleSkippedMeal(dateKey, m.id)}
-            style={[styles.chip, { borderColor: quest.border }]}
+            style={styles.target}
           >
-            <HudText size={12} color={quest.textSecondary}>
-              {named ? g('deficit.skipNamed', { meal: mealNames([m], g) }) : g('deficit.skip')}
-            </HudText>
+            <View style={[styles.chip, { borderColor: quest.border }]}>
+              <HudText size={12} color={quest.textSecondary}>
+                {named ? g('deficit.skipNamed', { meal: mealNames([m], g) }) : g('deficit.skip')}
+              </HudText>
+            </View>
           </Pressable>
         ))}
       </View>
@@ -67,11 +69,13 @@ export function DayDeficitNotes({ day, dateKey, dayLabel, readOnly, hidePendingL
               accessibilityRole="button"
               accessibilityLabel={g('deficit.addMissingLabel', { day: dayLabel })}
               onPress={() => router.push('/quick-add')}
-              style={[styles.chip, { borderColor: quest.gold }]}
+              style={styles.target}
             >
-              <HudText size={12} color={quest.gold}>
-                {g('deficit.addMissing')}
-              </HudText>
+              <View style={[styles.chip, { borderColor: quest.gold }]}>
+                <HudText size={12} color={quest.gold}>
+                  {g('deficit.addMissing')}
+                </HudText>
+              </View>
             </Pressable>
           )}
         </View>
@@ -88,11 +92,13 @@ export function DayDeficitNotes({ day, dateKey, dayLabel, readOnly, hidePendingL
               accessibilityRole="button"
               accessibilityLabel={g('deficit.skipUndoLabel', { meal: mealNames([m], g), day: dayLabel })}
               onPress={() => toggleSkippedMeal(dateKey, m.id)}
-              style={[styles.chip, { borderColor: quest.border }]}
+              style={styles.target}
             >
-              <HudText size={12} color={quest.textSecondary}>
-                {day.skippedMeals.length > 1 ? `${g('deficit.skipUndo')}: ${mealNames([m], g)}` : g('deficit.skipUndo')}
-              </HudText>
+              <View style={[styles.chip, { borderColor: quest.border }]}>
+                <HudText size={12} color={quest.textSecondary}>
+                  {day.skippedMeals.length > 1 ? `${g('deficit.skipUndo')}: ${mealNames([m], g)}` : g('deficit.skipUndo')}
+                </HudText>
+              </View>
             </Pressable>
           ))}
         </View>
@@ -104,6 +110,8 @@ export function DayDeficitNotes({ day, dateKey, dayLabel, readOnly, hidePendingL
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   missingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  skipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
+  skipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', columnGap: 8 },
+  // The chip stays 32 pt to look at; the pressable around it is 44 pt high (tap target).
+  target: { minHeight: 44, justifyContent: 'center' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1.5 },
 });

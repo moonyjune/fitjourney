@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
   limitRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   limitValue: { minWidth: 72, textAlign: 'center' },
   step: { width: 44, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
-  resetLimits: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center' },
+  resetLimits: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
   bannerWrap: { alignItems: 'center' },
   screen: { flex: 1, backgroundColor: quest.bg },
   content: { paddingHorizontal: 16, paddingBottom: 120 },

@@ -37,5 +37,5 @@ export function QuestChip({ label, selected, onPress, tone = 'gold', accessibili
 }
 
 const styles = StyleSheet.create({
-  chip: { minHeight: 40, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });

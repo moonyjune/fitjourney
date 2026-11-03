@@ -50,6 +50,9 @@ export function PhotoViewer({ photos, title, subtitle, initialIndex = 0, onClose
   if (!photos) return null;
   const current = photos[Math.min(at, photos.length - 1)];
   const photoHeight = Math.max(240, height - insets.top - insets.bottom - CHROME);
+  const heading = title || g('photo.viewerTitle');
+  const topTitle = current?.label && current.label === heading ? '' : heading;
+  const topSubtitle = subtitle && subtitle !== current?.caption ? subtitle : '';
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
@@ -59,12 +62,15 @@ export function PhotoViewer({ photos, title, subtitle, initialIndex = 0, onClose
             <QuestIcon name="x" size={22} color={quest.text} strokeWidth={2.4} />
           </Pressable>
           <View style={styles.flex}>
-            <HudText size={15} accessibilityRole="header" numberOfLines={1}>
-              {title || g('photo.viewerTitle')}
-            </HudText>
-            {subtitle ? (
+            {/* The dish and when are under the photo; the top repeats them only when they say something else (a day, a note). */}
+            {topTitle ? (
+              <HudText size={15} accessibilityRole="header" numberOfLines={1}>
+                {topTitle}
+              </HudText>
+            ) : null}
+            {topSubtitle ? (
               <HudText size={12} weight="medium" color={quest.goldLight} numberOfLines={1}>
-                {subtitle}
+                {topSubtitle}
               </HudText>
             ) : null}
           </View>

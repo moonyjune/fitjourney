@@ -8,3 +8,10 @@ export function weekStartKey(date: Date): string {
   d.setDate(d.getDate() + diffToMonday);
   return toDateKey(d);
 }
+
+/** The Monday key of the week before the one containing `date`. */
+export function previousWeekStartKey(date: Date): string {
+  const monday = new Date(`${weekStartKey(date)}T12:00:00`);
+  monday.setDate(monday.getDate() - 7);
+  return toDateKey(monday);
+}

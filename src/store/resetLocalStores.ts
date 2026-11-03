@@ -105,7 +105,7 @@ export function resetAllLocalStores() {
   // Device-local game state belongs to the account too: another user must not inherit levels, banners or limits.
   useTrainingStore.setState({ progress: {} });
   useAchievementStore.setState({ equippedBannerId: null });
-  useCelebrationStore.setState({ seenLevel: null });
+  useCelebrationStore.setState({ seenLevel: null, weeklyDoneKey: null });
   useLimitsStore.getState().reset();
   // The user's own foods and label edits belong to the account too.
   useFoodDbStore.setState({ custom: [], overrides: {}, recent: [] });

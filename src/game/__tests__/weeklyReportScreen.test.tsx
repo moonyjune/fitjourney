@@ -37,6 +37,7 @@ import { AI_AUTO_DEBOUNCE_MS, AI_AUTO_MIN_GAP_MS, WeeklyReportAutoRefresh } from
 import { buildWeeklyReportInput, weekInputFingerprint } from '../../ai/weeklyReport';
 import { resetAnalysisStore, useAnalysisStore } from '../../store/useAnalysisStore';
 import { useAiReportStore } from '../../store/useAiReportStore';
+import { useCelebrationStore } from '../../store/useCelebrationStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -109,6 +110,12 @@ describe('Weekly review screen', () => {
     expect(text).toContain('Cân nặng -0.8 kg · dự kiến theo thâm hụt -0.4 kg');
     expect(text).toContain('Phân tích tuần bằng AI');
     expect(mockRequest).not.toHaveBeenCalled(); // opening the screen costs nothing
+  });
+
+  it("opening it hides Camp's card for last week's review", async () => {
+    useCelebrationStore.setState({ weeklyDoneKey: null });
+    await mount();
+    expect(useCelebrationStore.getState().weeklyDoneKey).toBe('2026-10-12'); // the week before 19–25/10
   });
 
   it('asks for the review of this week (not forced to refresh), shows it, and stores it for next time', async () => {

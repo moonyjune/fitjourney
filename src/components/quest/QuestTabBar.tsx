@@ -209,11 +209,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
     borderWidth: 5,
     borderColor: quest.bg,
-    shadowColor: quest.gold,
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 6,
+    boxShadow: `0px 0px 12px ${quest.gold}73`,
   },
   fabIcon: { transform: [{ rotate: '-45deg' }] },
 });

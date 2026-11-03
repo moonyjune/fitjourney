@@ -62,7 +62,7 @@ export function WorkoutStepsList({ steps }: { steps: WorkoutStep[] }) {
 }
 
 /** Renders a PlanData (meal menus, water schedule, workouts, shopping list) — reused for both the live plan and an AI proposal preview.
- *  Pass `hideShoppingList` when the caller renders its own interactive shopping list instead (see ShoppingListEditor). */
+ *  Pass `hideShoppingList` when the caller renders its own interactive shopping list instead (see QuestShoppingList). */
 export function PlanPreview({ plan, hideShoppingList }: { plan: PlanData; hideShoppingList?: boolean }) {
   const { t } = useTranslation();
   return (

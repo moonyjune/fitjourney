@@ -11,6 +11,9 @@ import { DefaultBossArt } from '../src/components/quest/StageBossArt';
 import { useGameText } from '../src/game/strings';
 import { useNow } from '../src/game/useGameState';
 import { useAiReportStore } from '../src/store/useAiReportStore';
+import { useCelebrationStore } from '../src/store/useCelebrationStore';
+import { previousWeekStartKey } from '../src/utils/weekKey';
+import { bossClock } from '../src/game/boss';
 import { useAnalysisStore } from '../src/store/useAnalysisStore';
 import { useInsightsText } from '../src/insights/strings';
 import { useNutritionStore } from '../src/store/useNutritionStore';
@@ -53,6 +56,11 @@ export default function WeeklyReportScreen() {
   const ti = useInsightsText();
   const stored = useAiReportStore((s) => s.weekly[period]);
   const saveWeekly = useAiReportStore((s) => s.saveWeekly);
+
+  // Opening the report counts as having seen last week's review: Camp's "Tổng kết tuần" card goes away.
+  useEffect(() => {
+    useCelebrationStore.getState().markWeeklyDone(previousWeekStartKey(bossClock(new Date())));
+  }, []);
 
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<AiErrorKind | 'unusable' | null>(null);

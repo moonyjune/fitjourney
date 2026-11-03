@@ -168,7 +168,6 @@ function PlanMeal({ meal, meals, now, day, input }: PlanMealProps) {
       eyebrow={g('meal.eyebrow', { range: meal.timeRange })}
       onBack={goBack}
       backLabel={g('common.back')}
-      right={status}
       primary={eaten ? undefined : { label: primaryLabel, onPress: eat, disabled: !outcome.asPlanned && outcome.parts.length === 0 }}
     >
       {!day.isToday && (
@@ -181,6 +180,8 @@ function PlanMeal({ meal, meals, now, day, input }: PlanMealProps) {
         {meals.map((m, i) => (
           <QuestChip key={m.slot} label={g('meal.slotShort', { n: i + 1 })} selected={m.slot === meal.slot} onPress={() => router.setParams({ slot: m.slot as MealSlot })} />
         ))}
+        {/* The status sits at the end of the meal chips (dialog 09), so the long meal name keeps the whole header. */}
+        <View style={styles.statusSlot}>{status}</View>
       </View>
 
       <View style={styles.section}>
@@ -418,11 +419,12 @@ function ChoiceButton({ icon, label, a11y, selected, onPress }: { icon: QuestIco
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   banner: { marginTop: 4 },
+  statusSlot: { marginLeft: 'auto' },
   status: { borderRadius: 8, paddingHorizontal: 10, minHeight: 28, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
   statusPending: { borderColor: quest.border, backgroundColor: 'transparent' },
   statusEaten: { borderColor: quest.gold, backgroundColor: quest.gold },
   statusText: { letterSpacing: 1.2 },
-  switchRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
   section: { marginTop: 18 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 },
   eyebrow: { letterSpacing: 1.2, marginBottom: 8 },

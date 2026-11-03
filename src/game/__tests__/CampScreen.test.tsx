@@ -73,7 +73,7 @@ describe('FitQuest Camp screen', () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') }); // a Friday, inside the eating window
     mockPush.mockClear();
-    useCelebrationStore.setState({ seenLevel: null });
+    useCelebrationStore.setState({ seenLevel: null, weeklyDoneKey: null });
     useSettingsStore.setState({
       startDateISO: '2026-10-19T08:00:00',
       startWeightKg: 110,
@@ -288,6 +288,17 @@ describe('FitQuest Camp screen', () => {
     expect(allText(r)).toMatch(/Tổng kết tuần 43/);
     act(() => button(r, 'Xem: Tổng kết tuần').props.onPress());
     expect(mockPush).toHaveBeenCalledWith('/weekly-report');
+  });
+
+  it("keeps last week's review card after Monday until it is closed (×) or the weekly report is opened", () => {
+    jest.setSystemTime(new Date('2026-10-28T10:00:00')); // a Wednesday
+    const r = render();
+    expect(allText(r)).toMatch(/Tổng kết tuần 43/);
+    expect(button(r, 'Ẩn thẻ tổng kết tuần')).toBeTruthy();
+    act(() => renderer?.unmount());
+    // What × (and opening the weekly report) records: last week's Monday. The card is gone from then on.
+    useCelebrationStore.setState({ weeklyDoneKey: '2026-10-19' });
+    expect(allText(render())).not.toMatch(/Tổng kết tuần 43/);
   });
 
   describe('level-up celebration', () => {

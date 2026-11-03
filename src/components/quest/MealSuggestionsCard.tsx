@@ -278,7 +278,7 @@ export function MealSuggestionsCard({ now, bare }: { now: Date; bare?: boolean }
                 ) : null}
                 <View style={styles.ideaButtons}>
                   <QuestButton variant="ghost" title={g('meals.viewRecipe')} accessibilityLabel={`${g('meals.viewRecipe')}: ${idea.name}`} onPress={() => setViewing({ idea, brief, label: name, kind: meal.slot.kind })} />
-                  <QuestButton variant="mana" title={g('dinner.log')} accessibilityLabel={g('dinner.logLabel', { name: idea.name })} onPress={() => openInAddFood(idea, meal.slot.kind)} />
+                  <QuestButton variant="mana" title={g('dinner.log')} accessibilityLabel={g('dinner.logForMeal', { meal: name, name: idea.name })} onPress={() => openInAddFood(idea, meal.slot.kind)} />
                 </View>
               </View>
             ))}

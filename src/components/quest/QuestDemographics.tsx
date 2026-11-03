@@ -33,7 +33,7 @@ interface QuestDemographicsProps {
   activityLevelLabelKey: StringKey;
 }
 
-/** FitQuest-styled twin of `DemographicsFields` (same props, same strings) for the dark screens. */
+/** Age, gender and activity fields for the dark FitQuest screens. */
 export function QuestDemographics(props: QuestDemographicsProps) {
   const { t } = useTranslation();
   return (

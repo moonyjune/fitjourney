@@ -18,7 +18,7 @@ interface Row {
   isCustom: boolean;
 }
 
-/** Dark FitQuest twin of ShoppingListEditor — same store and rules (weekly reset, check-off, actual qty/price, custom items). */
+/** Dark FitQuest shopping list — the plan store and rules (weekly reset, check-off, actual qty/price, custom items). */
 export function QuestShoppingList({ plan }: { plan: PlanData }) {
   const { t } = useTranslation();
   const ensureCurrentWeek = useShoppingListStore((s) => s.ensureCurrentWeek);

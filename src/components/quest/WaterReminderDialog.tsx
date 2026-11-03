@@ -146,7 +146,9 @@ export function WaterReminderDialog({ reminder, onDrink, onSnooze, onClose }: Pr
           style={({ pressed }) => [styles.chip, styles.chipWide, pressed && styles.pressed]}
         >
           <QuestIcon name="clock" size={16} color={quest.text} />
-          <HudText size={14}>{g('water.pop.snooze')}</HudText>
+          <HudText size={14} numberOfLines={1}>
+            {g('water.pop.snooze')}
+          </HudText>
         </Pressable>
       </View>
     </BottomSheet>
@@ -159,7 +161,7 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16, paddingHorizontal: 2 },
   dotCol: { alignItems: 'center', gap: 4 },
   dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
-  dotNow: { shadowColor: quest.gold, shadowOpacity: 0.6, shadowRadius: 4 },
+  dotNow: { boxShadow: `0px 0px 4px ${quest.gold}99` },
   line: { marginTop: 8 },
   cta: { marginTop: 16 },
   chips: { flexDirection: 'row', gap: 8, marginTop: 10 },
@@ -177,6 +179,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   chipMana: { borderColor: quest.manaBorder, backgroundColor: quest.bg },
-  chipWide: { flex: 1.3 },
+  chipWide: { flex: 1.6 },
   pressed: { opacity: 0.85 },
 });

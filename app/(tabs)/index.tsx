@@ -35,6 +35,8 @@ import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import { toDateKey } from '../../src/utils/date';
 import { isoWeekNumber } from '../../src/utils/isoWeek';
+import { previousWeekStartKey } from '../../src/utils/weekKey';
+import { bossClock } from '../../src/game/boss';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { useWaterPlan } from '../../src/water/useWaterPlan';
 import { setPendingMealPhoto } from '../../src/food/pendingPhoto';
@@ -175,8 +177,11 @@ export default function CampScreen() {
   const checkedInToday = useFeelingStore((s) => s.records.some((r) => toDateKey(new Date(r.loggedAtISO)) === todayKey));
   const showEvening = isToday && now.getHours() >= EVENING_CHECKIN_HOUR && !checkedInToday;
 
-  // Monday: last week's boss, once, as the "Tổng kết tuần" card.
-  const lastWeek = now.getDay() === 1 ? game.bossHistory[1] : undefined;
+  // From Monday: last week's boss as the "Tổng kết tuần" card, until it is closed (×) or the weekly report is opened.
+  const weeklyDoneKey = useCelebrationStore((s) => s.weeklyDoneKey);
+  const markWeeklyDone = useCelebrationStore((s) => s.markWeeklyDone);
+  const lastWeekKey = previousWeekStartKey(bossClock(now));
+  const lastWeek = weeklyDoneKey === lastWeekKey ? undefined : game.bossHistory.find((w) => w.weekKey === lastWeekKey);
   const lastWeekDeficit = lastWeek ? lastWeek.days.reduce((sum, d) => sum + (d.cheat || d.deficitKcal == null ? 0 : d.deficitKcal), 0) : 0;
   const lastWeekLogged = lastWeek ? lastWeek.days.filter((d) => d.deficitKcal != null || d.cheat).length : 0;
 
@@ -288,7 +293,7 @@ export default function CampScreen() {
             <DefaultBossArt size={40} defeated={lastWeek.defeated} />
             <View style={styles.flex}>
               <View style={styles.weeklyHead}>
-                <HudText size={15} numberOfLines={1}>
+                <HudText size={15} numberOfLines={2} style={styles.shrink}>
                   {g('camp.weekly', { n: isoWeekNumber(new Date(`${lastWeek.weekKey}T12:00:00`)) })}
                 </HudText>
                 <View style={[styles.weeklyBadge, lastWeek.defeated && { backgroundColor: 'rgba(139,255,107,0.14)' }]}>
@@ -297,7 +302,7 @@ export default function CampScreen() {
                   </HudText>
                 </View>
               </View>
-              <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+              <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={2}>
                 {g('camp.weeklyLine', { kcal: Math.round(lastWeekDeficit).toLocaleString('en-US'), days: lastWeekLogged })}
               </HudText>
             </View>
@@ -310,6 +315,14 @@ export default function CampScreen() {
               <HudText size={13} color={quest.manaText}>
                 {g('camp.weeklyView')}
               </HudText>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={g('camp.weeklyClose')}
+              onPress={() => markWeeklyDone(lastWeek.weekKey)}
+              style={({ pressed }) => [styles.closeBtn, pressed && { opacity: 0.7 }]}
+            >
+              <QuestIcon name="x" size={16} color={quest.textSecondary} />
             </Pressable>
           </View>
         )}
@@ -343,5 +356,7 @@ const styles = StyleSheet.create({
   weekly: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel },
   weeklyHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   weeklyBadge: { paddingHorizontal: 8, minHeight: 20, borderRadius: 10, backgroundColor: quest.raised2, justifyContent: 'center' },
+  shrink: { flexShrink: 1 },
+  closeBtn: { width: 44, height: 44, marginLeft: -8, marginRight: -8, alignItems: 'center', justifyContent: 'center' },
   ghostPill: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.manaBorder, alignItems: 'center', justifyContent: 'center' },
 });

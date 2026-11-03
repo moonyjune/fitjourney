@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   chips: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   count: { paddingHorizontal: 10, minHeight: 26, borderRadius: 13, justifyContent: 'center' },
   list: { gap: 8 },
-  cookLink: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 2, minHeight: 32, paddingHorizontal: 4 },
+  cookLink: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 2, minHeight: 44, paddingHorizontal: 4 },
   perfect: { marginTop: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, flexDirection: 'row' },
   note: { marginTop: 10 },
 });

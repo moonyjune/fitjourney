@@ -187,7 +187,7 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
           <FoodThumb uris={thumbs} name={name} size={36} caption={mealCaption(item.mealTime ? t(`extraMealTime.${item.mealTime}` as StringKey) : null, item.loggedAtISO)} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {item.kcal} kcal · {Math.round(item.proteinG)} g
+          {g('journal.kcalProtein', { kcal: item.kcal, protein: Math.round(item.proteinG) })}
         </HudText>
         <HudText size={11} weight="medium" color={quest.textSecondary}>
           {g('journal.extraNutrients', { purine: Math.round(item.purineMg), sugar: Math.round(item.sugarG * 10) / 10, salt: Math.round(item.saltG * 10) / 10 })}
@@ -252,14 +252,16 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={g(skip.state === 'offer' ? 'journal.skipLabel' : 'journal.skipUndoLabel', { meal: item.label })}
-        hitSlop={6}
         onPress={skip.state === 'offer' ? skip.onSkip : skip.onUndo}
-        style={({ pressed }) => [styles.skipChip, skip.state === 'skipped' && styles.skipUndo, pressed && { opacity: 0.8 }]}
+        style={({ pressed }) => [styles.skipTarget, pressed && { opacity: 0.8 }]}
       >
-        <QuestIcon name={skip.state === 'offer' ? 'x' : 'back'} size={12} color={skip.state === 'offer' ? quest.hpText : quest.textSecondary} strokeWidth={2.4} />
-        <HudText size={11} color={skip.state === 'offer' ? quest.hpText : quest.textSecondary}>
-          {g(skip.state === 'offer' ? 'journal.skip' : 'journal.skipUndo')}
-        </HudText>
+        {/* 28 pt to look at, 44 pt to tap (the pressable around it). */}
+        <View style={[styles.skipChip, skip.state === 'skipped' && styles.skipUndo]}>
+          <QuestIcon name={skip.state === 'offer' ? 'x' : 'back'} size={12} color={skip.state === 'offer' ? quest.hpText : quest.textSecondary} strokeWidth={2.4} />
+          <HudText size={11} color={skip.state === 'offer' ? quest.hpText : quest.textSecondary}>
+            {g(skip.state === 'offer' ? 'journal.skip' : 'journal.skipUndo')}
+          </HudText>
+        </View>
       </Pressable>
     ) : null;
   if (onPress) {
@@ -805,7 +807,8 @@ const styles = StyleSheet.create({
   cardWorkout: { backgroundColor: quest.bossPanel, borderColor: quest.bossBorder },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },
-  skipChip: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginLeft: 76, marginTop: -2, marginBottom: 4, paddingHorizontal: 8, minHeight: 28, borderRadius: 6, borderWidth: 1.5, borderColor: quest.bossBorder },
+  skipTarget: { alignSelf: 'flex-start', justifyContent: 'center', minHeight: 44, marginLeft: 76, marginTop: -10, marginBottom: -4 },
+  skipChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, minHeight: 28, borderRadius: 6, borderWidth: 1.5, borderColor: quest.bossBorder },
   skipUndo: { borderColor: quest.border },
   chip: { paddingHorizontal: 8, minHeight: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   nowLine: { borderTopWidth: 1.5, borderTopColor: quest.gold, borderStyle: 'dashed', paddingTop: 4, marginTop: 4 },

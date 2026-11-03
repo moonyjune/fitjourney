@@ -81,7 +81,7 @@ export function NextMealCard({ now }: { now: Date }) {
               <View style={styles.buttons}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={g('dinner.logLabel', { name: idea.name })}
+                  accessibilityLabel={g('dinner.logForMeal', { meal: name, name: idea.name })}
                   onPress={() => openInAddFood(idea, meal.slot.kind)}
                   style={({ pressed }) => [styles.btn, styles.btnGold, pressed && styles.pressed]}
                 >

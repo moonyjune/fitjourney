@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   normal: { minHeight: 44 },
-  small: { minHeight: 36, paddingHorizontal: 10 },
+  small: { minHeight: 44, paddingHorizontal: 10 },
   picked: { backgroundColor: quest.gold, borderColor: quest.gold },
   pressed: { opacity: 0.85 },
 });
