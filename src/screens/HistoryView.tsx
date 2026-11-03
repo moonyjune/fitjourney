@@ -389,8 +389,8 @@ export function HistoryView({ client }: { client?: ClientSnapshot }) {
   }
 
   const streak = useMemo(
-    () => computeCurrentStreak(nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, new Date(), cheatDays),
-    [nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, cheatDays]
+    () => computeCurrentStreak(nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, now, cheatDays, evaluate(toDateKey(now)).settled),
+    [nutritionLogs, mealTemplates, workoutEntries, currentTdeeKcal, cheatDays, now, evaluate]
   );
   const badges = unlockedStreakBadges(streak);
 

@@ -28,9 +28,9 @@ function dayCaloriesInOut(
  * Counts consecutive days that hit the calorie-deficit goal, walking backward from today. A day
  * needs at least one logged entry (otherwise "eating nothing" would trivially look like a huge
  * deficit) AND an actual deficit (TDEE + exercise - intake) of at least STREAK_MIN_DEFICIT_KCAL.
- * Today only counts if already complete; otherwise the streak is measured through yesterday so an
- * in-progress day doesn't reset it early. A cheat day (`cheatDays`) is neutral: it neither adds to the
- * streak nor breaks it, the count just carries on past it.
+ * Today only counts if already complete AND settled (`todaySettled`: no meal still to come, see DayEvaluation.settled);
+ * otherwise the streak is measured through yesterday so an in-progress day neither counts early nor resets it. A cheat
+ * day (`cheatDays`) is neutral: it neither adds to the streak nor breaks it, the count just carries on past it.
  */
 export function computeCurrentStreak(
   logs: Record<string, DailyNutritionLog>,
@@ -38,7 +38,8 @@ export function computeCurrentStreak(
   workoutEntries: WorkoutLogEntry[],
   tdeeKcal: number,
   now: Date = new Date(),
-  cheatDays: readonly string[] = []
+  cheatDays: readonly string[] = [],
+  todaySettled: boolean = true
 ): number {
   const cheat = new Set(cheatDays);
   function isDayComplete(dateKey: string): boolean {
@@ -51,7 +52,7 @@ export function computeCurrentStreak(
   let streak = 0;
   const cursor = new Date(now);
   const todayKey = toDateKey(cursor);
-  if (!isDayComplete(todayKey)) {
+  if (!todaySettled || !isDayComplete(todayKey)) {
     cursor.setDate(cursor.getDate() - 1);
   }
 

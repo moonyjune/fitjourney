@@ -156,7 +156,7 @@ export function useGameState(now: Date): GameView {
       targetDeficitKcal,
       skippedMeals,
     });
-    return { ...state, streak: computeCurrentStreak(logs, mealTemplates, workoutEntries, tdeeKcal, at, cheatDays) };
+    return { ...state, streak: computeCurrentStreak(logs, mealTemplates, workoutEntries, tdeeKcal, at, cheatDays, state.today.settled) };
   }, [minuteStamp, startDateISO, logs, workoutEntries, mealTemplates, tdeeKcal, proteinTargetG, limits, cheatDays, bonusXp, targetDeficitKcal, skippedMeals, fasting, skipBreakfast]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 

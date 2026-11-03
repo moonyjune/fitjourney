@@ -81,6 +81,12 @@ describe('computeCurrentStreak (deficit-based)', () => {
     expect(streak).toBe(1);
   });
 
+  it('leaves today out until it is settled (meals still to come), without breaking the run through yesterday', () => {
+    const logs = { [dateKeyDaysAgo(0)]: lightDayLog(), [dateKeyDaysAgo(1)]: fullDayLog(), [dateKeyDaysAgo(2)]: fullDayLog() };
+    expect(computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW, [], false)).toBe(2);
+    expect(computeCurrentStreak(logs, MEAL_TEMPLATES, noWorkouts, TDEE_KCAL, NOW, [], true)).toBe(3);
+  });
+
   it('counts multiple consecutive complete days', () => {
     const logs = {
       [dateKeyDaysAgo(0)]: fullDayLog(),

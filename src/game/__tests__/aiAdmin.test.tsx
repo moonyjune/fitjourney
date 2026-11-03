@@ -291,7 +291,7 @@ describe('AI & cost screen', () => {
       await act(async () => saveButton(r).props.onPress());
       expect(mockSave.mock.calls).toEqual([
         ['model', 'claude-haiku-5-5'],
-        ['price_in', '1'], // the reference price filled in by the preset
+        ['price_in', '0.1'], // the reference price filled in by the preset
         ['price_out', '5.5'],
       ]);
       expect(allText(r)).toContain('Đã lưu');
@@ -304,10 +304,10 @@ describe('AI & cost screen', () => {
       expect(allText(r)).toContain('Mỗi ngày: 31.0k token (vào 26.0k · ra 5.0k) ≈ $0.15');
       expect(allText(r)).toContain('Trung bình 1 tháng (30 ngày): 930.0k token ≈ $4.59');
 
-      await act(async () => press(r, 'claude-haiku-5-5').props.onPress()); // 1 / 5 USD
+      await act(async () => press(r, 'claude-haiku-5-5').props.onPress()); // 0.1 / 0.5 USD
       const out = allText(r);
-      expect(out).toContain('Mỗi ngày: 31.0k token (vào 26.0k · ra 5.0k) ≈ $0.05');
-      expect(out).toContain('Trung bình 1 tháng (30 ngày): 930.0k token ≈ $1.53');
+      expect(out).toContain('Mỗi ngày: 31.0k token (vào 26.0k · ra 5.0k) ≈ $0.005');
+      expect(out).toContain('Trung bình 1 tháng (30 ngày): 930.0k token ≈ $0.15');
       // History keeps the cost recorded at the time of each call, with that call's model.
       expect(out).toContain('Cộng dồn: 50 lượt · 155.0k token · ≈ $0.60');
       expect(out).toContain('3 người · 40 lượt · 120.0k token · $0.60');
@@ -319,8 +319,10 @@ describe('AI & cost screen', () => {
       const r = await mount();
       await act(async () => input(r, 'Giá ra (USD / 1 triệu token)').props.onChangeText('30'));
       expect(allText(r)).toContain('(vào 26.0k · ra 5.0k) ≈ $0.23');
-      await act(async () => press(r, 'claude-fable-5-1').props.onPress());
+      await act(async () => input(r, 'Model (tên gọi trong API)').props.onChangeText('claude-opus-4-8'));
       expect(input(r, 'Giá ra (USD / 1 triệu token)').props.value).toBe('30');
+      await act(async () => press(r, 'claude-fable-5-1').props.onPress()); // a preset with a reference price fills it in
+      expect(input(r, 'Giá ra (USD / 1 triệu token)').props.value).toBe('50');
     });
 
     it('does not send an invalid model name or price', async () => {

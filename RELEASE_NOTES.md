@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.26.6 | no | — |
 | 0.26.5 | no | tempt-me, dish-photo |
 | 0.26.4 | yes | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
 | 0.26.3 | no | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
@@ -78,6 +79,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.26.6
+- The streak 🔥 counts today only once the day is settled (no meal still to come), like the deficit mission and the boss hit; until then it runs through yesterday, so an in-progress day neither adds early nor breaks it (Camp and History).
+- AI & cost: reference prices of the model presets updated to Anthropic's price list (Sonnet 5.5 $2 / $10, Opus 5.5 $4 / $20, Haiku 5.5 $0.10 / $0.50, Fable 5.1 $10 / $50 per million tokens).
 
 ## 0.26.5
 - Temptation pool pictures: one picture belongs to one item only (compared without query / fragment). A picture another item already has, or one that looks like a site's generic image (logo, banner, default / share image, icon), is refused and the next way to find one is tried.

@@ -21,9 +21,10 @@ export function checkPrice(text: string): { ok: true; value: string } | { ok: fa
 /** Reference prices (USD per million tokens, input / output) filled in when a preset is tapped. They are a starting point to check against
  *  Anthropic's price list, not a promise; a model without an entry keeps whatever prices are typed. */
 export const PRESET_PRICES: Partial<Record<string, { in: number; out: number }>> = {
-  'claude-sonnet-5-5': { in: 3, out: 15 },
-  'claude-opus-5-5': { in: 5, out: 25 },
-  'claude-haiku-5-5': { in: 1, out: 5 },
+  'claude-sonnet-5-5': { in: 2, out: 10 },
+  'claude-opus-5-5': { in: 4, out: 20 },
+  'claude-haiku-5-5': { in: 0.1, out: 0.5 },
+  'claude-fable-5-1': { in: 10, out: 50 },
 };
 
 export interface Pricing {
