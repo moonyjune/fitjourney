@@ -1,120 +1,91 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BossCard } from '../../src/components/quest/BossCard';
+import { CampHero } from '../../src/components/quest/CampHero';
+import { DateChip } from '../../src/components/quest/DateChip';
 import { HudText } from '../../src/components/quest/HudText';
-import { MissionRow } from '../../src/components/quest/MissionRow';
-import { QuestIcon } from '../../src/components/quest/QuestIcon';
+import { MissionRings, MissionsSheet } from '../../src/components/quest/MissionsSheet';
+import { NextMealCard } from '../../src/components/quest/NextMealCard';
+import { QuestIcon, type QuestIconName } from '../../src/components/quest/QuestIcon';
 import { FadeInUp } from '../../src/components/quest/motion/FadeInUp';
 import { PressScale } from '../../src/components/quest/motion/PressScale';
 import { PlayerHeader } from '../../src/components/quest/PlayerHeader';
+import { DefaultBossArt } from '../../src/components/quest/StageBossArt';
+import { WeeklyBossSheet } from '../../src/components/quest/WeeklyBossSheet';
 import { WindowCard } from '../../src/components/quest/WindowCard';
-import { JournalView } from '../../src/screens/JournalView';
-import { MISSION_XP, PERFECT_DAY_BONUS_XP, WORKOUT_MIN_MINUTES, type MissionId } from '../../src/game/constants';
-import { titleKeyForLevel } from '../../src/game/level';
-import type { DayEvaluation, MissionResult } from '../../src/game/missions';
-import { useGameText, type GameKey } from '../../src/game/strings';
-import { useGameState, useNow } from '../../src/game/useGameState';
-import { useCelebrationStore } from '../../src/store/useCelebrationStore';
-import { useSelectedDayStore, workingDayKey } from '../../src/store/useSelectedDayStore';
-import { logDayLabel } from '../../src/game/useLogDate';
-import { toDateKey } from '../../src/utils/date';
-import { getIfStatus } from '../../src/utils/intermittentFasting';
-import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { quest } from '../../src/theme/quest';
-import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
-import { MealSuggestionsCard } from '../../src/components/quest/MealSuggestionsCard';
-import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
+import { JournalView } from '../../src/screens/JournalView';
+import { MISSION_XP } from '../../src/game/constants';
+import { titleKeyForLevel } from '../../src/game/level';
+import { useGameText, type GameKey } from '../../src/game/strings';
+import { ALWAYS_EXERCISE, estimateMinutes, GROUP_EXERCISES, suggestedGroup } from '../../src/game/training/exercises';
+import { progressFor } from '../../src/game/training/progress';
+import { useDayEvaluator, useGameState, useNow, useTdeeKcal } from '../../src/game/useGameState';
+import { useCelebrationStore } from '../../src/store/useCelebrationStore';
+import { useFeelingStore } from '../../src/store/useFeelingStore';
+import { useMealModeStore } from '../../src/store/useMealModeStore';
+import { useNutritionStore } from '../../src/store/useNutritionStore';
+import { useSelectedDayStore, workingDayKey } from '../../src/store/useSelectedDayStore';
+import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { showToast } from '../../src/store/useToastStore';
+import { useTrainingStore } from '../../src/store/useTrainingStore';
+import { quest, questRadius } from '../../src/theme/quest';
+import { screenMaxWidthStyle } from '../../src/theme/responsive';
+import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
+import { toDateKey } from '../../src/utils/date';
+import { isoWeekNumber } from '../../src/utils/isoWeek';
+import { getIfStatus } from '../../src/utils/intermittentFasting';
+import { useWaterPlan } from '../../src/water/useWaterPlan';
 
-type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
+/** Water added by Camp's tile, like the quick-add chip. */
+const WATER_STEP_ML = 250;
+/** From this hour, a day without a check-in gets the evening check-in card (the user's decision 2, 2026-11-02). */
+const EVENING_CHECKIN_HOUR = 19;
 
-interface MissionCopy {
+function Tile({
+  icon,
+  title,
+  hint,
+  tone,
+  onPress,
+  label,
+  corner,
+}: {
+  icon: QuestIconName;
   title: string;
-  subtitle: string;
-  statusLabel: string;
-  progress?: number;
-}
-
-function describeMission(m: MissionResult, day: DayEvaluation, g: Translate): MissionCopy {
-  const exceeded = m.status === 'missed' && m.value > m.target && m.id !== 'workout';
-  const statusKey: GameKey = exceeded ? 'status.exceeded' : (`status.${m.status}` as GameKey);
-  let title: string;
-  let sub: string;
-  let progress: number | undefined;
-
-  switch (m.id) {
-    case 'workout':
-      title = g('mission.workout');
-      sub =
-        m.value >= m.target
-          ? g('sub.workoutDone', { min: Math.round(m.value), kcal: Math.round(day.burnedKcal) })
-          : g('sub.workoutOpen', { n: WORKOUT_MIN_MINUTES });
-      progress = m.target > 0 ? m.value / m.target : 0;
-      break;
-    case 'deficit':
-      title = g('mission.deficit', { n: m.target });
-      sub = day.cheat
-        ? g('sub.deficitCheat')
-        : day.deficitKcal == null
-          ? g('sub.deficitNone')
-          : day.projectedDeficitKcal != null
-            ? g('sub.deficitPending', { kcal: Math.round(day.projectedDeficitKcal).toLocaleString('en-US') })
-            : g('sub.deficit', { kcal: Math.round(day.deficitKcal).toLocaleString('en-US') });
-      progress = m.target > 0 ? Math.max(0, m.value) / m.target : 0;
-      break;
-    case 'protein':
-      title = g('mission.protein', { n: Math.round(m.target) });
-      sub = g('sub.protein', { cur: Math.round(m.value), target: Math.round(m.target) });
-      progress = m.target > 0 ? m.value / m.target : 0;
-      break;
-    case 'purine':
-      title = g('mission.purine', { n: m.target });
-      sub = g('sub.purine', { n: Math.round(m.value) });
-      break;
-    case 'salt':
-      title = g('mission.salt', { n: m.target });
-      sub = g('sub.salt', { n: m.value.toFixed(1) });
-      break;
-    case 'sugar':
-      title = g('mission.sugar', { n: m.target });
-      sub = g('sub.sugar', { n: Math.round(m.value) });
-      break;
-    case 'junk':
-      title = g('mission.junk');
-      sub = g('sub.junk', { n: m.value });
-      break;
-  }
-
-  const suffix = m.status === 'holding' ? g('status.holding') : m.status === 'missed' ? g(statusKey) : '';
-  return { title, subtitle: suffix ? `${sub} · ${suffix}` : sub, statusLabel: g(statusKey), progress };
-}
-
-/** Which tab logs the data behind each mission, so tapping a row jumps to where you can act on it. */
-const MISSION_TARGET: Partial<Record<MissionId, '/(tabs)/workout' | '/nutrition'>> = {
-  workout: '/(tabs)/workout',
-  protein: '/nutrition',
-  purine: '/nutrition',
-  salt: '/nutrition',
-  sugar: '/nutrition',
-  junk: '/nutrition',
-};
-
-function CampLink({ icon, label, onPress }: { icon: 'list' | 'smile'; label: string; onPress: () => void }) {
+  hint: string;
+  tone: 'gold' | 'mana' | 'plain';
+  onPress: () => void;
+  label: string;
+  corner?: ReactNode;
+}) {
+  const palette = {
+    gold: { bg: quest.panel, border: quest.gold, icon: quest.gold, hint: quest.textSecondary },
+    mana: { bg: quest.manaPanel, border: quest.manaBorder, icon: quest.mana, hint: quest.manaText },
+    plain: { bg: quest.panel, border: quest.border, icon: quest.xp, hint: quest.textSecondary },
+  }[tone];
   return (
-    <PressScale
-      wrapperStyle={styles.linkWrap}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={({ pressed }) => [styles.link, pressed && { opacity: 0.85 }]}
-    >
-      <QuestIcon name={icon} size={18} color={quest.gold} />
-      <HudText size={13} numberOfLines={1} style={styles.linkText}>
-        {label}
-      </HudText>
-    </PressScale>
+    <View style={styles.tileWrap}>
+      <PressScale
+        wrapperStyle={styles.tileFill}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={onPress}
+        style={({ pressed }) => [styles.tile, { backgroundColor: palette.bg, borderColor: palette.border }, pressed && { opacity: 0.85 }]}
+      >
+        <QuestIcon name={icon} size={22} color={palette.icon} strokeWidth={2.2} />
+        <View style={styles.tileText}>
+          <HudText size={15} numberOfLines={1}>
+            {title}
+          </HudText>
+          <HudText size={12} weight="medium" color={palette.hint} numberOfLines={2}>
+            {hint}
+          </HudText>
+        </View>
+      </PressScale>
+      {corner}
+    </View>
   );
 }
 
@@ -124,16 +95,27 @@ export default function CampScreen() {
   const tabClearance = useTabBarClearance();
   const now = useNow();
   const game = useGameState(now);
+  const evaluate = useDayEvaluator(now);
   const ifStatus = getIfStatus(now);
   const fasting = useMealModeStore((s) => s.fasting);
+  const tdeeKcal = useTdeeKcal();
+  const targetDeficitKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const proteinTargetG = useSettingsStore((s) => s.proteinTargetG);
   const [missionsOpen, setMissionsOpen] = useState(false);
-  // The check-in is written for the day selected in the battle log below; the link says which when it is not today.
-  const checkinDay = workingDayKey(useSelectedDayStore((s) => s.selectedKey), now);
-  const checkinLabel = checkinDay === toDateKey(now) ? g('checkin.title') : `${g('checkin.title')} · ${logDayLabel(checkinDay, now, g)}`;
+  const [bossOpen, setBossOpen] = useState(false);
+
+  // The day picked with the date chip (today unless changed): the hero card, missions and timeline show it, and the tiles log to it.
+  const todayKey = toDateKey(now);
+  const dayKey = workingDayKey(useSelectedDayStore((s) => s.selectedKey), now);
+  const isToday = dayKey === todayKey;
+  const day = isToday ? game.today : evaluate(dayKey);
+  const dayDate = new Date(`${dayKey}T12:00:00`);
+  const dayLabel = `${g(`weekday.${dayDate.getDay()}` as GameKey)} ${dayKey.slice(8)}/${dayKey.slice(5, 7)}`;
+  const dateParams: Record<string, string> = isToday ? {} : { date: dayKey };
 
   useLightStatusBar();
 
-  const { today, boss, level } = game;
+  const { boss, level } = game;
 
   // A level-up is celebrated once. The first time we ever see the player, their current level is simply
   // recorded (no celebration for progress made before this existed); a lower level (a log was deleted)
@@ -148,21 +130,49 @@ export default function CampScreen() {
       router.push({ pathname: '/level-up', params: { from: seenLevel, to: level.level } });
     }
   }, [level.level, seenLevel, markSeen]);
-  const todayDamage = boss.days.length > 0 ? boss.days[boss.days.length - 1].damage : 0;
-  const counts = {
-    done: today.missions.filter((m) => m.status === 'done').length,
-    holding: today.missions.filter((m) => m.status === 'holding').length,
-    open: today.missions.filter((m) => m.status === 'open').length,
-  };
+
+  // +250 ml tile: logged at once on the picked day, undone from the toast.
+  const waterMl = useNutritionStore((s) => s.logs[dayKey]?.waterMl ?? 0);
+  const { targetMl: waterTargetMl } = useWaterPlan(dayKey);
+  function addWater() {
+    const store = useNutritionStore.getState();
+    store.addWater(dayKey, WATER_STEP_ML);
+    const total = store.logs[dayKey]?.waterMl ?? waterMl + WATER_STEP_ML;
+    showToast({
+      text: g('quick.waterAdded', { ml: WATER_STEP_ML, total: total.toLocaleString('en-US') }),
+      tone: 'mana',
+      undo: () => useNutritionStore.getState().addWater(dayKey, -WATER_STEP_ML),
+    });
+  }
+
+  // "Tập 18′": today's suggested group (A on a rest day, as the Train screen does), started in one tap.
+  const progress = useTrainingStore((s) => s.progress);
+  const custom = useTrainingStore((s) => s.custom);
+  const train = useMemo(() => {
+    const group = suggestedGroup(now) ?? 'A';
+    const ids = [...GROUP_EXERCISES[group], ALWAYS_EXERCISE];
+    const minutes = estimateMinutes(ids.map((id) => ({ id, level: progressFor(progress, id).level })), custom);
+    return { group, ids, minutes };
+  }, [now, progress, custom]);
+  const workoutDone = game.today.missions.find((m) => m.id === 'workout')?.status === 'done';
+
+  // Evening check-in: after 19:00, while today has none.
+  const checkedInToday = useFeelingStore((s) => s.records.some((r) => toDateKey(new Date(r.loggedAtISO)) === todayKey));
+  const showEvening = isToday && now.getHours() >= EVENING_CHECKIN_HOUR && !checkedInToday;
+
+  // Monday: last week's boss, once, as the "Tổng kết tuần" card.
+  const lastWeek = now.getDay() === 1 ? game.bossHistory[1] : undefined;
+  const lastWeekDeficit = lastWeek ? lastWeek.days.reduce((sum, d) => sum + (d.cheat || d.deficitKcal == null ? 0 : d.deficitKcal), 0) : 0;
+  const lastWeekLogged = lastWeek ? lastWeek.days.filter((d) => d.deficitKcal != null || d.cheat).length : 0;
 
   return (
     <View style={styles.screen}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}
+        contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 8, paddingBottom: tabClearance }]}
       >
         <FadeInUp index={0}>
-          <PlayerHeader level={level} titleKey={titleKeyForLevel(level.level)} streak={game.streak} />
+          <PlayerHeader level={level} titleKey={titleKeyForLevel(level.level)} streak={game.streak} right={<DateChip now={now} />} />
         </FadeInUp>
 
         {fasting && (
@@ -170,70 +180,131 @@ export default function CampScreen() {
             <WindowCard isEatingWindow={ifStatus.isEatingWindow} hoursUntilTransition={ifStatus.hoursUntilTransition} />
           </FadeInUp>
         )}
+
         <FadeInUp index={2} style={styles.gap}>
-          <BossCard boss={boss} todayDamage={todayDamage} pendingDamage={boss.pendingDamage} onPress={() => router.push('/boss')} />
+          <CampHero
+            day={day}
+            dateKey={dayKey}
+            dayLabel={dayLabel}
+            boss={boss}
+            tdeeKcal={tdeeKcal}
+            targetDeficitKcal={targetDeficitKcal}
+            proteinTargetG={proteinTargetG}
+            onOpenBoss={() => setBossOpen(true)}
+          />
         </FadeInUp>
 
-        <FadeInUp index={3} style={styles.gap}>
-          <MealSuggestionsCard now={now} />
+        <FadeInUp index={3} style={[styles.tiles, styles.gap]}>
+          <Tile
+            icon="camera"
+            tone="gold"
+            title={g('camp.tilePhoto')}
+            hint={g('camp.tilePhotoHint')}
+            label={`${g('camp.tilePhoto')}. ${g('camp.tilePhotoHint')}`}
+            onPress={() => router.push({ pathname: '/add-food', params: dateParams })}
+          />
+          <Tile
+            icon="drop"
+            tone="mana"
+            title={g('camp.tileWater', { ml: WATER_STEP_ML })}
+            hint={g('camp.tileWaterHint', { cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })}
+            label={g('camp.tileWaterA11y', { ml: WATER_STEP_ML, cur: (waterMl / 1000).toFixed(1), target: (waterTargetMl / 1000).toFixed(1) })}
+            onPress={addWater}
+          />
+          <Tile
+            icon="dumbbell"
+            tone="plain"
+            title={g('camp.tileTrain', { m: train.minutes })}
+            hint={workoutDone ? g('camp.tileTrainDone', { g: train.group }) : g('camp.tileTrainHint', { g: train.group, xp: MISSION_XP.workout })}
+            label={g('camp.tileTrainA11y', { g: train.group, m: train.minutes })}
+            onPress={() => router.push({ pathname: '/train/session', params: { ids: train.ids.join(','), group: train.group } })}
+            corner={
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={g('camp.tileTrainMore')}
+                onPress={() => router.push('/(tabs)/workout')}
+                hitSlop={4}
+                style={styles.corner}
+              >
+                <QuestIcon name="chevron" size={16} color={quest.textSecondary} />
+              </Pressable>
+            }
+          />
         </FadeInUp>
 
-        <FadeInUp index={3} style={[styles.links, styles.gap]}>
-          <CampLink icon="smile" label={checkinLabel} onPress={() => router.push('/checkin')} />
-        </FadeInUp>
+        {showEvening && (
+          <FadeInUp index={4} style={styles.gap}>
+            <View style={styles.evening}>
+              <QuestIcon name="smile" size={22} color={quest.xp} />
+              <View style={styles.flex}>
+                <HudText size={15}>{g('camp.eveningTitle')}</HudText>
+                <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+                  {g('camp.eveningHint')}
+                </HudText>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${g('camp.eveningButton')}: ${g('checkin.title')}`}
+                onPress={() => router.push('/checkin')}
+                style={({ pressed }) => [styles.pill, pressed && { opacity: 0.85 }]}
+              >
+                <HudText size={13} color={quest.onGold}>
+                  {g('camp.eveningButton')}
+                </HudText>
+              </Pressable>
+            </View>
+          </FadeInUp>
+        )}
 
-        {/* The battle log is read many times a day: it lives on Camp instead of behind a button. */}
         <FadeInUp index={4}>
+          <MissionRings day={day} onOpen={() => setMissionsOpen(true)} />
+        </FadeInUp>
+
+        {isToday && (
+          <FadeInUp index={5}>
+            <NextMealCard now={now} />
+          </FadeInUp>
+        )}
+
+        {lastWeek && (
+          <View style={[styles.weekly, styles.gap]}>
+            <DefaultBossArt size={40} defeated={lastWeek.defeated} />
+            <View style={styles.flex}>
+              <View style={styles.weeklyHead}>
+                <HudText size={15} numberOfLines={1}>
+                  {g('camp.weekly', { n: isoWeekNumber(new Date(`${lastWeek.weekKey}T12:00:00`)) })}
+                </HudText>
+                <View style={[styles.weeklyBadge, lastWeek.defeated && { backgroundColor: 'rgba(139,255,107,0.14)' }]}>
+                  <HudText size={11} color={lastWeek.defeated ? quest.xp : quest.textTertiary}>
+                    {g(lastWeek.defeated ? 'camp.weeklyBeaten' : 'camp.weeklyUp')}
+                  </HudText>
+                </View>
+              </View>
+              <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+                {g('camp.weeklyLine', { kcal: Math.round(lastWeekDeficit).toLocaleString('en-US'), days: lastWeekLogged })}
+              </HudText>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${g('camp.weeklyView')}: ${g('week.title')}`}
+              onPress={() => router.push('/weekly-report')}
+              style={({ pressed }) => [styles.ghostPill, pressed && { opacity: 0.85 }]}
+            >
+              <HudText size={13} color={quest.manaText}>
+                {g('camp.weeklyView')}
+              </HudText>
+            </Pressable>
+          </View>
+        )}
+
+        {/* The day's timeline stays on Camp; the week strip, figures and cheat-day mark are one tap away in the Journal. */}
+        <FadeInUp index={6}>
           <JournalView embedded />
         </FadeInUp>
-
-        {/* Missions are read rarely: folded by default, the heading opens them. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${g('missions.title')}. ${g('missions.summary', counts)}`}
-          accessibilityState={{ expanded: missionsOpen }}
-          onPress={() => setMissionsOpen((o) => !o)}
-          style={[styles.sectionHead, styles.gap]}
-        >
-          <HudText size={17} accessibilityRole="header">
-            {missionsOpen ? '▾' : '▸'} {g('missions.title')}
-          </HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('missions.summary', counts)}
-          </HudText>
-        </Pressable>
-
-        {missionsOpen && (
-          <>
-          <View style={styles.list}>
-            {today.missions.map((m, i) => {
-              const copy = describeMission(m, today, g);
-              const target = MISSION_TARGET[m.id];
-              return (
-                <FadeInUp key={m.id} index={5 + i}>
-                  <MissionRow
-                    title={copy.title}
-                    subtitle={copy.subtitle}
-                    statusLabel={copy.statusLabel}
-                    status={m.status}
-                    xp={MISSION_XP[m.id]} // the reward on offer; the row styles itself as earned once done
-                    progress={copy.progress}
-                    onPress={target ? () => router.push(target) : undefined}
-                  />
-                </FadeInUp>
-              );
-            })}
-          </View>
-
-          <HudText size={12} weight="medium" color={today.perfect ? quest.gold : quest.textSecondary} style={styles.centerNote}>
-            {today.perfect ? g('missions.perfectDone', { n: PERFECT_DAY_BONUS_XP }) : g('missions.perfect', { n: PERFECT_DAY_BONUS_XP })}
-          </HudText>
-          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.centerNote}>
-            {g('missions.estimateNote')}
-          </HudText>
-          </>
-        )}
       </ScrollView>
+
+      <MissionsSheet visible={missionsOpen} onClose={() => setMissionsOpen(false)} day={day} />
+      <WeeklyBossSheet visible={bossOpen} onClose={() => setBossOpen(false)} boss={boss} today={game.today} now={now} />
     </View>
   );
 }
@@ -241,26 +312,19 @@ export default function CampScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: quest.bg },
   scroll: { flex: 1 },
-  // Extra bottom padding keeps the last row clear of the floating tab bar.
   content: { paddingHorizontal: 16, paddingBottom: 120 },
   gap: { marginTop: 12 },
-  links: { flexDirection: 'row', gap: 10 },
-  linkWrap: { flex: 1 },
-  link: {
-    flex: 1,
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    borderRadius: 14,
-    backgroundColor: quest.panel,
-    borderWidth: 1.5,
-    borderColor: quest.border,
-  },
-  linkText: { flexShrink: 1 },
-  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 20 },
-  list: { gap: 8, marginTop: 8 },
-  centerNote: { textAlign: 'center', marginTop: 12 },
+  flex: { flex: 1, minWidth: 0 },
+  tiles: { flexDirection: 'row', gap: 8 },
+  tileWrap: { flex: 1, minWidth: 0 },
+  tileFill: { flex: 1 },
+  tile: { flex: 1, minHeight: 96, padding: 12, gap: 10, borderRadius: questRadius.panel, borderWidth: 1.5, justifyContent: 'space-between' },
+  tileText: { gap: 2 },
+  corner: { position: 'absolute', top: 0, right: 0, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  evening: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.xp, backgroundColor: quest.panel },
+  pill: { minHeight: 44, paddingHorizontal: 16, borderRadius: 999, backgroundColor: quest.gold, alignItems: 'center', justifyContent: 'center' },
+  weekly: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel },
+  weeklyHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  weeklyBadge: { paddingHorizontal: 8, minHeight: 20, borderRadius: 10, backgroundColor: quest.raised2, justifyContent: 'center' },
+  ghostPill: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.manaBorder, alignItems: 'center', justifyContent: 'center' },
 });

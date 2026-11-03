@@ -12,39 +12,20 @@ import type { BossDay } from '../src/game/boss';
 import { useGameText, type GameKey } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
 import { DEFICIT_LEVEL_COLOR } from '../src/game/deficitLevel';
-import { mealNames } from '../src/game/deficitView';
+import { bossHitTexts, bossNum as num, bossStatusText, deficitSplitText } from '../src/game/bossView';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import { isoWeekNumber } from '../src/utils/isoWeek';
-
-const num = (n: number) => Math.round(n).toLocaleString('en-US');
 
 function back() {
   if (router.canGoBack()) router.back();
   else router.replace('/(tabs)');
 }
 
-/** A day's deficit split into its two sources: eating below (or above) the TDEE, and training. Eating counts for at most
- *  DAILY_DAMAGE_CAP_KCAL of the damage, training on top. */
-function useDeficitSplit() {
-  const g = useGameText();
-  return (d: BossDay): string => {
-    if (d.deficitKcal == null) return '';
-    const diet = Math.round(d.deficitKcal - d.burnedKcal);
-    const parts = [
-      diet >= 0
-        ? g(diet > DAILY_DAMAGE_CAP_KCAL ? 'boss.detail.fromDietCapped' : 'boss.detail.fromDiet', { n: num(diet), cap: num(DAILY_DAMAGE_CAP_KCAL) })
-        : g('boss.detail.overDiet', { n: num(-diet) }),
-    ];
-    if (d.burnedKcal > 0) parts.push(g('boss.detail.fromTraining', { n: num(Math.round(d.burnedKcal)) }));
-    return parts.join(' · ');
-  };
-}
-
 export default function BossScreen() {
   const g = useGameText();
-  const splitText = useDeficitSplit();
+  const splitText = (d: BossDay) => deficitSplitText(d, g);
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow(60_000);
@@ -52,15 +33,8 @@ export default function BossScreen() {
 
   const today = boss.days[boss.days.length - 1];
   const weekNo = isoWeekNumber(new Date(`${boss.weekKey}T12:00:00`));
-  const lastDay = boss.daysUntilReset <= 1;
 
-  let hit: string;
-  if (today?.cheat) hit = g('boss.detail.hitCheat');
-  else if (today?.pending && today.deficitKcal != null && today.deficitKcal > 0) hit = g('boss.detail.hitPendingNote', { meals: mealNames(todayEval.pendingMeals, g) });
-  else if (!today || today.deficitKcal == null) hit = g('boss.detail.hitNone');
-  else if (today.deficitKcal <= 0) hit = g('boss.detail.hitSurplus');
-  else if (today.capped) hit = g('boss.detail.hitCap', { cap: num(DAILY_DAMAGE_CAP_KCAL) });
-  else hit = '';
+  const { headline, reason: hit } = bossHitTexts(boss, todayEval, g);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
@@ -92,11 +66,7 @@ export default function BossScreen() {
       </View>
       <XpBar ratio={boss.maxHp > 0 ? boss.hpLeft / boss.maxHp : 0} color={quest.hp} trackColor={quest.bossPanel} height={14} from={1} delay={300} />
       <HudText size={13} weight="medium" color={quest.textSecondary}>
-        {boss.defeated
-          ? g('boss.detail.beaten')
-          : lastDay
-            ? g('boss.detail.leftLast', { n: num(boss.hpLeft) })
-            : g('boss.detail.left', { d: boss.daysUntilReset - 1, n: num(boss.neededPerRemainingDay) })}
+        {bossStatusText(boss, g)}
       </HudText>
 
       {!boss.defeated && boss.neededPerRemainingDay > DAILY_DAMAGE_CAP_KCAL && (
@@ -109,13 +79,7 @@ export default function BossScreen() {
         <HudText size={11} color={quest.gold} style={styles.eyebrow}>
           {g('boss.detail.hitTitle').toUpperCase()}
         </HudText>
-        {today && today.deficitKcal != null && today.deficitKcal > 0 ? (
-          <HudText size={16}>
-            {today.pending
-              ? g('boss.detail.hitPending', { def: num(today.deficitKcal), dmg: num(today.pendingDamage) })
-              : g('boss.detail.hit', { def: num(today.deficitKcal), dmg: num(today.damage) })}
-          </HudText>
-        ) : null}
+        {headline ? <HudText size={16}>{headline}</HudText> : null}
         {hit ? (
           <HudText size={13} weight="medium" color={quest.textTertiary}>
             {hit}

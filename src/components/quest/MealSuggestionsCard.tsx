@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { acceptDinner, cleanAiDinner, dinnerIdeasFromFoods, dinnerVerdict, type DinnerBrief, type DinnerIdea } from '../../ai/dinner';
-import { ideaFromRecipe, recipeFromIdea, recipeKey, recipesFitting } from '../../cookbook/recipes';
+import { ideaFromRecipe, recipeFromIdea, recipeKey, recipesFitting, type CookbookRecipe } from '../../cookbook/recipes';
 import { useCookbookStore } from '../../store/useCookbookStore';
 import { useMealIdeasStore } from '../../store/useMealIdeasStore';
 import { toDateKey } from '../../utils/date';
 import { RecipeDialog } from './RecipeDialog';
-import { buildMealPlan, DAY_BAND_KCAL, MAX_MEAL_KCAL, mealBrief, mealCardVisible, mealTimeFor, type MealKind, type SplitMeal } from '../../ai/mealSplit';
+import { buildMealPlan, DAY_BAND_KCAL, MAX_MEAL_KCAL, mealBrief, mealCardVisible, mealTimeFor, type MealKind, type MealPlan, type SplitMeal } from '../../ai/mealSplit';
 import { buildTasteProfile } from '../../ai/tasteProfile';
 import { useAiErrorText } from '../../ai/usePhotoAnalysis';
 import { useGameText, type GameKey } from '../../game/strings';
@@ -41,7 +41,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const room = (n: number) => Math.max(0, Math.round(n * 10) / 10);
 
 /** Opens Add food with an idea filled in (nothing is saved: the user checks and confirms there). */
-function openInAddFood(idea: DinnerIdea, kind: MealKind) {
+export function openInAddFood(idea: DinnerIdea, kind: MealKind) {
   router.push({
     pathname: '/add-food',
     params: {
@@ -57,24 +57,54 @@ function openInAddFood(idea: DinnerIdea, kind: MealKind) {
   });
 }
 
-/** Camp: "what to eat next". It works out what is left of today (calories, protein, room in the limits, all on the device), finds the
- *  meals still to come (fasting on: the plan's meals; off: breakfast, lunch, dinner) and splits what is left over them: one meal late
- *  in the day or with little left, two or three when there is room for them. Each meal gets ideas from the user's own foods, sized to
- *  its share; the AI is asked per meal, on request, and every idea of its is re-checked against that meal's share first. */
-export function MealSuggestionsCard({ now }: { now: Date }) {
-  const g = useGameText();
-  const aiErrorText = useAiErrorText();
-  const foods = useAllFoods();
+/** The dishes offered for one meal of the split, best first: the suggestions asked for (AI or shared cookbook) that still fit its share,
+ *  then the user's own foods, then (until something was asked for) the cook book's dishes that fit. */
+export function mealIdeas(args: { totals: MealPlan['totals']; meal: SplitMeal; prefs: MealPlan['prefs']; foods: Parameters<typeof dinnerIdeasFromFoods>[1]; asked: DinnerIdea[] | undefined; book: CookbookRecipe[] }) {
+  const { totals, meal, prefs, foods, asked, book } = args;
+  const brief = mealBrief(totals, meal, prefs);
+  const dbIdeas = dinnerIdeasFromFoods(brief, foods).slice(0, DB_IDEAS_PER_MEAL);
+  const aiList = (asked ?? []).filter((i) => acceptDinner(brief, i));
+  const aiKeys = new Set([...dbIdeas, ...aiList].map((i) => recipeKey(i.name)));
+  // Once there are suggestions for this meal they take the place of the user's own cook book dishes.
+  const bookIdeas = asked !== undefined ? [] : recipesFitting(book, brief, 3).filter((r) => !aiKeys.has(r.id)).map(ideaFromRecipe);
+  const ideas = [...aiList, ...dbIdeas, ...bookIdeas].slice(0, IDEAS_SHOWN);
+  return { brief, dbIdeas, aiList, ideas, asked: asked !== undefined };
+}
+
+/** Today's meal plan (what is left, split over the meals still to come), kept in step with the logs and the per-meal wishes. */
+export function useMealPlan(now: Date): MealPlan | null {
   const logs = useNutritionStore((s) => s.logs);
   const workouts = useWorkoutStore((s) => s.entries);
   const settings = useSettingsStore((s) => s.targetDailyDeficitKcal + s.proteinTargetG + s.calorieTargetKcal);
   const fasting = useMealModeStore((s) => s.fasting);
+  const prefs = useMealPrefs();
+  const minute = Math.floor(now.getTime() / 60_000);
+  return useMemo(() => buildMealPlan(new Date(minute * 60_000), prefs), [minute, logs, workouts, settings, fasting, prefs]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
+/** The user's wishes per meal (kcal, protein, "never above the kcal"). */
+export function useMealPrefs() {
   const prefKcal = useMealPrefStore((s) => s.kcal);
   const prefProtein = useMealPrefStore((s) => s.proteinG);
   const prefStrict = useMealPrefStore((s) => s.strictKcal);
-  const prefs = useMemo(() => pickPrefs({ kcal: prefKcal, proteinG: prefProtein, strictKcal: prefStrict }), [prefKcal, prefProtein, prefStrict]);
+  return useMemo(() => pickPrefs({ kcal: prefKcal, proteinG: prefProtein, strictKcal: prefStrict }), [prefKcal, prefProtein, prefStrict]);
+}
+
+/** Camp › Bữa kế tiếp › "Phần của các bữa còn lại" (a sheet; `bare` drops the card frame and title there): "what to eat next".
+ *  It works out what is left of today (calories, protein, room in the limits, all on the device), finds the
+ *  meals still to come (fasting on: the plan's meals; off: breakfast, lunch, dinner) and splits what is left over them: one meal late
+ *  in the day or with little left, two or three when there is room for them. Each meal gets ideas from the user's own foods, sized to
+ *  its share; the AI is asked per meal, on request, and every idea of its is re-checked against that meal's share first. */
+export function MealSuggestionsCard({ now, bare }: { now: Date; bare?: boolean }) {
+  const g = useGameText();
+  const aiErrorText = useAiErrorText();
+  const foods = useAllFoods();
+  const prefKcal = useMealPrefStore((s) => s.kcal);
+  const prefProtein = useMealPrefStore((s) => s.proteinG);
+  const prefStrict = useMealPrefStore((s) => s.strictKcal);
+  const prefs = useMealPrefs();
   const minute = Math.floor(now.getTime() / 60_000);
-  const plan = useMemo(() => buildMealPlan(new Date(minute * 60_000), prefs), [minute, logs, workouts, settings, fasting, prefs]); // eslint-disable-line react-hooks/exhaustive-deps
+  const plan = useMealPlan(now);
   const signature = plan ? `${plan.fasting}|${prefKcal}|${prefProtein}|${prefStrict}|${plan.totals.budgetKcal}|${plan.totals.proteinLeftG}|${plan.split.meals.map((m) => `${m.slot.id}:${m.kcal}`).join()}` : '';
   // The suggestions on screen (the AI's 3, or 3 from the shared cookbook) are kept per day and meal, so reloading the page shows them again
   // without asking (and paying) again; the AI's also go into the user's cook book. A new request replaces them, and the old ones go into
@@ -159,8 +189,8 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
   }
 
   return (
-    <View style={styles.card} accessibilityLabel={g('meals.title')}>
-      <HudText size={15}>{g('meals.title')}</HudText>
+    <View style={bare ? styles.bare : styles.card} accessibilityLabel={g('meals.title')}>
+      {!bare && <HudText size={15}>{g('meals.title')}</HudText>}
       <HudText size={13} weight="medium" color={quest.textSecondary}>
         {g('dinner.left', { kcal: totals.budgetKcal, protein: totals.proteinLeftG })}
       </HudText>
@@ -193,16 +223,9 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
       )}
 
       {split.meals.map((meal) => {
-        const brief = mealBrief(totals, meal, prefs);
-        const dbIdeas = dinnerIdeasFromFoods(brief, foods).slice(0, DB_IDEAS_PER_MEAL);
-        const aiList = (aiIdeas[meal.slot.id] ?? []).filter((i) => acceptDinner(brief, i));
-        const aiKeys = new Set([...dbIdeas, ...aiList].map((i) => recipeKey(i.name)));
-        const asked = aiIdeas[meal.slot.id] !== undefined;
+        const { brief, dbIdeas, aiList, ideas, asked } = mealIdeas({ totals, meal, prefs, foods, asked: aiIdeas[meal.slot.id], book });
         const aiBusy = busy?.id === meal.slot.id && busy.by === 'ai';
         const bookBusy = busy?.id === meal.slot.id && busy.by === 'book';
-        // Once there are suggestions for this meal they take the place of the user's own cook book dishes.
-        const bookIdeas = asked ? [] : recipesFitting(book, brief, 3).filter((r) => !aiKeys.has(r.id)).map(ideaFromRecipe);
-        const ideas = [...aiList, ...dbIdeas, ...bookIdeas].slice(0, IDEAS_SHOWN);
         const verdict = meal.slot.plan && !meal.light ? dinnerVerdict(brief) : null;
         const name = labelOf(meal);
         return (
@@ -330,6 +353,7 @@ export function MealSuggestionsCard({ now }: { now: Date }) {
 }
 
 const styles = StyleSheet.create({
+  bare: { gap: 6 },
   card: { gap: 6, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   meal: { gap: 4, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
   ideaButtons: { gap: 6 },

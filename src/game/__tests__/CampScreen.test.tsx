@@ -34,6 +34,9 @@ import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
+import { useFeelingStore } from '../../store/useFeelingStore';
+import { useSelectedDayStore } from '../../store/useSelectedDayStore';
+import { useToastStore } from '../../store/useToastStore';
 
 function allText(renderer: ReactTestRenderer): string {
   const parts: string[] = [];
@@ -48,10 +51,17 @@ function allText(renderer: ReactTestRenderer): string {
 }
 
 
-/** Missions are folded on Camp by default: open them. */
+/** Camp shows the missions as 7 rings: one tap opens the missions sheet. */
 function openMissions(r: ReactTestRenderer) {
-  const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
-  if (head) act(() => head.props.onPress());
+  const rings = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
+  if (rings) act(() => rings.props.onPress());
+}
+
+/** The first pressable whose accessible name starts with `label`. */
+function button(r: ReactTestRenderer, label: string) {
+  const found = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith(label))[0];
+  if (!found) throw new Error(`no button "${label}"`);
+  return found;
 }
 
 describe('FitQuest Camp screen', () => {
@@ -104,20 +114,30 @@ describe('FitQuest Camp screen', () => {
     return r;
   }
 
-  it('shows the battle log on Camp and keeps the missions folded until opened', () => {
+  it('is one compact page: header with the date chip, the hero card, 3 tiles, mission rings and the timeline; the sheet opens on tap', () => {
     let r!: ReactTestRenderer;
     act(() => {
       r = create(<CampScreen />);
     });
     renderer = r;
     const text = allText(r);
-    expect(text).toContain('Nhật ký trận');
+    expect(text).toContain('Cấp 1');
+    expect(text).toContain('Hôm nay'); // the date chip
+    expect(text).toMatch(/còn ăn \d[\d,]* \/ [\d,]+ kcal/);
+    expect(text).toContain('Dự kiến ~1,172'); // the estimate until the day is settled (dinner still to come)
+    expect(text).toContain('chờ chốt');
+    expect(text).toContain('Đạm 117 /200 g');
+    expect(text).toContain('Chụp món');
+    expect(text).toContain('+250 ml');
+    expect(text).toMatch(/Tập \d+′/);
+    expect(text).toContain('Nhiệm vụ 1/7 xong');
     expect(text).toContain('Dòng thời gian');
-    const head = r.root.findAll((n) => n.props.accessibilityState?.expanded !== undefined && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
-    expect(head.props.accessibilityState.expanded).toBe(false);
-    expect(text).not.toContain('Tập luyện');
+    // The week strip, the 4 figure boxes and the colour key moved to the Journal.
+    expect(text).not.toContain('Nhật ký trận');
+    expect(text).not.toContain('Tuần trước');
+    expect(text).not.toContain('Không đồ ăn vặt'); // mission titles live in the sheet
     openMissions(r);
-    expect(allText(r)).toContain('Tập luyện');
+    expect(allText(r)).toContain('Không đồ ăn vặt');
   });
 
   it('shows the player, the weekly boss and all seven missions', () => {
@@ -128,16 +148,26 @@ describe('FitQuest Camp screen', () => {
     for (const name of ['Tập luyện', 'Thâm hụt', 'Protein 200 g', 'Purine', 'Muối', 'Đường', 'Không đồ ăn vặt']) {
       expect(text).toContain(name);
     }
+    expect(text).toContain('1 xong'); // the sheet's counters
     expect(text).toContain('GIỜ TIẾP TẾ ĐANG MỞ'); // 16:10 is inside the 12:00-20:00 window (title is set in capitals)
   });
 
-  it('shows the meal suggestions from an hour before the fasting window, while meals are left, and not before', () => {
-    const text = allText(render());
-    expect(text).toContain('Gợi ý các bữa còn lại'); // 16:10, meals still to come
-    expect(text).toMatch(/Còn ~\d+ kcal và thiếu ~\d+ g đạm trong hôm nay\./);
+  it("shows the next meal with one dish from an hour before the fasting window, and every meal's share in the ⓘ sheet", () => {
+    const r = render();
+    const text = allText(r);
+    expect(text).toContain('Bữa 3 - Tối (Chốt cửa sổ ăn) · 19:15'); // 16:10, dinner still to come
+    expect(text).toContain('Ghi món này');
+    expect(text).toContain('Món khác');
+    expect(text).not.toContain('Gợi ý các bữa còn lại'); // the full card is in the sheet
+    act(() => button(r, 'Phần của các bữa còn lại').props.onPress());
+    const sheet = allText(r);
+    expect(sheet).toContain('Gợi ý các bữa còn lại');
+    expect(sheet).toMatch(/Còn ~\d+ kcal và thiếu ~\d+ g đạm trong hôm nay\./);
+    act(() => button(r, 'Món khác cho').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/cookbook', params: { quick: 'fits' } });
     act(() => renderer?.unmount());
     jest.setSystemTime(new Date('2026-10-23T10:00:00'));
-    expect(allText(render())).not.toContain('Gợi ý các bữa còn lại'); // the window opens at 12:00, the card at 11:00
+    expect(allText(render())).not.toContain('Ghi món này'); // the window opens at 12:00, the card at 11:00
   });
 
   it('with fasting off: no fasting-window card, and the meal suggestions are there all day (a normal 3-meal day)', () => {
@@ -147,8 +177,8 @@ describe('FitQuest Camp screen', () => {
       const text = allText(render());
       expect(text).not.toContain('GIỜ TIẾP TẾ');
       expect(text).not.toContain('NHỊN ĂN');
-      expect(text).toContain('Gợi ý các bữa còn lại');
-      expect(text).toContain('Bữa sáng');
+      expect(text).toContain('Bữa sáng · ');
+      expect(text).toContain('Món khác');
     } finally {
       useMealModeStore.setState({ fasting: true });
     }
@@ -163,24 +193,87 @@ describe('FitQuest Camp screen', () => {
     expect(text).not.toMatch(/\+\s*0(?!\d)/);
   });
 
-  it('jumps to the right tab when a mission row is tapped', () => {
+  it("a mission row opens where to act: Tập the Train tab, a food mission the day's journal, with a link to the cook book filtered", () => {
     const r = render();
-    const rows = r.root.findAll((n) => n.props.accessibilityRole === 'button' && typeof n.props.onPress === 'function');
-    const protein = rows.find((n) => String(n.props.accessibilityLabel).startsWith('Protein'));
-    expect(protein).toBeDefined();
-    act(() => protein!.props.onPress());
-    expect(mockPush).toHaveBeenCalledWith('/nutrition');
-    const workoutRow = rows.find((n) => String(n.props.accessibilityLabel).startsWith('Tập luyện'));
-    act(() => workoutRow!.props.onPress());
+    act(() => button(r, 'Protein').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith('/journal');
+    openMissions(r);
+    act(() => button(r, 'Tập luyện').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith('/(tabs)/workout');
+    openMissions(r);
+    act(() => button(r, 'Gợi ý món ít purine').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/cookbook', params: { quick: 'lowPurine' } });
+  });
+
+  it("the boss bar opens the weekly boss sheet (HP, today's pending hit, 7 days), and Xem cả tuần the full week", () => {
+    const r = render();
+    act(() => button(r, 'Boss tuần').props.onPress());
+    const text = allText(r);
+    expect(text).toContain('Boss tuần 43 · reset 05:00 sáng thứ Hai');
+    expect(text).toContain('Đòn hôm nay');
+    expect(text).toContain('~−1,172'); // pending: not taken off the HP yet
+    expect(text).toContain('phần mờ = ~1,172 chờ chốt, chưa trừ');
+    act(() => button(r, 'Xem cả tuần').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith('/boss');
+  });
+
+  it('+250 ml logs water on the picked day at once, with "Hoàn tác" on the toast', () => {
+    const r = render();
+    act(() => button(r, 'Thêm 250 ml nước').props.onPress());
+    expect(useNutritionStore.getState().logs['2026-10-23'].waterMl).toBe(3450);
+    expect(useToastStore.getState().toast?.text).toContain('+250 ml');
+    act(() => useToastStore.getState().undo());
+    expect(useNutritionStore.getState().logs['2026-10-23'].waterMl).toBe(3200);
+  });
+
+  it("The Tập tile starts today's session in one tap; its › opens the Train screen", () => {
+    const r = render();
+    act(() => button(r, 'Bắt đầu buổi tập nhóm').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/train/session', params: expect.objectContaining({ ids: expect.any(String), group: expect.any(String) }) });
+    act(() => button(r, 'Mở màn Tập').props.onPress());
     expect(mockPush).toHaveBeenCalledWith('/(tabs)/workout');
   });
 
-  it('opens the boss detail when the boss card is tapped', () => {
+  it('after 19:00 shows the evening check-in card until today has a check-in', () => {
+    jest.setSystemTime(new Date('2026-10-23T19:30:00'));
     const r = render();
-    const card = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel).startsWith('Boss tuần'))[0];
-    expect(card).toBeDefined();
-    act(() => card.props.onPress());
-    expect(mockPush).toHaveBeenCalledWith('/boss');
+    expect(allText(r)).toContain('Hôm nay thế nào?');
+    act(() => button(r, 'Check-in').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith('/checkin');
+    act(() => renderer?.unmount());
+    useFeelingStore.setState({ records: [{ id: 'f', loggedAtISO: '2026-10-23T19:00:00', cravingLevel: 2, hungerLevel: 2, mood: 'good', workoutCondition: null, note: '' }] });
+    try {
+      expect(allText(render())).not.toContain('Hôm nay thế nào?');
+    } finally {
+      useFeelingStore.setState({ records: [] });
+    }
+    act(() => renderer?.unmount());
+    jest.setSystemTime(new Date('2026-10-23T18:30:00'));
+    expect(allText(render())).not.toContain('Hôm nay thế nào?');
+  });
+
+  it("the date chip's day drives the hero, the tiles and the timeline (a past day: no next meal)", () => {
+    useSelectedDayStore.setState({ selectedKey: '2026-10-22' });
+    try {
+      const r = render();
+      const text = allText(r);
+      expect(text).toContain('Hôm qua');
+      expect(text).not.toContain('Ghi món này');
+      act(() => button(r, 'Thêm 250 ml nước').props.onPress());
+      expect(useNutritionStore.getState().logs['2026-10-22'].waterMl).toBe(250);
+      act(() => button(r, 'Chụp món').props.onPress());
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/add-food', params: { date: '2026-10-22' } });
+    } finally {
+      useSelectedDayStore.setState({ selectedKey: null });
+    }
+  });
+
+  it("on Monday shows last week's review card", () => {
+    jest.setSystemTime(new Date('2026-10-26T10:00:00'));
+    const r = render();
+    expect(allText(r)).toMatch(/Tổng kết tuần 43/);
+    act(() => button(r, 'Xem: Tổng kết tuần').props.onPress());
+    expect(mockPush).toHaveBeenCalledWith('/weekly-report');
   });
 
   describe('level-up celebration', () => {
@@ -220,8 +313,11 @@ describe('FitQuest Camp screen', () => {
 
   it('follows the language setting', () => {
     useSettingsStore.setState({ language: 'en' }); // nothing is mounted yet, so no act() needed
-    const text = allText(render());
-    expect(text).toContain("Today's missions");
+    const r = render();
+    expect(allText(r)).toContain('Missions 1/7 done');
+    act(() => button(r, "Today's missions").props.onPress());
+    const text = allText(r);
+    expect(text).toContain("Today's missions"); // the missions sheet
     expect(text).toContain('The One-Kilo Blob');
   });
 

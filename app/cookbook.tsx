@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { DinnerIdea } from '../src/ai/dinner';
 import { buildMealPlan, mealBrief } from '../src/ai/mealSplit';
@@ -42,7 +42,11 @@ export default function CookbookScreen() {
   const [tab, setTab] = useState<Tab>('mine');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortId>('newest');
-  const [quick, setQuick] = useState<QuickId[]>([]);
+  // Camp can open the cook book already filtered (e.g. ?quick=fits from "Món khác", ?quick=lowPurine from the Purine mission).
+  const { quick: quickParam } = useLocalSearchParams<{ quick?: string }>();
+  const [quick, setQuick] = useState<QuickId[]>(() =>
+    typeof quickParam === 'string' ? quickParam.split(',').filter((q): q is QuickId => (QUICK_IDS as readonly string[]).includes(q)) : []
+  );
   const [open, setOpen] = useState<DinnerIdea | null>(null);
   // The share of the next meal still to come today, to tell which dishes fit it.
   const brief = useMemo(() => {

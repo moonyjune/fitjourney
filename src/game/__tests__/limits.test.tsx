@@ -41,9 +41,9 @@ function allText(renderer: ReactTestRenderer): string {
 }
 
 
-/** Missions are folded on Camp by default: open them. */
+/** Camp shows the missions as rings: open the missions sheet. */
 function openMissions(r: ReactTestRenderer) {
-  const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityState?.expanded === false && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
+  const head = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('Nhiệm vụ hôm nay'))[0];
   if (head) act(() => head.props.onPress());
 }
 

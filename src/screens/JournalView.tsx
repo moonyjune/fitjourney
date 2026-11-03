@@ -29,10 +29,9 @@ import { useProofStore } from '../store/useProofStore';
 import { selectedDayKey, useSelectedDayStore } from '../store/useSelectedDayStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useCheatDayStore } from '../store/useCheatDayStore';
-import { useSkippedMealStore } from '../store/useSkippedMealStore';
 import { DEFICIT_LEVEL_COLOR, deficitColor, deficitLevel, type DeficitLevel } from '../game/deficitLevel';
-import { mealNames, shownDeficit } from '../game/deficitView';
-import type { DayMeal } from '../game/missions';
+import { shownDeficit } from '../game/deficitView';
+import { DayDeficitNotes } from '../components/quest/DayDeficitNotes';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { quest, questRadius } from '../theme/quest';
 import { screenMaxWidthStyle } from '../theme/responsive';
@@ -288,8 +287,6 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
   );
 }
 
-/** The battle log. `embedded`: a section of another screen (Camp) — no own scroll view, back button or safe-area padding;
- *  the title is a section heading instead. */
 /** The selected day's deficit level ("Đạt", "Quá lố"…) in its colour, the colour key, and the cheat-day mark. */
 function DeficitLevelRow({ level, target, cheat, onToggleCheat }: { level: DeficitLevel | null; target: number; cheat: boolean; onToggleCheat?: () => void }) {
   const g = useGameText();
@@ -328,6 +325,8 @@ function DeficitLevelRow({ level, target, cheat, onToggleCheat }: { level: Defic
   );
 }
 
+/** The battle log. `embedded`: Camp's "Dòng thời gian" section — only the selected day's timeline (no week strip, figures, colour key
+ *  or water rows: Camp's hero card and tiles show those, the full log is a tap away), no own scroll view or back button. */
 export function JournalView({ client, embedded }: { client?: ClientSnapshot; embedded?: boolean }) {
   const g = useGameText();
   const { t, language } = useTranslation();
@@ -365,7 +364,6 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   // Cheat days are the user's own marks (a coach's view has none).
   const ownCheatDays = useCheatDayStore((s) => s.days);
   const toggleCheat = useCheatDayStore((s) => s.toggle);
-  const toggleSkippedMeal = useSkippedMealStore((s) => s.toggle);
   const cheatDays = useMemo(() => (client ? [] : ownCheatDays), [client, ownCheatDays]);
   const ownTdeeKcal = useTdeeKcal();
   const tdeeKcal = client?.tdeeKcal ?? ownTdeeKcal;
@@ -564,25 +562,6 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
   // Today with meals still to come: the end-of-day estimate (no boss damage yet). A settled day with a meal not logged: no level colour.
   const shown = shownDeficit(day);
   const dayLabelText = `${weekdayLabel(selectedDate)} ${dateLabel(selectedDate)}`;
-  /** "Bỏ bữa" chips: mark a meal (still to come today, or not logged) as skipped on purpose, so it is no longer pending or missing. */
-  const skipChips = (meals: DayMeal[], named: boolean) =>
-    meals.length === 0 ? null : (
-      <View style={styles.skipRow}>
-        {meals.map((m) => (
-          <Pressable
-            key={m.id}
-            accessibilityRole="button"
-            accessibilityLabel={g('deficit.skipLabel', { meal: mealNames([m], g), day: dayLabelText })}
-            onPress={() => toggleSkippedMeal(selectedKey, m.id)}
-            style={[styles.levelChip, { borderColor: quest.border }]}
-          >
-            <HudText size={12} color={quest.textSecondary}>
-              {named ? g('deficit.skipNamed', { meal: mealNames([m], g) }) : g('deficit.skip')}
-            </HudText>
-          </Pressable>
-        ))}
-      </View>
-    );
   const dayLevel = shown.incomplete ? null : levelOf(selectedKey, shown.kcal);
   const stats = [
     { label: g('journal.eaten'), value: Math.round(day.eatenKcal).toLocaleString('en-US'), color: quest.text, accent: false },
@@ -602,12 +581,15 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
 
   const header = embedded ? (
     <View style={styles.embeddedHead}>
-      <HudText size={17} accessibilityRole="header">
-        {g('journal.title')}
+      <HudText size={17} accessibilityRole="header" style={styles.flex}>
+        {g('journal.timeline')}
       </HudText>
-      <HudText size={11} color={quest.textSecondary} style={styles.flex} numberOfLines={1}>
-        {eyebrow}
-      </HudText>
+      <Pressable accessibilityRole="link" accessibilityLabel={g('camp.journalLink')} onPress={() => router.push('/journal')} hitSlop={8} style={styles.headLink}>
+        <HudText size={13} weight="medium" color={quest.textSecondary}>
+          {g('camp.journalLink')}
+        </HudText>
+        <QuestIcon name="chevron" size={14} color={quest.textSecondary} />
+      </Pressable>
     </View>
   ) : (
     <QuestHeader title={client ? `${g('journal.title')} · ${client.displayName}` : g('journal.title')} eyebrow={eyebrow} onBack={goBack} backLabel={g('common.back')} />
@@ -620,6 +602,8 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
       <Outer {...outerProps}>
         {header}
 
+        {!embedded && (
+        <>
         <View style={styles.stripWrap} {...swipe.panHandlers}>
           <Pressable accessibilityRole="button" accessibilityLabel={g('journal.prevWeek')} onPress={() => shiftWeek(-1)} style={styles.arrow}>
             <QuestIcon name="back" size={18} color={quest.text} strokeWidth={2.4} />
@@ -699,56 +683,7 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
           cheat={cheatDays.includes(selectedKey)}
           onToggleCheat={client || selectedKey > todayKey ? undefined : () => toggleCheat(selectedKey)}
         />
-        {shown.projected && (
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('deficit.pendingLine', {
-              eaten: Math.round(day.eatenKcal).toLocaleString('en-US'),
-              rest: day.pendingMeals.reduce((sum, m) => sum + m.kcal, 0).toLocaleString('en-US'),
-              meals: mealNames(day.pendingMeals, g),
-            })}
-          </HudText>
-        )}
-        {shown.projected && !client && skipChips(day.pendingMeals, true)}
-        {shown.incomplete && (
-          <View style={styles.missingRow}>
-            <HudText size={12} weight="medium" color={quest.goldLight} style={styles.flex}>
-              {g('deficit.missingLine', { meals: mealNames(day.missingMeals, g) })}
-            </HudText>
-            {!client && (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={g('deficit.addMissingLabel', { day: `${weekdayLabel(selectedDate)} ${dateLabel(selectedDate)}` })}
-                onPress={() => router.push('/quick-add')}
-                style={[styles.levelChip, { borderColor: quest.gold }]}
-              >
-                <HudText size={12} color={quest.gold}>
-                  {g('deficit.addMissing')}
-                </HudText>
-              </Pressable>
-            )}
-          </View>
-        )}
-        {shown.incomplete && !client && skipChips(day.missingMeals, day.missingMeals.length > 1)}
-        {!client && day.skippedMeals.length > 0 && (
-          <View style={styles.missingRow}>
-            <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.flex}>
-              {g('deficit.skippedLine', { meals: mealNames(day.skippedMeals, g) })}
-            </HudText>
-            {day.skippedMeals.map((m) => (
-              <Pressable
-                key={m.id}
-                accessibilityRole="button"
-                accessibilityLabel={g('deficit.skipUndoLabel', { meal: mealNames([m], g), day: dayLabelText })}
-                onPress={() => toggleSkippedMeal(selectedKey, m.id)}
-                style={[styles.levelChip, { borderColor: quest.border }]}
-              >
-                <HudText size={12} color={quest.textSecondary}>
-                  {day.skippedMeals.length > 1 ? `${g('deficit.skipUndo')}: ${mealNames([m], g)}` : g('deficit.skipUndo')}
-                </HudText>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <DayDeficitNotes day={day} dateKey={selectedKey} dayLabel={dayLabelText} readOnly={!!client} />
 
         <View
           accessible
@@ -770,9 +705,11 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
             {g('journal.legend')}
           </HudText>
         </View>
+        </>
+        )}
 
         <View style={styles.timeline}>
-          {visibleTimeline.map((item) => (
+          {(embedded ? visibleTimeline.filter((i) => i.kind !== 'water') : visibleTimeline).map((item) => (
             <TimelineRow
               key={item.id}
               item={item}
@@ -788,9 +725,21 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
           ))}
         </View>
 
-        <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
-          {g('journal.waterNote')}
-        </HudText>
+        {embedded ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={g('camp.journalFullDay')}
+            onPress={() => router.push('/journal')}
+            style={({ pressed }) => [styles.fullDay, pressed && { opacity: 0.85 }]}
+          >
+            <QuestIcon name="list" size={18} color={quest.text} />
+            <HudText size={14}>{g('camp.journalFullDay')}</HudText>
+          </Pressable>
+        ) : (
+          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
+            {g('journal.waterNote')}
+          </HudText>
+        )}
       </Outer>
       <WorkoutDetailDialog entries={openWorkoutEntries} lang={language === 'en' ? 'en' : 'vi'} onClose={() => setOpenWorkout(null)} />
       <MealDetailDialog detail={detail} onClose={() => setOpenId(null)} canEditParts={!client} onEditPart={editPart} onAddPhoto={client ? undefined : addPhoto} onRemovePhoto={client ? undefined : removePhoto} />
@@ -801,7 +750,9 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: quest.bg },
   content: { paddingHorizontal: 16, paddingBottom: 32 },
-  embeddedHead: { flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 20 },
+  embeddedHead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20, marginBottom: 4 },
+  headLink: { flexDirection: 'row', alignItems: 'center', gap: 2, minHeight: 44 },
+  fullDay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 48, marginTop: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   flex: { flex: 1, minWidth: 0 },
   stripWrap: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14 },
   arrow: { width: 32, height: 64, alignItems: 'center', justifyContent: 'center', borderRadius: 10 },
@@ -810,8 +761,6 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', gap: 8, marginTop: 12 },
   stat: { flex: 1, minWidth: 0, padding: 10, gap: 2, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center' },
   levelBar: { width: '60%', height: 3, borderRadius: 2, marginTop: 2 },
-  missingRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  skipRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
   levelRow: { marginTop: 10, gap: 6 },
   levelHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1.5 },
