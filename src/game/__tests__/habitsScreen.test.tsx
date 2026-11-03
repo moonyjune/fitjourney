@@ -34,6 +34,7 @@ import HabitsScreen from '../../../app/habits';
 import type { Habit } from '../../habits/types';
 import { addDaysToKey } from '../../insights/dateMath';
 import { useHabitStore } from '../../store/useHabitStore';
+import { useToastStore } from '../../store/useToastStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
@@ -178,7 +179,7 @@ describe('Habits screen', () => {
     expect(allText(r)).toContain('Tích vài ngày để thấy tỷ lệ duy trì theo tuần.');
   });
 
-  it('adds a habit (a name is required), then edits and deletes it with a second tap', async () => {
+  it('adds a habit (a name is required), then edits it and deletes it with undo on a toast', async () => {
     const r = await mount();
     await tap(r, 'Thêm thói quen');
     await tap(r, 'Lưu');
@@ -198,11 +199,15 @@ describe('Habits screen', () => {
     expect(useHabitStore.getState().habits.find((x) => x.id === added.id)!.status).toBe('building');
 
     await tap(r, 'Xóa thói quen: Ngủ trước 23h');
-    expect(useHabitStore.getState().habits.find((x) => x.id === added.id)!.archived).toBe(false);
-    await tap(r, 'Bấm lần nữa để xóa: Ngủ trước 23h');
     expect(useHabitStore.getState().habits.find((x) => x.id === added.id)!.archived).toBe(true);
     expect(has(r, 'Ngủ trước 23h: chưa tích')).toBe(false);
     expect(allText(r)).not.toContain('Ngủ trước 23h');
+    // No second tap any more: the toast's "Hoàn tác" brings it back.
+    expect(useToastStore.getState().toast?.text).toBe('Đã xoá thói quen "Ngủ trước 23h"');
+    await act(async () => useToastStore.getState().undo());
+    expect(useHabitStore.getState().habits.find((x) => x.id === added.id)!.archived).toBe(false);
+    expect(mockPushHabit).toHaveBeenLastCalledWith(expect.objectContaining({ id: added.id, archived: false }));
+    expect(has(r, 'Ngủ trước 23h: chưa tích')).toBe(true);
   });
 
   it('can turn daily ticking off for a habit while editing it', async () => {

@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { Alert } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
@@ -50,16 +49,18 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import PlanScreen from '../../../app/plan';
+import PlanMenuScreen from '../../../app/plan-menu';
+import AccountSettingsScreen from '../../../app/settings/account';
+import { useToastStore } from '../../store/useToastStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 
 describe('Plan screen (FitQuest)', () => {
   let renderer: ReactTestRenderer | undefined;
-  let alertSpy: jest.SpiedFunction<typeof Alert.alert>;
-  const render = async () => {
+  const render = async (element: React.ReactElement = <PlanScreen />) => {
     let r!: ReactTestRenderer;
     await act(async () => {
-      r = create(<PlanScreen />);
+      r = create(element);
     });
     renderer = r;
     return r;
@@ -95,7 +96,7 @@ describe('Plan screen (FitQuest)', () => {
     mockLink.mockReset();
     mockFetchLink.mockReset();
     mockFetchLink.mockResolvedValue(null);
-    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    useToastStore.setState({ toast: null });
     useSettingsStore.setState({
       language: 'en',
       role: 'client',
@@ -119,7 +120,6 @@ describe('Plan screen (FitQuest)', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
-    alertSpy.mockRestore();
   });
 
   it('goes back from the header button', async () => {
@@ -128,20 +128,54 @@ describe('Plan screen (FitQuest)', () => {
     expect(mockRouter.back).toHaveBeenCalled();
   });
 
-  it('saves edited goals to settings', async () => {
+  it('saves edited goals to settings with a toast that can undo it', async () => {
     const r = await render();
     await type(r, 'Goal weight (kg)', '75');
     await press(r, 'Save goals');
     expect(useSettingsStore.getState().goalWeightKg).toBe(75);
-    expect(alertSpy).toHaveBeenCalledWith('Saved', expect.any(String));
+    expect(useToastStore.getState().toast?.text).toBe('Goals saved');
+    await act(async () => useToastStore.getState().undo());
+    expect(useSettingsStore.getState().goalWeightKg).toBe(80);
+    expect(field(r, 'Goal weight (kg)').props.value).toBe('80');
   });
 
-  it('rejects an empty goal field and leaves settings untouched', async () => {
+  it('rejects an empty goal field with a red line under it and leaves settings untouched', async () => {
     const r = await render();
     await type(r, 'Goal weight (kg)', '');
     await press(r, 'Save goals');
     expect(useSettingsStore.getState().goalWeightKg).toBe(80);
-    expect(alertSpy).toHaveBeenCalledWith('Error', expect.any(String));
+    expect(allText(r)).toContain('Enter a number above 0');
+    expect(useToastStore.getState().toast).toBeNull();
+  });
+
+  it('keeps only goals, body, start date, the way to the menu and the AI assistant (no language, reminders, coach or sign-out)', async () => {
+    const text = allText(await render());
+    expect(text).toContain('Goals & plan');
+    expect(text).toContain('Start date');
+    expect(text).toContain('Menu & workouts');
+    for (const gone of ['Language', 'Sign out', "Enter your coach's code to link accounts"]) expect(text).not.toContain(gone);
+  });
+
+  it('opens the menu, workouts and shopping list page', async () => {
+    const r = await render();
+    await press(r, r.root.findAll((n) => String(n.props.accessibilityLabel ?? '').startsWith('Menu & workouts:'))[0].props.accessibilityLabel);
+    expect(mockRouter.push).toHaveBeenCalledWith('/plan-menu');
+    const menu = allText(await render(<PlanMenuScreen />));
+    expect(menu).toContain('SHOPPING LIST');
+    expect(menu).toContain('FOOD SWAPS');
+  });
+
+  it('changes the start date in a sheet, with undo', async () => {
+    useSettingsStore.setState({ startDateISO: '2026-09-03T08:00:00.000Z' });
+    const r = await render();
+    const row = r.root.findAll((n) => String(n.props.accessibilityLabel ?? '').startsWith('Start date:'))[0];
+    await act(async () => row.props.onPress());
+    const today = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.findAll((c) => c.props.children === 'Today').length > 0)[0];
+    await act(async () => today.props.onPress());
+    await press(r, 'Save');
+    expect(useSettingsStore.getState().startDateISO).not.toBe('2026-09-03T08:00:00.000Z');
+    await act(async () => useToastStore.getState().undo());
+    expect(useSettingsStore.getState().startDateISO).toBe('2026-09-03T08:00:00.000Z');
   });
 
   it('saves demographics and shows the live TDEE preview', async () => {
@@ -161,8 +195,8 @@ describe('Plan screen (FitQuest)', () => {
     expect(s.activityLevel).toBe('moderate');
   });
 
-  it('switches language', async () => {
-    const r = await render();
+  it('switches language (Coach & account page)', async () => {
+    const r = await render(<AccountSettingsScreen />);
     await act(async () => {
       r.root.findAll((n) => n.props.accessibilityRole === 'tab' && n.props.accessibilityLabel === 'Tiếng Việt')[0].props.onPress();
     });
@@ -171,32 +205,33 @@ describe('Plan screen (FitQuest)', () => {
 
   it('shows the server message when linking a coach fails, and clears nothing', async () => {
     mockLink.mockResolvedValue({ ok: false, message: 'Mã không đúng' });
-    const r = await render();
-    await type(r, "Enter your coach's code to link accounts", 'zz99');
-    await press(r, 'Link');
+    const r = await render(<AccountSettingsScreen />);
+    await type(r, 'Coach code', 'zz99');
+    await press(r, 'Connect');
     expect(mockLink).toHaveBeenCalledWith('zz99');
-    expect(alertSpy).toHaveBeenCalledWith("Couldn't link", 'Mã không đúng');
+    expect(allText(r)).toContain('Mã không đúng');
+    expect(field(r, 'Coach code').props.value).toBe('zz99');
   });
 
   it('shows the linked coach: email, code and since when, and offers no second link', async () => {
     useSettingsStore.setState({ coachId: 'c1', linkedCoachEmail: 'coach@fit.io', linkedCoachCode: 'AB12CD', linkedCoachSinceISO: '2026-10-05T03:00:00.000Z' });
-    const r = await render();
+    const r = await render(<AccountSettingsScreen />);
     const text = allText(r);
     expect(text).toContain('Coach email');
     expect(text).toContain('coach@fit.io');
     expect(text).toContain('AB12CD');
     expect(text).toContain('05/10/2026');
     expect(text).toContain('one Coach only');
-    expect(field(r, "Enter your coach's code to link accounts")).toBeUndefined();
+    expect(field(r, 'Coach code')).toBeUndefined();
   });
 
   it('says so when the linked coach details are not loaded yet', async () => {
     useSettingsStore.setState({ coachId: 'c1' });
-    expect(allText(await render())).toContain('Not loaded yet');
+    expect(allText(await render(<AccountSettingsScreen />))).toContain('Not loaded yet');
   });
 
   it('shows no coach details and the code field when not linked', async () => {
-    const text = allText(await render());
+    const text = allText(await render(<AccountSettingsScreen />));
     expect(text).not.toContain('Coach email');
     expect(text).not.toContain('one Coach only');
   });
@@ -226,17 +261,21 @@ describe('Plan screen (FitQuest)', () => {
     expect(useSettingsStore.getState().linkedCoachEmail).toBeNull();
   });
 
-  it('keeps the last row of the plan above the bottom bar (bar cover 34 + 68 + inset 34 = 136)', async () => {
+  it('is a stack page now: the last row ends clear of the home indicator (inset 34 + 24)', async () => {
     const r = await render();
     const scroll = r.root.findAll((n) => n.props.contentContainerStyle != null)[0];
     const flat = Object.assign({}, ...[scroll.props.contentContainerStyle].flat(3).filter(Boolean));
-    expect(flat.paddingBottom).toBe(160); // 136 covered by the bar + a 24 px gap
+    expect(flat.paddingBottom).toBe(58);
   });
 
-  it('signs out', async () => {
-    const r = await render();
+  it('signs out from the Coach & account page, after the confirm box', async () => {
+    const r = await render(<AccountSettingsScreen />);
     expect(allText(r)).toContain('me@x.io');
     await press(r, 'Sign out');
+    expect(mockSignOut).not.toHaveBeenCalled();
+    const box = r.root.findAll((n) => n.props.testID === 'sign-out-confirm')[0];
+    const buttons = box.findAll((n) => n.props.accessibilityLabel === 'Sign out' && typeof n.props.onPress === 'function');
+    await act(async () => buttons[buttons.length - 1].props.onPress());
     expect(mockSignOut).toHaveBeenCalled();
   });
 });

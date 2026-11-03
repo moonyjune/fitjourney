@@ -1,39 +1,66 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useGameText } from '../../game/strings';
 import { quest } from '../../theme/quest';
 import { BottomSheet } from './BottomSheet';
 import { HudText } from './HudText';
+import { QuestButton } from './QuestButton';
 
-interface InfoButtonProps {
-  /** Accessible name of the ⓘ button ("Màu thâm hụt nghĩa là gì?"). */
-  label: string;
-  /** Title of the sheet it opens. */
-  title: string;
-  /** The detail that does not fit on one line (Design/uiux-proposal README §2.3: hints ≤ 60 characters, the rest behind ⓘ). */
-  text: string;
+export interface InfoButtonProps {
+  /** Accessible name of the ⓘ button as written ("Màu thâm hụt nghĩa là gì?"); wins over `about`. */
+  label?: string;
+  /** What it explains, for screen readers ("Giải thích: Giới hạn hằng ngày"), when no `label` is given. */
+  about?: string;
+  /** Heading of the sheet (default "Vì sao?"). */
+  title?: string;
+  /** The explanation as one text, or as paragraphs: the detail a one-line hint leaves out (README §2.3 rule 1). */
+  text?: string;
+  body?: string[];
   testID?: string;
 }
 
-/** A 44 pt "ⓘ" that opens a short "Vì sao?" sheet with the full explanation. */
-export function InfoButton({ label, title, text, testID }: InfoButtonProps) {
+/** The ⓘ "Vì sao?" button: a 44 pt target next to a one-line hint that opens a sheet with the full explanation and "Đã hiểu". */
+export function InfoButton({ label, about, title, text, body, testID }: InfoButtonProps) {
+  const g = useGameText();
   const [open, setOpen] = useState(false);
+  const paragraphs = body ?? (text ? [text] : []);
   return (
     <>
-      <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => setOpen(true)} hitSlop={4} style={({ pressed }) => [styles.button, pressed && { opacity: 0.7 }]} testID={testID}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label ?? g('rd6.info.a11y', { what: about ?? '' })}
+        onPress={() => setOpen(true)}
+        hitSlop={4}
+        style={({ pressed }) => [styles.button, pressed && { opacity: 0.7 }]}
+        testID={testID}
+      >
         <HudText size={16} color={quest.manaText}>
           ⓘ
         </HudText>
       </Pressable>
-      <BottomSheet visible={open} onClose={() => setOpen(false)} title={title}>
-        <HudText size={14} weight="medium" color={quest.textSecondary} style={styles.body}>
-          {text}
-        </HudText>
-      </BottomSheet>
+      {/* Mounted only while open: nothing to render (or keep in sync) for the many ⓘ of a page that stay closed. */}
+      {open && (
+        <BottomSheet
+          visible
+          onClose={() => setOpen(false)}
+          title={title ?? g('rd6.info.title')}
+          footer={<QuestButton title={g('rd6.info.ok')} variant="ghost" onPress={() => setOpen(false)} />}
+        >
+          <View style={styles.body}>
+            {paragraphs.map((p, i) => (
+              <HudText key={i} size={14} weight="medium" color={quest.textTertiary} style={styles.paragraph}>
+                {p}
+              </HudText>
+            ))}
+          </View>
+        </BottomSheet>
+      )}
     </>
   );
 }
 
 const styles = StyleSheet.create({
   button: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  body: { lineHeight: 21 },
+  body: { gap: 10 },
+  paragraph: { lineHeight: 21 },
 });

@@ -1,21 +1,22 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { LineChart } from 'react-native-chart-kit';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
-import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { ScreenTemplate } from '../src/components/quest/ScreenTemplate';
 import { QuestIcon } from '../src/components/quest/QuestIcon';
 import { fmtDec, fmtInt, fmtSigned } from '../src/insights/format';
 import { useInsights } from '../src/insights/useInsights';
 import { useUricStore, TARGET_RANGE } from '../src/store/useUricStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { quest, questRadius } from '../src/theme/quest';
-import { chartWidthFor, screenMaxWidthStyle } from '../src/theme/responsive';
+import { chartWidthFor } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { useGameText } from '../src/game/strings';
+import { showToast } from '../src/store/useToastStore';
 import { thinLabels } from '../src/utils/chartLabels';
 import { toDateKey } from '../src/utils/date';
 import { contextFor, fromUmol, isPlausibleUmol, parseDateInput, sortReadings, summarizeReadings, toUmol, type UricStatus } from '../src/uric/analysis';
@@ -95,19 +96,19 @@ function ReadingForm({ reading, onDone }: { reading: UricReading | null; onDone:
 /** Profile > Uric acid: log blood test results, see them against the target, and see what the diary looked like before each one. */
 export default function UricScreen() {
   const t = useUricText();
+  const g = useGameText();
   const lang = useSettingsStore((s) => s.language);
-  const insets = useSafeAreaInsets();
   useLightStatusBar();
   const width = chartWidthFor(useWindowDimensions().width) - 16;
   const readings = useUricStore((s) => s.readings);
   const targetUmol = useUricStore((s) => s.targetUmol);
   const nudgeTarget = useUricStore((s) => s.nudgeTarget);
   const removeReading = useUricStore((s) => s.removeReading);
+  const importReadings = useUricStore((s) => s.importReadings);
   const { insights, thresholds, items } = useInsights();
   const weighs = insights.weighs;
 
   const [editing, setEditing] = useState<{ reading: UricReading | null } | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
   const todayKey = toDateKey(new Date());
   const sorted = useMemo(() => sortReadings(readings), [readings]);
@@ -125,173 +126,172 @@ export default function UricScreen() {
   }, [sorted, targetUmol]);
 
   return (
-    <View style={styles.screen}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
-        <QuestHeader title={t('ur.title')} onBack={goBack} backLabel={t('ur.back')} />
+    <ScreenTemplate title={t('ur.title')} onBack={goBack} backLabel={t('ur.back')}>
 
-        {editing ? (
-          <ReadingForm key={editing.reading?.id ?? 'new'} reading={editing.reading} onDone={() => setEditing(null)} />
-        ) : (
-          <>
-            {summary ? (
-              <View style={styles.card}>
-                <View style={styles.headRow}>
-                  <HudText size={24} color={STATUS_COLOR[summary.status]}>
-                    {t('ur.latest', { v: fmtInt(summary.latest.valueUmol, lang), mg: mg(summary.latest.valueUmol) })}
-                  </HudText>
-                </View>
-                <HudText size={13} color={STATUS_COLOR[summary.status]}>
-                  {t(STATUS_KEY[summary.status])}
-                </HudText>
-                <HudText size={12} weight="medium" color={quest.textSecondary}>
-                  {summary.daysSince === 0 ? t('ur.dateToday', { date: shortDate(summary.latest.dateKey) }) : t('ur.dateAgo', { date: shortDate(summary.latest.dateKey), n: summary.daysSince })}
-                </HudText>
-                <HudText size={13} weight="medium" color={summary.aboveTarget > 0 ? quest.text : quest.xp}>
-                  {summary.aboveTarget > 0 ? t('ur.vsTargetAbove', { t: fmtInt(targetUmol, lang), d: fmtInt(summary.aboveTarget, lang) }) : t('ur.vsTargetOk', { t: fmtInt(targetUmol, lang) })}
-                </HudText>
-                {summary.previous && summary.deltaVsPrevious !== null && (
-                  <HudText size={12} weight="medium" color={summary.deltaVsPrevious <= 0 ? quest.xp : quest.hpText}>
-                    {t('ur.deltaPrev', { date: shortDate(summary.previous.dateKey), d: fmtSigned(summary.deltaVsPrevious, lang) })}
-                  </HudText>
-                )}
-                {summary.deltaVsFirst !== null && summary.previous && sorted.length > 2 && (
-                  <HudText size={12} weight="medium" color={quest.textSecondary}>
-                    {t('ur.deltaFirst', { d: fmtSigned(summary.deltaVsFirst, lang) })}
-                  </HudText>
-                )}
-                {summary.status === 'high' && (
-                  <HudText size={12} weight="medium" color={quest.hpText}>
-                    {t('ur.highAlert')}
-                  </HudText>
-                )}
-              </View>
-            ) : (
-              <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
-                {t('ur.none')}
-              </HudText>
-            )}
-
-            {chart && (
-              <View style={styles.card}>
-                <HudText size={12} weight="medium" color={quest.textSecondary}>
-                  {t('ur.chartTitle')}
-                </HudText>
-                <LineChart data={chart} width={width} height={180} chartConfig={chartConfig} bezier={false} fromZero={false} withShadow={false} style={styles.chart} />
-                <View style={styles.legend}>
-                  <View style={[styles.dot, { backgroundColor: quest.gold }]} />
-                  <HudText size={11} weight="medium" color={quest.textSecondary}>
-                    {t('ur.legendResult')}
-                  </HudText>
-                  <View style={[styles.dot, { backgroundColor: quest.xp }]} />
-                  <HudText size={11} weight="medium" color={quest.textSecondary}>
-                    {t('ur.legendTarget')}
-                  </HudText>
-                </View>
-              </View>
-            )}
-
-            <View style={styles.addRow}>
-              <QuestButton title={t('ur.add')} icon="plus" onPress={() => setEditing({ reading: null })} />
-            </View>
-
-            {sorted.length > 0 && (
-              <>
-                <HudText size={17} accessibilityRole="header" style={styles.section}>
-                  {t('ur.listTitle')}
-                </HudText>
-                {[...sorted].reverse().map((r) => {
-                  const index = sorted.indexOf(r);
-                  const ctx = contextFor(r, sorted[index - 1] ?? null, { rows: insights.allRows, items, weighs, thresholds });
-                  const status = summarizeReadings([r], targetUmol, todayKey)!.status;
-                  return (
-                    <View key={r.id} style={styles.card}>
-                      <View style={styles.headRow}>
-                        <HudText size={15} style={styles.flex}>
-                          {t('ur.row', { date: shortDate(r.dateKey), v: fmtInt(r.valueUmol, lang) })}
-                        </HudText>
-                        <HudText size={11} color={STATUS_COLOR[status]}>
-                          {t(STATUS_KEY[status])}
-                        </HudText>
-                      </View>
-                      {r.note ? (
-                        <HudText size={12} weight="medium" color={quest.textSecondary}>
-                          {r.note}
-                        </HudText>
-                      ) : null}
-                      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-                        {t('ur.ctxTitle').toUpperCase()}
-                      </HudText>
-                      {ctx.daysWithData === 0 ? (
-                        <HudText size={12} weight="medium" color={quest.textSecondary}>
-                          {t('ur.ctxNone')}
-                        </HudText>
-                      ) : (
-                        <>
-                          <HudText size={12} weight="medium" color={ctx.purineOverDays > 0 ? quest.hpText : quest.text}>
-                            {t('ur.ctxPurine', { mg: fmtInt(ctx.avgPurineMg ?? 0, lang), n: ctx.purineOverDays, d: ctx.daysWithData })}
-                          </HudText>
-                          <HudText size={12} weight="medium" color={ctx.alcoholDays > 0 ? quest.hpText : quest.text}>
-                            {ctx.alcoholDays > 0 ? t('ur.ctxAlcohol', { n: ctx.alcoholDays }) : t('ur.ctxNoAlcohol')}
-                          </HudText>
-                          <HudText size={12} weight="medium" color={quest.text}>
-                            {t('ur.ctxDeficit', { d: fmtInt(ctx.avgDeficit ?? 0, lang) })}
-                          </HudText>
-                        </>
-                      )}
-                      {ctx.weightKg !== null && (
-                        <HudText size={12} weight="medium" color={quest.text}>
-                          {ctx.weightChangeKg !== null
-                            ? t('ur.ctxWeightChange', { kg: fmtDec(ctx.weightKg, 1, lang), d: `${ctx.weightChangeKg > 0 ? '+' : ''}${fmtDec(ctx.weightChangeKg, 1, lang)}` })
-                            : t('ur.ctxWeight', { kg: fmtDec(ctx.weightKg, 1, lang) })}
-                        </HudText>
-                      )}
-                      <View style={styles.chips}>
-                        <QuestChip label={t('ur.edit')} accessibilityLabel={`${t('ur.edit')}: ${shortDate(r.dateKey)}`} onPress={() => setEditing({ reading: r })} />
-                        <QuestChip
-                          label={confirmDelete === r.id ? t('ur.deleteConfirm') : t('ur.delete')}
-                          accessibilityLabel={`${confirmDelete === r.id ? t('ur.deleteConfirm') : t('ur.delete')}: ${shortDate(r.dateKey)}`}
-                          tone="mana"
-                          onPress={() => (confirmDelete === r.id ? removeReading(r.id) : setConfirmDelete(r.id))}
-                        />
-                      </View>
-                    </View>
-                  );
-                })}
-              </>
-            )}
-
-            <HudText size={17} accessibilityRole="header" style={styles.section}>
-              {t('ur.targetTitle')}
-            </HudText>
+      {editing ? (
+        <ReadingForm key={editing.reading?.id ?? 'new'} reading={editing.reading} onDone={() => setEditing(null)} />
+      ) : (
+        <>
+          {summary ? (
             <View style={styles.card}>
               <View style={styles.headRow}>
-                <Pressable accessibilityRole="button" accessibilityLabel={t('ur.targetLess')} disabled={targetUmol <= TARGET_RANGE.min} onPress={() => nudgeTarget(-1)} style={styles.step}>
-                  <QuestIcon name="minus" size={18} color={quest.text} />
-                </Pressable>
-                <HudText size={15} style={styles.targetText}>
-                  {t('ur.targetValue', { t: fmtInt(targetUmol, lang), mg: mg(targetUmol) })}
+                <HudText size={24} color={STATUS_COLOR[summary.status]}>
+                  {t('ur.latest', { v: fmtInt(summary.latest.valueUmol, lang), mg: mg(summary.latest.valueUmol) })}
                 </HudText>
-                <Pressable accessibilityRole="button" accessibilityLabel={t('ur.targetMore')} disabled={targetUmol >= TARGET_RANGE.max} onPress={() => nudgeTarget(1)} style={styles.step}>
-                  <QuestIcon name="plus" size={18} color={quest.text} />
-                </Pressable>
               </View>
-              <HudText size={12} weight="medium" color={quest.textSecondary}>
-                {t('ur.targetHint')}
+              <HudText size={13} color={STATUS_COLOR[summary.status]}>
+                {t(STATUS_KEY[summary.status])}
               </HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {summary.daysSince === 0 ? t('ur.dateToday', { date: shortDate(summary.latest.dateKey) }) : t('ur.dateAgo', { date: shortDate(summary.latest.dateKey), n: summary.daysSince })}
+              </HudText>
+              <HudText size={13} weight="medium" color={summary.aboveTarget > 0 ? quest.text : quest.xp}>
+                {summary.aboveTarget > 0 ? t('ur.vsTargetAbove', { t: fmtInt(targetUmol, lang), d: fmtInt(summary.aboveTarget, lang) }) : t('ur.vsTargetOk', { t: fmtInt(targetUmol, lang) })}
+              </HudText>
+              {summary.previous && summary.deltaVsPrevious !== null && (
+                <HudText size={12} weight="medium" color={summary.deltaVsPrevious <= 0 ? quest.xp : quest.hpText}>
+                  {t('ur.deltaPrev', { date: shortDate(summary.previous.dateKey), d: fmtSigned(summary.deltaVsPrevious, lang) })}
+                </HudText>
+              )}
+              {summary.deltaVsFirst !== null && summary.previous && sorted.length > 2 && (
+                <HudText size={12} weight="medium" color={quest.textSecondary}>
+                  {t('ur.deltaFirst', { d: fmtSigned(summary.deltaVsFirst, lang) })}
+                </HudText>
+              )}
+              {summary.status === 'high' && (
+                <HudText size={12} weight="medium" color={quest.hpText}>
+                  {t('ur.highAlert')}
+                </HudText>
+              )}
             </View>
-            <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
-              {t('ur.note')}
+          ) : (
+            <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
+              {t('ur.none')}
             </HudText>
-          </>
-        )}
-      </ScrollView>
-    </View>
+          )}
+
+          {chart && (
+            <View style={styles.card}>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {t('ur.chartTitle')}
+              </HudText>
+              <LineChart data={chart} width={width} height={180} chartConfig={chartConfig} bezier={false} fromZero={false} withShadow={false} style={styles.chart} />
+              <View style={styles.legend}>
+                <View style={[styles.dot, { backgroundColor: quest.gold }]} />
+                <HudText size={11} weight="medium" color={quest.textSecondary}>
+                  {t('ur.legendResult')}
+                </HudText>
+                <View style={[styles.dot, { backgroundColor: quest.xp }]} />
+                <HudText size={11} weight="medium" color={quest.textSecondary}>
+                  {t('ur.legendTarget')}
+                </HudText>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.addRow}>
+            <QuestButton title={t('ur.add')} icon="plus" onPress={() => setEditing({ reading: null })} />
+          </View>
+
+          {sorted.length > 0 && (
+            <>
+              <HudText size={17} accessibilityRole="header" style={styles.section}>
+                {t('ur.listTitle')}
+              </HudText>
+              {[...sorted].reverse().map((r) => {
+                const index = sorted.indexOf(r);
+                const ctx = contextFor(r, sorted[index - 1] ?? null, { rows: insights.allRows, items, weighs, thresholds });
+                const status = summarizeReadings([r], targetUmol, todayKey)!.status;
+                return (
+                  <View key={r.id} style={styles.card}>
+                    <View style={styles.headRow}>
+                      <HudText size={15} style={styles.flex}>
+                        {t('ur.row', { date: shortDate(r.dateKey), v: fmtInt(r.valueUmol, lang) })}
+                      </HudText>
+                      <HudText size={11} color={STATUS_COLOR[status]}>
+                        {t(STATUS_KEY[status])}
+                      </HudText>
+                    </View>
+                    {r.note ? (
+                      <HudText size={12} weight="medium" color={quest.textSecondary}>
+                        {r.note}
+                      </HudText>
+                    ) : null}
+                    <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
+                      {t('ur.ctxTitle').toUpperCase()}
+                    </HudText>
+                    {ctx.daysWithData === 0 ? (
+                      <HudText size={12} weight="medium" color={quest.textSecondary}>
+                        {t('ur.ctxNone')}
+                      </HudText>
+                    ) : (
+                      <>
+                        <HudText size={12} weight="medium" color={ctx.purineOverDays > 0 ? quest.hpText : quest.text}>
+                          {t('ur.ctxPurine', { mg: fmtInt(ctx.avgPurineMg ?? 0, lang), n: ctx.purineOverDays, d: ctx.daysWithData })}
+                        </HudText>
+                        <HudText size={12} weight="medium" color={ctx.alcoholDays > 0 ? quest.hpText : quest.text}>
+                          {ctx.alcoholDays > 0 ? t('ur.ctxAlcohol', { n: ctx.alcoholDays }) : t('ur.ctxNoAlcohol')}
+                        </HudText>
+                        <HudText size={12} weight="medium" color={quest.text}>
+                          {t('ur.ctxDeficit', { d: fmtInt(ctx.avgDeficit ?? 0, lang) })}
+                        </HudText>
+                      </>
+                    )}
+                    {ctx.weightKg !== null && (
+                      <HudText size={12} weight="medium" color={quest.text}>
+                        {ctx.weightChangeKg !== null
+                          ? t('ur.ctxWeightChange', { kg: fmtDec(ctx.weightKg, 1, lang), d: `${ctx.weightChangeKg > 0 ? '+' : ''}${fmtDec(ctx.weightChangeKg, 1, lang)}` })
+                          : t('ur.ctxWeight', { kg: fmtDec(ctx.weightKg, 1, lang) })}
+                      </HudText>
+                    )}
+                    <View style={styles.chips}>
+                      <QuestChip label={t('ur.edit')} accessibilityLabel={`${t('ur.edit')}: ${shortDate(r.dateKey)}`} onPress={() => setEditing({ reading: r })} />
+                      <QuestChip
+                        label={t('ur.delete')}
+                        accessibilityLabel={`${t('ur.delete')}: ${shortDate(r.dateKey)}`}
+                        tone="mana"
+                        onPress={() => {
+                          // Deleted at once; the toast's "Hoàn tác" puts the same reading back (same id, synced again).
+                          removeReading(r.id);
+                          showToast({ text: g('rd6.uric.deleted', { date: shortDate(r.dateKey) }), undo: () => importReadings([r]) });
+                        }}
+                      />
+                    </View>
+                  </View>
+                );
+              })}
+            </>
+          )}
+
+          <HudText size={17} accessibilityRole="header" style={styles.section}>
+            {t('ur.targetTitle')}
+          </HudText>
+          <View style={styles.card}>
+            <View style={styles.headRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('ur.targetLess')} disabled={targetUmol <= TARGET_RANGE.min} onPress={() => nudgeTarget(-1)} style={styles.step}>
+                <QuestIcon name="minus" size={18} color={quest.text} />
+              </Pressable>
+              <HudText size={15} style={styles.targetText}>
+                {t('ur.targetValue', { t: fmtInt(targetUmol, lang), mg: mg(targetUmol) })}
+              </HudText>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('ur.targetMore')} disabled={targetUmol >= TARGET_RANGE.max} onPress={() => nudgeTarget(1)} style={styles.step}>
+                <QuestIcon name="plus" size={18} color={quest.text} />
+              </Pressable>
+            </View>
+            <HudText size={12} weight="medium" color={quest.textSecondary}>
+              {t('ur.targetHint')}
+            </HudText>
+          </View>
+          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
+            {t('ur.note')}
+          </HudText>
+        </>
+      )}
+    </ScreenTemplate>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
   section: { marginTop: 20, marginBottom: 4 },
   note: { marginTop: 14 },
   flex: { flex: 1, minWidth: 0 },

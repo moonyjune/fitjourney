@@ -10,6 +10,7 @@ import { quest, questRadius } from '../../theme/quest';
 import { weekStartKey } from '../../utils/weekKey';
 import type { CoachClientSummary } from '../../types';
 import { HudText } from './HudText';
+import { InfoButton } from './InfoButton';
 import { QuestButton } from './QuestButton';
 
 const STATUS_KEY: Record<ClientStatus, GameKey> = {
@@ -47,9 +48,12 @@ export function CoachDigestCard({ clients }: { clients: CoachClientSummary[] }) 
   return (
     <View style={styles.card} accessibilityLabel={g('digest.title')}>
       <HudText size={15}>{g('digest.title')}</HudText>
-      <HudText size={12} weight="medium" color={quest.textSecondary}>
-        {g('digest.hint')}
-      </HudText>
+      <View style={styles.hintRow}>
+        <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.hintText}>
+          {g('digest.hint')}
+        </HudText>
+        <InfoButton about={g('digest.title')} body={[g('rd6.info.digest')]} />
+      </View>
       <QuestButton
         variant="ghost"
         icon="chart"
@@ -117,6 +121,8 @@ export function CoachDigestCard({ clients }: { clients: CoachClientSummary[] }) 
 }
 
 const styles = StyleSheet.create({
+  hintRow: { flexDirection: 'row', alignItems: 'center', marginVertical: -8 },
+  hintText: { flex: 1, minWidth: 0 },
   card: { gap: 8, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   row: { gap: 4, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },

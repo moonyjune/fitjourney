@@ -53,6 +53,7 @@ jest.mock('../../sync/cloudSync', () => ({
 import ClientDetail from '../../../app/client/[id]';
 import { aiFlags } from '../../ai/featureFlags';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useToastStore } from '../../store/useToastStore';
 
 function allText(renderer: ReactTestRenderer): string {
   const parts: string[] = [];
@@ -129,7 +130,8 @@ describe('Coach client detail', () => {
       byLabel(renderer!, 'Gửi nhận xét').props.onPress();
     });
     expect(mockPushFeedback).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(useToastStore.getState().toast?.text).toBe('Nhập nhận xét trước khi gửi.');
   });
 
   it('sends feedback for the chosen period and reloads the list', async () => {
@@ -157,7 +159,7 @@ describe('Coach client detail', () => {
     await act(async () => {
       byLabel(renderer!, 'Gửi nhận xét').props.onPress();
     });
-    expect(Alert.alert).toHaveBeenCalledWith(expect.any(String), 'Mất mạng');
+    expect(useToastStore.getState().toast?.text).toContain('Mất mạng');
     const again = renderer.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.multiline)[0];
     expect(again.props.value).toBe('Cố lên');
   });

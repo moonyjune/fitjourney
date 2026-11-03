@@ -1,275 +1,206 @@
-import { useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { signOutAndReset } from '../../src/auth/signOut';
+import { BannerRibbon } from '../../src/components/quest/BannerRibbon';
 import { HudText } from '../../src/components/quest/HudText';
-import { QuestButton } from '../../src/components/quest/QuestButton';
 import { QuestIcon, type QuestIconName } from '../../src/components/quest/QuestIcon';
-import { QuestSegment } from '../../src/components/quest/QuestSegment';
 import { QuestShield } from '../../src/components/quest/QuestShield';
+import { SettingsGroup, SettingsGroupTitle, SettingsLinkRow } from '../../src/components/quest/SettingsRows';
+import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 import { XpBar } from '../../src/components/quest/XpBar';
 import { titleKeyForLevel } from '../../src/game/level';
 import { useGameText, type GameKey } from '../../src/game/strings';
-import { BannerRibbon } from '../../src/components/quest/BannerRibbon';
-import { LIMIT_RANGE, useLimitsStore, type LimitKey } from '../../src/store/useLimitsStore';
-import { useAchievementStore } from '../../src/store/useAchievementStore';
 import { useAchievements, useGameState, useNow } from '../../src/game/useGameState';
-import { cancelAllReminders, requestNotificationPermissions, scheduleAllReminders } from '../../src/notifications/schedule';
-import { disableWebPush, enableWebPush, refreshPushPlan } from '../../src/notifications/webPush';
-import { usePushStore } from '../../src/store/usePushStore';
-import { useAuthStore } from '../../src/store/useAuthStore';
-import { usePlanStore } from '../../src/store/usePlanStore';
-import { useUricText } from '../../src/uric/strings';
-import { useLearnText } from '../../src/learn/strings';
 import { useHabitText } from '../../src/habits/strings';
-import { useFoodText } from '../../src/food/strings';
 import { useInsightsText } from '../../src/insights/strings';
+import { LEARN_TOPICS } from '../../src/learn/topicsData';
+import { useLearnText } from '../../src/learn/strings';
+import { useAchievementStore } from '../../src/store/useAchievementStore';
 import { useAiPhotoStore } from '../../src/store/useAiPhotoStore';
+import { useAuthStore } from '../../src/store/useAuthStore';
+import { useHabitStore } from '../../src/store/useHabitStore';
+import { useLimitsStore } from '../../src/store/useLimitsStore';
+import { useMealModeStore } from '../../src/store/useMealModeStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
+import { useTemptationStore } from '../../src/store/useTemptationStore';
+import { useWaterWindowStore } from '../../src/store/useWaterWindowStore';
 import { useWeightStore } from '../../src/store/useWeightStore';
-import { quest, questFonts, questRadius } from '../../src/theme/quest';
+import { MAX_PER_DAY } from '../../src/temptation/schedule';
+import { quest, questRadius } from '../../src/theme/quest';
 import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
-import { useIsAiAdmin } from '../../src/ai/useIsAiAdmin';
-import { useMealModeStore } from '../../src/store/useMealModeStore';
-import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
-import { APP_VERSION, BUILD_ID } from '../../src/utils/buildInfo';
-import { TemptationSettings } from '../../src/components/quest/TemptationSettings';
-import { WaterSettings } from '../../src/components/quest/WaterSettings';
+import { toDateKey } from '../../src/utils/date';
+import { APP_VERSION } from '../../src/utils/buildInfo';
 
-type Lang = 'vi' | 'en';
-
-interface MenuRowProps {
-  icon: QuestIconName;
-  label: string;
-  hint?: string;
-  onPress: () => void;
+/** "6", "6:30": an hour of the water window, short. */
+function hourText(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h}:${String(m).padStart(2, '0')}` : String(h);
 }
 
-function MenuRow({ icon, label, hint, onPress }: MenuRowProps) {
+/** The name on the identity card: the part of the account's address before the "@" (nothing else is known about the player). */
+function playerName(address: string | undefined): string | null {
+  if (!address) return null;
+  const name = address.split('@')[0]?.trim();
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : null;
+}
+
+function Shortcut({ icon, label, value, color, onPress }: { icon: QuestIconName; label: string; value?: string; color: string; onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={hint ? `${label}. ${hint}` : label}
+      accessibilityLabel={value ? `${label}: ${value}` : label}
       onPress={onPress}
-      style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [styles.shortcut, pressed && styles.pressed]}
     >
-      <QuestIcon name={icon} size={20} color={quest.gold} />
-      <View style={styles.flex}>
-        <HudText size={15}>{label}</HudText>
-        {hint ? (
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {hint}
-          </HudText>
-        ) : null}
+      <View style={[styles.shortcutIcon, { borderColor: color, backgroundColor: `${color}22` }]}>
+        <QuestIcon name={icon} size={20} color={color} strokeWidth={2.2} />
       </View>
-      <QuestIcon name="chevron" size={18} color={quest.textSecondary} />
+      <HudText size={13} numberOfLines={1}>
+        {label}
+      </HudText>
+      {value ? (
+        <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+          {value}
+        </HudText>
+      ) : null}
     </Pressable>
   );
 }
 
-interface LimitRowProps {
-  limitKey: LimitKey;
-  name: string;
-  value: string;
-  moreLabel: string;
-  lessLabel: string;
-}
-
-function LimitRow({ limitKey, name, value, moreLabel, lessLabel }: LimitRowProps) {
-  const nudge = useLimitsStore((s) => s.nudge);
-  const current = useLimitsStore((s) => s[limitKey]);
-  const { min, max } = LIMIT_RANGE[limitKey];
-  return (
-    <View style={styles.limitRow}>
-      <HudText size={14} style={styles.flex}>
-        {name}
-      </HudText>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={lessLabel}
-        accessibilityState={{ disabled: current <= min }}
-        disabled={current <= min}
-        onPress={() => nudge(limitKey, -1)}
-        style={[styles.step, current <= min && { opacity: 0.4 }]}
-      >
-        <QuestIcon name="minus" size={18} color={quest.text} strokeWidth={2.6} />
-      </Pressable>
-      <HudText size={15} color={quest.gold} style={styles.limitValue} accessibilityLabel={`${name} ${value}`}>
-        {value}
-      </HudText>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={moreLabel}
-        accessibilityState={{ disabled: current >= max }}
-        disabled={current >= max}
-        onPress={() => nudge(limitKey, 1)}
-        style={[styles.step, current >= max && { opacity: 0.4 }]}
-      >
-        <QuestIcon name="plus" size={18} color={quest.text} strokeWidth={2.6} />
-      </Pressable>
-    </View>
-  );
-}
-
+/** Hồ sơ (README §3.9, mockup 08): who you are (shield with the level, name, title, campfire streak, XP), three stats, three shortcuts
+ *  (Nhật ký, Thành tích, Cook book) and the settings as six rows with their current value, each opening its own page. */
 export default function ProfileScreen() {
   const g = useGameText();
   const ti = useInsightsText();
-  const tf = useFoodText();
   const tb = useHabitText();
   const tl = useLearnText();
-  const tu = useUricText();
   const insets = useSafeAreaInsets();
   const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const now = useNow();
   const game = useGameState(now);
   const { stickers, banners } = useAchievements(now);
-  const limits = useLimitsStore();
-  const resetLimits = useLimitsStore((s) => s.reset);
   const equippedBannerId = useAchievementStore((s) => s.equippedBannerId);
   const equippedBanner = banners.find((b) => b.id === equippedBannerId && b.earned);
 
-  const session = useAuthStore((s) => s.session);
+  const address = useAuthStore((s) => s.session?.user.email);
   const language = useSettingsStore((s) => s.language);
+  const goalWeightKg = useSettingsStore((s) => s.goalWeightKg);
+  const deficit = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const waterTargetMl = useSettingsStore((s) => s.waterTargetMl);
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
-  const waterPopupEnabled = useSettingsStore((s) => s.waterPopupEnabled ?? s.remindersEnabled);
-  const pushEnabled = usePushStore((s) => s.enabled);
-  const [pushBusy, setPushBusy] = useState(false);
-  const [pushNote, setPushNote] = useState<string | null>(null);
-  const aiFullHd = useAiPhotoStore((s) => s.fullHd);
-  const setAiFullHd = useAiPhotoStore((s) => s.setFullHd);
-  const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
-  const isAiAdmin = useIsAiAdmin();
-  const fasting = useMealModeStore((s) => s.fasting);
-  const setFasting = useMealModeStore((s) => s.setFasting);
-  const skipBreakfast = useMealModeStore((s) => s.skipBreakfast);
-  const setSkipBreakfast = useMealModeStore((s) => s.setSkipBreakfast);
-  const setAiEnabled = useAiPhotoStore((s) => s.setAiEnabled);
-  const coachId = useSettingsStore((s) => s.coachId);
-  const linkedCoachEmail = useSettingsStore((s) => s.linkedCoachEmail);
-  const linkedCoachCode = useSettingsStore((s) => s.linkedCoachCode);
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
-  const updateSettings = useSettingsStore((s) => s.updateSettings);
-  const submitCoachCode = useSettingsStore((s) => s.submitCoachCode);
-  const switchToCoachMode = useSettingsStore((s) => s.switchToCoachMode);
-  const plan = usePlanStore((s) => s.plan);
+  const waterStart = useWaterWindowStore((s) => s.startMinutes);
+  const waterEnd = useWaterWindowStore((s) => s.endMinutes);
+  const purineMg = useLimitsStore((s) => s.purineMg);
+  const saltG = useLimitsStore((s) => s.saltG);
+  const fasting = useMealModeStore((s) => s.fasting);
+  const tempt = useTemptationStore((s) => s.settings);
+  const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
   const latest = useWeightStore((s) => s.latest());
-
-  const [coachCode, setCoachCode] = useState('');
-  const [linking, setLinking] = useState(false);
-  const [coachError, setCoachError] = useState<string | null>(null);
-  const [switching, setSwitching] = useState(false);
+  const habits = useHabitStore((s) => s.habits);
+  const todayChecks = useHabitStore((s) => s.checks[toDateKey(now)]);
 
   const { level } = game;
-  const lostKg = startWeightKg - (latest?.weightKg ?? startWeightKg);
-
-  async function toggleReminders(value: boolean) {
-    try {
-      if (value) {
-        const granted = await requestNotificationPermissions();
-        if (!granted) {
-          // Leave the switch off: claiming reminders are on when the OS refused them would be a lie.
-          Alert.alert(g('profile.reminders'), g('profile.remindersHint'));
-          return;
-        }
-        await scheduleAllReminders(plan);
-      } else {
-        await cancelAllReminders();
-      }
-    } catch (error) {
-      // expo-notifications is unavailable in Expo Go / on web; still let the preference save.
-      console.warn('[notifications] unavailable in this runtime:', error);
-    }
-    updateSettings({ remindersEnabled: value });
-    // The server sends nothing while reminders are off: save the (empty) plan now rather than after the debounce.
-    refreshPushPlan().catch(() => undefined);
-  }
-
-  // Web Push for this device. Called straight from the tap: the permission prompt (iPhone) only opens from a user gesture.
-  async function togglePush(value: boolean) {
-    setPushNote(null);
-    if (!value) {
-      setPushBusy(true);
-      await disableWebPush().catch(() => undefined);
-      setPushBusy(false);
-      return;
-    }
-    if (!remindersEnabled) {
-      setPushNote(g('push.remindersOff'));
-      return;
-    }
-    setPushBusy(true);
-    const result = await enableWebPush();
-    setPushBusy(false);
-    if (!result.ok) {
-      const key = result.reason === 'needsHomeScreen' ? 'push.needsHomeScreen' : result.reason === 'unsupported' ? 'push.unsupported' : result.reason === 'denied' ? 'push.denied' : 'push.failed';
-      setPushNote(g(key));
-    }
-  }
-
-  async function connectCoach() {
-    if (!coachCode.trim()) return;
-    setLinking(true);
-    setCoachError(null);
-    const result = await submitCoachCode(coachCode);
-    setLinking(false);
-    if (result.ok) setCoachCode('');
-    else setCoachError(result.message || g('profile.coachError'));
-  }
-
-  async function switchToCoach() {
-    setSwitching(true);
-    await switchToCoachMode();
-    setSwitching(false);
-    router.replace('/(tabs)/clients');
-  }
-
-  function confirmSignOut() {
-    const run = () => {
-      signOutAndReset();
-    };
-    if (Platform.OS === 'web') {
-      // Alert.alert has no multi-button support on web.
-      if (typeof window !== 'undefined' && window.confirm(g('profile.signOutConfirm'))) run();
-      return;
-    }
-    Alert.alert(g('profile.signOut'), g('profile.signOutConfirm'), [
-      { text: g('profile.cancel'), style: 'cancel' },
-      { text: g('profile.signOut'), style: 'destructive', onPress: run },
-    ]);
-  }
+  const lostKg = Math.max(0, startWeightKg - (latest?.weightKg ?? startWeightKg));
+  const name = playerName(address);
+  const title = g(`title.${titleKeyForLevel(level.level)}`);
+  const earnedStickers = stickers.filter((x) => x.earned).length;
+  const tracked = habits.filter((h) => !h.archived && h.tracked);
+  const habitsDone = tracked.filter((h) => todayChecks?.[h.id] === 'done').length;
+  const onOff = (on: boolean) => g(on ? 'rd6.set.on' : 'rd6.set.off');
 
   const stats = [
-    { label: g('profile.statStreak'), value: g(game.streak === 1 ? 'profile.statStreakValueOne' : 'profile.statStreakValue', { n: game.streak }) },
-    { label: g('profile.statBosses'), value: String(game.bossesDefeated) },
-    { label: g('profile.statPerfect'), value: String(game.perfectDays) },
-    { label: g('profile.statWeight'), value: g('profile.statWeightValue', { kg: Math.max(0, lostKg).toFixed(1) }) },
+    { value: `−${lostKg.toFixed(1)} kg`, label: g('profile.statWeight') },
+    { value: String(game.bossesDefeated), label: g('profile.statBosses') },
+    { value: String(game.perfectDays), label: g('profile.statPerfect') },
+  ];
+
+  const settings: { key: string; icon: QuestIconName; color: string; label: string; value: string; route: string }[] = [
+    { key: 'goals', icon: 'plan', color: quest.gold, label: g('rd6.set.goals'), value: g('rd6.set.goalsValue', { kg: goalWeightKg, deficit }), route: '/plan' },
+    {
+      key: 'water',
+      icon: 'drop',
+      color: quest.mana,
+      label: g('rd6.set.water'),
+      value: g('rd6.set.waterValue', { l: String(Math.round(waterTargetMl / 100) / 10), from: hourText(waterStart), to: hourText(waterEnd) }),
+      route: '/settings/water',
+    },
+    {
+      key: 'limits',
+      icon: 'alert',
+      color: quest.hp,
+      label: g('rd6.set.limits'),
+      value: `${g('rd6.set.limitsValue', { p: purineMg, s: saltG })}${fasting ? ' · 16:8' : ''}`,
+      route: '/settings/limits',
+    },
+    {
+      key: 'reminders',
+      icon: 'bell',
+      color: quest.goldLight,
+      label: g('rd6.set.reminders'),
+      value: tempt.enabled ? g('rd6.set.remindersTempt', { state: onOff(remindersEnabled), n: MAX_PER_DAY[tempt.frequency] }) : onOff(remindersEnabled),
+      route: '/settings/reminders',
+    },
+    { key: 'ai', icon: 'chart', color: quest.manaText, label: g('rd6.set.ai'), value: onOff(aiEnabled), route: '/settings/ai' },
+    {
+      key: 'account',
+      icon: 'user',
+      color: quest.xp,
+      label: g('rd6.set.account'),
+      value: g(language === 'vi' ? 'profile.languageVi' : 'profile.languageEn'),
+      route: '/settings/account',
+    },
+  ];
+
+  // Pages that have no other way in yet (the Journal will gather Nutrition, History, the weekly review and Analysis).
+  const more: { key: string; icon: QuestIconName; color: string; label: string; value?: string; route: string }[] = [
+    { key: 'habits', icon: 'check', color: quest.xp, label: tb('hb.profileRow'), value: tracked.length ? g('rd6.more.habitsValue', { n: habitsDone, t: tracked.length }) : undefined, route: '/habits' },
+    { key: 'learn', icon: 'list', color: quest.mana, label: tl('learn.profileRow'), value: g('rd6.more.learnValue', { n: LEARN_TOPICS.length }), route: '/learn' },
+    { key: 'nutrition', icon: 'bowl', color: quest.gold, label: g('profile.nutrition'), route: '/nutrition' },
+    { key: 'history', icon: 'calendar', color: quest.goldLight, label: g('profile.history'), route: '/history' },
+    { key: 'week', icon: 'flame', color: quest.hp, label: g('week.profileRow'), route: '/weekly-report' },
+    { key: 'insights', icon: 'chart', color: quest.manaText, label: ti('ins.profileRow'), route: '/insights' },
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
-      <HudText size={28} accessibilityRole="header">
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 12, paddingBottom: tabClearance }]}>
+      <HudText size={20} accessibilityRole="header" style={styles.title}>
         {g('profile.title')}
       </HudText>
 
-      <View style={styles.card}>
+      <View
+        style={styles.card}
+        accessible
+        accessibilityLabel={[name, title, g('level.label', { n: level.level }), g('rd6.profile.streakA11y', { n: game.streak }), g('rd6.profile.xp', { cur: level.xpIntoLevel, need: level.xpForNext })]
+          .filter(Boolean)
+          .join('. ')}
+      >
         <QuestShield level={level.level} width={64} />
         <View style={styles.flex}>
-          <HudText size={20}>{g(`title.${titleKeyForLevel(level.level)}`)}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('level.label', { n: level.level })}
-            {session?.user.email ? ` · ${session.user.email}` : ''}
-          </HudText>
-          <View style={styles.bar}>
-            <XpBar
-              ratio={level.ratio}
-              accessibilityLabel={g('level.progress', { cur: level.xpIntoLevel, need: level.xpForNext, next: level.level + 1 })}
-            />
+          {name ? (
+            <HudText size={20} numberOfLines={1}>
+              {name}
+            </HudText>
+          ) : null}
+          <View style={styles.titleRow}>
+            <HudText size={name ? 14 : 20} color={name ? quest.gold : quest.text} numberOfLines={1} style={styles.flexShrink}>
+              {title}
+            </HudText>
+            <View style={styles.streak}>
+              <QuestIcon name="flame" size={14} color={quest.gold} strokeWidth={2.4} />
+              <HudText size={13} color={quest.gold}>
+                {game.streak}
+              </HudText>
+            </View>
           </View>
-          <HudText size={11} weight="medium" color={quest.textSecondary}>
-            {g('level.progress', { cur: level.xpIntoLevel, need: level.xpForNext, next: level.level + 1 })}
+          <View style={styles.bar}>
+            <XpBar ratio={level.ratio} accessibilityLabel={g('level.progress', { cur: level.xpIntoLevel, need: level.xpForNext, next: level.level + 1 })} />
+          </View>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {`${g('level.label', { n: level.level })} · ${g('rd6.profile.xp', { cur: level.xpIntoLevel, need: level.xpForNext })}`}
           </HudText>
         </View>
       </View>
@@ -280,341 +211,69 @@ export default function ProfileScreen() {
         </View>
       )}
 
-      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.stats').toUpperCase()}
-      </HudText>
       <View style={styles.stats}>
         {stats.map((s) => (
           <View key={s.label} accessible accessibilityLabel={`${s.label} ${s.value}`} style={styles.stat}>
-            <HudText size={18} color={quest.gold}>
+            <HudText size={18} color={quest.gold} numberOfLines={1}>
               {s.value}
             </HudText>
-            <HudText size={11} weight="medium" color={quest.textSecondary} numberOfLines={1}>
+            <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={2} style={styles.center}>
               {s.label}
             </HudText>
           </View>
         ))}
       </View>
 
-      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.group.progress').toUpperCase()}
-      </HudText>
-      <View style={styles.menu}>
-        <MenuRow icon="plan" label={g('profile.plan')} hint={g('profile.planHint')} onPress={() => router.push('/plan')} />
-        <MenuRow icon="chart" label={g('profile.weight')} hint={g('profile.weightHint')} onPress={() => router.push('/weight')} />
-        <MenuRow icon="bowl" label={g('profile.nutrition')} hint={g('profile.nutritionHint')} onPress={() => router.push('/nutrition')} />
-        <MenuRow icon="list" label={g('profile.history')} hint={g('profile.historyHint')} onPress={() => router.push('/history')} />
-        <MenuRow icon="flame" label={g('week.profileRow')} hint={g('week.profileRowHint')} onPress={() => router.push('/weekly-report')} />
-        <MenuRow icon="flame" label={ti('ins.profileRow')} hint={ti('ins.profileRowHint')} onPress={() => router.push('/insights')} />
-        <MenuRow
+      <View style={styles.shortcuts}>
+        <Shortcut icon="list" color={quest.mana} label={g('rd6.profile.journal')} onPress={() => router.push('/journal')} />
+        <Shortcut
           icon="check"
+          color={quest.gold}
           label={g('profile.achievements')}
-          hint={g('profile.achievementsHint', {
-            n: stickers.filter((x) => x.earned).length,
-            t: stickers.length,
-            b: banners.filter((x) => x.earned).length,
-          })}
+          value={`${earnedStickers}/${stickers.length}`}
           onPress={() => router.push('/achievements')}
         />
+        <Shortcut icon="bowl" color={quest.xp} label={g('rd6.profile.cookbook')} onPress={() => router.push('/cookbook')} />
       </View>
 
-      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.group.food').toUpperCase()}
-      </HudText>
-      <View style={styles.menu}>
-        <MenuRow icon="bowl" label={tf('fdb.profileRow')} hint={tf('fdb.profileRowHint')} onPress={() => router.push('/food-db')} />
-        <MenuRow icon="list" label={g('cookbook.title')} hint={g('cookbook.empty')} onPress={() => router.push('/cookbook')} />
-        <MenuRow icon="check" label={tb('hb.profileRow')} hint={tb('hb.profileRowHint')} onPress={() => router.push('/habits')} />
-        <MenuRow icon="drop" label={tu('ur.profileRow')} hint={tu('ur.profileRowHint')} onPress={() => router.push('/uric')} />
-        <MenuRow icon="list" label={tl('learn.profileRow')} hint={tl('learn.profileRowHint')} onPress={() => router.push('/learn')} />
-      </View>
-
-      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.group.daily').toUpperCase()}
-      </HudText>
-      <WaterSettings />
-
-      <View style={styles.setting}>
-        <View style={styles.settingHead}>
-          <QuestIcon name="alert" size={20} color={quest.gold} />
-          <HudText size={15}>{g('limits.title')}</HudText>
-        </View>
-        <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {g('limits.hint')}
-        </HudText>
-        {(
-          [
-            ['purineMg', 'limits.purine', g('limits.unitMg', { n: limits.purineMg })],
-            ['saltG', 'limits.salt', g('limits.unitG', { n: limits.saltG })],
-            ['sugarG', 'limits.sugar', g('limits.unitG', { n: limits.sugarG })],
-          ] as [LimitKey, GameKey, string][]
-        ).map(([key, nameKey, value]) => (
-          <LimitRow
-            key={key}
-            limitKey={key}
-            name={g(nameKey)}
-            value={value}
-            moreLabel={g('limits.more', { name: g(nameKey) })}
-            lessLabel={g('limits.less', { name: g(nameKey) })}
-          />
+      <SettingsGroupTitle>{g('rd6.profile.settings')}</SettingsGroupTitle>
+      <SettingsGroup>
+        {settings.map((s, i) => (
+          <SettingsLinkRow key={s.key} first={i === 0} icon={s.icon} color={s.color} label={s.label} value={s.value} onPress={() => router.push(s.route as never)} />
         ))}
-        <Pressable accessibilityRole="button" accessibilityLabel={g('limits.reset')} onPress={resetLimits} style={styles.resetLimits}>
-          <HudText size={13} color={quest.textSecondary}>
-            {g('limits.reset')}
-          </HudText>
-        </Pressable>
-      </View>
+      </SettingsGroup>
 
-      <View style={styles.settingRow}>
-        <QuestIcon name="clock" size={20} color={quest.gold} />
-        <View style={styles.flex}>
-          <HudText size={15}>{g('fasting.title')}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('fasting.what')}
-          </HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('fasting.hint')}
-          </HudText>
-        </View>
-        <Switch
-          accessibilityLabel={g('fasting.title')}
-          value={fasting}
-          onValueChange={setFasting}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
-      </View>
-      {/* Normal (three-meal) days only: breakfast is then not an expected meal. */}
-      {!fasting && (
-        <View style={styles.settingRow}>
-          <QuestIcon name="clock" size={20} color={quest.gold} />
-          <View style={styles.flex}>
-            <HudText size={15}>{g('fasting.skipBreakfast')}</HudText>
-            <HudText size={12} weight="medium" color={quest.textSecondary}>
-              {g('fasting.skipBreakfastHint')}
-            </HudText>
-          </View>
-          <Switch
-            accessibilityLabel={g('fasting.skipBreakfast')}
-            value={!!skipBreakfast}
-            onValueChange={setSkipBreakfast}
-            trackColor={{ false: quest.raised2, true: quest.gold }}
-            thumbColor={quest.text}
-          />
-        </View>
-      )}
+      <SettingsGroupTitle>{g('rd6.profile.more')}</SettingsGroupTitle>
+      <SettingsGroup>
+        {more.map((s, i) => (
+          <SettingsLinkRow key={s.key} first={i === 0} icon={s.icon} color={s.color} label={s.label} value={s.value} onPress={() => router.push(s.route as never)} />
+        ))}
+      </SettingsGroup>
 
-      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.group.play').toUpperCase()}
-      </HudText>
-      <View style={styles.settingRow}>
-        <QuestIcon name="bell" size={20} color={quest.gold} />
-        <View style={styles.flex}>
-          <HudText size={15}>{g('profile.reminders')}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('profile.remindersHint')}
-          </HudText>
-        </View>
-        <Switch
-          accessibilityLabel={g('profile.reminders')}
-          value={remindersEnabled}
-          onValueChange={toggleReminders}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
-      </View>
-      {/* The in-app water pop-up has its own switch (dialogs.md decision 9): reminders can stay on without it. */}
-      <View style={styles.settingRow}>
-        <QuestIcon name="drop" size={20} color={quest.mana} />
-        <View style={styles.flex}>
-          <HudText size={15}>{g('profile.waterPopup')}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('profile.waterPopupHint')}
-          </HudText>
-        </View>
-        <Switch
-          accessibilityLabel={g('profile.waterPopup')}
-          value={waterPopupEnabled}
-          onValueChange={(value) => updateSettings({ waterPopupEnabled: value })}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
-      </View>
-
-      {Platform.OS === 'web' && (
-        <View style={styles.settingRow}>
-          <QuestIcon name="bell" size={20} color={quest.gold} />
-          <View style={styles.flex}>
-            <HudText size={15}>{g('push.title')}</HudText>
-            <HudText size={12} weight="medium" color={quest.textSecondary}>
-              {g('push.hint')}
-            </HudText>
-            {pushNote ? (
-              <HudText size={12} weight="medium" color={quest.gold} accessibilityLiveRegion="polite">
-                {pushNote}
-              </HudText>
-            ) : pushEnabled ? (
-              <HudText size={12} weight="medium" color={quest.textSecondary}>
-                {g('push.on')}
-              </HudText>
-            ) : null}
-          </View>
-          <Switch
-            accessibilityLabel={g('push.title')}
-            value={pushEnabled}
-            disabled={pushBusy}
-            onValueChange={togglePush}
-            trackColor={{ false: quest.raised2, true: quest.gold }}
-            thumbColor={quest.text}
-          />
-        </View>
-      )}
-
-      <TemptationSettings />
-
-      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.group.ai').toUpperCase()}
-      </HudText>
-      <View style={styles.settingRow}>
-        <QuestIcon name="chart" size={20} color={quest.mana} />
-        <View style={styles.flex}>
-          <HudText size={15}>{g('profile.aiEnabled')}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('profile.aiEnabledHint')}
-          </HudText>
-        </View>
-        <Switch
-          accessibilityLabel={g('profile.aiEnabled')}
-          value={aiEnabled}
-          onValueChange={setAiEnabled}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
-      </View>
-
-      <View style={styles.settingRow}>
-        <QuestIcon name="camera" size={20} color={quest.gold} />
-        <View style={styles.flex}>
-          <HudText size={15}>{g('profile.aiFullHd')}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('profile.aiFullHdHint')}
-          </HudText>
-        </View>
-        <Switch
-          accessibilityLabel={g('profile.aiFullHd')}
-          value={aiFullHd}
-          onValueChange={setAiFullHd}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
-      </View>
-
-      <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-        {g('profile.group.account').toUpperCase()}
-      </HudText>
-      <View style={styles.setting}>
-        <View style={styles.settingHead}>
-          <QuestIcon name="globe" size={20} color={quest.gold} />
-          <HudText size={15}>{g('profile.language')}</HudText>
-        </View>
-        <QuestSegment<Lang>
-          accessibilityLabel={g('profile.language')}
-          value={language}
-          onChange={(value) => updateSettings({ language: value })}
-          options={[
-            { value: 'vi', label: g('profile.languageVi') },
-            { value: 'en', label: g('profile.languageEn') },
-          ]}
-        />
-      </View>
-
-      <View style={styles.setting}>
-        <View style={styles.settingHead}>
-          <QuestIcon name="user" size={20} color={quest.mana} />
-          <HudText size={15}>{g('profile.coach')}</HudText>
-        </View>
-        {coachId ? (
-          <>
-            <HudText size={13} weight="medium" color={quest.manaText}>
-              {g('profile.coachLinked')}
-            </HudText>
-            <HudText size={12} weight="medium" color={quest.textSecondary}>
-              {g('profile.coachEmail')}: {linkedCoachEmail ?? '—'}
-            </HudText>
-            <HudText size={12} weight="medium" color={quest.textSecondary}>
-              {g('profile.coachCodeShown')}: {linkedCoachCode ?? '—'}
-            </HudText>
-          </>
-        ) : (
-          <>
-            <HudText size={12} weight="medium" color={quest.textSecondary}>
-              {g('profile.coachLinkHint')}
-            </HudText>
-            <View style={styles.coachRow}>
-              <TextInput
-                accessibilityLabel={g('profile.coachCodeLabel')}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                placeholder={g('profile.coachPlaceholder')}
-                placeholderTextColor={quest.textSecondary}
-                value={coachCode}
-                onChangeText={(v) => {
-                  setCoachCode(v);
-                  setCoachError(null);
-                }}
-                style={styles.coachInput}
-              />
-              <View style={styles.coachBtn}>
-                <QuestButton variant="mana" title={g('profile.coachConnect')} onPress={connectCoach} loading={linking} disabled={!coachCode.trim()} />
-              </View>
-            </View>
-            {coachError && (
-              <HudText size={12} weight="medium" color={quest.goldLight} accessibilityLiveRegion="polite">
-                {coachError}
-              </HudText>
-            )}
-          </>
-        )}
-        <QuestButton variant="ghost" icon="swap" title={g('profile.coachOn')} onPress={switchToCoach} loading={switching} />
-      </View>
-
-      <View style={styles.menu}>
-        <MenuRow icon="plus" label={g('profile.import')} hint={g('profile.importHint')} onPress={() => router.push('/import-diary')} />
-        {isAiAdmin && <MenuRow icon="chart" label={g('aiAdmin.profileRow')} hint={g('aiAdmin.profileRowHint')} onPress={() => router.push('/ai-admin')} />}
-      </View>
-
-      <View style={styles.signOut}>
-        <QuestButton variant="ghost" icon="out" title={g('profile.signOut')} onPress={confirmSignOut} />
-      </View>
-      <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.build}>
-        {g('profile.build', { version: APP_VERSION, id: BUILD_ID })}
+      <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.build}>
+        {`FitQuest ${APP_VERSION}`}
       </HudText>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  limitRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
-  limitValue: { minWidth: 72, textAlign: 'center' },
-  step: { width: 44, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
-  resetLimits: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
-  bannerWrap: { alignItems: 'center' },
   screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
+  content: { paddingHorizontal: 16 },
+  title: { minHeight: 40, textAlignVertical: 'center' },
   flex: { flex: 1, minWidth: 0 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 14, padding: 14, borderRadius: 20, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
+  flexShrink: { flexShrink: 1 },
+  center: { textAlign: 'center' },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 14, marginTop: 8, padding: 14, borderRadius: 20, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  streak: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999, backgroundColor: quest.raised },
   bar: { marginTop: 8, marginBottom: 4 },
-  eyebrow: { letterSpacing: 1.6, marginTop: 20, marginBottom: 8 },
-  stats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  stat: { flexBasis: '47%', flexGrow: 1, padding: 12, gap: 2, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
-  menu: { gap: 8 },
-  menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
-  setting: { gap: 10, marginTop: 12, padding: 14, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
-  settingHead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  settingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, marginTop: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
-  coachRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  coachInput: { flex: 1, minWidth: 0, minHeight: 56, paddingHorizontal: 14, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, fontSize: 16, fontFamily: questFonts.semibold },
-  coachBtn: { width: 130 },
-  signOut: { marginTop: 20 },
-  build: { marginTop: 14, textAlign: 'center' },
+  bannerWrap: { alignItems: 'center', marginTop: 12 },
+  stats: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  stat: { flex: 1, alignItems: 'center', gap: 2, paddingVertical: 12, paddingHorizontal: 6, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
+  shortcuts: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  shortcut: { flex: 1, minHeight: 88, alignItems: 'center', justifyContent: 'center', gap: 6, padding: 10, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
+  shortcutIcon: { width: 40, height: 40, borderRadius: 12, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  pressed: { opacity: 0.85 },
+  build: { marginTop: 18, textAlign: 'center' },
 });

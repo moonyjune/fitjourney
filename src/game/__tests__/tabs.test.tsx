@@ -34,10 +34,15 @@ jest.mock('../../notifications/schedule', () => ({
   cancelAllReminders: () => mockCancel(),
 }));
 const mockIsAiAdmin = jest.fn<() => Promise<boolean>>();
+const mockFlush = jest.fn<() => Promise<void>>();
 jest.mock('../../sync/cloudSync', () => ({
   fetchIsAiAdmin: () => mockIsAiAdmin(),
   fetchWeeklySuggestion: async () => null,
   fetchFeedback: async () => [],
+  flushSyncQueue: () => mockFlush(),
+  fetchAiUsageToday: jest.fn(async () => null),
+  pushUricReading: jest.fn(),
+  deleteUricReading: jest.fn(),
   pushUserData: jest.fn(),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
@@ -53,6 +58,13 @@ jest.mock('../../sync/cloudSync', () => ({
 import MapScreen from '../../../app/(tabs)/map';
 import { JournalScreen } from '../../screens/journal/JournalScreen';
 import ProfileScreen from '../../../app/(tabs)/profile';
+import AccountSettingsScreen from '../../../app/settings/account';
+import AiSettingsScreen from '../../../app/settings/ai';
+import LimitsSettingsScreen from '../../../app/settings/limits';
+import RemindersSettingsScreen from '../../../app/settings/reminders';
+import WaterSettingsScreen from '../../../app/settings/water';
+import { useSyncQueueStore } from '../../sync/syncQueue';
+import { useUricStore } from '../../store/useUricStore';
 import { QuestTabBar } from '../../components/quest/QuestTabBar';
 import { resetIsAiAdminCache } from '../../ai/useIsAiAdmin';
 import { useMealModeStore } from '../../store/useMealModeStore';
@@ -103,6 +115,7 @@ describe('FitQuest tabs', () => {
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') });
     Object.values(mockRouter).forEach((fn) => fn.mockClear());
     mockSignOut.mockClear();
+    mockFlush.mockReset().mockResolvedValue(undefined);
     mockRequestPermission.mockReset();
     mockSchedule.mockReset().mockResolvedValue(undefined);
     mockCancel.mockReset().mockResolvedValue(undefined);
@@ -291,38 +304,63 @@ describe('FitQuest tabs', () => {
       mockIsAiAdmin.mockResolvedValue(false);
     });
 
-    it('shows the "AI & chi phí" entry only to an account the server lists as an AI admin', async () => {
-      const find = (r: ReactTestRenderer) => r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('AI & chi phí'));
-      let r = render(<ProfileScreen />);
-      await act(async () => undefined);
-      expect(find(r)).toHaveLength(0);
-      act(() => r.unmount());
-
-      resetIsAiAdminCache();
-      mockIsAiAdmin.mockResolvedValue(true);
-      r = render(<ProfileScreen />);
-      await act(async () => undefined);
-      const row = find(r)[0];
-      expect(row).toBeDefined();
-      await act(async () => row.props.onPress());
-      expect(mockRouter.push).toHaveBeenCalledWith('/ai-admin');
-    });
-
-    it('shows the level card and real stats', () => {
+    it('shows the identity card: shield, the name from the account, title, campfire streak and XP; three stats', () => {
       const text = allText(render(<ProfileScreen />));
       expect(text).toContain('Hồ sơ');
-      expect(text).toContain('harry@example.com');
-      expect(text).toContain('3.8 kg'); // weight lost
-      expect(text).toContain('Lửa trại');
+      expect(text).toContain('Harry'); // the part of the address before "@", never the whole address
+      expect(text).not.toContain('example.com');
+      expect(text).toMatch(/\d+ \/ \d+ XP/);
+      expect(text).toContain('−3.8 kg'); // weight lost
       expect(text).toContain('Boss đã hạ');
+      expect(text).toContain('Ngày hoàn hảo');
     });
 
-    it('opens the achievements with the real unlocked counts', () => {
+    it('has three shortcuts: Journal, achievements (with the real counts) and the cook book', () => {
       const r = render(<ProfileScreen />);
-      const row = pressable(r, (l) => l.startsWith('Thành tích'));
-      expect(row.props.accessibilityLabel).toMatch(/\d+ \/ \d+ sticker · 0 banner/);
-      act(() => row.props.onPress());
-      expect(mockRouter.push).toHaveBeenCalledWith('/achievements');
+      const ach = pressable(r, (l) => l.startsWith('Thành tích'));
+      expect(ach.props.accessibilityLabel).toMatch(/Thành tích: \d+\/\d+/);
+      for (const [label, path] of [['Nhật ký', '/journal'], ['Thành tích', '/achievements'], ['Cook book', '/cookbook']] as const) {
+        act(() => pressable(r, (l) => l.startsWith(label)).props.onPress());
+        expect(mockRouter.push).toHaveBeenCalledWith(path);
+      }
+    });
+
+    it('lists six settings with their current value, each opening its own page', () => {
+      useLimitsStore.getState().reset();
+      useAiPhotoStore.getState().setAiEnabled(true);
+      useMealModeStore.setState({ fasting: false });
+      useSettingsStore.setState({ targetDailyDeficitKcal: 500, waterTargetMl: 2500 });
+      const r = render(<ProfileScreen />);
+      const rows: [string, string, string][] = [
+        ['Mục tiêu & kế hoạch', '95 kg · −500/ngày', '/plan'],
+        ['Nước uống', '2.5 L', '/settings/water'],
+        ['Giới hạn & 16:8', 'Purine 1200 · Muối 7', '/settings/limits'],
+        ['Nhắc nhở & cám dỗ', 'Tắt', '/settings/reminders'],
+        ['AI', 'Bật', '/settings/ai'],
+        ['Coach & tài khoản', 'Tiếng Việt', '/settings/account'],
+      ];
+      for (const [label, value, path] of rows) {
+        const row = pressable(r, (l) => l.startsWith(`${label}:`));
+        expect(row.props.accessibilityLabel).toContain(value);
+        act(() => row.props.onPress());
+        expect(mockRouter.push).toHaveBeenCalledWith(path);
+      }
+    });
+
+    it('keeps the other pages reachable under "Thêm" (habits, knowledge, nutrition, history, weekly review, analysis)', () => {
+      const r = render(<ProfileScreen />);
+      const routes: [string, string][] = [
+        ['Thói quen', '/habits'],
+        ['Kiến thức', '/learn'],
+        ['Dinh dưỡng', '/nutrition'],
+        ['Lịch sử', '/history'],
+        ['Tổng kết tuần (AI)', '/weekly-report'],
+        ['Phân tích', '/insights'],
+      ];
+      for (const [label, path] of routes) {
+        act(() => pressable(r, (l) => l.startsWith(label)).props.onPress());
+        expect(mockRouter.push).toHaveBeenCalledWith(path);
+      }
     });
 
     it('shows the equipped banner only while it is actually earned', () => {
@@ -334,10 +372,24 @@ describe('FitQuest tabs', () => {
       useAchievementStore.setState({ equippedBannerId: null });
     });
 
-    it('lets the user move the purine, salt and sugar limits within sane bounds, and reset them', async () => {
+    it('the Profile shows a title from the level table (never the old "Chiến binh IF" name)', () => {
+      const text = allText(render(<ProfileScreen />));
+      expect(text).toMatch(/Tân binh|Fit Warrior|Thợ săn Boss|Hiệp sĩ Kỷ luật|Huyền thoại/);
+      expect(text).not.toContain('Chiến binh IF');
+    });
+  });
+
+  describe('Settings pages', () => {
+    beforeEach(() => {
+      resetIsAiAdminCache();
+      mockIsAiAdmin.mockReset();
+      mockIsAiAdmin.mockResolvedValue(false);
+    });
+
+    it('Giới hạn & 16:8: moves the purine, salt and sugar limits within sane bounds, and resets them', async () => {
       useLimitsStore.getState().reset();
-      const r = render(<ProfileScreen />);
-      expect(allText(r)).toContain('Giới hạn hằng ngày');
+      const r = render(<LimitsSettingsScreen />);
+      expect(allText(r)).toContain('GIỚI HẠN HẰNG NGÀY');
       expect(allText(r)).toMatch(/1,?200 mg/);
       await act(async () => {
         pressable(r, (l) => l === 'Tăng Purine tối đa').props.onPress();
@@ -361,81 +413,79 @@ describe('FitQuest tabs', () => {
       expect(useLimitsStore.getState()).toMatchObject({ purineMg: 1200, saltG: 7, sugarG: 25 });
     });
 
-    it('has a Full HD photo switch for the AI that is off by default and remembers the choice', async () => {
-      useAiPhotoStore.getState().setFullHd(false);
-      const r = render(<ProfileScreen />);
-      const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Gửi ảnh Full HD cho AI' && typeof n.props.onValueChange === 'function')[0];
-      expect(toggle.props.value).toBe(false);
-      await act(async () => toggle.props.onValueChange(true));
-      expect(useAiPhotoStore.getState().fullHd).toBe(true);
-      useAiPhotoStore.getState().setFullHd(false);
+    it('Giới hạn & 16:8: the long explanation of the limits is back behind ⓘ (set your own level or follow your doctor)', async () => {
+      const r = render(<LimitsSettingsScreen />);
+      expect(allText(r)).not.toContain('theo bác sĩ');
+      await act(async () => pressable(r, (l) => l === 'Giải thích: Giới hạn hằng ngày').props.onPress());
+      expect(allText(r)).toContain('hãy đặt mức phù hợp với bạn (hoặc theo bác sĩ)');
+      expect(allText(r)).toContain('Đã hiểu');
     });
 
-    it('has a weekly AI review entry for everybody that opens the review', () => {
-      const r = render(<ProfileScreen />);
-      const row = pressable(r, (l) => l.startsWith('Tổng kết tuần (AI)'));
-      act(() => row.props.onPress());
-      expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
-    });
-
-    it('the Profile shows a title from the level table (never the old "Chiến binh IF" name)', () => {
-      const text = allText(render(<ProfileScreen />));
-      expect(text).toMatch(/Tân binh|Fit Warrior|Thợ săn Boss|Hiệp sĩ Kỷ luật|Huyền thoại/);
-      expect(text).not.toContain('Chiến binh IF');
-    });
-
-    it('has an intermittent-fasting switch that is on by default; turning it off is remembered (and saved to the cloud settings)', async () => {
+    it('Giới hạn & 16:8: the fasting switch (on by default) with its IF explanation behind ⓘ; "Tôi không ăn sáng" only when off', async () => {
       useMealModeStore.setState({ fasting: true });
-      const r = render(<ProfileScreen />);
-      const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Nhịn ăn gián đoạn (16:8)' && typeof n.props.onValueChange === 'function')[0];
-      expect(toggle.props.value).toBe(true);
+      const r = render(<LimitsSettingsScreen />);
+      const toggle = () => r.root.findAll((n) => n.props.accessibilityLabel === 'Nhịn ăn gián đoạn (16:8)' && typeof n.props.onValueChange === 'function')[0];
+      expect(toggle().props.value).toBe(true);
       expect(allText(r)).toContain('Tắt: 3 bữa đến 22:00');
+      expect(allText(r)).not.toContain('IF là viết tắt của Intermittent Fasting');
+      expect(allText(r)).not.toContain('Tôi không ăn sáng');
+      await act(async () => pressable(r, (l) => l === 'Giải thích: Nhịn ăn gián đoạn (16:8)').props.onPress());
+      expect(allText(r)).toContain('16:8 là gì?');
       expect(allText(r)).toContain('IF là viết tắt của Intermittent Fasting, tức nhịn ăn gián đoạn');
-      await act(async () => toggle.props.onValueChange(false));
+      expect(allText(r)).toContain('gợi ý món chia theo ngân sách còn lại');
+      await act(async () => toggle().props.onValueChange(false));
       expect(useMealModeStore.getState().fasting).toBe(false);
+      expect(allText(r)).toContain('Tôi không ăn sáng');
       useMealModeStore.setState({ fasting: true });
     });
 
-    it('has a master AI switch that is on by default and remembers the choice', async () => {
+    it('Giới hạn & 16:8: opens the uric acid page, its row showing the latest result', () => {
+      useUricStore.setState({ readings: [{ id: 'u1', dateKey: '2026-10-20', valueUmol: 412, note: '' }] });
+      const r = render(<LimitsSettingsScreen />);
+      const row = pressable(r, (l) => l.startsWith('Axit uric:'));
+      expect(row.props.accessibilityLabel).toContain('412 µmol/L · 20/10');
+      act(() => row.props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/uric');
+      useUricStore.setState({ readings: [] });
+    });
+
+    it('AI: master switch on by default, Full HD off by default, both remembered; what is sent is behind ⓘ', async () => {
       useAiPhotoStore.getState().setAiEnabled(true);
-      const r = render(<ProfileScreen />);
-      const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Dùng AI (Claude)' && typeof n.props.onValueChange === 'function')[0];
-      expect(toggle.props.value).toBe(true);
-      await act(async () => toggle.props.onValueChange(false));
+      useAiPhotoStore.getState().setFullHd(false);
+      const r = render(<AiSettingsScreen />);
+      const sw = (label: string) => r.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.props.onValueChange === 'function')[0];
+      expect(sw('Dùng AI (Claude)').props.value).toBe(true);
+      expect(sw('Gửi ảnh Full HD cho AI').props.value).toBe(false);
+      await act(async () => sw('Gửi ảnh Full HD cho AI').props.onValueChange(true));
+      expect(useAiPhotoStore.getState().fullHd).toBe(true);
+      await act(async () => sw('Dùng AI (Claude)').props.onValueChange(false));
       expect(useAiPhotoStore.getState().aiEnabled).toBe(false);
+      await act(async () => pressable(r, (l) => l === 'Giải thích: Dùng AI (Claude)').props.onPress());
+      expect(allText(r)).toContain('Tắt: không gửi gì, bạn tự nhập.');
+      expect(allText(r)).toContain('không tên/email');
       useAiPhotoStore.getState().setAiEnabled(true);
+      useAiPhotoStore.getState().setFullHd(false);
     });
 
-    it('opens the plan, weight, nutrition and history screens', () => {
-      const r = render(<ProfileScreen />);
-      const routes: [string, string][] = [
-        ['Kế hoạch', '/plan'],
-        ['Cân nặng', '/weight'],
-        ['Dinh dưỡng', '/nutrition'],
-        ['Lịch sử', '/history'],
-        ['Phân tích', '/insights'],
-        ['Thói quen', '/habits'],
-        ['Kiến thức', '/learn'],
-        ['Axit uric', '/uric'],
-        ['Nhập nhật ký', '/import-diary'],
-      ];
-      for (const [label, path] of routes) {
-        act(() => pressable(r, (l) => l.startsWith(label)).props.onPress());
-        expect(mockRouter.push).toHaveBeenCalledWith(path);
-      }
+    it('AI: shows the "AI & chi phí" entry only to an account the server lists as an AI admin', async () => {
+      const find = (r: ReactTestRenderer) => r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('AI & chi phí'));
+      let r = render(<AiSettingsScreen />);
+      await act(async () => undefined);
+      expect(find(r)).toHaveLength(0);
+      act(() => r.unmount());
+
+      resetIsAiAdminCache();
+      mockIsAiAdmin.mockResolvedValue(true);
+      r = render(<AiSettingsScreen />);
+      await act(async () => undefined);
+      const row = find(r)[0];
+      expect(row).toBeDefined();
+      await act(async () => row.props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/ai-admin');
     });
 
-    it('switches the language and persists it', async () => {
-      const r = render(<ProfileScreen />);
-      await act(async () => {
-        pressable(r, (l) => l === 'English').props.onPress();
-      });
-      expect(useSettingsStore.getState().language).toBe('en');
-      expect(allText(r)).toContain('DAILY TARGETS'); // the eyebrow is set in capitals
-    });
-
-    it('turns reminders on only when the OS grants permission', async () => {
-      const r = render(<ProfileScreen />);
+    it('Nhắc nhở & cám dỗ: turns reminders on only when the OS grants permission (a refusal is a line, not an alert)', async () => {
+      const r = render(<RemindersSettingsScreen />);
       const sw = () => r.root.findAll((n) => typeof n.props.onValueChange === 'function' && n.props.accessibilityLabel === 'Nhắc nhở')[0];
 
       mockRequestPermission.mockResolvedValue(false);
@@ -444,6 +494,7 @@ describe('FitQuest tabs', () => {
       });
       expect(useSettingsStore.getState().remindersEnabled).toBe(false); // refused -> stays off
       expect(mockSchedule).not.toHaveBeenCalled();
+      expect(allText(r)).toContain('Chưa cấp quyền thông báo');
 
       mockRequestPermission.mockResolvedValue(true);
       await act(async () => {
@@ -451,6 +502,7 @@ describe('FitQuest tabs', () => {
       });
       expect(mockSchedule).toHaveBeenCalledTimes(1);
       expect(useSettingsStore.getState().remindersEnabled).toBe(true);
+      expect(allText(r)).not.toContain('Chưa cấp quyền thông báo');
 
       await act(async () => {
         await sw().props.onValueChange(false);
@@ -459,10 +511,10 @@ describe('FitQuest tabs', () => {
       expect(useSettingsStore.getState().remindersEnabled).toBe(false);
     });
 
-    it('still saves the preference when notifications are unavailable in this runtime', async () => {
+    it('Nhắc nhở & cám dỗ: still saves the preference when notifications are unavailable in this runtime', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
       mockRequestPermission.mockRejectedValue(new Error('not available in Expo Go'));
-      const r = render(<ProfileScreen />);
+      const r = render(<RemindersSettingsScreen />);
       const sw = r.root.findAll((n) => typeof n.props.onValueChange === 'function' && n.props.accessibilityLabel === 'Nhắc nhở')[0];
       await act(async () => {
         await sw.props.onValueChange(true);
@@ -471,9 +523,31 @@ describe('FitQuest tabs', () => {
       warn.mockRestore();
     });
 
-    it('connects a coach code, and shows the error when it is rejected', async () => {
+    it('Nhắc nhở & cám dỗ: the water pop-up has its own switch, and the temptation challenge is on the same page', async () => {
+      useSettingsStore.setState({ remindersEnabled: true, waterPopupEnabled: undefined });
+      const r = render(<RemindersSettingsScreen />);
+      const pop = () => r.root.findAll((n) => typeof n.props.onValueChange === 'function' && n.props.accessibilityLabel === 'Pop-up uống nước')[0];
+      expect(pop().props.value).toBe(true); // follows the reminders until changed
+      await act(async () => pop().props.onValueChange(false));
+      expect(useSettingsStore.getState()).toMatchObject({ remindersEnabled: true, waterPopupEnabled: false });
+      expect(r.root.findAll((n) => typeof n.props.onValueChange === 'function' && n.props.accessibilityLabel === 'Thử thách cám dỗ')).toHaveLength(1);
+      // Giving in only breaks the streak: back behind ⓘ.
+      await act(async () => pressable(r, (l) => l === 'Giải thích: Thử thách cám dỗ').props.onPress());
+      expect(allText(r)).toContain('thua thì chỉ mất chuỗi');
+    });
+
+    it('Coach & tài khoản: switches the language and persists it', async () => {
+      const r = render(<AccountSettingsScreen />);
+      await act(async () => {
+        pressable(r, (l) => l === 'English').props.onPress();
+      });
+      expect(useSettingsStore.getState().language).toBe('en');
+      expect(allText(r)).toContain('Coach & account');
+    });
+
+    it('Coach & tài khoản: connects a coach code, and shows the error when it is rejected', async () => {
       mockSubmitCode.mockResolvedValueOnce({ ok: false, message: 'Mã không đúng' }).mockResolvedValueOnce({ ok: true });
-      const r = render(<ProfileScreen />);
+      const r = render(<AccountSettingsScreen />);
       const input = () => r.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.accessibilityLabel === 'Mã coach')[0];
       act(() => input().props.onChangeText('ABC123'));
       await act(async () => {
@@ -488,25 +562,70 @@ describe('FitQuest tabs', () => {
       expect(input().props.value).toBe(''); // cleared after success
     });
 
-    it('asks before signing out (web uses window.confirm)', () => {
-      const confirm = jest.fn(() => false);
-      (globalThis as unknown as { window: unknown }).window = { confirm };
-      const rn = require('react-native') as { Platform: { OS: string } };
-      const original = rn.Platform.OS;
-      rn.Platform.OS = 'web';
-      try {
-        const r = render(<ProfileScreen />);
-        act(() => pressable(r, (l) => l === 'Đăng xuất').props.onPress());
-        expect(confirm).toHaveBeenCalled();
-        expect(mockSignOut).not.toHaveBeenCalled(); // declined
+    it('Coach & tài khoản: shows the account and the version, and opens the diary import', () => {
+      const r = render(<AccountSettingsScreen />);
+      expect(allText(r)).toContain(String(useAuthStore.getState().session?.user.email)); // the whole address, only on this page
+      expect(allText(r)).toMatch(/Phiên bản \d+\.\d+\.\d+/);
+      act(() => pressable(r, (l) => l.startsWith('Nhập nhật ký')).props.onPress());
+      expect(mockRouter.push).toHaveBeenCalledWith('/import-diary');
+    });
 
-        confirm.mockReturnValue(true);
-        act(() => pressable(r, (l) => l === 'Đăng xuất').props.onPress());
-        expect(mockSignOut).toHaveBeenCalledTimes(1);
-      } finally {
-        rn.Platform.OS = original;
-        delete (globalThis as unknown as { window?: unknown }).window;
-      }
+    it('Coach & tài khoản: asks in an in-app box before signing out; nothing waiting → no extra line', async () => {
+      useSyncQueueStore.setState({ pending: [] });
+      const r = render(<AccountSettingsScreen />);
+      await act(async () => pressable(r, (l) => l === 'Đăng xuất').props.onPress());
+      expect(allText(r)).toContain('Đăng xuất khỏi tài khoản này?');
+      expect(allText(r)).not.toContain('chưa đồng bộ sẽ được gửi trước');
+      await act(async () => pressable(r, (l) => l === 'Huỷ').props.onPress());
+      expect(mockSignOut).not.toHaveBeenCalled(); // declined
+      expect(allText(r)).not.toContain('Đăng xuất khỏi tài khoản này?');
+
+      await act(async () => pressable(r, (l) => l === 'Đăng xuất').props.onPress());
+      const confirm = r.root.findAll((n) => n.props.testID === 'sign-out-confirm')[0];
+      const buttons = confirm.findAll((n) => n.props.accessibilityLabel === 'Đăng xuất' && typeof n.props.onPress === 'function');
+      await act(async () => buttons[buttons.length - 1].props.onPress());
+      expect(mockSignOut).toHaveBeenCalledTimes(1);
+    });
+
+    it('Coach & tài khoản: with changes waiting, says they will be sent first, sends them, then signs out', async () => {
+      const op = { id: '1-a', type: 'userData', payload: { key: 'k', value: 1 } } as never;
+      useSyncQueueStore.setState({ pending: [op, { ...(op as object), id: '2-b', payload: { key: 'j', value: 2 } } as never] });
+      mockFlush.mockImplementation(async () => {
+        useSyncQueueStore.setState({ pending: [] });
+      });
+      const r = render(<AccountSettingsScreen />);
+      await act(async () => pressable(r, (l) => l === 'Đăng xuất').props.onPress());
+      expect(allText(r)).toContain('2 thay đổi chưa đồng bộ sẽ được gửi trước.');
+      const confirm = r.root.findAll((n) => n.props.testID === 'sign-out-confirm')[0];
+      const buttons = confirm.findAll((n) => n.props.accessibilityLabel === 'Đăng xuất' && typeof n.props.onPress === 'function');
+      await act(async () => buttons[buttons.length - 1].props.onPress());
+      expect(mockFlush).toHaveBeenCalledTimes(1);
+      expect(mockSignOut).toHaveBeenCalledTimes(1);
+    });
+
+    it('Coach & tài khoản: when the changes cannot be sent it does not sign out yet, says so, and offers "Vẫn đăng xuất"', async () => {
+      const op = { id: '1-a', type: 'userData', payload: { key: 'k', value: 1 } } as never;
+      useSyncQueueStore.setState({ pending: [op] });
+      mockFlush.mockImplementation(async () => undefined); // offline: still waiting
+      const r = render(<AccountSettingsScreen />);
+      await act(async () => pressable(r, (l) => l === 'Đăng xuất').props.onPress());
+      let confirm = r.root.findAll((n) => n.props.testID === 'sign-out-confirm')[0];
+      let buttons = confirm.findAll((n) => n.props.accessibilityLabel === 'Đăng xuất' && typeof n.props.onPress === 'function');
+      await act(async () => buttons[buttons.length - 1].props.onPress());
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(allText(r)).toContain('Chưa gửi được 1 thay đổi');
+      confirm = r.root.findAll((n) => n.props.testID === 'sign-out-confirm')[0];
+      buttons = confirm.findAll((n) => n.props.accessibilityLabel === 'Vẫn đăng xuất' && typeof n.props.onPress === 'function');
+      await act(async () => buttons[0].props.onPress());
+      expect(mockSignOut).toHaveBeenCalledTimes(1);
+      useSyncQueueStore.setState({ pending: [] });
+    });
+
+    it('Nước uống: the water page holds the water settings, the "past days keep their target" detail behind ⓘ', async () => {
+      const r = render(<WaterSettingsScreen />);
+      expect(allText(r)).toContain('Nước uống');
+      await act(async () => pressable(r, (l) => l.startsWith('Giải thích:')).props.onPress());
+      expect(allText(r)).toContain('Ngày đã qua giữ mục tiêu của ngày đó.');
     });
   });
 

@@ -309,6 +309,28 @@ describe('Achievements screen', () => {
     expect(text).toContain('Chưa có: 16:8, đổi món AI, coach'); // badges the app cannot track yet are named
   });
 
+  it('says behind ⓘ that the purine / salt / sugar streaks are estimates from food names', async () => {
+    const r = render();
+    expect(allText(r)).not.toContain('ước tính theo tên món');
+    await act(async () => {
+      r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Giải thích: Thành tích')[0].props.onPress();
+    });
+    expect(allText(r)).toContain('Chuỗi purine/muối/đường dựa trên ước tính theo tên món');
+  });
+
+  it('filters by group with chips: one group of stickers, or only the banners', async () => {
+    const r = render();
+    const chip = (label: string) => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === label && n.props.accessibilityState?.selected !== undefined)[0];
+    const headers = () => r.root.findAll((n) => n.props.accessibilityRole === 'header' && n.props.size === 18).map((n) => allText({ toJSON: () => n } as never) || String(n.props.children));
+    expect(chip('Tất cả').props.accessibilityState.selected).toBe(true);
+    await act(async () => chip('Cân nặng').props.onPress());
+    expect(headers()).toEqual(['Cân nặng']);
+    await act(async () => chip('Banner thành tích').props.onPress());
+    expect(headers()).toEqual(['Banner thành tích']);
+    await act(async () => chip('Tất cả').props.onPress());
+    expect(headers().length).toBeGreaterThan(2);
+  });
+
   it('lets only an earned banner be put on the profile, and removed again', async () => {
     useWeightStore.setState({ entries: [{ id: 'w', dateISO: '2026-10-23T06:00:00', weightKg: 99 }] });
     const r = render();

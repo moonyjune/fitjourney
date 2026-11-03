@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { DEFAULT_START_WEIGHT_KG } from '../src/constants/plan';
@@ -12,6 +12,7 @@ import { useTranslation } from '../src/i18n/useTranslation';
 import type { StringKey } from '../src/i18n/strings';
 import { quest } from '../src/theme/quest';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { showToast } from '../src/store/useToastStore';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import type { ActivityLevel, Gender } from '../src/types';
 
@@ -80,7 +81,8 @@ export default function OnboardingScreen() {
     if (coachCode.trim()) {
       const result = await submitCoachCode(coachCode);
       if (!result.ok) {
-        Alert.alert('Không liên kết được với Coach', result.message + '\nBạn vẫn có thể thử lại sau ở tab Kế hoạch.');
+        // One line in a toast (i18n), the app still opens: the code can be entered again in Hồ sơ › Coach & tài khoản.
+        showToast({ text: g('rd6.onb.coachFailed', { msg: result.message }), tone: 'danger', durationMs: 8000 });
       }
     }
     setBusy(false);
