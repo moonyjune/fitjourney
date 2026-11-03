@@ -38,6 +38,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import AddFoodScreen from '../../../app/add-food';
+import { addByHand, editItem, readItem, saveMeal } from '../../testing/mealFlow';
 import type { FoodEntry } from '../../food/types';
 import { useFoodDbStore } from '../../store/useFoodDbStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
@@ -80,10 +81,7 @@ describe('Swaps when an item breaks a limit (Add food)', () => {
     await act(async () => input(r, label).props.onChangeText(v));
   };
   const fillItem = async (r: ReactTestRenderer, purine = '1500') => {
-    await type(r, 'Tên món', 'Xúc xích chiên');
-    await type(r, 'Calo (kcal)', '400');
-    await type(r, 'Đạm (g)', '300');
-    await type(r, 'Purine (mg)', purine);
+    await addByHand(r, { name: 'Xúc xích chiên', kcal: '400', protein: '300', purine });
   };
   const items = () => useNutritionStore.getState().logs[DATE]?.extraItems ?? [];
 
@@ -128,13 +126,10 @@ describe('Swaps when an item breaks a limit (Add food)', () => {
     const r = await mount();
     await fillItem(r);
     await act(async () => find(r, 'Dùng món thay: Cá hấp nhà làm')!.props.onPress());
-    expect(input(r, 'Tên món').props.value).toBe('Cá hấp nhà làm');
-    expect(input(r, 'Calo (kcal)').props.value).toBe('380');
-    expect(input(r, 'Đạm (g)').props.value).toBe('250');
-    expect(input(r, 'Purine (mg)').props.value).toBe('100');
+    expect(await readItem(r, 1)).toMatchObject({ name: 'Cá hấp nhà làm', kcal: '380', protein: '250', purine: '100' });
     expect(items()).toHaveLength(0);
     expect(allText(r)).not.toContain('làm vượt giới hạn'); // the problem is gone, so is the card
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await saveMeal(r);
     expect(items().map((i) => [i.name, i.calories, i.purineMg])).toEqual([['Cá hấp nhà làm', 380, 100]]);
     expect(useFoodDbStore.getState().custom).toHaveLength(2);
   });
@@ -175,10 +170,9 @@ describe('Swaps when an item breaks a limit (Add food)', () => {
 
   it('offers nothing until the item has calories to swap (a purine figure alone is not a meal)', async () => {
     const r = await mount();
-    await type(r, 'Tên món', 'Xúc xích');
-    await type(r, 'Purine (mg)', '1500');
+    await addByHand(r, { name: 'Xúc xích', purine: '1500' });
     expect(allText(r)).not.toContain('làm vượt giới hạn');
-    await type(r, 'Calo (kcal)', '400');
+    await editItem(r, 1, { kcal: '400' });
     expect(allText(r)).toContain('làm vượt giới hạn');
   });
 
@@ -188,7 +182,7 @@ describe('Swaps when an item breaks a limit (Add food)', () => {
     await fillItem(r);
     await act(async () => find(r, 'Nhờ AI gợi ý thêm')!.props.onPress());
     await act(async () => find(r, 'Dùng món thay: Ức gà luộc + rau')!.props.onPress());
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await saveMeal(r);
     expect(items().map((i) => i.name)).toEqual(['Ức gà luộc + rau']);
     expect(useFoodDbStore.getState().custom.map((f) => f.name)).toContain('Ức gà luộc + rau');
   });
@@ -199,7 +193,7 @@ describe('Swaps when an item breaks a limit (Add food)', () => {
     await fillItem(r);
     await act(async () => find(r, 'Nhờ AI gợi ý thêm')!.props.onPress());
     expect(allText(r)).toContain('Ức gà luộc + rau');
-    await type(r, 'Purine (mg)', '1800');
+    await editItem(r, 1, { purine: '1800' });
     expect(allText(r)).not.toContain('Ức gà luộc + rau');
     expect(find(r, 'Nhờ AI gợi ý thêm')).toBeDefined();
   });

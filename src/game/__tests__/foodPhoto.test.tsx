@@ -55,6 +55,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import AddFoodScreen from '../../../app/add-food';
+import { addByHand, readItem, saveMeal, SAVE_MEAL } from '../../testing/mealFlow';
 import JournalScreen from '../../../app/journal';
 import { DailyMealBreakdownTable } from '../../components/DailyMealBreakdownTable';
 import { DEFAULT_PLAN } from '../../constants/plan';
@@ -87,8 +88,6 @@ const pressable = (r: ReactTestRenderer, label: string): ReactTestInstance => {
   if (!found) throw new Error(`no pressable "${label}"`);
   return found;
 };
-const textInput = (r: ReactTestRenderer, label: string): ReactTestInstance =>
-  r.root.findAll((n) => typeof n.props.onChangeText === 'function' && n.props.accessibilityLabel === label)[0];
 // Host nodes only: the Image composite and its host element both carry the same props.
 const images = (r: ReactTestRenderer, label: string) => r.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityLabel === label && n.props.source);
 const preview = (r: ReactTestRenderer) => images(r, 'Ảnh món ăn đã chọn 1');
@@ -197,17 +196,16 @@ describe('Photo on an off-plan food', () => {
   });
 
   describe('saving', () => {
-    const fill = async (r: ReactTestRenderer, name = 'Bánh bao') => {
-      await act(async () => textInput(r, 'Tên món').props.onChangeText(name));
-      await act(async () => textInput(r, 'Calo (kcal)').props.onChangeText('320'));
-    };
+    /** The food typed by hand ("Tự nhập" → the item sheet): the photos are picked on step 1 before it. */
+    const fill = async (r: ReactTestRenderer, name = 'Bánh bao') => addByHand(r, { name, kcal: '320' });
     const items = () => useNutritionStore.getState().logs[DATE].extraItems;
 
     it('stores the photo with the item and also saves it as a meal proof the coach can see', async () => {
       const r = await mount(<AddFoodScreen />);
-      await fill(r);
       await press(r, 'Chụp ảnh');
-      await press(r, 'Thêm vào hôm nay');
+      await fill(r);
+      expect(preview(r).map(sourceUri)).toContain(CAM); // shown large on the check step
+      await saveMeal(r);
 
       expect(mockPersist).toHaveBeenCalledWith(CAM, expect.stringMatching(/^extra-/));
       expect(items()).toHaveLength(1);
@@ -223,7 +221,7 @@ describe('Photo on an off-plan food', () => {
     it('still saves without a photo, and creates no proof', async () => {
       const r = await mount(<AddFoodScreen />);
       await fill(r);
-      await press(r, 'Thêm vào hôm nay');
+      await saveMeal(r);
       expect(items()).toHaveLength(1);
       expect(items()[0].photoUri).toBeUndefined();
       expect(useProofStore.getState().photos).toHaveLength(0);
@@ -234,20 +232,21 @@ describe('Photo on an off-plan food', () => {
     it('keeps everything typed when the photo cannot be saved, and lets the user retry without it', async () => {
       mockPersist.mockRejectedValueOnce(new Error('disk full'));
       const r = await mount(<AddFoodScreen />);
-      await fill(r, 'Phở bò');
       await press(r, 'Chọn ảnh');
-      await press(r, 'Thêm vào hôm nay');
+      await fill(r, 'Phở bò');
+      await saveMeal(r);
 
       expect(items()).toHaveLength(0);
       expect(mockRouter.back).not.toHaveBeenCalled();
       expect(allText(r)).toContain('Không lưu được ảnh nên món chưa được thêm');
-      expect(textInput(r, 'Tên món').props.value).toBe('Phở bò');
-      expect(textInput(r, 'Calo (kcal)').props.value).toBe('320');
+      expect(await readItem(r, 1)).toMatchObject({ name: 'Phở bò', kcal: '320' });
       expect(preview(r)).toHaveLength(1);
 
+      await press(r, 'Quay lại');
       await press(r, 'Xóa ảnh 1');
+      await press(r, 'Tự nhập, không dùng AI'); // back to the check step, the line kept
       expect(allText(r)).not.toContain('Không lưu được ảnh nên món chưa được thêm');
-      await press(r, 'Thêm vào hôm nay');
+      await saveMeal(r);
       expect(items()).toHaveLength(1);
       expect(items()[0].name).toBe('Phở bò');
     });
@@ -257,9 +256,9 @@ describe('Photo on an off-plan food', () => {
       useNutritionStore.setState({ addExtra: () => { throw new Error('store down'); } });
       try {
         const r = await mount(<AddFoodScreen />);
-        await fill(r);
         await press(r, 'Chụp ảnh');
-        await press(r, 'Thêm vào hôm nay');
+        await fill(r);
+        await saveMeal(r);
         expect(mockDeletePhoto).toHaveBeenCalledWith(expect.stringMatching(/^file:\/\/\/docs\/proofs\/extra-/));
         expect(mockRouter.back).not.toHaveBeenCalled();
       } finally {
@@ -271,13 +270,12 @@ describe('Photo on an off-plan food', () => {
       let finish!: (uri: string) => void;
       mockPersist.mockImplementationOnce(() => new Promise<string>((resolve) => { finish = resolve; }));
       const r = await mount(<AddFoodScreen />);
-      await fill(r);
       await press(r, 'Chụp ảnh');
-      await press(r, 'Thêm vào hôm nay');
-      expect(pressable(r, 'Chụp ảnh').props.disabled).toBe(true);
-      expect(pressable(r, 'Xóa ảnh 1').props.disabled).toBe(true);
-      expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Thêm vào hôm nay' && n.props.accessibilityState?.busy === true).length).toBeGreaterThan(0);
-      await press(r, 'Thêm vào hôm nay'); // a second tap while busy is ignored
+      await fill(r);
+      await saveMeal(r);
+      expect(pressable(r, 'Thêm ảnh (1/3)').props.disabled).toBe(true);
+      expect(r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && SAVE_MEAL.test(n.props.accessibilityLabel) && n.props.accessibilityState?.busy === true).length).toBeGreaterThan(0);
+      await saveMeal(r); // a second tap while busy is ignored
       expect(mockPersist).toHaveBeenCalledTimes(1);
       await act(async () => finish('file:///docs/proofs/extra-1.jpg'));
       expect(items()).toHaveLength(1);
@@ -396,9 +394,8 @@ describe('Photo on an off-plan food', () => {
       await press(r, 'Chọn ảnh');
       mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///tmp/b.jpg' }, { uri: 'file:///tmp/c.jpg' }] });
       await press(r, 'Chọn ảnh');
-      await act(async () => textInput(r, 'Tên món').props.onChangeText('Bún chả'));
-      await act(async () => textInput(r, 'Calo (kcal)').props.onChangeText('550'));
-      await press(r, 'Thêm vào hôm nay');
+      await addByHand(r, { name: 'Bún chả', kcal: '550' });
+      await saveMeal(r);
 
       const saved = useNutritionStore.getState().logs[DATE].extraItems[0];
       const proofs = proofsOf(saved.id);

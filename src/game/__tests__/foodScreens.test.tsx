@@ -50,6 +50,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import AddFoodScreen from '../../../app/add-food';
+import { addByHand, editItem, readItem, saveMeal } from '../../testing/mealFlow';
 import FoodDbScreen from '../../../app/food-db';
 import { BUILT_IN_FOODS } from '../../food/foodData';
 import { useFoodDbStore } from '../../store/useFoodDbStore';
@@ -217,22 +218,26 @@ describe('Food database screen', () => {
   });
 });
 
-describe('Food lookup in Add food', () => {
+describe('Món đã lưu (food lookup sheet) in Ghi bữa', () => {
   const today = toDateKey(new Date());
   const items = () => useNutritionStore.getState().logs[today]?.extraItems ?? [];
+  const searchOpen = (r: ReactTestRenderer) => r.root.findAll((n) => n.props.accessibilityLabel === 'Tìm món (vd: ức gà, phở)' && typeof n.props.onChangeText === 'function').length > 0;
 
-  it('stays closed until opened, and offers the database from inside', async () => {
+  it('opens as a sheet from step 1, and offers the database and the cook book from inside', async () => {
     const r = await mount(<AddFoodScreen />);
-    expect(has(r, 'Tìm món (vd: ức gà, phở)')).toBe(false);
-    await tap(r, 'Tra cứu món (tính theo g/ml)');
+    expect(searchOpen(r)).toBe(false);
+    await tap(r, 'Món đã lưu');
     expect(input(r, 'Tìm món (vd: ức gà, phở)')).toBeDefined();
     await tap(r, 'Mở cơ sở dữ liệu món ăn');
     expect(mockRouter.push).toHaveBeenCalledWith('/food-db');
+    await tap(r, 'Món đã lưu');
+    await tap(r, 'Món trong Cook book ▸');
+    expect(mockRouter.push).toHaveBeenCalledWith('/cookbook');
   });
 
-  it('builds a meal from foods and amounts, fills the form with the totals, and saves them with purine and salt', async () => {
+  it('builds a meal from foods and amounts, puts the totals on the check step, and saves them with purine and salt', async () => {
     const r = await mount(<AddFoodScreen />);
-    await tap(r, 'Tra cứu món (tính theo g/ml)');
+    await tap(r, 'Món đã lưu');
     await type(r, 'Tìm món (vd: ức gà, phở)', 'uc ga chin');
     await tap(r, 'Thêm Ức gà chín (áp chảo/nướng/luộc)');
     await type(r, 'Số lượng Ức gà chín (áp chảo/nướng/luộc)', '150');
@@ -246,15 +251,12 @@ describe('Food lookup in Add food', () => {
     expect(total).toContain('purine 299 mg');
 
     await tap(r, 'Dùng cho món này');
-    expect((input(r, 'Tên món').props as { value: string }).value).toBe('150 g Ức gà chín; 200 g Cơm trắng chín');
-    expect((input(r, 'Calo (kcal)').props as { value: string }).value).toBe('508');
-    expect((input(r, 'Đạm (g)').props as { value: string }).value).toBe('51.9');
-    expect((input(r, 'Purine (mg)').props as { value: string }).value).toBe('299');
+    expect(searchOpen(r)).toBe(false); // the sheet closes after use
+    expect(allText(r)).toContain('Kiểm tra món');
     // sodium 124 mg = 0.31 g salt
-    expect((input(r, 'Muối (g)').props as { value: string }).value).toBe('0.31');
-    expect(has(r, 'Tìm món (vd: ức gà, phở)')).toBe(false); // the lookup closes after use
+    expect(await readItem(r, 1)).toMatchObject({ name: '150 g Ức gà chín; 200 g Cơm trắng chín', kcal: '508', protein: '51.9', purine: '299', salt: '0.31' });
 
-    await tap(r, 'Thêm vào hôm nay');
+    await saveMeal(r);
     expect(items()).toHaveLength(1);
     expect(items()[0]).toMatchObject({ name: '150 g Ức gà chín; 200 g Cơm trắng chín', calories: 508, proteinG: 51.9, purineMg: 299, saltG: 0.31 });
     expect(useFoodDbStore.getState().recent).toHaveLength(2);
@@ -264,21 +266,32 @@ describe('Food lookup in Add food', () => {
 
   it('a meal built from the lookup and then changed by hand is remembered as a new food', async () => {
     const r = await mount(<AddFoodScreen />);
-    await tap(r, 'Tra cứu món (tính theo g/ml)');
+    await tap(r, 'Món đã lưu');
     await type(r, 'Tìm món (vd: ức gà, phở)', 'com trang');
     await tap(r, 'Thêm Cơm trắng chín');
     await tap(r, 'Dùng cho món này');
-    await type(r, 'Calo (kcal)', '333');
-    await tap(r, 'Thêm vào hôm nay');
+    await editItem(r, 1, { kcal: '333' });
+    await saveMeal(r);
     expect(useFoodDbStore.getState().custom).toHaveLength(1);
     expect(useFoodDbStore.getState().custom[0]).toMatchObject({ auto: true, kcal: 333 });
+  });
+
+  it('can add a saved food next to the lines already on the check step', async () => {
+    const r = await mount(<AddFoodScreen />);
+    await addByHand(r, { name: 'Chuối', kcal: '90' });
+    await tap(r, 'Món đã lưu');
+    await type(r, 'Tìm món (vd: ức gà, phở)', 'com trang');
+    await tap(r, 'Thêm Cơm trắng chín');
+    await tap(r, 'Dùng cho món này');
+    expect(allText(r)).toContain('Chuối');
+    expect(allText(r)).toContain('Cơm trắng chín');
   });
 
   it('shows recently used foods, lets you remove a picked food, and warns about low-confidence foods', async () => {
     const pho = BUILT_IN_FOODS.find((f) => f.confidence === 'low')!;
     useFoodDbStore.getState().touchRecent(pho.id);
     const r = await mount(<AddFoodScreen />);
-    await tap(r, 'Tra cứu món (tính theo g/ml)');
+    await tap(r, 'Món đã lưu');
     expect(allText(r)).toContain('DÙNG GẦN ĐÂY');
     await tap(r, `Thêm ${pho.name}`);
     expect(allText(r)).toContain('Có món độ tin cậy thấp');
@@ -287,34 +300,34 @@ describe('Food lookup in Add food', () => {
     expect(has(r, 'Dùng cho món này')).toBe(false);
   });
 
-  it('ignores an empty or zero amount instead of filling the form with zeros', async () => {
+  it('ignores an empty or zero amount instead of filling the list with zeros', async () => {
     const r = await mount(<AddFoodScreen />);
-    await tap(r, 'Tra cứu món (tính theo g/ml)');
+    await tap(r, 'Món đã lưu');
     await type(r, 'Tìm món (vd: ức gà, phở)', 'com trang');
     await tap(r, 'Thêm Cơm trắng chín');
     await type(r, 'Số lượng Cơm trắng chín', '0');
     await tap(r, 'Dùng cho món này');
-    expect((input(r, 'Tên món').props as { value: string }).value).toBe('');
-    expect((input(r, 'Calo (kcal)').props as { value: string }).value).toBe('');
+    expect(allText(r)).not.toContain('Kiểm tra món');
+    expect(searchOpen(r)).toBe(true);
   });
 });
 
-describe('Add food with only a name: the food database answers', () => {
+describe('Ghi bữa with only a name: the food database answers', () => {
   const today = toDateKey(new Date());
   const items = () => useNutritionStore.getState().logs[today]?.extraItems ?? [];
 
-  it('fills the form with ONE known food\'s database figures, scaled to the amount typed; the user saves it', async () => {
+  it('fills the line with ONE known food\'s database figures, scaled to the amount typed; the user saves it', async () => {
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', '2 quả trứng gà');
-    await tap(r, 'Thêm vào hôm nay');
+    await addByHand(r, { name: '2 quả trứng gà' });
+    await saveMeal(r);
     // Nothing saved yet: the figures are filled in to check.
     expect(items()).toHaveLength(0);
     expect(mockRouter.back).not.toHaveBeenCalled();
     const text = allText(r);
     expect(text).toContain('Đã điền "2 quả Trứng gà" từ cơ sở dữ liệu');
     expect(text).toContain('Lấy từ cơ sở dữ liệu món ăn: Trứng gà · 143 kcal');
-    expect((input(r, 'Calo (kcal)').props as { value: string }).value).toBe('143');
-    await tap(r, 'Thêm vào hôm nay');
+    expect(text).toContain('Lưu bữa · 143 kcal');
+    await saveMeal(r);
     expect(items()).toHaveLength(1);
     // 2 eggs x 50 g: 143 kcal, 12.6 g protein, 5 mg purine, 140 mg sodium ≈ 0.4 g salt
     expect(items()[0]).toMatchObject({ name: '2 quả Trứng gà', calories: 143, proteinG: 12.6, purineMg: 5, saltG: 0.4 });
@@ -324,17 +337,16 @@ describe('Add food with only a name: the food database answers', () => {
 
   it('a typed calorie figure still wins: the entry is saved as typed, without the lookup', async () => {
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', 'Trứng gà');
-    await type(r, 'Calo (kcal)', '200');
-    await tap(r, 'Thêm vào hôm nay');
+    await addByHand(r, { name: 'Trứng gà', kcal: '200' });
+    await saveMeal(r);
     expect(items()[0]).toMatchObject({ name: 'Trứng gà', calories: 200 });
     expect(mockRouter.back).toHaveBeenCalled();
   });
 
   it('several foods are not guessed: a message offers the AI right here', async () => {
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', 'phở bò, trứng gà');
-    await tap(r, 'Thêm vào hôm nay');
+    await addByHand(r, { name: 'phở bò, trứng gà' });
+    await saveMeal(r);
     expect(items()).toHaveLength(0);
     expect(allText(r)).toContain('có vẻ gồm nhiều món');
     await tap(r, 'Nhờ AI phân tích món này');
@@ -344,14 +356,16 @@ describe('Add food with only a name: the food database answers', () => {
 
   it('an unknown food shows a message; the AI is asked about it on the same screen, the description filled in', async () => {
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', 'bánh xèo');
-    await tap(r, 'Thêm vào hôm nay');
+    await addByHand(r, { name: 'bánh xèo' });
+    await saveMeal(r);
     expect(items()).toHaveLength(0);
     expect(allText(r)).toContain('Không tìm thấy "bánh xèo" trong cơ sở dữ liệu món ăn. Nhờ AI phân tích để ước tính.');
     expect(allText(r)).not.toContain('Nhập calo hoặc đạm lớn hơn 0.');
     await tap(r, 'Nhờ AI phân tích món này');
-    expect((input(r, 'Bạn đã ăn gì?').props as { value: string }).value).toBe('bánh xèo');
     expect(mockMealText.mock.calls[0][0]).toBe('bánh xèo');
+    expect(allText(r)).toContain('Không có mạng'); // the AI's answer (here: offline) shows on the same screen, with "Tự nhập"
+    await tap(r, 'Quay lại');
+    expect((input(r, 'Bạn đã ăn gì?').props as { value: string }).value).toBe('bánh xèo');
 
     act(() => renderer?.unmount());
     mockParams = { text: 'bánh xèo' };

@@ -7,6 +7,8 @@ jest.mock('expo-router', () => ({
   router: { push: (...args: unknown[]) => mockPush(...args) },
   useFocusEffect: () => undefined,
 }));
+const mockPick = jest.fn<(...a: unknown[]) => Promise<unknown>>(async () => ({ uri: 'blob:meal' }));
+jest.mock('../../utils/pickPhoto', () => ({ pickPhoto: (...a: unknown[]) => mockPick(...a), pickPhotos: jest.fn() }));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
@@ -37,6 +39,7 @@ import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useFeelingStore } from '../../store/useFeelingStore';
 import { useSelectedDayStore } from '../../store/useSelectedDayStore';
 import { useToastStore } from '../../store/useToastStore';
+import { takePendingMealPhoto } from '../../food/pendingPhoto';
 
 function allText(renderer: ReactTestRenderer): string {
   const parts: string[] = [];
@@ -252,7 +255,7 @@ describe('FitQuest Camp screen', () => {
     expect(allText(render())).not.toContain('Hôm nay thế nào?');
   });
 
-  it("the date chip's day drives the hero, the tiles and the timeline (a past day: no next meal)", () => {
+  it("the date chip's day drives the hero, the tiles and the timeline (a past day: no next meal)", async () => {
     useSelectedDayStore.setState({ selectedKey: '2026-10-22' });
     try {
       const r = render();
@@ -261,7 +264,18 @@ describe('FitQuest Camp screen', () => {
       expect(text).not.toContain('Ghi món này');
       act(() => button(r, 'Thêm 250 ml nước').props.onPress());
       expect(useNutritionStore.getState().logs['2026-10-22'].waterMl).toBe(250);
-      act(() => button(r, 'Chụp món').props.onPress());
+      // "Chụp món" opens the camera from the tap, then hands the photo to Ghi bữa (analysed there at once).
+      await act(async () => button(r, 'Chụp món').props.onPress());
+      expect(mockPick).toHaveBeenCalledWith('camera');
+      expect(mockPush).toHaveBeenCalledWith({ pathname: '/add-food', params: { date: '2026-10-22', photo: '1' } });
+      expect(takePendingMealPhoto()).toBe('blob:meal');
+      // Cancelled: nothing opens. No camera: Ghi bữa opens so a photo can be picked there.
+      mockPush.mockClear();
+      mockPick.mockResolvedValueOnce(null);
+      await act(async () => button(r, 'Chụp món').props.onPress());
+      expect(mockPush).not.toHaveBeenCalled();
+      mockPick.mockResolvedValueOnce({ error: 'cameraDenied' });
+      await act(async () => button(r, 'Chụp món').props.onPress());
       expect(mockPush).toHaveBeenCalledWith({ pathname: '/add-food', params: { date: '2026-10-22' } });
     } finally {
       useSelectedDayStore.setState({ selectedKey: null });

@@ -17,6 +17,9 @@
       "headers": [{ "key": "Content-Type", "value": "application/manifest+json" }]
     }
   ],
+  "redirects": [
+    { "source": "/text-meal", "destination": "/add-food", "permanent": true }
+  ],
   "rewrites": [
     {
       "source": "/:path*",

@@ -2,10 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { Alert } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-const mockRouter = { replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
+const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
 
 jest.mock('expo-router', () => ({
-  router: { replace: (...a: unknown[]) => mockRouter.replace(...a), back: () => mockRouter.back(), canGoBack: () => mockRouter.canGoBack() },
+  router: { push: (...a: unknown[]) => mockRouter.push(...a), replace: (...a: unknown[]) => mockRouter.replace(...a), back: () => mockRouter.back(), canGoBack: () => mockRouter.canGoBack() },
   useLocalSearchParams: () => ({}),
   useFocusEffect: (cb: () => void) => {
     const React = require('react');
@@ -161,23 +161,11 @@ describe('Nutrition screen (FitQuest)', () => {
     expect(useNutritionStore.getState().getLog(key).waterMl).toBe(0);
   });
 
-  it('adds an off-plan food and clears the form', async () => {
+  it('sends an off-plan food to the one meal-logging flow (Ghi bữa) instead of a form of its own', async () => {
     const r = await render();
-    await type(r, 'Food name (optional)', 'Banana');
-    await type(r, 'Calories', '90');
-    await type(r, 'Protein (g)', '1');
-    await press(r, 'Lunch');
-    await press(r, "Add to today's total");
-    const log = useNutritionStore.getState().getLog(key);
-    expect(log.extraCalories).toBe(90);
-    expect(log.extraItems[0]).toMatchObject({ name: 'Banana', calories: 90, proteinG: 1, mealTime: 'lunch' });
-    expect(byLabel(r, 'Calories', 'onChangeText').props.value).toBe('');
-  });
-
-  it('refuses an extra food with no calories or protein', async () => {
-    const r = await render();
-    await press(r, "Add to today's total");
-    expect(alertSpy).toHaveBeenCalled();
+    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Calories' && typeof n.props.onChangeText === 'function')).toHaveLength(0);
+    await press(r, 'Log an off-plan meal');
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/add-food', params: {} });
     expect(useNutritionStore.getState().getLog(key).extraItems).toHaveLength(0);
   });
 

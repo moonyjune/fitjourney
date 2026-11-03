@@ -52,6 +52,7 @@ jest.mock('react-native-chart-kit', () => {
 });
 
 import AddFoodScreen from '../../../app/add-food';
+import { addByHand, editItem, findPressable } from '../../testing/mealFlow';
 import InsightsScreen from '../../../app/insights';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
@@ -126,24 +127,29 @@ afterEach(() => {
   renderer = undefined;
 });
 
-describe('Live comments in Add food', () => {
+describe('Live comments in Ghi bữa (check step)', () => {
   const today = toDateKey(new Date());
   const yesterday = toDateKey(new Date(Date.now() - 86_400_000));
+  /** A food named in the item sheet ("Tự nhập" first, then ✎ on the line to rename it). */
+  const name = async (r: ReactTestRenderer, v: string) => {
+    if (findPressable(r, 'Sửa món 1')) await editItem(r, 1, { name: v });
+    else await addByHand(r, { name: v });
+  };
 
   it('says nothing for a neutral name and nothing for a name that is too short', async () => {
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', 'x');
+    await name(r, 'x');
     expect(allText(r)).not.toContain('NHẬN XÉT MÓN NÀY');
-    await type(r, 'Tên món', 'một món không có từ khóa');
+    await name(r, 'một món không có từ khóa');
     expect(allText(r)).not.toContain('NHẬN XÉT MÓN NÀY');
   });
 
   it('praises a good food and warns about one to swap, with the reason and the replacement', async () => {
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', 'lòng trắng rán');
+    await name(r, 'lòng trắng rán');
     expect(allText(r)).toContain('NHẬN XÉT MÓN NÀY');
     expect(allText(r)).toContain('✔ Lòng trắng trứng: đạm nạc, ~0 purine');
-    await type(r, 'Tên món', 'xúc xích');
+    await name(r, 'xúc xích');
     const text = allText(r);
     expect(text).toContain('⚠ Xúc xích: đồ chế biến sẵn');
     expect(text).toContain('→ thay: trứng luộc / lòng trắng / ức gà tự luộc');
@@ -153,20 +159,18 @@ describe('Live comments in Add food', () => {
   it('counts a repeat from the last two days and from today', async () => {
     useNutritionStore.setState({ logs: { [yesterday]: day(yesterday, [food('1 xúc xích', 'lunch')]) } });
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', 'xúc xích nướng');
+    await name(r, 'xúc xích nướng');
     expect(allText(r)).toContain('↻ Xúc xích: đây là lần thứ 2 trong 3 ngày');
-    await type(r, 'Tên món', 'trứng luộc');
+    await name(r, 'trứng luộc');
     expect(allText(r)).not.toContain('↻');
   });
 
   it('warns when the numbers of this one meal are large', async () => {
     const r = await mount(<AddFoodScreen />);
-    await type(r, 'Tên món', 'cơm thập cẩm');
+    await addByHand(r, { name: 'cơm thập cẩm', kcal: '1200', protein: '10', purine: '400', salt: '5' });
+    await tap(r, 'Bữa: chưa chọn. Chạm để đổi bữa và giờ');
     await tap(r, 'Trưa');
-    await type(r, 'Calo (kcal)', '1200');
-    await type(r, 'Đạm (g)', '10');
-    await type(r, 'Purine (mg)', '400');
-    await type(r, 'Muối (g)', '5');
+    await tap(r, 'Xong');
     const text = allText(r);
     expect(text).toContain('Bữa trên 1.000 kcal');
     // A meal warning names the share of the WHOLE day's limit it used (limits: purine 600 mg, salt 5 g = 2,000 mg sodium).
@@ -178,7 +182,10 @@ describe('Live comments in Add food', () => {
   it('follows the app language', async () => {
     useSettingsStore.setState({ language: 'en' });
     const r = await mount(<AddFoodScreen />);
+    await tap(r, 'Enter by hand, no AI');
     await type(r, 'Food name', 'xúc xích');
+    await tap(r, 'Save this food');
+    expect(allText(r)).toContain('Check the foods');
     expect(allText(r)).toContain('COMMENTS ON THIS FOOD');
     expect(allText(r)).toContain('→ swap:');
   });

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HudText } from '../src/components/quest/HudText';
@@ -25,9 +25,7 @@ import { usePlanStore } from '../src/store/usePlanStore';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { useGameText } from '../src/game/strings';
 import { useDayEvaluator, useNow } from '../src/game/useGameState';
-import type { StringKey } from '../src/i18n/strings';
 import { toDateKey } from '../src/utils/date';
-import type { ExtraMealTime } from '../src/types';
 import { quest, questFonts, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
@@ -44,16 +42,6 @@ function endOfDay(d: Date): Date {
   copy.setHours(23, 59, 0, 0);
   return copy;
 }
-
-const EXTRA_MEAL_TIME_OPTIONS: { value: ExtraMealTime; labelKey: StringKey }[] = [
-  { value: 'breakfast', labelKey: 'extraMealTime.breakfast' },
-  { value: 'morning_snack', labelKey: 'extraMealTime.morning_snack' },
-  { value: 'lunch', labelKey: 'extraMealTime.lunch' },
-  { value: 'afternoon_snack', labelKey: 'extraMealTime.afternoon_snack' },
-  { value: 'late_afternoon_snack', labelKey: 'extraMealTime.late_afternoon_snack' },
-  { value: 'dinner', labelKey: 'extraMealTime.dinner' },
-  { value: 'evening_snack', labelKey: 'extraMealTime.evening_snack' },
-];
 
 export default function NutritionScreen() {
   const { t } = useTranslation();
@@ -78,7 +66,6 @@ export default function NutritionScreen() {
   const toggleMeal = useNutritionStore((s) => s.toggleMeal);
   const addWater = useNutritionStore((s) => s.addWater);
   const resetWater = useNutritionStore((s) => s.resetWater);
-  const addExtra = useNutritionStore((s) => s.addExtra);
   const saveDayLog = useNutritionStore((s) => s.saveDayLog);
   const settings = useSettingsStore();
   const latestWeight = useWeightStore((s) => s.latest());
@@ -89,10 +76,6 @@ export default function NutritionScreen() {
     [workoutEntries, dateKey]
   );
 
-  const [extraName, setExtraName] = useState('');
-  const [extraCalories, setExtraCalories] = useState('');
-  const [extraProtein, setExtraProtein] = useState('');
-  const [extraMealTime, setExtraMealTime] = useState<ExtraMealTime | null>(null);
   const [customWaterMl, setCustomWaterMl] = useState('');
 
   function handleAddCustomWater() {
@@ -107,20 +90,6 @@ export default function NutritionScreen() {
   const extraNow = extraIntake(log);
   const totalCalories = Math.round(eatenCalories + extraNow.kcal);
   const totalProtein = Math.round((eatenProtein + extraNow.proteinG) * 10) / 10;
-
-  function handleAddExtra() {
-    const cal = parseFloat(extraCalories.replace(',', '.')) || 0;
-    const protein = parseFloat(extraProtein.replace(',', '.')) || 0;
-    if (cal <= 0 && protein <= 0) {
-      Alert.alert(t('common.error'), t('nutrition.errorMissingValue'));
-      return;
-    }
-    addExtra(dateKey, extraName.trim(), cal, protein, extraMealTime);
-    setExtraName('');
-    setExtraCalories('');
-    setExtraProtein('');
-    setExtraMealTime(null);
-  }
 
   const sectionTitle = (text: string) => (
     <HudText size={16} style={styles.sectionTitle} accessibilityRole="header">
@@ -266,59 +235,12 @@ export default function NutritionScreen() {
       })}
 
       {sectionTitle(t('nutrition.extraTitle'))}
-      <View style={styles.card}>
-        <TextInput
-          accessibilityLabel={t('nutrition.extraNamePlaceholder')}
-          placeholderTextColor={quest.textSecondary}
-          style={styles.input}
-          placeholder={t('nutrition.extraNamePlaceholder')}
-          value={extraName}
-          onChangeText={setExtraName}
-        />
-        <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {t('nutrition.extraMealTimeLabel')}
-        </HudText>
-        <View style={styles.chipRow}>
-          {EXTRA_MEAL_TIME_OPTIONS.map((opt) => {
-            const active = extraMealTime === opt.value;
-            return (
-              <Pressable
-                key={opt.value}
-                accessibilityRole="button"
-                accessibilityState={{ selected: active }}
-                accessibilityLabel={t(opt.labelKey)}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setExtraMealTime(active ? null : opt.value)}
-              >
-                <HudText size={12} weight={active ? 'bold' : 'medium'} color={active ? quest.onGold : quest.textSecondary}>
-                  {t(opt.labelKey)}
-                </HudText>
-              </Pressable>
-            );
-          })}
-        </View>
-        <View style={styles.customWaterRow}>
-          <TextInput
-            accessibilityLabel={t('common.calories')}
-            placeholderTextColor={quest.textSecondary}
-            style={[styles.input, styles.flex]}
-            placeholder={t('common.calories')}
-            keyboardType="decimal-pad"
-            value={extraCalories}
-            onChangeText={setExtraCalories}
-          />
-          <TextInput
-            accessibilityLabel={t('nutrition.extraProteinPlaceholder')}
-            placeholderTextColor={quest.textSecondary}
-            style={[styles.input, styles.flex]}
-            placeholder={t('nutrition.extraProteinPlaceholder')}
-            keyboardType="decimal-pad"
-            value={extraProtein}
-            onChangeText={setExtraProtein}
-          />
-        </View>
-        <QuestButton title={t('nutrition.addExtraButton')} onPress={handleAddExtra} />
-      </View>
+      <QuestButton
+        variant="ghost"
+        icon="plus"
+        title={g('nutritionScreen.logMeal')}
+        onPress={() => router.push({ pathname: '/add-food', params: isToday ? {} : { date: dateKey } })}
+      />
 
       {sectionTitle(t('nutrition.diaryTitle'))}
       <View style={styles.card}>
@@ -353,7 +275,6 @@ const styles = StyleSheet.create({
   checkboxChecked: { backgroundColor: quest.xp, borderColor: quest.xp },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { minHeight: 36, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
-  chipActive: { backgroundColor: quest.gold, borderColor: quest.gold },
   waterChip: { minHeight: 44, paddingHorizontal: 14, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel, alignItems: 'center', justifyContent: 'center' },
   customWaterRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: { minHeight: 48, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, fontSize: 15, fontFamily: questFonts.semibold },

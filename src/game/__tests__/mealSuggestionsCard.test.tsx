@@ -44,6 +44,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import AddFoodScreen from '../../../app/add-food';
+import { addByHand, readItem, saveMeal, tap } from '../../testing/mealFlow';
 import { dinnerIdeasFromFoods } from '../../ai/dinner';
 import { buildMealPlan, mealBrief } from '../../ai/mealSplit';
 import { MealSuggestionsCard } from '../../components/quest/MealSuggestionsCard';
@@ -538,17 +539,14 @@ describe('Add food opened with a dinner idea', () => {
     return renderer!;
   };
 
-  it('fills the form (name, figures, dinner) from the route and saves nothing until confirmed', async () => {
+  it('opens straight on the check step with the dish (name, figures, dinner) from the route and saves nothing until confirmed', async () => {
     mockParams = { name: 'Cá hấp gừng + rau', calories: '180', protein: '35', purine: '200', salt: '1', sugar: '0', mealTime: 'dinner' };
     const r = await mount();
-    expect(input(r, 'Tên món').props.value).toBe('Cá hấp gừng + rau');
-    expect(input(r, 'Calo (kcal)').props.value).toBe('180');
-    expect(input(r, 'Đạm (g)').props.value).toBe('35');
-    expect(input(r, 'Purine (mg)').props.value).toBe('200');
-    expect(input(r, 'Muối (g)').props.value).toBe('1');
-    expect(input(r, 'Đường tự do (g)').props.value).toBe('');
+    expect(allText(r)).toContain('Kiểm tra món');
+    expect(find(r, 'Bữa: Tối. Chạm để đổi bữa và giờ')).toBeDefined();
+    expect(await readItem(r, 1)).toEqual({ name: 'Cá hấp gừng + rau', kcal: '180', protein: '35', purine: '200', salt: '1', sugar: '' });
     expect(useNutritionStore.getState().logs[DATE]).toBeUndefined();
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await saveMeal(r);
     const items = useNutritionStore.getState().logs[DATE].extraItems;
     expect(items.map((i) => [i.name, i.calories, i.proteinG, i.mealTime])).toEqual([['Cá hấp gừng + rau', 180, 35, 'dinner']]);
     expect(useFoodDbStore.getState().custom.map((f) => f.name)).toEqual(['Cá hấp gừng + rau']); // an AI idea is remembered
@@ -558,15 +556,15 @@ describe('Add food opened with a dinner idea', () => {
     useFoodDbStore.setState({ custom: [saved('Rau luộc nhà làm')] });
     mockParams = { name: 'Rau luộc nhà làm', calories: '120', protein: '35', from: 'db', mealTime: 'dinner' };
     const r = await mount();
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await saveMeal(r);
     expect(useFoodDbStore.getState().custom).toHaveLength(1);
   });
 
-  it('ignores nonsense in the route and opens an empty form', async () => {
+  it('ignores nonsense in the route and opens the empty input step', async () => {
     mockParams = { name: '', calories: '99999999', protein: 'x', mealTime: 'brunch' };
     const r = await mount();
-    expect(input(r, 'Tên món').props.value).toBe('');
-    expect(input(r, 'Calo (kcal)').props.value).toBe('');
+    expect(allText(r)).toContain('Bước 1/2');
+    expect(find(r, 'Sửa món 1')).toBeUndefined();
   });
 });
 
@@ -600,28 +598,32 @@ describe('Time eaten box on the entry screens', () => {
   };
   const saved1 = () => useNutritionStore.getState().logs[DATE].extraItems[0];
   const hhmm = (iso: string) => `${String(new Date(iso).getHours()).padStart(2, '0')}:${String(new Date(iso).getMinutes()).padStart(2, '0')}`;
-  const fill = async (r: ReactTestRenderer) => {
-    await type(r, 'Tên món', 'Cơm gà');
-    await type(r, 'Calo (kcal)', '600');
-  };
+  const fill = async (r: ReactTestRenderer) => addByHand(r, { name: 'Cơm gà', kcal: '600' });
+  const mealSheet = (r: ReactTestRenderer) => tap(r, /^Bữa: /);
   const chip = (r: ReactTestRenderer, label: string) => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === label)[0];
 
   it('shows the picked meal\'s usual time as the placeholder, and with nothing typed files the food at that time (a lunch entered at 23:05 is 12:00)', async () => {
     const r = await mount();
+    await fill(r);
+    expect(find(r, 'Giờ ăn: 23:05. Chạm để đổi')).toBeDefined();
+    await mealSheet(r);
     expect(input(r, 'Giờ ăn (tuỳ chọn)').props.placeholder).toBe('23:05'); // no meal yet: the moment of entry
     await act(async () => chip(r, 'Trưa').props.onPress());
     expect(input(r, 'Giờ ăn (tuỳ chọn)').props.placeholder).toBe('12:00');
-    await fill(r);
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await tap(r, 'Xong');
+    expect(find(r, 'Giờ ăn: 12:00. Chạm để đổi')).toBeDefined();
+    await saveMeal(r);
     expect(hhmm(saved1().loggedAtISO)).toBe('12:00');
   });
 
   it('the time typed wins: a dinner at 20:30', async () => {
     const r = await mount();
-    await act(async () => chip(r, 'Tối').props.onPress());
     await fill(r);
+    await mealSheet(r);
+    await act(async () => chip(r, 'Tối').props.onPress());
     await type(r, 'Giờ ăn (tuỳ chọn)', '20h30');
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await tap(r, 'Xong');
+    await saveMeal(r);
     expect(hhmm(saved1().loggedAtISO)).toBe('20:30');
     expect(saved1().mealTime).toBe('dinner');
   });
@@ -629,14 +631,16 @@ describe('Time eaten box on the entry screens', () => {
   it('a time that is not a time is flagged and nothing is saved until it is fixed or emptied', async () => {
     const r = await mount();
     await fill(r);
+    await mealSheet(r);
     await type(r, 'Giờ ăn (tuỳ chọn)', '25:99');
     expect(allText(r)).toContain('Giờ chưa đúng');
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await saveMeal(r);
     expect(useNutritionStore.getState().logs[DATE]).toBeUndefined();
     expect(mockRouter.back).not.toHaveBeenCalled();
     await type(r, 'Giờ ăn (tuỳ chọn)', '');
     expect(allText(r)).not.toContain('Giờ chưa đúng');
-    await act(async () => find(r, 'Thêm vào hôm nay')!.props.onPress());
+    await tap(r, 'Xong');
+    await saveMeal(r);
     expect(hhmm(saved1().loggedAtISO)).toBe('23:05'); // no meal, no time: the moment of entry
   });
 });

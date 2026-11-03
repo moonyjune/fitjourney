@@ -61,6 +61,7 @@ jest.mock('../../sync/cloudSync', () => ({
 }));
 
 import AddFoodScreen from '../../../app/add-food';
+import { addByHand, findPressable, openMealSheet, tap } from '../../testing/mealFlow';
 import MealDetailScreen from '../../../app/meal/[slot]';
 import CheckinScreen from '../../../app/checkin';
 import JournalScreen from '../../../app/journal';
@@ -417,8 +418,16 @@ describe('FitQuest logging screens', () => {
     });
   });
 
-  describe('Add food', () => {
-    it('takes the photo handed over by "Chụp món ăn" once (AI off: no analysis, the photo waits with the form)', () => {
+  describe('Add food (Ghi bữa)', () => {
+    const mount = async () => {
+      let r: ReactTestRenderer | undefined;
+      await act(async () => {
+        r = render(<AddFoodScreen />);
+      });
+      return r!;
+    };
+
+    it('takes the photo handed over by "Chụp món ăn" once (AI off: no analysis, the photo waits on the input step)', () => {
       const { setPendingMealPhoto, takePendingMealPhoto } = require('../../food/pendingPhoto');
       const { useAiPhotoStore } = require('../../store/useAiPhotoStore');
       useAiPhotoStore.setState({ aiEnabled: false });
@@ -428,29 +437,42 @@ describe('FitQuest logging screens', () => {
       const photo = r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh món ăn đã chọn 1' && n.props.source?.uri === 'file:///meal.jpg');
       expect(photo.length).toBeGreaterThan(0);
       expect(takePendingMealPhoto()).toBeNull();
+      // AI off: no "Phân tích", the primary button is "Tự nhập" and says why.
+      expect(allText(r)).toContain('AI đang tắt');
+      expect(findPressable(r, 'Phân tích bằng AI')).toBeUndefined();
+      expect(findPressable(r, 'Tự nhập')).toBeDefined();
       useAiPhotoStore.setState({ aiEnabled: true });
     });
 
-    it('refuses an empty entry', () => {
-      const r = render(<AddFoodScreen />);
-      act(() => pressable(r, (l) => l === 'Thêm vào hôm nay').props.onPress());
+    it('step 1 is short: one line and ⓘ instead of paragraphs, one Analyze, and "Tự nhập"', async () => {
+      const r = await mount();
+      const text = allText(r);
+      expect(text).toContain('Ghi bữa');
+      expect(text).toContain('Bước 1/2');
+      expect(text).not.toContain('Mô tả, chụp ảnh, tra món hoặc tự nhập');
+      expect(findPressable(r, 'Phân tích bằng AI')).toBeDefined();
+      await tap(r, 'Cách ghi bữa');
+      expect(allText(r)).toContain('Món có trong cơ sở dữ liệu của bạn được điền luôn');
+    });
+
+    it('refuses an empty entry', async () => {
+      const r = await mount();
+      await tap(r, 'Phân tích bằng AI');
       expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
       expect(allText(r)).toContain('Hãy mô tả món đã ăn, thêm ảnh, hoặc nhập tên món.');
       expect(mockRouter.back).not.toHaveBeenCalled();
     });
 
-    it('saves an item with its purine, salt, sugar and junk flag, then closes', () => {
-      const r = render(<AddFoodScreen />);
-      act(() => textInput(r, 'Tên món').props.onChangeText('Bánh mì thịt'));
-      act(() => pressable(r, (l) => l === 'Trưa').props.onPress());
-      act(() => textInput(r, 'Calo (kcal)').props.onChangeText('450'));
-      act(() => textInput(r, 'Đạm (g)').props.onChangeText('18,5'));
-      act(() => textInput(r, 'Purine (mg)').props.onChangeText('60'));
-      act(() => textInput(r, 'Muối (g)').props.onChangeText('2.2'));
-      const junk = r.root.findAll((n) => typeof n.props.onValueChange === 'function' && n.props.accessibilityLabel === 'Đồ ăn vặt / junk food')[0];
-      act(() => junk.props.onValueChange(true));
-
-      act(() => pressable(r, (l) => l === 'Thêm vào hôm nay').props.onPress());
+    it('saves an item with its purine, salt, sugar and junk flag, then closes', async () => {
+      const r = await mount();
+      await addByHand(r, { name: 'Bánh mì thịt', kcal: '450', protein: '18,5', purine: '60', salt: '2.2' });
+      await openMealSheet(r);
+      await tap(r, 'Trưa');
+      await tap(r, 'Xong');
+      await tap(r, 'Đồ ăn vặt / junk food');
+      expect(allText(r)).toContain('Bánh mì thịt');
+      expect(allText(r)).toContain('450 kcal · 18.5 g đạm');
+      await tap(r, 'Lưu bữa · 450 kcal');
       const log = useNutritionStore.getState().logs[DATE];
       expect(log.extraItems).toHaveLength(1);
       expect(log.extraItems[0]).toMatchObject({
@@ -461,13 +483,12 @@ describe('FitQuest logging screens', () => {
       expect(mockRouter.back).toHaveBeenCalled();
     });
 
-    it('saves to the day picked in the quick-add sheet; a future or malformed date means today', () => {
+    it('saves to the day picked in the quick-add sheet (gold date chip); a future or malformed date means today', async () => {
       mockParams = { date: '2026-10-20' };
-      let r = render(<AddFoodScreen />);
-      expect(allText(r)).toContain('Đang ghi cho: T3 20/10');
-      act(() => textInput(r, 'Tên món').props.onChangeText('Chè'));
-      act(() => textInput(r, 'Calo (kcal)').props.onChangeText('250'));
-      act(() => pressable(r, (l) => l === 'Thêm vào T3 20/10').props.onPress());
+      let r = await mount();
+      expect(findPressable(r, (l) => l.includes('T3 20/10'))).toBeDefined();
+      await addByHand(r, { name: 'Chè', kcal: '250' });
+      await tap(r, 'Lưu bữa T3 20/10 · 250 kcal');
       expect(useNutritionStore.getState().logs['2026-10-20'].extraItems[0]).toMatchObject({ name: 'Chè', calories: 250 });
       expect(new Date(useNutritionStore.getState().logs['2026-10-20'].extraItems[0].loggedAtISO).getDate()).toBe(20);
       expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
@@ -475,18 +496,17 @@ describe('FitQuest logging screens', () => {
       for (const date of ['2026-10-24', '2026-02-31', 'hôm qua']) {
         mockParams = { date };
         act(() => r.unmount());
-        r = render(<AddFoodScreen />);
-        expect(allText(r)).not.toContain('Đang ghi cho');
-        expect(pressable(r, (l) => l === 'Thêm vào hôm nay')).toBeDefined();
+        r = await mount();
+        expect(findPressable(r, (l) => l.includes('Hôm nay'))).toBeDefined();
+        await addByHand(r, { name: 'Chè', kcal: '250' });
+        expect(findPressable(r, 'Lưu bữa · 250 kcal')).toBeDefined();
       }
     });
 
-    it('warns live about the missions an item would break, before it is saved', () => {
-      const r = render(<AddFoodScreen />);
-      act(() => textInput(r, 'Calo (kcal)').props.onChangeText('300'));
-      act(() => textInput(r, 'Đường tự do (g)').props.onChangeText('40'));
-      const junk = r.root.findAll((n) => typeof n.props.onValueChange === 'function' && n.props.accessibilityLabel === 'Đồ ăn vặt / junk food')[0];
-      act(() => junk.props.onValueChange(true));
+    it('warns live about the missions an item would break, before it is saved', async () => {
+      const r = await mount();
+      await addByHand(r, { kcal: '300', sugar: '40' });
+      await tap(r, 'Đồ ăn vặt / junk food');
       const text = allText(r);
       expect(text).toContain('Sẽ vượt ngưỡng Đường');
       expect(text).toContain('Sẽ vượt ngưỡng Đồ ăn vặt');

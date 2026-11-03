@@ -37,6 +37,8 @@ import { toDateKey } from '../../src/utils/date';
 import { isoWeekNumber } from '../../src/utils/isoWeek';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { useWaterPlan } from '../../src/water/useWaterPlan';
+import { setPendingMealPhoto } from '../../src/food/pendingPhoto';
+import { pickPhoto } from '../../src/utils/pickPhoto';
 
 /** Water added by Camp's tile, like the quick-add chip. */
 const WATER_STEP_ML = 250;
@@ -112,6 +114,19 @@ export default function CampScreen() {
   const dayDate = new Date(`${dayKey}T12:00:00`);
   const dayLabel = `${g(`weekday.${dayDate.getDay()}` as GameKey)} ${dayKey.slice(8)}/${dayKey.slice(5, 7)}`;
   const dateParams: Record<string, string> = isToday ? {} : { date: dayKey };
+
+  // "Chụp món": the camera opens straight from the tap (on web the file input only opens from a user gesture, Expo SDK 57 docs),
+  // then the photo goes to Ghi bữa and is analysed at once. Cancelled: nothing happens; no camera: Ghi bữa opens to pick a photo.
+  async function snapMeal() {
+    const picked = await pickPhoto('camera');
+    if (!picked) return;
+    if ('error' in picked) {
+      router.push({ pathname: '/add-food', params: dateParams });
+      return;
+    }
+    setPendingMealPhoto(picked.uri);
+    router.push({ pathname: '/add-food', params: { ...dateParams, photo: '1' } });
+  }
 
   useLightStatusBar();
 
@@ -201,7 +216,9 @@ export default function CampScreen() {
             title={g('camp.tilePhoto')}
             hint={g('camp.tilePhotoHint')}
             label={`${g('camp.tilePhoto')}. ${g('camp.tilePhotoHint')}`}
-            onPress={() => router.push({ pathname: '/add-food', params: dateParams })}
+            onPress={() => {
+              void snapMeal();
+            }}
           />
           <Tile
             icon="drop"
