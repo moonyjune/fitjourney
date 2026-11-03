@@ -49,7 +49,11 @@ interface NutritionState {
       parts?: MealPart[];
     }
   ) => string;
-  removeExtraItem: (dateKey: string, itemId: string) => void;
+  /** Removes a logged food. `keepPhotos` leaves its photos (proofs and files) in place, so `restoreExtraItem` can bring it back whole
+   *  ("Xoá bữa" + Hoàn tác); call `discardExtraPhotos` once the undo is no longer offered. */
+  removeExtraItem: (dateKey: string, itemId: string, opts?: { keepPhotos?: boolean }) => void;
+  /** Puts a removed food back as it was (same id, so its kept photos belong to it again), at `index` in the day's list (default: last). */
+  restoreExtraItem: (dateKey: string, item: ExtraFoodItem, index?: number) => void;
   /** Changes a logged off-plan food in place (amounts, totals, breakdown, photo) and saves it, with no AI call. `photoUri: null` removes
    *  the photo; a new one replaces the old (its proof and file go) and is saved as a meal proof. */
   updateExtra: (dateKey: string, itemId: string, patch: ExtraPatch) => void;
@@ -108,6 +112,10 @@ function discardMainPhoto(item: Pick<ExtraFoodItem, 'id' | 'photoUri'>): void {
 }
 
 /** Removes every photo attached to an off-plan food item: the proof entries and the persisted files. */
+export function discardExtraPhotos(item: Pick<ExtraFoodItem, 'id' | 'photoUri'>): void {
+  discardExtraPhoto(item);
+}
+
 function discardExtraPhoto(item: Pick<ExtraFoodItem, 'id' | 'photoUri'>): void {
   const proofs = useProofStore.getState();
   const ref = extraProofRef(item.id);
@@ -210,13 +218,21 @@ export const useNutritionStore = create<NutritionState>()(
           }
         }
       },
-      removeExtraItem: (dateKey, itemId) =>
+      removeExtraItem: (dateKey, itemId, opts) =>
         set((state) => {
           const current = state.logs[dateKey] ?? emptyLog(dateKey);
           const item = (current.extraItems ?? []).find((i) => i.id === itemId);
           if (!item) return state;
-          discardExtraPhoto(item);
+          if (!opts?.keepPhotos) discardExtraPhoto(item);
           const updated = withCountersAfterEdit(current, { ...current, extraItems: (current.extraItems ?? []).filter((i) => i.id !== itemId) });
+          return commit(state.logs, dateKey, updated);
+        }),
+      restoreExtraItem: (dateKey, item, index) =>
+        set((state) => {
+          const current = state.logs[dateKey] ?? emptyLog(dateKey);
+          const items = (current.extraItems ?? []).filter((i) => i.id !== item.id);
+          const at = index == null ? items.length : Math.max(0, Math.min(items.length, index));
+          const updated = withIntakeCounters({ ...current, extraItems: [...items.slice(0, at), item, ...items.slice(at)] });
           return commit(state.logs, dateKey, updated);
         }),
       saveDayLog: (dateKey, patch) =>

@@ -9,6 +9,9 @@ export interface ToastInput {
   undo?: () => void;
   /** Another button instead of undo ("Xem", "Thử lại"); ignored when `undo` is given. */
   action?: { label: string; onPress: () => void };
+  /** Runs once when the toast goes away without its undo being pressed (timed out, closed, or replaced by a newer toast): e.g. the
+   *  photos of a deleted meal are thrown away only then, so "Hoàn tác" can bring the meal back with them. */
+  onExpire?: () => void;
   /** Gold by default. */
   tone?: ToastTone;
   /** How long it stays up (5 s by default). */
@@ -36,6 +39,16 @@ interface ToastState {
 let nextId = 1;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
+/** Runs a toast's `onExpire` (a throwing callback must not break the toast itself). */
+function expire(toast: Toast | null) {
+  if (!toast?.onExpire) return;
+  try {
+    toast.onExpire();
+  } catch {
+    // nothing to do: the toast is gone either way
+  }
+}
+
 function clearTimer() {
   if (timer) clearTimeout(timer);
   timer = null;
@@ -45,6 +58,7 @@ export const useToastStore = create<ToastState>()((set, get) => ({
   toast: null,
   show: (input) => {
     clearTimer();
+    expire(get().toast);
     const id = nextId++;
     const durationMs = input.durationMs ?? TOAST_DEFAULT_MS;
     set({ toast: { ...input, id, tone: input.tone ?? 'gold', durationMs } });
@@ -56,6 +70,7 @@ export const useToastStore = create<ToastState>()((set, get) => ({
     if (!current || (id != null && current.id !== id)) return;
     clearTimer();
     set({ toast: null });
+    expire(current);
   },
   undo: () => {
     const current = get().toast;

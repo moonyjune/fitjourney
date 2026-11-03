@@ -16,6 +16,9 @@ interface Props {
   targetProtein: number;
   /** Dark FitQuest look (default off = classic light). */
   dark?: boolean;
+  /** Adds a button (labelled `useLabel`) that takes the suggested dish in place of the plan's (the plan meal screen). */
+  onUse?: (recipe: Recipe) => void;
+  useLabel?: string;
 }
 
 function difficultyStars(level: number): string {
@@ -26,7 +29,7 @@ function difficultyStars(level: number): string {
 /** "Tuỳ biến món ăn" — an AI-suggested alternative dish for this meal slot, matching its
  *  calorie/protein target but a different dish than the plan's default. Purely additive to the
  *  Nutrition screen: doesn't touch meal-completion state, calorie tallying, or proof capture. */
-export function MealRecipeSuggestion({ dayType, mealSlot, mealLabel, targetCalories, targetProtein, dark }: Props) {
+export function MealRecipeSuggestion({ dayType, mealSlot, mealLabel, targetCalories, targetProtein, dark, onUse, useLabel }: Props) {
   const { t } = useTranslation();
   const lightAccent = useAccentColors();
   const accent = dark
@@ -128,6 +131,16 @@ export function MealRecipeSuggestion({ dayType, mealSlot, mealLabel, targetCalor
       <TouchableOpacity style={[styles.cookButton, { backgroundColor: accent.primary }]} onPress={() => setModalVisible(true)}>
         <Text style={[styles.cookButtonText, { color: onAccent }]}>{t('mealRecipe.howToCookButton')}</Text>
       </TouchableOpacity>
+      {onUse && useLabel ? (
+        <TouchableOpacity
+          style={[styles.cookButton, { borderWidth: 1.5, borderColor: accent.primary }]}
+          onPress={() => onUse(recipe)}
+          accessibilityRole="button"
+          accessibilityLabel={`${useLabel}: ${recipe.dishName}`}
+        >
+          <Text style={[styles.cookButtonText, { color: accent.primary }]}>{useLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
 
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>

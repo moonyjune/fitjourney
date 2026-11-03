@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import type { MealPart } from '../../types';
 import { MAX_MEAL_PHOTOS, type MealPhotoRef } from '../../utils/photoOrder';
 import { pickPhoto } from '../../utils/pickPhoto';
-import { PhotoStrip } from './PhotoStrip';
+import { BottomSheet } from './BottomSheet';
+import { DishThumb } from './DishThumb';
 import { HudText } from './HudText';
-import { QuestButton } from './QuestButton';
 import { PartEditForm } from './PartEditForm';
+import { PhotoStrip } from './PhotoStrip';
+import { PhotoViewer } from './PhotoViewer';
+import { QuestButton } from './QuestButton';
 import { QuestIcon } from './QuestIcon';
 
 export interface MealDetail {
@@ -37,14 +40,20 @@ interface Props {
   /** Give the photos their take / choose (add one more) and remove (the photo in view) buttons. Resolve false when it could not be done. */
   onAddPhoto?: (uri: string) => Promise<boolean>;
   onRemovePhoto?: (photo: MealPhotoRef) => Promise<boolean>;
+  /** "Ăn lại món này": logs the meal again (the caller shows the toast with "Hoàn tác"); the sheet then closes. Left out for a coach or a plan meal. */
+  onEatAgain?: () => void;
+  /** "Xoá bữa": deletes it at once (the caller shows the toast with "Hoàn tác"); the sheet then closes. Left out for a coach. */
+  onDelete?: () => void;
 }
 
-/** A logged meal in full: its photos at a readable size side by side with ‹ › (add up to MAX_MEAL_PHOTOS, remove the one in view), the totals and, when it was entered as several foods,
- *  each of them with a pencil to change its amount; the calories are worked out again on the spot. */
-export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto }: Props) {
+/** A logged meal in full, as a bottom sheet (dialog 10): its photos side by side with ‹ › (tap one to see it full screen; add up to
+ *  MAX_MEAL_PHOTOS, remove the one in view), the totals and, when it was entered as several foods, each of them with a pencil that opens
+ *  a small sheet to change its amount (the calories are worked out again on the spot); then "Ăn lại món này" and "Xoá bữa", both undoable. */
+export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto, onEatAgain, onDelete }: Props) {
   const g = useGameText();
   const [inView, setInView] = useState(0);
   const [editing, setEditing] = useState<number | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   if (!detail) return null;
@@ -52,6 +61,7 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
   const current = photos[Math.min(inView, photos.length - 1)];
   const canAdd = !!onAddPhoto && photos.length < MAX_MEAL_PHOTOS;
   const round1 = (n: number) => Math.round(n * 10) / 10;
+  const editingPart = editing != null ? detail.parts?.[editing] : undefined;
 
   async function change(source: 'camera' | 'library' | 'remove') {
     if (busy) return;
@@ -79,102 +89,144 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
 
   const close = () => {
     setEditing(null);
+    setZoom(null);
     setInView(0);
     setPhotoError(null);
     onClose();
   };
+  const caption = [detail.meal, detail.time].filter(Boolean).join(' · ');
+
+  const footer =
+    onEatAgain || onDelete ? (
+      <View style={styles.actions}>
+        {onEatAgain && (
+          <View style={styles.flex}>
+            <QuestButton
+              icon="undo"
+              title={g('journal.eatAgain')}
+              onPress={() => {
+                onEatAgain();
+                close(); // the toast with "Hoàn tác" shows on the screen below
+              }}
+            />
+          </View>
+        )}
+        {onDelete && (
+          <View style={styles.flex}>
+            <QuestButton
+              variant="danger"
+              icon="trash"
+              title={g('journal.deleteMeal')}
+              accessibilityLabel={g('journal.deleteMealLabel', { name: detail.title })}
+              onPress={() => {
+                onDelete();
+                close();
+              }}
+            />
+          </View>
+        )}
+      </View>
+    ) : null;
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={close}>
-      <View style={styles.overlay}>
-        <Pressable accessibilityRole="button" accessibilityLabel={g('journal.detailClose')} style={StyleSheet.absoluteFill} onPress={close} />
-        <View style={styles.sheet} accessibilityViewIsModal>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <HudText size={17} accessibilityRole="header">
-              {detail.title}
+    <BottomSheet visible onClose={close} title={detail.title} subtitle={caption || undefined} closeLabel={g('journal.detailClose')} footer={footer} testID="meal-detail-sheet">
+      <View style={styles.content}>
+        {photos.length > 0 ? (
+          <>
+            <PhotoStrip
+              key={photos.map((p) => p.uri).join('|')}
+              photos={photos.map((p) => ({ uri: p.uri, label: detail.title }))}
+              onIndex={setInView}
+              onPressPhoto={setZoom}
+              pressLabel={g('photo.zoom')}
+            />
+            <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.center}>
+              {g('journal.detailZoomHint')}
             </HudText>
-            {detail.time || detail.meal ? (
-              <HudText size={13} color={quest.goldLight}>
-                {[detail.meal, detail.time].filter(Boolean).join(' · ')}
-              </HudText>
-            ) : null}
+          </>
+        ) : (
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('journal.detailNoPhoto')}
+          </HudText>
+        )}
+        {(onAddPhoto || onRemovePhoto) && (
+          <View style={styles.photoButtons}>
+            {canAdd && <PhotoButton icon="camera" label={g('food.photo.camera')} disabled={busy} onPress={() => change('camera')} />}
+            {canAdd && <PhotoButton icon="plus" label={photos.length > 0 ? g('photo.addMore', { n: photos.length, max: MAX_MEAL_PHOTOS }) : g('food.photo.library')} disabled={busy} onPress={() => change('library')} />}
+            {onRemovePhoto && current ? <PhotoButton icon="trash" label={photos.length > 1 ? g('photo.removeThis') : g('food.photo.remove')} disabled={busy} danger onPress={() => change('remove')} /> : null}
+          </View>
+        )}
+        {photoError && (
+          <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+            {photoError}
+          </HudText>
+        )}
 
-            {photos.length > 0 ? (
-              <PhotoStrip key={photos.map((p) => p.uri).join('|')} photos={photos.map((p) => ({ uri: p.uri, label: detail.title }))} onIndex={setInView} />
-            ) : (
-              <HudText size={12} weight="medium" color={quest.textSecondary}>
-                {g('journal.detailNoPhoto')}
-              </HudText>
-            )}
-            {(onAddPhoto || onRemovePhoto) && (
-              <View style={styles.photoButtons}>
-                {canAdd && <PhotoButton icon="camera" label={g('food.photo.camera')} disabled={busy} onPress={() => change('camera')} />}
-                {canAdd && <PhotoButton icon="plus" label={photos.length > 0 ? g('photo.addMore', { n: photos.length, max: MAX_MEAL_PHOTOS }) : g('food.photo.library')} disabled={busy} onPress={() => change('library')} />}
-                {onRemovePhoto && current ? <PhotoButton icon="trash" label={photos.length > 1 ? g('photo.removeThis') : g('food.photo.remove')} disabled={busy} danger onPress={() => change('remove')} /> : null}
-              </View>
-            )}
-            {photoError && (
-              <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
-                {photoError}
-              </HudText>
-            )}
+        <HudText size={16} color={quest.goldLight}>
+          {detail.kcal} kcal · {round1(detail.proteinG)} g
+        </HudText>
+        {detail.purineMg != null && detail.sugarG != null && detail.saltG != null && (
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('journal.extraNutrients', { purine: Math.round(detail.purineMg), sugar: round1(detail.sugarG), salt: round1(detail.saltG) })}
+          </HudText>
+        )}
 
-            <HudText size={14} color={quest.goldLight}>
-              {detail.kcal} kcal · {round1(detail.proteinG)} g
+        {detail.parts && detail.parts.length > 0 && (
+          <View style={styles.parts}>
+            <HudText size={12} color={quest.textSecondary}>
+              {g('journal.detailParts').toUpperCase()}
             </HudText>
-            {detail.purineMg != null && detail.sugarG != null && detail.saltG != null && (
+            {canEditParts && (
               <HudText size={12} weight="medium" color={quest.textSecondary}>
-                {g('journal.extraNutrients', { purine: Math.round(detail.purineMg), sugar: round1(detail.sugarG), salt: round1(detail.saltG) })}
+                {g('journal.detailEditHint')}
               </HudText>
             )}
-
-            {detail.parts && detail.parts.length > 0 && (
-              <View style={styles.parts}>
-                <HudText size={12} color={quest.textSecondary}>
-                  {g('journal.detailParts').toUpperCase()}
+            {detail.parts.map((p, i) => (
+              <View key={`${p.name}-${i}`} style={[styles.partRow, i > 0 && styles.partDivider]}>
+                <DishThumb name={p.name} size={40} radius={10} off />
+                <HudText size={13} weight="medium" style={styles.flex}>
+                  {g('journal.detailPartLine', { name: p.name, kcal: p.calories, protein: p.proteinG })}
                 </HudText>
-                {canEditParts && (
-                  <HudText size={11} weight="medium" color={quest.textSecondary}>
-                    {g('journal.detailEditHint')}
-                  </HudText>
+                {canEditParts && onEditPart && (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={g('journal.partEdit', { name: p.name })}
+                    hitSlop={4}
+                    onPress={() => setEditing(i)}
+                    style={styles.iconButton}
+                  >
+                    <QuestIcon name="edit" size={16} color={quest.gold} strokeWidth={2.2} />
+                  </Pressable>
                 )}
-                {detail.parts.map((p, i) => (
-                  <View key={`${p.name}-${i}`} style={styles.partBlock}>
-                    <View style={styles.partRow}>
-                      <HudText size={13} weight="medium" style={styles.flex}>
-                        {g('journal.detailPartLine', { name: p.name, kcal: p.calories, protein: p.proteinG })}
-                      </HudText>
-                      {canEditParts && onEditPart && (
-                        <Pressable
-                          accessibilityRole="button"
-                          accessibilityLabel={g('journal.partEdit', { name: p.name })}
-                          hitSlop={8}
-                          onPress={() => setEditing(i)}
-                          style={styles.iconButton}
-                        >
-                          <QuestIcon name="edit" size={16} color={quest.gold} strokeWidth={2.2} />
-                        </Pressable>
-                      )}
-                    </View>
-                    {editing === i && (
-                      <PartEditForm
-                        part={p}
-                        onCancel={() => setEditing(null)}
-                        onSave={(next) => {
-                          onEditPart?.(i, next);
-                          setEditing(null);
-                        }}
-                      />
-                    )}
-                  </View>
-                ))}
               </View>
-            )}
-          </ScrollView>
-          <QuestButton variant="ghost" title={g('journal.detailClose')} onPress={close} />
-        </View>
+            ))}
+          </View>
+        )}
       </View>
-    </Modal>
+
+      {/* ✎ opens the part's amounts in a sheet of its own, over this one (dialog 08). */}
+      <BottomSheet visible={!!editingPart} onClose={() => setEditing(null)} title={editingPart ? g('journal.partEditTitle', { name: editingPart.name }) : undefined}>
+        {editingPart && editing != null && (
+          <PartEditForm
+            key={`${editing}-${editingPart.name}`}
+            part={editingPart}
+            onCancel={() => setEditing(null)}
+            onSave={(next) => {
+              onEditPart?.(editing, next);
+              setEditing(null);
+            }}
+          />
+        )}
+      </BottomSheet>
+
+      <PhotoViewer
+        photos={zoom != null ? photos.map((p) => ({ uri: p.uri, label: detail.title, caption: caption || undefined })) : null}
+        initialIndex={zoom ?? 0}
+        title={detail.title}
+        subtitle={caption || undefined}
+        onClose={() => setZoom(null)}
+      />
+    </BottomSheet>
   );
 }
 
@@ -197,14 +249,14 @@ function PhotoButton({ icon, label, onPress, disabled, danger }: { icon: 'camera
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: 'rgba(0,0,0,0.7)' },
-  sheet: { maxHeight: '90%', maxWidth: 520, width: '100%', alignSelf: 'center', gap: 12, padding: 16, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
-  content: { gap: 8 },
+  content: { gap: 10 },
+  center: { textAlign: 'center' },
   flex: { flex: 1, minWidth: 0 },
   photoButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  photoButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
+  photoButton: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
   parts: { gap: 6, marginTop: 4 },
-  partBlock: { gap: 6 },
-  partRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  iconButton: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  partRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  partDivider: { borderTopWidth: 1, borderTopColor: quest.raised2 },
+  iconButton: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  actions: { flexDirection: 'row', gap: 10 },
 });

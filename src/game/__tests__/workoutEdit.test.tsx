@@ -70,6 +70,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import { useToastStore } from '../../store/useToastStore';
 
 const NOW = new Date('2026-10-23T16:10:00');
 const CAM = 'file:///tmp/cam.jpg';
@@ -598,13 +599,28 @@ describe('Classic workout screen: editing, photo and AI prefill', () => {
       expect(useWorkoutStore.getState().entries[0]).toMatchObject({ label: 'Máy chạy của tôi', durationMin: 35, caloriesBurned: 330 });
     });
 
-    it('deleting an entry deletes its proof and its file', async () => {
+    it('deleting an entry deletes its proof and its file once the "Hoàn tác" toast is gone', async () => {
       withProof();
       const r = await mount();
       await press(r, 'Xóa: Đi bộ nhanh');
       expect(useWorkoutStore.getState().entries).toHaveLength(0);
+      expect(useToastStore.getState().toast?.text).toBe('Đã xoá Đi bộ nhanh');
+      // The photo waits for the undo...
+      expect(useProofStore.getState().photos).toHaveLength(1);
+      act(() => useToastStore.getState().hide());
+      // ...and goes with the toast.
       expect(useProofStore.getState().photos).toHaveLength(0);
       expect(mockDeletePhoto).toHaveBeenCalledWith('file:///docs/proofs/old.jpg');
+    });
+
+    it('"Hoàn tác" brings a deleted entry back with its photo', async () => {
+      withProof();
+      const r = await mount();
+      await press(r, 'Xóa: Đi bộ nhanh');
+      act(() => useToastStore.getState().undo());
+      expect(useWorkoutStore.getState().entries.map((e) => e.id)).toEqual(['e1']);
+      expect(useProofStore.getState().photos).toHaveLength(1);
+      expect(mockDeletePhoto).not.toHaveBeenCalled();
     });
   });
 });
