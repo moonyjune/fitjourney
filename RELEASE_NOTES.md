@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.27.0 | yes | analyze-proof-photo, analyze-weekly-feelings, coach-digest, boss-banter, dish-photo, estimate-workout-kcal, parse-meal-text, generate-meal-recipe, read-nutrition-label, suggest-dinner, suggest-cheat-places, suggest-plan-update, weekly-report, suggest-swap, tempt-me, send-push |
 | 0.26.6 | no | — |
 | 0.26.5 | no | tempt-me, dish-photo |
 | 0.26.4 | yes | analyze-proof-photo, boss-banter, coach-digest, dish-photo, generate-meal-recipe, parse-meal-text, estimate-workout-kcal, read-nutrition-label, suggest-cheat-places, tempt-me, suggest-dinner, suggest-swap, weekly-report |
@@ -79,6 +80,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.27.0
+- Boss banter and the coach digest run on their own model, "Câu ngắn (boss, nhận xét)" on the AI & cost screen (ai_settings key `model.short`), Claude Haiku 5.5 by default.
+- A temptation pool refill started by a player's pop-up no longer uses that player's AI calls or daily budget: every refill and photo check is system cost, logged on the pool (tempt_pool_meta). Refill limits are unchanged, and the global daily cap AI_DAILY_BUDGET_USD now includes the pool's spend for the day.
+- The weekly feelings analysis and the plan chat go through the shared AI code: the current model (the one chosen on the AI & cost screen, Sonnet 5.5) instead of the older Sonnet 5, a daily limit per user (feelings 3, plan chat 10; `ai_quota.feelings` / `ai_quota.planchat`), the AI budgets and off switch, and their cost shown as "Phân tích cảm giác tuần" / "Trò chuyện sửa kế hoạch".
+- Web Push follows the signed-in account: every way a session ends ("Đăng xuất", the sign-out after 24 h without opening the app, an expired session, a sign-out in another tab) drops this device's subscription. After an automatic sign-out, "Thông báo khi đóng app" comes back on when the same account signs in again (permission already granted); never after "Đăng xuất", never for another account. Saving claims the subscription by endpoint (`push_claim_subscription`), so another account on the same device can turn push on at once.
+- The reminder plan is re-sent 3 s after a change to the water target, the drinking window, "Nhắc nhở", the language, the meal mode or the plan; a day with its own water target is sent as today's drink times.
+- Skipped meals ("Bỏ bữa") sync per meal with the newest change winning: an undo ("Hoàn tác") on one device is no longer brought back by another device that was offline. Old-format data is read and rewritten automatically.
+- Server: run schema.sql (`model.short` key, tempt_pool_meta day-cost columns, `tempt_pool_add_cost` / `ai_cost_on_day` redefined, `push_claim_subscription`); every part works before it is run, with the old behaviour.
 
 ## 0.26.6
 - The streak 🔥 counts today only once the day is settled (no meal still to come), like the deficit mission and the boss hit; until then it runs through yesterday, so an in-progress day neither adds early nor breaks it (Camp and History).
