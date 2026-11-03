@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, View } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
-import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { ScreenTemplate } from '../src/components/quest/ScreenTemplate';
 import { QuestIcon } from '../src/components/quest/QuestIcon';
 import { analyzeHabits, type HabitStats } from '../src/habits/analysis';
 import { autoSignals } from '../src/habits/auto';
@@ -22,8 +21,9 @@ import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useWeightStore } from '../src/store/useWeightStore';
 import { useWorkoutStore } from '../src/store/useWorkoutStore';
 import { quest, questRadius } from '../src/theme/quest';
-import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { useGameText } from '../src/game/strings';
+import { showToast } from '../src/store/useToastStore';
 import { toDateKey } from '../src/utils/date';
 
 const STATUS_KEY: Record<HabitStatus, HabitKey> = { formed: 'hb.s.formed', building: 'hb.s.building', todo: 'hb.s.todo' };
@@ -147,12 +147,13 @@ function FormationBadge({ s }: { s: HabitStats }) {
 /** Profile > Habits: tick the habits day by day, see how steady each one is week by week, and keep the list. */
 export default function HabitsScreen() {
   const h = useHabitText();
-  const insets = useSafeAreaInsets();
+  const g = useGameText();
   useLightStatusBar();
   const habits = useHabitStore((s) => s.habits);
   const checks = useHabitStore((s) => s.checks);
   const setCheck = useHabitStore((s) => s.setCheck);
   const archiveHabit = useHabitStore((s) => s.archiveHabit);
+  const restoreHabit = useHabitStore((s) => s.restoreHabit);
   const addHabit = useHabitStore((s) => s.addHabit);
   const language = useSettingsStore((s) => s.language);
   const nutritionLogs = useNutritionStore((s) => s.logs);
@@ -162,7 +163,6 @@ export default function HabitsScreen() {
   const todayKey = toDateKey(new Date());
   const [day, setDay] = useState(todayKey);
   const [editing, setEditing] = useState<{ habit: Habit | null } | null>(null);
-  const [confirmArchive, setConfirmArchive] = useState<string | null>(null);
 
   const active = useMemo(() => habits.filter((x) => !x.archived).sort((a, b) => a.sort - b.sort), [habits]);
   const tracked = useMemo(() => trackedHabits(habits), [habits]);
@@ -186,237 +186,236 @@ export default function HabitsScreen() {
   const stateText = (v: CheckValue | undefined) => h(v === 'done' ? 'hb.stateDone' : v === 'missed' ? 'hb.stateMissed' : 'hb.stateNone');
 
   return (
-    <View style={styles.screen}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
-        <QuestHeader title={h('hb.title')} onBack={goBack} backLabel={h('hb.back')} />
+    <ScreenTemplate title={h('hb.title')} onBack={goBack} backLabel={h('hb.back')}>
 
-        {editing ? (
-          <HabitForm key={editing.habit?.id ?? 'new'} habit={editing.habit} onDone={() => setEditing(null)} />
-        ) : (
-          <>
-            <HudText size={17} accessibilityRole="header" style={styles.section}>
-              {h('hb.checkTitle')}
+      {editing ? (
+        <HabitForm key={editing.habit?.id ?? 'new'} habit={editing.habit} onDone={() => setEditing(null)} />
+      ) : (
+        <>
+          <HudText size={17} accessibilityRole="header" style={styles.section}>
+            {h('hb.checkTitle')}
+          </HudText>
+          <View style={styles.chips}>
+            {days.map((d) => (
+              <QuestChip key={d} label={d === todayKey ? h('hb.today') : fmtDayMonth(d)} selected={day === d} onPress={() => setDay(d)} accessibilityLabel={d === todayKey ? h('hb.today') : fmtDayMonth(d)} />
+            ))}
+          </View>
+
+          {tracked.length === 0 ? (
+            <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
+              {h('hb.noTracked')}
             </HudText>
-            <View style={styles.chips}>
-              {days.map((d) => (
-                <QuestChip key={d} label={d === todayKey ? h('hb.today') : fmtDayMonth(d)} selected={day === d} onPress={() => setDay(d)} accessibilityLabel={d === todayKey ? h('hb.today') : fmtDayMonth(d)} />
-              ))}
-            </View>
-
-            {tracked.length === 0 ? (
-              <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
-                {h('hb.noTracked')}
-              </HudText>
-            ) : (
-              <View style={styles.card}>
-                {tracked.map((habit) => {
-                  const v = dayChecks[habit.id];
-                  const run = streak(checks, habit.id, todayKey);
-                  const signal = habit.auto ? signals[habit.auto] : null;
-                  return (
-                    <View key={habit.id} style={styles.checkRow}>
-                      <View style={styles.flex}>
-                        <HudText size={14}>{habit.name}</HudText>
-                        {run >= 2 && (
-                          <HudText size={11} weight="medium" color={quest.gold}>
-                            {h('hb.streak', { n: run })}
+          ) : (
+            <View style={styles.card}>
+              {tracked.map((habit) => {
+                const v = dayChecks[habit.id];
+                const run = streak(checks, habit.id, todayKey);
+                const signal = habit.auto ? signals[habit.auto] : null;
+                return (
+                  <View key={habit.id} style={styles.checkRow}>
+                    <View style={styles.flex}>
+                      <HudText size={14}>{habit.name}</HudText>
+                      {run >= 2 && (
+                        <HudText size={11} weight="medium" color={quest.gold}>
+                          {h('hb.streak', { n: run })}
+                        </HudText>
+                      )}
+                      {habit.auto && signal !== null && (
+                        <View style={styles.autoRow}>
+                          <HudText size={11} weight="medium" color={signal ? quest.xp : quest.textSecondary}>
+                            {signal ? h('hb.autoYes', { what: h(AUTO_WHAT[habit.auto]) }) : h('hb.autoNo', { what: h(AUTO_WHAT[habit.auto]) })}
                           </HudText>
-                        )}
-                        {habit.auto && signal !== null && (
-                          <View style={styles.autoRow}>
-                            <HudText size={11} weight="medium" color={signal ? quest.xp : quest.textSecondary}>
-                              {signal ? h('hb.autoYes', { what: h(AUTO_WHAT[habit.auto]) }) : h('hb.autoNo', { what: h(AUTO_WHAT[habit.auto]) })}
-                            </HudText>
-                            {signal && v !== 'done' && (
-                              <Pressable accessibilityRole="button" accessibilityLabel={`${h('hb.autoUse')}: ${habit.name}`} onPress={() => setCheck(day, habit.id, 'done')} style={styles.useAuto}>
-                                <HudText size={11} color={quest.manaText}>
-                                  {h('hb.autoUse')}
-                                </HudText>
-                              </Pressable>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                      <Pressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`${habit.name}: ${stateText(v)}`}
-                        onPress={() => setCheck(day, habit.id, nextValue(v))}
-                        style={[styles.tick, v === 'done' && { backgroundColor: quest.xp, borderColor: quest.xp }, v === 'missed' && { backgroundColor: quest.hp, borderColor: quest.hp }]}
-                      >
-                        {v === 'done' && <QuestIcon name="check" size={20} color={quest.onGold} strokeWidth={3} />}
-                        {v === 'missed' && <QuestIcon name="x" size={20} color={quest.text} strokeWidth={3} />}
-                      </Pressable>
+                          {signal && v !== 'done' && (
+                            <Pressable accessibilityRole="button" accessibilityLabel={`${h('hb.autoUse')}: ${habit.name}`} onPress={() => setCheck(day, habit.id, 'done')} style={styles.useAuto}>
+                              <HudText size={11} color={quest.manaText}>
+                                {h('hb.autoUse')}
+                              </HudText>
+                            </Pressable>
+                          )}
+                        </View>
+                      )}
                     </View>
-                  );
-                })}
-                <HudText size={12} weight="medium" color={ratio === null ? quest.textSecondary : ratio >= FORMED_RATE ? quest.xp : quest.gold}>
-                  {ratio === null ? h('hb.dayNone') : h('hb.dayRatio', { p: pct(ratio), d: done, m: marked })}
-                </HudText>
-              </View>
-            )}
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`${habit.name}: ${stateText(v)}`}
+                      onPress={() => setCheck(day, habit.id, nextValue(v))}
+                      style={[styles.tick, v === 'done' && { backgroundColor: quest.xp, borderColor: quest.xp }, v === 'missed' && { backgroundColor: quest.hp, borderColor: quest.hp }]}
+                    >
+                      {v === 'done' && <QuestIcon name="check" size={20} color={quest.onGold} strokeWidth={3} />}
+                      {v === 'missed' && <QuestIcon name="x" size={20} color={quest.text} strokeWidth={3} />}
+                    </Pressable>
+                  </View>
+                );
+              })}
+              <HudText size={12} weight="medium" color={ratio === null ? quest.textSecondary : ratio >= FORMED_RATE ? quest.xp : quest.gold}>
+                {ratio === null ? h('hb.dayNone') : h('hb.dayRatio', { p: pct(ratio), d: done, m: marked })}
+              </HudText>
+            </View>
+          )}
 
-            <HudText size={17} accessibilityRole="header" style={styles.section}>
-              {h('hb.weeksTitle')}
+          <HudText size={17} accessibilityRole="header" style={styles.section}>
+            {h('hb.weeksTitle')}
+          </HudText>
+          {weeks.length === 0 ? (
+            <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
+              {h('hb.weeksEmpty')}
             </HudText>
-            {weeks.length === 0 ? (
-              <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
-                {h('hb.weeksEmpty')}
+          ) : (
+            weeks.map((w) => (
+              <View key={w.weekStart} style={styles.card}>
+                <HudText size={15}>{h('hb.week', { from: fmtDayMonth(w.weekStart), to: fmtDayMonth(w.weekEnd) })}</HudText>
+                {w.weakest === null ? (
+                  <HudText size={12} weight="medium" color={quest.textSecondary}>
+                    {h('hb.weekEmpty')}
+                  </HudText>
+                ) : (
+                  <>
+                    {w.rates
+                      .filter((r) => r.rate !== null)
+                      .map((r) => (
+                        <HudText key={r.habit.id} size={12} weight="medium" color={r.rate! >= FORMED_RATE ? quest.xp : quest.gold}>
+                          {h('hb.weekRow', { name: r.habit.name, done: r.done, total: r.done + r.missed, p: pct(r.rate!) })}
+                        </HudText>
+                      ))}
+                    <HudText size={12} weight="medium" color={w.allFormed ? quest.xp : quest.hpText}>
+                      {w.allFormed ? h('hb.weekAll') : h('hb.weekWeakest', { name: w.weakest.habit.name, p: pct(w.weakest.rate!) })}
+                    </HudText>
+                  </>
+                )}
+              </View>
+            ))
+          )}
+          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
+            {h('hb.rule')}
+          </HudText>
+
+          <HudText size={17} accessibilityRole="header" style={styles.section}>
+            {h('hb.an.title')}
+          </HudText>
+          <View style={styles.card}>
+            {insights.length === 0 ? (
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {h('hb.an.empty')}
               </HudText>
             ) : (
-              weeks.map((w) => (
-                <View key={w.weekStart} style={styles.card}>
-                  <HudText size={15}>{h('hb.week', { from: fmtDayMonth(w.weekStart), to: fmtDayMonth(w.weekEnd) })}</HudText>
-                  {w.weakest === null ? (
-                    <HudText size={12} weight="medium" color={quest.textSecondary}>
-                      {h('hb.weekEmpty')}
-                    </HudText>
-                  ) : (
-                    <>
-                      {w.rates
-                        .filter((r) => r.rate !== null)
-                        .map((r) => (
-                          <HudText key={r.habit.id} size={12} weight="medium" color={r.rate! >= FORMED_RATE ? quest.xp : quest.gold}>
-                            {h('hb.weekRow', { name: r.habit.name, done: r.done, total: r.done + r.missed, p: pct(r.rate!) })}
-                          </HudText>
-                        ))}
-                      <HudText size={12} weight="medium" color={w.allFormed ? quest.xp : quest.hpText}>
-                        {w.allFormed ? h('hb.weekAll') : h('hb.weekWeakest', { name: w.weakest.habit.name, p: pct(w.weakest.rate!) })}
-                      </HudText>
-                    </>
-                  )}
-                </View>
+              insights.map((line, i) => (
+                <HudText key={i} size={12} weight="medium" color={TONE_COLOR[line.tone]}>
+                  {`• ${line.text}`}
+                </HudText>
               ))
             )}
-            <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
-              {h('hb.rule')}
+            <HudText size={11} weight="medium" color={quest.textSecondary}>
+              {h('hb.an.basis')}
             </HudText>
+          </View>
 
-            <HudText size={17} accessibilityRole="header" style={styles.section}>
-              {h('hb.an.title')}
+          <HudText size={17} accessibilityRole="header" style={styles.section}>
+            {h('hb.kz.title')}
+          </HudText>
+          <View style={styles.card}>
+            <HudText size={11} weight="medium" color={quest.textSecondary}>
+              {h('hb.kz.intro')}
             </HudText>
-            <View style={styles.card}>
-              {insights.length === 0 ? (
-                <HudText size={12} weight="medium" color={quest.textSecondary}>
-                  {h('hb.an.empty')}
+            {tips.length === 0 ? (
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {h('hb.kz.none')}
+              </HudText>
+            ) : (
+              tips.map((line, i) => (
+                <HudText key={i} size={12} weight="medium" color={TONE_COLOR[line.tone]}>
+                  {`• ${line.text}`}
                 </HudText>
-              ) : (
-                insights.map((line, i) => (
-                  <HudText key={i} size={12} weight="medium" color={TONE_COLOR[line.tone]}>
-                    {`• ${line.text}`}
-                  </HudText>
-                ))
-              )}
-              <HudText size={11} weight="medium" color={quest.textSecondary}>
-                {h('hb.an.basis')}
-              </HudText>
-            </View>
-
-            <HudText size={17} accessibilityRole="header" style={styles.section}>
-              {h('hb.kz.title')}
-            </HudText>
-            <View style={styles.card}>
-              <HudText size={11} weight="medium" color={quest.textSecondary}>
-                {h('hb.kz.intro')}
-              </HudText>
-              {tips.length === 0 ? (
-                <HudText size={12} weight="medium" color={quest.textSecondary}>
-                  {h('hb.kz.none')}
-                </HudText>
-              ) : (
-                tips.map((line, i) => (
-                  <HudText key={i} size={12} weight="medium" color={TONE_COLOR[line.tone]}>
-                    {`• ${line.text}`}
-                  </HudText>
-                ))
-              )}
-              {candidates.length > 0 && (
-                <>
-                  <HudText size={14} style={styles.subhead}>
-                    {h('hb.kz.newTitle')}
-                  </HudText>
-                  {steadyFirst && (
-                    <HudText size={11} weight="medium" color={quest.gold}>
-                      {h('hb.kz.newWait', { name: steadyFirst.name })}
-                    </HudText>
-                  )}
-                  {candidates.map((c) => (
-                    <View key={c.id} style={styles.candidate}>
-                      <View style={styles.flex}>
-                        <HudText size={13}>{c.name}</HudText>
-                        <HudText size={11} weight="medium" color={quest.textSecondary}>
-                          {c.why}
-                        </HudText>
-                      </View>
-                      <QuestChip label={h('hb.kz.addOne')} accessibilityLabel={`${h('hb.kz.addOne')}: ${c.name}`} tone="mana" onPress={() => addHabit(c.fields)} />
-                    </View>
-                  ))}
-                </>
-              )}
-            </View>
-
-            <HudText size={17} accessibilityRole="header" style={styles.section}>
-              {h('hb.listTitle')}
-            </HudText>
-            {active.length === 0 && (
-              <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
-                {h('hb.listEmpty')}
-              </HudText>
+              ))
             )}
-            {active.map((habit) => (
-              <View key={habit.id} style={styles.card}>
-                <View style={styles.headRow}>
-                  <HudText size={14} style={styles.flex}>
-                    {habit.name}
-                  </HudText>
-                </View>
-                {statsById.get(habit.id) && <FormationBadge s={statsById.get(habit.id)!} />}
-                {habit.assessment ? (
-                  <HudText size={12} weight="medium" color={quest.textSecondary}>
-                    {habit.assessment}
-                  </HudText>
-                ) : null}
-                {habit.kaizen ? (
-                  <HudText size={12} weight="medium" color={quest.text}>
-                    {`${h('hb.kaizen')}: ${habit.kaizen}`}
-                  </HudText>
-                ) : null}
-                {habit.measuredBy ? (
-                  <HudText size={11} weight="medium" color={quest.textSecondary}>
-                    {`${h('hb.measured')}: ${habit.measuredBy}`}
-                  </HudText>
-                ) : null}
-                {!habit.tracked && (
-                  <HudText size={11} weight="medium" color={quest.textSecondary}>
-                    {h('hb.untracked')}
+            {candidates.length > 0 && (
+              <>
+                <HudText size={14} style={styles.subhead}>
+                  {h('hb.kz.newTitle')}
+                </HudText>
+                {steadyFirst && (
+                  <HudText size={11} weight="medium" color={quest.gold}>
+                    {h('hb.kz.newWait', { name: steadyFirst.name })}
                   </HudText>
                 )}
-                <View style={styles.chips}>
-                  <QuestChip label={h('hb.edit')} accessibilityLabel={`${h('hb.edit')}: ${habit.name}`} onPress={() => setEditing({ habit })} />
-                  <QuestChip
-                    label={confirmArchive === habit.id ? h('hb.archiveConfirm') : h('hb.archive')}
-                    accessibilityLabel={`${confirmArchive === habit.id ? h('hb.archiveConfirm') : h('hb.archive')}: ${habit.name}`}
-                    tone="mana"
-                    onPress={() => (confirmArchive === habit.id ? archiveHabit(habit.id) : setConfirmArchive(habit.id))}
-                  />
-                </View>
-              </View>
-            ))}
-            <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
-              {h('hb.f.rule')}
+                {candidates.map((c) => (
+                  <View key={c.id} style={styles.candidate}>
+                    <View style={styles.flex}>
+                      <HudText size={13}>{c.name}</HudText>
+                      <HudText size={11} weight="medium" color={quest.textSecondary}>
+                        {c.why}
+                      </HudText>
+                    </View>
+                    <QuestChip label={h('hb.kz.addOne')} accessibilityLabel={`${h('hb.kz.addOne')}: ${c.name}`} tone="mana" onPress={() => addHabit(c.fields)} />
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
+
+          <HudText size={17} accessibilityRole="header" style={styles.section}>
+            {h('hb.listTitle')}
+          </HudText>
+          {active.length === 0 && (
+            <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.note}>
+              {h('hb.listEmpty')}
             </HudText>
-            <View style={styles.addRow}>
-              <QuestButton title={h('hb.add')} icon="plus" variant="ghost" onPress={() => setEditing({ habit: null })} />
+          )}
+          {active.map((habit) => (
+            <View key={habit.id} style={styles.card}>
+              <View style={styles.headRow}>
+                <HudText size={14} style={styles.flex}>
+                  {habit.name}
+                </HudText>
+              </View>
+              {statsById.get(habit.id) && <FormationBadge s={statsById.get(habit.id)!} />}
+              {habit.assessment ? (
+                <HudText size={12} weight="medium" color={quest.textSecondary}>
+                  {habit.assessment}
+                </HudText>
+              ) : null}
+              {habit.kaizen ? (
+                <HudText size={12} weight="medium" color={quest.text}>
+                  {`${h('hb.kaizen')}: ${habit.kaizen}`}
+                </HudText>
+              ) : null}
+              {habit.measuredBy ? (
+                <HudText size={11} weight="medium" color={quest.textSecondary}>
+                  {`${h('hb.measured')}: ${habit.measuredBy}`}
+                </HudText>
+              ) : null}
+              {!habit.tracked && (
+                <HudText size={11} weight="medium" color={quest.textSecondary}>
+                  {h('hb.untracked')}
+                </HudText>
+              )}
+              <View style={styles.chips}>
+                <QuestChip label={h('hb.edit')} accessibilityLabel={`${h('hb.edit')}: ${habit.name}`} onPress={() => setEditing({ habit })} />
+                <QuestChip
+                  label={h('hb.archive')}
+                  accessibilityLabel={`${h('hb.archive')}: ${habit.name}`}
+                  tone="mana"
+                  onPress={() => {
+                    // Removed at once; the toast's "Hoàn tác" brings it back (its ticks were never deleted).
+                    archiveHabit(habit.id);
+                    showToast({ text: g('rd6.habits.archived', { name: habit.name }), undo: () => restoreHabit(habit.id) });
+                  }}
+                />
+              </View>
             </View>
-          </>
-        )}
-      </ScrollView>
-    </View>
+          ))}
+          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
+            {h('hb.f.rule')}
+          </HudText>
+          <View style={styles.addRow}>
+            <QuestButton title={h('hb.add')} icon="plus" variant="ghost" onPress={() => setEditing({ habit: null })} />
+          </View>
+        </>
+      )}
+    </ScreenTemplate>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
   section: { marginTop: 20, marginBottom: 8 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
   note: { marginTop: 8 },

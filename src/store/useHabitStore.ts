@@ -16,6 +16,8 @@ interface HabitState {
   setFormedMark: (id: string, mark: boolean | null) => void;
   /** Hides a habit everywhere; the ticks it already has stay on record. */
   archiveHabit: (id: string) => void;
+  /** Undoes `archiveHabit` (the toast's "Hoàn tác"). */
+  restoreHabit: (id: string) => void;
   /** Ticks a habit on a day (`done` or `missed`), or clears the tick with null. */
   setCheck: (dateKey: string, habitId: string, value: CheckValue | null) => void;
   /** Adds the habits whose id this device does not have yet; returns how many were new. Existing habits are left as the user edited them. */
@@ -56,6 +58,13 @@ export const useHabitStore = create<HabitState>()(
         const current = get().habits.find((h) => h.id === id);
         if (!current || current.archived) return;
         const updated = { ...current, archived: true };
+        set((s) => ({ habits: s.habits.map((h) => (h.id === id ? updated : h)) }));
+        pushHabit(updated);
+      },
+      restoreHabit: (id) => {
+        const current = get().habits.find((h) => h.id === id);
+        if (!current || !current.archived) return;
+        const updated = { ...current, archived: false };
         set((s) => ({ habits: s.habits.map((h) => (h.id === id ? updated : h)) }));
         pushHabit(updated);
       },

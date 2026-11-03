@@ -109,11 +109,12 @@ describe('navigation (redesign GĐ0)', () => {
   });
 
   it('every literal route the app navigates to resolves to a screen file', () => {
-    const pattern = /(?:push|replace|dismissTo|navigate)\(\s*[`'](\/[^'`$?]*)|pathname:\s*'(\/[^']*)'|href=["'{`]+(\/[^"'`}?]*)/g;
+    // `route: '/x'`: a row of a list of links (Profile's settings and "Thêm" rows) pushed by the list.
+    const pattern = /(?:push|replace|dismissTo|navigate)\(\s*[`'](\/[^'`$?]*)|pathname:\s*'(\/[^']*)'|href=["'{`]+(\/[^"'`}?]*)|route:\s*'(\/[^']*)'/g;
     const targets = new Set<string>();
     for (const file of [...sourceFiles(APP), ...sourceFiles(path.join(ROOT, 'src'))]) {
       const text = fs.readFileSync(file, 'utf8');
-      for (const m of text.matchAll(pattern)) targets.add(m[1] ?? m[2] ?? m[3]);
+      for (const m of text.matchAll(pattern)) targets.add(m[1] ?? m[2] ?? m[3] ?? m[4]);
     }
     expect(targets.size).toBeGreaterThan(20);
     for (const name of ['/weight', '/nutrition', '/history', '/plan', '/workout-classic']) expect(targets).toContain(name);

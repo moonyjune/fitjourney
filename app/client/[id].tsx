@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HudText } from '../../src/components/quest/HudText';
 import { QuestButton } from '../../src/components/quest/QuestButton';
 import { QuestHeader } from '../../src/components/quest/QuestHeader';
+import { showToast } from '../../src/store/useToastStore';
 import { QuestPlanPreview } from '../../src/components/quest/QuestPlanPreview';
 import { QuestSegment } from '../../src/components/quest/QuestSegment';
 import { useGameText } from '../../src/game/strings';
@@ -99,14 +100,14 @@ export default function ClientDetailScreen() {
 
   async function handleSendFeedback() {
     if (!clientId || !feedbackText.trim()) {
-      Alert.alert(t('clientDetail.missingContentTitle'), t('clientDetail.missingContentMessage'));
+      showToast({ text: t('clientDetail.missingContentMessage'), tone: 'neutral' });
       return;
     }
     setFeedbackBusy(true);
     const result = await pushCoachFeedback(clientId, feedbackPeriodType, feedbackLabel, feedbackText.trim());
     setFeedbackBusy(false);
     if (!result.ok) {
-      Alert.alert(t('clientDetail.sendFailedTitle'), result.message);
+      showToast({ text: `${t('clientDetail.sendFailedTitle')}: ${result.message}`, tone: 'danger' });
       return;
     }
     setFeedbackText('');
@@ -229,7 +230,7 @@ export default function ClientDetailScreen() {
     if (!clientId) return;
     await pushPlan(newPlan, new Date().toISOString(), clientId);
     setPlan(newPlan);
-    Alert.alert(t('clientDetail.updatedTitle'), t('clientDetail.updatedMessage'));
+    showToast({ text: g('rd6.client.updated') });
   }
 
   /** The off-plan food a photo belongs to (its `taskRefId` is `extra:<itemId>`), if it is still in that day's diary. */

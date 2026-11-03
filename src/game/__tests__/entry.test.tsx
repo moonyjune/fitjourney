@@ -54,6 +54,7 @@ import AuthScreen from '../../../app/auth';
 import OnboardingScreen from '../../../app/onboarding';
 import RoleSelectScreen from '../../../app/role-select';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useToastStore } from '../../store/useToastStore';
 
 function allText(renderer: ReactTestRenderer): string {
   const parts: string[] = [];
@@ -135,7 +136,8 @@ describe('Entry screens (auth, role, onboarding)', () => {
         submit.props.onPress();
       });
       expect(mockSignIn).not.toHaveBeenCalled();
-      expect(alert).toHaveBeenCalledWith('Thiếu thông tin', 'Vui lòng nhập email và mật khẩu.');
+      expect(alert).not.toHaveBeenCalled(); // one line under the form instead of an alert
+      expect(allText(r)).toContain('Vui lòng nhập email và mật khẩu.');
     });
 
     it('switches to sign-up and tells the user to check their email', async () => {
@@ -153,7 +155,8 @@ describe('Entry screens (auth, role, onboarding)', () => {
         submit.props.onPress();
       });
       expect(mockSignUp).toHaveBeenCalledWith({ email: 'new@user.io', password: 'longpassword' });
-      expect(alert).toHaveBeenCalledWith('Kiểm tra email', expect.any(String));
+      expect(alert).not.toHaveBeenCalled();
+      expect(allText(r)).toContain('Kiểm tra email: nếu cần xác nhận');
     });
 
     it('shows the server error instead of failing silently, and does not remember bad credentials', async () => {
@@ -167,7 +170,8 @@ describe('Entry screens (auth, role, onboarding)', () => {
       await act(async () => {
         submit.props.onPress();
       });
-      expect(alert).toHaveBeenCalledWith('Lỗi', 'Invalid login credentials');
+      expect(alert).not.toHaveBeenCalled();
+      expect(allText(r)).toContain('Invalid login credentials');
       expect(mockSaveSaved).not.toHaveBeenCalled();
     });
   });
@@ -363,7 +367,9 @@ describe('Entry screens (auth, role, onboarding)', () => {
       expect(allText(r)).toContain('AB12CD');
       await tap(r, 'Bắt đầu');
       expect(submit).toHaveBeenCalledWith('ab12cd');
-      expect(alert).toHaveBeenCalledWith('Không liên kết được với Coach', expect.stringContaining('Mã không đúng'));
+      expect(alert).not.toHaveBeenCalled(); // a toast (i18n) instead of a hard-coded alert
+      expect(useToastStore.getState().toast?.text).toContain('Mã không đúng');
+      expect(useToastStore.getState().toast?.text).toContain('Coach & tài khoản');
       expect(mockRouter.replace).toHaveBeenCalledWith('/(tabs)');
     });
   });

@@ -44,6 +44,7 @@ import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useUricStore } from '../../store/useUricStore';
 import { useWeightStore } from '../../store/useWeightStore';
+import { useToastStore } from '../../store/useToastStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { toDateKey } from '../../utils/date';
 import type { DailyNutritionLog, ExtraFoodItem } from '../../types';
@@ -213,7 +214,7 @@ describe('Uric acid screen', () => {
     expect(useUricStore.getState().readings).toEqual([]);
   });
 
-  it('edits a result and deletes it with a second tap', async () => {
+  it('edits a result, deletes it at once and can undo the delete from the toast', async () => {
     useUricStore.setState({ readings: [{ id: 'a', dateKey: '2026-10-16', valueUmol: 457, note: '' }] });
     const r = await mount();
     await tap(r, 'Sửa: 16/10/2026');
@@ -221,11 +222,13 @@ describe('Uric acid screen', () => {
     await tap(r, 'Lưu');
     expect(useUricStore.getState().readings[0]).toMatchObject({ id: 'a', valueUmol: 440 });
     await tap(r, 'Xóa: 16/10/2026');
-    expect(useUricStore.getState().readings).toHaveLength(1);
-    await tap(r, 'Bấm lần nữa để xóa: 16/10/2026');
     expect(useUricStore.getState().readings).toEqual([]);
     expect(mockDelete).toHaveBeenCalledWith('a');
     expect(allText(r)).toContain('Chưa có kết quả nào');
+    expect(useToastStore.getState().toast?.text).toBe('Đã xoá kết quả 16/10/2026');
+    await act(async () => useToastStore.getState().undo());
+    expect(useUricStore.getState().readings).toEqual([{ id: 'a', dateKey: '2026-10-16', valueUmol: 440, note: '' }]);
+    expect(mockPush).toHaveBeenLastCalledWith({ id: 'a', dateKey: '2026-10-16', valueUmol: 440, note: '' });
   });
 
   it('moves the target in steps and stops at the limits', async () => {

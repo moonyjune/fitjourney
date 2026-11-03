@@ -15,6 +15,7 @@ import {
   waterDrinkAmounts,
 } from '../../water/schedule';
 import { HudText } from './HudText';
+import { InfoButton } from './InfoButton';
 import { QuestIcon } from './QuestIcon';
 
 const WINDOW_STEP_MIN = 30;
@@ -106,6 +107,7 @@ export function WaterSettings() {
             {g('water.setting.hint')}
           </HudText>
         </View>
+        <InfoButton about={g('water.setting.title')} body={[g('rd6.info.water')]} />
       </View>
 
       <Stepper

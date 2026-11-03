@@ -1,13 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FadeInUp } from '../src/components/quest/motion/FadeInUp';
 import { PopIn } from '../src/components/quest/motion/PopIn';
 import { Shine } from '../src/components/quest/motion/Shine';
 import { BannerRibbon } from '../src/components/quest/BannerRibbon';
 import { HudText } from '../src/components/quest/HudText';
-import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { InfoButton } from '../src/components/quest/InfoButton';
+import { QuestChip } from '../src/components/quest/QuestChip';
+import { ScreenTemplate } from '../src/components/quest/ScreenTemplate';
 import { rarityColor, Sticker } from '../src/components/quest/Sticker';
 import { XpBar } from '../src/components/quest/XpBar';
 import {
@@ -25,8 +25,8 @@ import { useAchievements, useNow } from '../src/game/useGameState';
 import { useAchievementStore } from '../src/store/useAchievementStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { quest, questRadius } from '../src/theme/quest';
-import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { backToProfile } from '../src/utils/backToProfile';
 
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
 
@@ -121,8 +121,9 @@ export default function AchievementsScreen() {
   const g = useGameText();
   const language = useSettingsStore((s) => s.language);
   const lang = language === 'en' ? 'en' : 'vi';
-  const insets = useSafeAreaInsets();
   useLightStatusBar();
+  // Chip filter at the top (dialogs 32): one group of stickers, or the banners, instead of scrolling through every group.
+  const [filter, setFilter] = useState<string | null>(null);
   const now = useNow(60_000);
   const { stats, stickers, banners } = useAchievements(now);
   const equippedId = useAchievementStore((s) => s.equippedBannerId);
@@ -141,21 +142,25 @@ export default function AchievementsScreen() {
   const earned = stickers.filter((s) => s.earned).length;
   const earnedBanners = banners.filter((b) => b.earned).length;
 
-  function back() {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(tabs)/profile');
-  }
+  const shown = filter == null ? byCategory : byCategory.filter((c) => c.id === filter);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
-      <QuestHeader
-        title={g('ach.title')}
-        eyebrow={g('ach.counts', { n: earned, t: stickers.length, b: earnedBanners, bt: banners.length })}
-        onBack={back}
-        backLabel={g('ach.back')}
-      />
+    <ScreenTemplate
+      title={g('ach.title')}
+      eyebrow={g('ach.counts', { n: earned, t: stickers.length, b: earnedBanners, bt: banners.length })}
+      onBack={backToProfile}
+      backLabel={g('ach.back')}
+      contentStyle={styles.content}
+    >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+        <QuestChip label={g('rd6.ach.all')} selected={filter == null} onPress={() => setFilter(null)} />
+        {byCategory.map((cat) => (
+          <QuestChip key={cat.id} label={g(`ach.cat.${cat.id}` as GameKey)} selected={filter === cat.id} onPress={() => setFilter(cat.id)} />
+        ))}
+        <QuestChip label={g('ach.banners')} selected={filter === 'banners'} onPress={() => setFilter('banners')} />
+      </ScrollView>
 
-      {byCategory.map((cat) => {
+      {(filter === 'banners' ? [] : shown).map((cat) => {
         const got = cat.items.filter((i) => i.earned).length;
         return (
           <View key={cat.id} style={styles.section}>
@@ -182,43 +187,50 @@ export default function AchievementsScreen() {
         );
       })}
 
-      <View style={styles.section}>
-        <View style={styles.sectionHead}>
-          <HudText size={18} accessibilityRole="header">
-            {g('ach.banners')}
+      {(filter == null || filter === 'banners') && (
+        <View style={styles.section}>
+          <View style={styles.sectionHead}>
+            <HudText size={18} accessibilityRole="header">
+              {g('ach.banners')}
+            </HudText>
+            <HudText size={13} color={quest.gold}>
+              {earnedBanners} / {banners.length}
+            </HudText>
+          </View>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('ach.bannersHint')}
           </HudText>
-          <HudText size={13} color={quest.gold}>
-            {earnedBanners} / {banners.length}
-          </HudText>
+          {banners.map((b) => (
+            <BannerRow
+              key={b.id}
+              b={b}
+              stats={stats}
+              g={g}
+              lang={lang}
+              width={300}
+              equipped={equippedId === b.id}
+              onToggle={() => equipBanner(equippedId === b.id ? null : b.id)}
+            />
+          ))}
         </View>
-        <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {g('ach.bannersHint')}
-        </HudText>
-        {banners.map((b) => (
-          <BannerRow
-            key={b.id}
-            b={b}
-            stats={stats}
-            g={g}
-            lang={lang}
-            width={300}
-            equipped={equippedId === b.id}
-            onToggle={() => equipBanner(equippedId === b.id ? null : b.id)}
-          />
-        ))}
-      </View>
+      )}
 
-      <HudText size={12} weight="medium" color={quest.textSecondary}>
-        {g('ach.note')}
-      </HudText>
-    </ScrollView>
+      <View style={styles.noteRow}>
+        <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.flex}>
+          {g('ach.note')}
+        </HudText>
+        <InfoButton about={g('ach.title')} body={[g('rd6.info.ach')]} />
+      </View>
+    </ScreenTemplate>
   );
 }
 
 const styles = StyleSheet.create({
   stickerBox: { width: 52, height: 52 },
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 48, gap: 20 },
+  content: { gap: 20 },
+  filters: { gap: 8, paddingVertical: 2 },
+  noteRow: { flexDirection: 'row', alignItems: 'center' },
+  flex: { flex: 1, minWidth: 0 },
   section: { gap: 10 },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -228,5 +240,5 @@ const styles = StyleSheet.create({
   tileName: { marginTop: 2 },
   tileFoot: { flexDirection: 'row', justifyContent: 'space-between', gap: 6, marginTop: 'auto' },
   bannerCard: { gap: 8, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, alignItems: 'flex-start' },
-  equip: { minHeight: 36, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
+  equip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
 });

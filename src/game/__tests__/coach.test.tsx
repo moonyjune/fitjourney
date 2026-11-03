@@ -140,6 +140,12 @@ describe('Coach mode screens', () => {
     await act(async () => {
       pressByLabel(r, (l) => l === 'Sign out').props.onPress();
     });
+    expect(mockSignOut).not.toHaveBeenCalled(); // asks first, in the app's confirm box
+    const box = r.root.findAll((n) => n.props.testID === 'sign-out-confirm')[0];
+    const buttons = box.findAll((n) => n.props.accessibilityLabel === 'Sign out' && typeof n.props.onPress === 'function');
+    await act(async () => {
+      buttons[buttons.length - 1].props.onPress();
+    });
     expect(mockSignOut).toHaveBeenCalled();
   });
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { supabase } from '../src/lib/supabase';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
@@ -43,10 +43,12 @@ export default function AuthScreen() {
   }, []);
 
   async function handleSubmit() {
+    // Problems are one line under the form (dialogs 45), not an alert.
     if (!email || !password) {
-      Alert.alert(t('auth.missingFieldsTitle'), t('auth.missingFieldsMessage'));
+      setResetNote({ kind: 'error', text: t('auth.missingFieldsMessage') });
       return;
     }
+    setResetNote(null);
     setBusy(true);
     try {
       if (mode === 'signIn') {
@@ -57,11 +59,11 @@ export default function AuthScreen() {
         const { error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
         await saveRememberedCredentials(email, password);
-        Alert.alert(t('auth.checkEmailTitle'), t('auth.checkEmailMessage'));
+        setResetNote({ kind: 'ok', text: g('rd6.auth.checkEmail') });
       }
       // RootLayout listens to auth state changes and will navigate away automatically.
     } catch (err) {
-      Alert.alert(t('common.error'), err instanceof Error ? err.message : t('auth.genericError'));
+      setResetNote({ kind: 'error', text: err instanceof Error && err.message ? err.message : t('auth.genericError') });
     } finally {
       setBusy(false);
     }

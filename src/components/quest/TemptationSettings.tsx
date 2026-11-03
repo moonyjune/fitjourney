@@ -9,6 +9,7 @@ import { temptationXp } from '../../temptation/stats';
 import { summonTemptation } from '../../temptation/summon';
 import { quest, questFonts, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
+import { InfoButton } from './InfoButton';
 import { QuestButton } from './QuestButton';
 import { QuestIcon } from './QuestIcon';
 import { QuestSegment } from './QuestSegment';
@@ -54,9 +55,12 @@ export function TemptationSettings() {
         <HudText size={20}>😈</HudText>
         <View style={styles.flex}>
           <HudText size={15}>{g('tempt.title')}</HudText>
-          <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('tempt.hint', { xp: TEMPTATION_RESIST_XP })}
-          </HudText>
+          <View style={styles.hintRow}>
+            <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.flex}>
+              {g('tempt.hint', { xp: TEMPTATION_RESIST_XP })}
+            </HudText>
+            <InfoButton about={g('tempt.title')} body={[g('rd6.info.tempt', { xp: TEMPTATION_RESIST_XP })]} />
+          </View>
         </View>
         <Switch
           accessibilityLabel={g('tempt.title')}
@@ -157,6 +161,7 @@ export function TemptationSettings() {
 const styles = StyleSheet.create({
   box: { gap: 10, marginTop: 12, padding: 14, borderRadius: questRadius.panel, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.bossBorder },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  hintRow: { flexDirection: 'row', alignItems: 'center', marginVertical: -8 },
   flex: { flex: 1, minWidth: 0 },
   hourRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44 },
   hourValue: { minWidth: 60, textAlign: 'center' },

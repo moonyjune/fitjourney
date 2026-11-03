@@ -22,6 +22,8 @@ jest.mock('../../lib/supabase', () => ({ supabase: { auth: { signOut: jest.fn() 
 jest.mock('../../utils/photoStorage', () => ({ persistPickedPhoto: jest.fn(), deletePersistedPhoto: jest.fn(async () => undefined) }));
 
 const mockPicker = jest.fn<(...a: unknown[]) => Promise<{ canceled: boolean; assets?: { uri: string }[] }>>();
+const mockPurge = jest.fn<(key: string) => Promise<unknown>>();
+jest.mock('../../sync/purgeBefore', () => ({ purgeBefore: (key: string) => mockPurge(key) }));
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: (...a: unknown[]) => mockPicker(...a) }));
 const mockRead = jest.fn<(asset: unknown) => Promise<string>>();
 jest.mock('../../import/readPickedFile', () => ({ readPickedText: (a: unknown) => mockRead(a) }));
@@ -290,6 +292,24 @@ describe('Import diary screen', () => {
     await choose(r);
     expect(text(r)).toContain('Không mở được file.');
   });
+  it('deletes the diary before a date only after the confirm box (cannot be undone), and not at all when cancelled', async () => {
+    mockPurge.mockReset().mockResolvedValue({ ok: true, days: 3, weights: 1, workouts: 2, feelings: 0, photos: 4 });
+    const r = await mount();
+    const button = () => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Xóa dữ liệu cũ')[0];
+    await act(async () => button().props.onPress());
+    expect(mockPurge).not.toHaveBeenCalled();
+    expect(text(r)).toContain('Xoá mọi ghi chép trước 21/09/2026?');
+    expect(text(r)).toContain('Không hoàn tác được.');
+    await act(async () => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Huỷ')[0].props.onPress());
+    expect(text(r)).not.toContain('Xoá mọi ghi chép trước');
+    expect(mockPurge).not.toHaveBeenCalled();
+
+    await act(async () => button().props.onPress());
+    await act(async () => r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Xoá vĩnh viễn')[0].props.onPress());
+    expect(mockPurge).toHaveBeenCalledWith('2026-09-21');
+    expect(text(r)).not.toContain('Xoá mọi ghi chép trước');
+  });
+
   describe('cloud status after the import', () => {
     const pickDiary = () => {
       mockPicker.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///d.json' }] });

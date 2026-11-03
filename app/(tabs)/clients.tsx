@@ -1,25 +1,21 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CoachDigestCard } from '../../src/components/quest/CoachDigestCard';
 import { HudText } from '../../src/components/quest/HudText';
 import { QuestIcon } from '../../src/components/quest/QuestIcon';
+import { ScreenTemplate } from '../../src/components/quest/ScreenTemplate';
 import { useGameText } from '../../src/game/strings';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { fetchCoachClients } from '../../src/sync/cloudSync';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { quest, questRadius } from '../../src/theme/quest';
-import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
 import type { CoachClientSummary } from '../../src/types';
-import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 export default function ClientsScreen() {
   const { t } = useTranslation();
   const g = useGameText();
-  const insets = useSafeAreaInsets();
-  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const coachCode = useSettingsStore((s) => s.coachCode);
   const [clients, setClients] = useState<CoachClientSummary[]>([]);
@@ -39,15 +35,7 @@ export default function ClientsScreen() {
   );
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
-      <View>
-        <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-          {g('coach.eyebrow').toUpperCase()}
-        </HudText>
-        <HudText size={28} accessibilityRole="header">
-          {g('coach.clientsTitle')}
-        </HudText>
-      </View>
+    <ScreenTemplate title={g('coach.clientsTitle')} eyebrow={g('coach.eyebrow')} tabBar contentStyle={styles.content}>
 
       <View style={styles.codeCard} accessible accessibilityLabel={`${t('clients.yourCodeTitle')}: ${coachCode ?? ''}`}>
         <HudText size={11} color={quest.manaText} style={styles.eyebrow}>
@@ -109,13 +97,12 @@ export default function ClientsScreen() {
           </Pressable>
         );
       })}
-    </ScrollView>
+    </ScreenTemplate>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120, gap: 12 },
+  content: { gap: 12 },
   flex: { flex: 1, minWidth: 0 },
   eyebrow: { letterSpacing: 1.6 },
   codeCard: { gap: 4, padding: 16, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },

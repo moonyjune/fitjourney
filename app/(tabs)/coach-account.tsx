@@ -1,28 +1,24 @@
 import { useCallback, useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { StyleSheet, Switch, View } from 'react-native';
 import { HudText } from '../../src/components/quest/HudText';
 import { QuestButton } from '../../src/components/quest/QuestButton';
 import { QuestSegment } from '../../src/components/quest/QuestSegment';
+import { ScreenTemplate } from '../../src/components/quest/ScreenTemplate';
+import { SignOutButton } from '../../src/components/quest/SignOutButton';
 import { useAuthStore } from '../../src/store/useAuthStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useSyncQueueStore } from '../../src/sync/syncQueue';
-import { signOutAndReset } from '../../src/auth/signOut';
 import { useGameText } from '../../src/game/strings';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { quest, questRadius } from '../../src/theme/quest';
-import { screenMaxWidthStyle } from '../../src/theme/responsive';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
-import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
 
 type Lang = 'vi' | 'en';
 
 export default function CoachAccountScreen() {
   const { t } = useTranslation();
   const g = useGameText();
-  const insets = useSafeAreaInsets();
-  const tabClearance = useTabBarClearance();
   useLightStatusBar();
   const session = useAuthStore((s) => s.session);
   const pendingSyncCount = useSyncQueueStore((s) => s.pending.length);
@@ -51,15 +47,7 @@ export default function CoachAccountScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16, paddingBottom: tabClearance }]}>
-      <View>
-        <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-          {g('coach.eyebrow').toUpperCase()}
-        </HudText>
-        <HudText size={28} accessibilityRole="header">
-          {g('coach.accountTitle')}
-        </HudText>
-      </View>
+    <ScreenTemplate title={g('coach.accountTitle')} eyebrow={g('coach.eyebrow')} tabBar contentStyle={styles.content}>
 
       <View style={styles.codeCard} accessible accessibilityLabel={`${t('coachAccount.codeTitle')}: ${coachCode ?? ''}`}>
         <HudText size={11} color={quest.manaText} style={styles.eyebrow}>
@@ -137,28 +125,22 @@ export default function CoachAccountScreen() {
             {t('sync.pendingCount', { n: pendingSyncCount })}
           </HudText>
         )}
-        <Pressable accessibilityRole="button" accessibilityLabel={t('common.signOut')} onPress={() => signOutAndReset()} style={styles.signOut}>
-          <HudText size={15} color={quest.hpText}>
-            {t('common.signOut')}
-          </HudText>
-        </Pressable>
+        <SignOutButton />
       </View>
 
       <HudText size={12} weight="medium" color={quest.textSecondary}>
         {g('coach.sharedOnly')}
       </HudText>
-    </ScrollView>
+    </ScreenTemplate>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120, gap: 12 },
+  content: { gap: 12 },
   flex: { flex: 1, minWidth: 0 },
   eyebrow: { letterSpacing: 1.6 },
   codeCard: { gap: 4, padding: 16, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   code: { letterSpacing: 4, color: quest.manaText },
   card: { gap: 10, padding: 14, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   switchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  signOut: { minHeight: 48, borderRadius: questRadius.button, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel, alignItems: 'center', justifyContent: 'center' },
 });
