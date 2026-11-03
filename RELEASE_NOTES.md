@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.32.0 | no | — |
 | 0.31.0 | no | — |
 | 0.30.0 | no | — |
 | 0.29.0 | no | — |
@@ -86,6 +87,13 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.32.0
+Redesign, phase 4 (Cook book, Cheat day, food database).
+- Cook book: search plus a filter button with a badge; filters and sort in a sheet with 44 pt chips; "Món của tôi | 🎉 Cheat day"; quick chips ("Vừa bữa …", "Ít purine", "≤ 20′", "★"); a 2-column grid of photo cards with one badge ("Vừa" / "+N kcal" / "Purine cao"); dishes that don't match the filters fold under "Xem n món không khớp"; sticky "✨ Gợi ý món mới cho <bữa>" (own cook book, shared cook book, AI).
+- A recipe is its own page (/recipe/…) with a large photo and a sticky "Ghi món này · kcal · bữa"; purine, salt and sugar fold away unless over the limit.
+- Cheat day has its own screen (/cheat-day): one "thèm gì?" box (type or speak), a location chip and sheet, "Ăn ngoài / Tự nấu", "AI hiểu là…", a dish carousel with photos, short place cards with one trust badge, "Chỉ đường" and an ⓘ sheet for sources and checks, "Gợi ý tiếp", saved places and search history with "Hoàn tác".
+- The food database uses the new screen frame; adding or editing a food is a sheet; deleting has "Hoàn tác" instead of a second tap.
 
 ## 0.31.0
 Redesign, phase 3 (Train, Journey, Weight) and a check of phases 0–2.
