@@ -147,8 +147,8 @@ describe('Coach mode screens', () => {
     const navigate = jest.fn();
     const emit = jest.fn(() => ({ defaultPrevented: false }));
     const bar = async (coach: boolean) => {
-      const routes = ['index', 'workout', 'map', 'profile', 'clients', 'coach-account', 'plan'].map((name) => ({ key: `${name}-k`, name }));
-      const hidden = new Set(coach ? ['index', 'workout', 'map', 'profile', 'plan'] : ['clients', 'coach-account', 'plan']);
+      const routes = ['index', 'workout', 'map', 'profile', 'clients', 'coach-account'].map((name) => ({ key: `${name}-k`, name }));
+      const hidden = new Set(coach ? ['index', 'workout', 'map', 'profile'] : ['clients', 'coach-account']);
       const descriptors: Record<string, { options: object }> = {};
       for (const r of routes) descriptors[r.key] = { options: hidden.has(r.name) ? { tabBarItemStyle: { display: 'none' } } : {} };
       const props = { state: { index: coach ? 4 : 0, routes }, descriptors, navigation: { navigate, emit }, insets: { top: 0, bottom: 0, left: 0, right: 0 }, coach };
@@ -165,7 +165,7 @@ describe('Coach mode screens', () => {
     it('is unchanged for a warrior: four tabs and the + button', async () => {
       const r = await bar(false);
       const tabs = [...new Set(r.root.findAll((n) => n.props.accessibilityRole === 'tab').map((n) => n.props.accessibilityLabel))];
-      expect(tabs).toEqual(['Trại', 'Tập', 'Bản đồ', 'Hồ sơ']);
+      expect(tabs).toEqual(['Trại', 'Tập', 'Hành trình', 'Hồ sơ']);
       expect(r.root.findAll((n) => n.props.accessibilityRole === 'button' && n.props.accessibilityLabel === 'Ghi nhanh').length).toBeGreaterThan(0);
     });
   });

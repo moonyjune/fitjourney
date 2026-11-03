@@ -171,7 +171,7 @@ describe('FitQuest logging screens', () => {
       act(() => pressable(r, (l) => l === 'Ngày trước').props.onPress());
       const text = allText(r);
       expect(text).toContain('T4 21/10');
-      expect(text).toContain('Áp dụng cho bữa ăn');
+      expect(text).toContain('Cho bữa, nước, check-in');
 
       act(() => pressable(r, (l) => l === 'Thêm 250 ml nước').props.onPress());
       expect(useNutritionStore.getState().logs['2026-10-21'].waterMl).toBe(250);
@@ -544,7 +544,7 @@ describe('FitQuest logging screens', () => {
       const r = render(<JournalScreen />);
       const level = () => ['Thâm hụt quá mức', 'Đạt', 'Tạm chấp nhận', 'Không đạt', 'Duy trì', 'Ăn dư', 'Cheat day'].filter((l) => r.root.findAll((n) => (n.type as unknown) === 'Text' && [n.props.children].flat(5).join('') === l).length > 0);
       expect(level().length).toBeGreaterThan(0);
-      expect(allText(r)).toContain('Màu thâm hụt so với mục tiêu');
+      expect(allText(r)).toContain('Mục tiêu 1100 kcal · Đạt ≥ 90%');
       act(() => pressable(r, (l) => l.startsWith('Đánh dấu ngày này là cheat day')).props.onPress());
       expect(useCheatDayStore.getState().days).toEqual([DATE]);
       // A cheat day's kcal are not counted: it shows as such instead of a deficit level.

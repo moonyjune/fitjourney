@@ -27,7 +27,7 @@ jest.mock('../../sync/cloudSync', () => ({
   pullProfile: jest.fn(async () => null),
 }));
 
-import WeightScreen from '../../../app/(tabs)/weight';
+import WeightScreen from '../../../app/weight';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 

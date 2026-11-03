@@ -299,10 +299,10 @@ export default function ProfileScreen() {
         {g('profile.group.progress').toUpperCase()}
       </HudText>
       <View style={styles.menu}>
-        <MenuRow icon="plan" label={g('profile.plan')} hint={g('profile.planHint')} onPress={() => router.push('/(tabs)/plan')} />
-        <MenuRow icon="chart" label={g('profile.weight')} hint={g('profile.weightHint')} onPress={() => router.push('/(tabs)/weight')} />
-        <MenuRow icon="bowl" label={g('profile.nutrition')} hint={g('profile.nutritionHint')} onPress={() => router.push('/(tabs)/nutrition')} />
-        <MenuRow icon="list" label={g('profile.history')} hint={g('profile.historyHint')} onPress={() => router.push('/(tabs)/history')} />
+        <MenuRow icon="plan" label={g('profile.plan')} hint={g('profile.planHint')} onPress={() => router.push('/plan')} />
+        <MenuRow icon="chart" label={g('profile.weight')} hint={g('profile.weightHint')} onPress={() => router.push('/weight')} />
+        <MenuRow icon="bowl" label={g('profile.nutrition')} hint={g('profile.nutritionHint')} onPress={() => router.push('/nutrition')} />
+        <MenuRow icon="list" label={g('profile.history')} hint={g('profile.historyHint')} onPress={() => router.push('/history')} />
         <MenuRow icon="flame" label={g('week.profileRow')} hint={g('week.profileRowHint')} onPress={() => router.push('/weekly-report')} />
         <MenuRow icon="flame" label={ti('ins.profileRow')} hint={ti('ins.profileRowHint')} onPress={() => router.push('/insights')} />
         <MenuRow

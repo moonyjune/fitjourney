@@ -42,7 +42,7 @@ jest.mock('../../sync/cloudSync', () => ({
   pullProfile: jest.fn(async () => null),
 }));
 
-import HistoryScreen from '../../../app/(tabs)/history';
+import HistoryScreen from '../../../app/history';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';

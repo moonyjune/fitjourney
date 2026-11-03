@@ -34,7 +34,7 @@ jest.mock('../../sync/cloudSync', () => ({
   requestPhotoAnalysis: jest.fn(),
 }));
 
-import NutritionScreen from '../../../app/(tabs)/nutrition';
+import NutritionScreen from '../../../app/nutrition';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';

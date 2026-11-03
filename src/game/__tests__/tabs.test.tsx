@@ -382,7 +382,7 @@ describe('FitQuest tabs', () => {
       const r = render(<ProfileScreen />);
       const toggle = r.root.findAll((n) => n.props.accessibilityLabel === 'Nhịn ăn gián đoạn (16:8)' && typeof n.props.onValueChange === 'function')[0];
       expect(toggle.props.value).toBe(true);
-      expect(allText(r)).toContain('Tắt: ngày ăn 3 bữa bình thường');
+      expect(allText(r)).toContain('Tắt: 3 bữa đến 22:00');
       expect(allText(r)).toContain('IF là viết tắt của Intermittent Fasting, tức nhịn ăn gián đoạn');
       await act(async () => toggle.props.onValueChange(false));
       expect(useMealModeStore.getState().fasting).toBe(false);
@@ -402,10 +402,10 @@ describe('FitQuest tabs', () => {
     it('opens the plan, weight, nutrition and history screens', () => {
       const r = render(<ProfileScreen />);
       const routes: [string, string][] = [
-        ['Kế hoạch', '/(tabs)/plan'],
-        ['Cân nặng', '/(tabs)/weight'],
-        ['Dinh dưỡng', '/(tabs)/nutrition'],
-        ['Lịch sử', '/(tabs)/history'],
+        ['Kế hoạch', '/plan'],
+        ['Cân nặng', '/weight'],
+        ['Dinh dưỡng', '/nutrition'],
+        ['Lịch sử', '/history'],
         ['Phân tích', '/insights'],
         ['Thói quen', '/habits'],
         ['Kiến thức', '/learn'],
@@ -506,11 +506,12 @@ describe('FitQuest tabs', () => {
   describe('Tab bar', () => {
     const navigate = jest.fn();
     const emit = jest.fn(() => ({ defaultPrevented: false }));
-    const routes = ['index', 'today-classic', 'map', 'profile', 'weight', 'nutrition', 'workout', 'history', 'plan', 'clients', 'coach-account'].map((name) => ({
+    // The routes declared in app/(tabs)/_layout.tsx, in declaration order (the bar sorts them itself).
+    const routes = ['index', 'workout', 'map', 'profile', 'clients', 'coach-account'].map((name) => ({
       key: `${name}-k`,
       name,
     }));
-    const hidden = new Set(['today-classic', 'weight', 'nutrition', 'history', 'plan', 'clients', 'coach-account']);
+    const hidden = new Set(['clients', 'coach-account']);
 
     function bar(focusedName = 'index') {
       const descriptors: Record<string, { options: object }> = {};
@@ -525,23 +526,23 @@ describe('FitQuest tabs', () => {
       emit.mockClear().mockReturnValue({ defaultPrevented: false });
     });
 
-    it('shows exactly Camp, Train, Map and Profile plus the + button; hidden routes never appear', () => {
+    it('shows exactly Camp, Train, Journey and Profile plus the + button; hidden routes never appear', () => {
       const r = bar();
       // findAll returns both the composite and host node of each Pressable, so de-duplicate by label.
       const tabs = [...new Set(r.root.findAll((n) => n.props.accessibilityRole === 'tab').map((n) => n.props.accessibilityLabel))];
-      expect(tabs).toEqual(['Trại', 'Tập', 'Bản đồ', 'Hồ sơ']); // the design's order, not the routes' declaration order
+      expect(tabs).toEqual(['Trại', 'Tập', 'Hành trình', 'Hồ sơ']); // the design's order, not the routes' declaration order
       expect(allText(r)).not.toContain('Cân nặng');
     });
 
     it('marks the focused tab as selected and navigates when another is pressed', () => {
       const r = bar('map');
       const selected = r.root.findAll((n) => n.props.accessibilityRole === 'tab' && n.props.accessibilityState?.selected);
-      expect([...new Set(selected.map((n) => n.props.accessibilityLabel))]).toEqual(['Bản đồ']);
+      expect([...new Set(selected.map((n) => n.props.accessibilityLabel))]).toEqual(['Hành trình']);
       act(() => pressable(r, (l) => l === 'Hồ sơ').props.onPress());
       expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'tabPress', target: 'profile-k' }));
       expect(navigate).toHaveBeenCalledWith('profile');
       navigate.mockClear();
-      act(() => pressable(r, (l) => l === 'Bản đồ').props.onPress()); // already focused
+      act(() => pressable(r, (l) => l === 'Hành trình').props.onPress()); // already focused
       expect(navigate).not.toHaveBeenCalled();
     });
 

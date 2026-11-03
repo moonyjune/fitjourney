@@ -92,13 +92,13 @@ function describeMission(m: MissionResult, day: DayEvaluation, g: Translate): Mi
 }
 
 /** Which tab logs the data behind each mission, so tapping a row jumps to where you can act on it. */
-const MISSION_TARGET: Partial<Record<MissionId, '/(tabs)/workout' | '/(tabs)/nutrition'>> = {
+const MISSION_TARGET: Partial<Record<MissionId, '/(tabs)/workout' | '/nutrition'>> = {
   workout: '/(tabs)/workout',
-  protein: '/(tabs)/nutrition',
-  purine: '/(tabs)/nutrition',
-  salt: '/(tabs)/nutrition',
-  sugar: '/(tabs)/nutrition',
-  junk: '/(tabs)/nutrition',
+  protein: '/nutrition',
+  purine: '/nutrition',
+  salt: '/nutrition',
+  sugar: '/nutrition',
+  junk: '/nutrition',
 };
 
 function CampLink({ icon, label, onPress }: { icon: 'list' | 'smile'; label: string; onPress: () => void }) {

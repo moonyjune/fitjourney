@@ -305,8 +305,8 @@ describe('Achievements screen', () => {
 
   it('is honest about what it does not track yet', () => {
     const text = allText(render());
-    expect(text).toContain('Chưa có: nhịn ăn 16:8, đổi món AI và huy hiệu coach');
-    expect(text).toContain('ước tính theo tên món'); // the purine/salt/sugar streaks are estimates, and the note says so
+    expect(text).toContain('Sticker không cộng XP');
+    expect(text).toContain('Chưa có: 16:8, đổi món AI, coach'); // badges the app cannot track yet are named
   });
 
   it('lets only an earned banner be put on the profile, and removed again', async () => {

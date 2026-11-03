@@ -2,31 +2,31 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { stepsOrImplicit } from '../../src/components/PlanPreview';
-import { DateOffsetPicker } from '../../src/components/DateOffsetPicker';
-import { HudText } from '../../src/components/quest/HudText';
-import { QuestButton } from '../../src/components/quest/QuestButton';
-import { FoodThumb } from '../../src/components/quest/FoodPhoto';
-import { QuestHeader } from '../../src/components/quest/QuestHeader';
-import { QuestWorkoutSteps } from '../../src/components/quest/QuestPlanPreview';
-import { WorkoutEntryForm, type PhotoChange, type WorkoutFormValues } from '../../src/components/quest/WorkoutEntryForm';
-import { FadeInUp } from '../../src/components/quest/motion';
-import { useProofStore } from '../../src/store/useProofStore';
-import { useWorkoutStore } from '../../src/store/useWorkoutStore';
-import { addWorkoutWithPhoto, detachWorkoutPhoto, replaceWorkoutPhoto, workoutProofFor } from '../../src/utils/workoutPhotos';
-import type { WorkoutLogEntry } from '../../src/types';
-import { todayKey } from '../../src/store/useNutritionStore';
-import { getDayType } from '../../src/constants/plan';
-import { usePlanStore } from '../../src/store/usePlanStore';
-import { formatDateVi, toDateKey } from '../../src/utils/date';
-import { iconForWorkoutLabel, workoutIntensity, type WorkoutIntensity } from '../../src/utils/workoutIntensity';
-import { useGameText } from '../../src/game/strings';
-import { useTranslation } from '../../src/i18n/useTranslation';
-import type { StringKey } from '../../src/i18n/strings';
-import { quest, questRadius } from '../../src/theme/quest';
-import { screenMaxWidthStyle } from '../../src/theme/responsive';
-import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
-import { useTabBarClearance } from '../../src/components/quest/QuestTabBar';
+import { stepsOrImplicit } from '../src/components/PlanPreview';
+import { DateOffsetPicker } from '../src/components/DateOffsetPicker';
+import { HudText } from '../src/components/quest/HudText';
+import { QuestButton } from '../src/components/quest/QuestButton';
+import { FoodThumb } from '../src/components/quest/FoodPhoto';
+import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { QuestWorkoutSteps } from '../src/components/quest/QuestPlanPreview';
+import { WorkoutEntryForm, type PhotoChange, type WorkoutFormValues } from '../src/components/quest/WorkoutEntryForm';
+import { FadeInUp } from '../src/components/quest/motion';
+import { useProofStore } from '../src/store/useProofStore';
+import { useWorkoutStore } from '../src/store/useWorkoutStore';
+import { addWorkoutWithPhoto, detachWorkoutPhoto, replaceWorkoutPhoto, workoutProofFor } from '../src/utils/workoutPhotos';
+import type { WorkoutLogEntry } from '../src/types';
+import { todayKey } from '../src/store/useNutritionStore';
+import { getDayType } from '../src/constants/plan';
+import { usePlanStore } from '../src/store/usePlanStore';
+import { formatDateVi, toDateKey } from '../src/utils/date';
+import { iconForWorkoutLabel, workoutIntensity, type WorkoutIntensity } from '../src/utils/workoutIntensity';
+import { useGameText } from '../src/game/strings';
+import { useTranslation } from '../src/i18n/useTranslation';
+import type { StringKey } from '../src/i18n/strings';
+import { quest, questRadius } from '../src/theme/quest';
+import { screenMaxWidthStyle } from '../src/theme/responsive';
+import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { useTabBarClearance } from '../src/components/quest/QuestTabBar';
 
 const INTENSITY_COLOR: Record<WorkoutIntensity, { fg: string; bg: string; border: string }> = {
   light: { fg: quest.xp, bg: '#17301F', border: '#2E6A3B' },
@@ -293,7 +293,7 @@ export default function WorkoutScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={t('workout.editWithAiButton')}
-                onPress={() => router.push(`/(tabs)/plan?editWorkout=${encodeURIComponent(template.label)}`)}
+                onPress={() => router.push(`/plan?editWorkout=${encodeURIComponent(template.label)}`)}
                 style={({ pressed }) => [styles.linkButton, pressed && { opacity: 0.7 }]}
               >
                 <HudText size={13} color={quest.manaText}>

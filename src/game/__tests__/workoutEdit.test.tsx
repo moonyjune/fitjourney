@@ -62,7 +62,7 @@ jest.mock('../../sync/cloudSync', () => ({
   requestPhotoAnalysis: (...a: unknown[]) => mockAnalysis(...a),
 }));
 
-import WorkoutScreen from '../../../app/(tabs)/workout-classic';
+import WorkoutScreen from '../../../app/workout-classic';
 import { useDayEvaluator, useNow } from '../useGameState';
 import { toDateKey } from '../../utils/date';
 import { useProofStore } from '../../store/useProofStore';
@@ -297,7 +297,7 @@ describe('Classic workout screen: editing, photo and AI prefill', () => {
       expect(photoAt).toBeLessThan(text.indexOf('Thời lượng (phút)'));
       expect(hasPress(logForm(r), 'Chụp ảnh')).toBe(true);
       expect(hasPress(logForm(r), 'Chọn từ thư viện')).toBe(true);
-      expect(text).toContain('AI tự điền số liệu và ghi buổi tập cho bạn');
+      expect(text).toContain('AI điền và ghi buổi tập');
     });
 
     it('picks a photo from the camera or the gallery, previews it and removes it', async () => {

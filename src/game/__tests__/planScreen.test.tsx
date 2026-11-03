@@ -49,7 +49,7 @@ jest.mock('../../sync/cloudSync', () => ({
   saveChatMessage: jest.fn(),
 }));
 
-import PlanScreen from '../../../app/(tabs)/plan';
+import PlanScreen from '../../../app/plan';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 

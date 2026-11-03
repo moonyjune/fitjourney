@@ -169,7 +169,7 @@ describe('FitQuest Camp screen', () => {
     const protein = rows.find((n) => String(n.props.accessibilityLabel).startsWith('Protein'));
     expect(protein).toBeDefined();
     act(() => protein!.props.onPress());
-    expect(mockPush).toHaveBeenCalledWith('/(tabs)/nutrition');
+    expect(mockPush).toHaveBeenCalledWith('/nutrition');
     const workoutRow = rows.find((n) => String(n.props.accessibilityLabel).startsWith('Tập luyện'));
     act(() => workoutRow!.props.onPress());
     expect(mockPush).toHaveBeenCalledWith('/(tabs)/workout');
