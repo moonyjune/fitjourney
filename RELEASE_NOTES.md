@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.0.1 | no | boss-banter, dish-photo, tempt-me, suggest-cheat-places |
 | 1.0.0 | no | — |
 | 0.34.0 | no | — |
 | 0.33.0 | no | — |
@@ -90,6 +91,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.0.1
+- The app is called "FitJourney" everywhere: the version line in Profile ("FitJourney 1.0.1"), the AI prompts of the boss banter and the temptation pool, the user agent of the photo and place lookups, code comments, test names and the design docs (the proposal PDF is now `Design/uiux-proposal/FitJourney-UIUX-proposal.pdf`). Folder names such as `Design/v4-fitquest` are unchanged.
 
 ## 1.0.0
 The UI/UX redesign is complete (Design/uiux-proposal, phases 0–6 shipped in 0.28.0–0.34.0; this release is the final end-to-end check). The version before the redesign is kept as branch `backup/pre-redesign-0.27.2` and tag `v0.27.2`.
