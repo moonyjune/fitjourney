@@ -13,7 +13,7 @@ import { useWaterWindowStore } from '../store/useWaterWindowStore';
 import { clampWaterWindow, DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN } from '../water/schedule';
 import { useAnalysisStore } from '../store/useAnalysisStore';
 import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
-import { cleanSkippedMeals, mergeSkippedMeals, useSkippedMealStore } from '../store/useSkippedMealStore';
+import { daysFromEntries, mergeSkipEntries, readSkippedPayload, skippedPayload, useSkippedMealStore } from '../store/useSkippedMealStore';
 import { useCheatPlacesStore } from '../store/useCheatPlacesStore';
 import { cleanCheatPlacesData, mergeCheatPlaces } from '../cookbook/placesHistory';
 import { useTemptationStore } from '../store/useTemptationStore';
@@ -376,13 +376,17 @@ function restoreUserData(remote: Map<string, unknown>): void {
   if (!sameJson(mergedCheat, localCheat)) useCheatDayStore.setState({ days: mergedCheat });
   if (!sameJson(mergedCheat, remoteCheat)) void pushUserData(USER_DATA_KEYS.cheatDays, { days: mergedCheat });
 
-  // Meals skipped on purpose: marks from either side are kept, like cheat days.
+  // Meals skipped on purpose: the newest mark of each (day, meal) wins, an un-skip included (old `{ days }` payloads count as skips
+  // with no time, so any timed mark beats them).
   const skippedRaw = remote.get(USER_DATA_KEYS.skippedMeals);
-  const remoteSkipped = cleanSkippedMeals(isObj(skippedRaw) ? skippedRaw.days : {});
-  const localSkipped = useSkippedMealStore.getState().days;
-  const mergedSkipped = mergeSkippedMeals(localSkipped, remoteSkipped);
-  if (!sameJson(mergedSkipped, localSkipped)) useSkippedMealStore.setState({ days: mergedSkipped });
-  if (!sameJson(mergedSkipped, remoteSkipped)) void pushUserData(USER_DATA_KEYS.skippedMeals, { days: mergedSkipped });
+  const remoteSkipped = readSkippedPayload(skippedRaw);
+  const localSkipped = useSkippedMealStore.getState().entries;
+  const mergedSkipped = mergeSkipEntries(localSkipped, remoteSkipped);
+  if (!sameJson(mergedSkipped, localSkipped)) useSkippedMealStore.setState({ entries: mergedSkipped, days: daysFromEntries(mergedSkipped) });
+  // An old-format row is rewritten in the new one (with `days` still in it for devices not updated yet).
+  const remoteIsV2 = isObj(skippedRaw) && isObj(skippedRaw.entries);
+  const skippedWorthSaving = skippedRaw !== undefined || Object.keys(mergedSkipped).length > 0;
+  if (skippedWorthSaving && (!remoteIsV2 || !sameJson(mergedSkipped, remoteSkipped))) void pushUserData(USER_DATA_KEYS.skippedMeals, skippedPayload(mergedSkipped));
 
   // Cheat day places (history of searches, starred places): both sides joined, minus what either side removed after adding it.
   const placesRemote = cleanCheatPlacesData(remote.get(USER_DATA_KEYS.cheatPlaces));

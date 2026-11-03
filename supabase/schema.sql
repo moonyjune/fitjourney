@@ -953,6 +953,44 @@ drop policy if exists "push_subscriptions_own" on public.push_subscriptions;
 create policy "push_subscriptions_own" on public.push_subscriptions for all
   to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Lưu đăng ký của thiết bị cho tài khoản đang đăng nhập, "nhận" theo endpoint: dòng cùng endpoint còn gắn với tài khoản khác
+-- (đăng xuất do hết phiên / không mở app 24 giờ khi không xoá được dòng) bị xoá rồi ghi lại cho auth.uid(). Endpoint là URL bí mật
+-- chỉ trình duyệt đó biết, nên ai có nó chính là thiết bị đó. App dùng hàm này thay cho upsert (RLS chặn upsert vào dòng của người khác).
+create or replace function public.push_claim_subscription(
+  p_endpoint text,
+  p_p256dh text,
+  p_auth text,
+  p_user_agent text default null,
+  p_plan jsonb default null,
+  p_tz text default null
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'not signed in' using errcode = '28000';
+  end if;
+  delete from public.push_subscriptions where endpoint = p_endpoint and user_id <> uid;
+  insert into public.push_subscriptions (user_id, endpoint, p256dh, auth, user_agent, plan, plan_updated_at, tz, failures)
+  values (uid, p_endpoint, p_p256dh, p_auth, left(p_user_agent, 400), p_plan, now(), p_tz, 0)
+  on conflict (endpoint) do update set
+    user_id = excluded.user_id,
+    p256dh = excluded.p256dh,
+    auth = excluded.auth,
+    user_agent = excluded.user_agent,
+    plan = excluded.plan,
+    plan_updated_at = excluded.plan_updated_at,
+    tz = excluded.tz,
+    failures = 0;
+end;
+$$;
+revoke all on function public.push_claim_subscription(text, text, text, text, jsonb, text) from public, anon;
+grant execute on function public.push_claim_subscription(text, text, text, text, jsonb, text) to authenticated;
+
 -- Nhắc đã gửi (khóa dạng water@2026-11-02@09:00, meal@..., workout@...). Chỉ send-push (service role) đọc/ghi.
 create table if not exists public.push_sent (
   user_id uuid not null references public.profiles (id) on delete cascade,
