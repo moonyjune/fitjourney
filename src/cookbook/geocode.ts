@@ -42,7 +42,7 @@ export async function reverseGeocode(lat: number, lon: number, fetchImpl: typeof
   const timer = controller ? setTimeout(() => controller.abort(), TIMEOUT_MS) : null;
   try {
     const res = await fetchImpl(url, {
-      headers: { Accept: 'application/json', 'Accept-Language': 'vi', ...(inBrowser ? {} : { 'User-Agent': 'FitQuest/1.0 (cheat-day place search)' }) },
+      headers: { Accept: 'application/json', 'Accept-Language': 'vi', ...(inBrowser ? {} : { 'User-Agent': 'FitJourney/1.0 (cheat-day place search)' }) },
       ...(controller ? { signal: controller.signal } : {}),
     });
     if (!res.ok) return null;

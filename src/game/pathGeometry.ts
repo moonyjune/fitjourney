@@ -5,7 +5,7 @@ export interface Pt {
 export type Cubic = [Pt, Pt, Pt, Pt];
 
 /** The winding trail drawn on the map (viewBox 0 0 362 440), start at the bottom, gate at the top.
- *  Taken from the FitQuest map design: M60 400 C200 400 300 360 250 300 S80 240 120 190 C160 140 300 110 290 50
+ *  Taken from the FitJourney map design: M60 400 C200 400 300 360 250 300 S80 240 120 190 C160 140 300 110 290 50
  *  with the smooth-curve (S) control point written out. */
 export const MAP_TRAIL: Cubic[] = [
   [{ x: 60, y: 400 }, { x: 200, y: 400 }, { x: 300, y: 360 }, { x: 250, y: 300 }],

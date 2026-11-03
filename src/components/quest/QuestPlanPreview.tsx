@@ -53,7 +53,7 @@ export function QuestWorkoutSteps({ steps }: { steps: WorkoutStep[] }) {
   );
 }
 
-/** Dark FitQuest twin of PlanPreview: meal menus, water schedule, workouts and (optionally) the shopping list. */
+/** Dark FitJourney twin of PlanPreview: meal menus, water schedule, workouts and (optionally) the shopping list. */
 /** `waterSchedule` replaces the plan's stored one (the user's own plan shows the one generated from their daily target). */
 export function QuestPlanPreview({ plan, hideShoppingList, waterSchedule = plan.waterSchedule }: { plan: PlanData; hideShoppingList?: boolean; waterSchedule?: WaterCheckpoint[] }) {
   const { t } = useTranslation();

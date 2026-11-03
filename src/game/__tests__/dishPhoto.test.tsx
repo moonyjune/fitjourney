@@ -138,7 +138,7 @@ describe('dish photos (server, pure)', () => {
     const o = new URL(openverseSearchUrl('pho beef'));
     expect(o.hostname).toBe('api.openverse.org');
     expect(o.searchParams.get('license')).toBe('cc0,pdm,by,by-sa');
-    expect(photoUserAgent()).toMatch(/^FitQuest\/1\.0 \(/);
+    expect(photoUserAgent()).toMatch(/^FitJourney\/1\.0 \(/);
     expect(photoUserAgent('https://example.org/contact')).toContain('https://example.org/contact');
   });
 

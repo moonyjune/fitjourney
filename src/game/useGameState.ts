@@ -121,7 +121,7 @@ export function useDayEvaluator(now: Date): (dateKey: string) => DayEvaluation {
   );
 }
 
-/** All FitQuest progress for the signed-in user, derived from the existing log stores. */
+/** All FitJourney progress for the signed-in user, derived from the existing log stores. */
 export function useGameState(now: Date): GameView {
   const startDateISO = useSettingsStore((s) => s.startDateISO);
   const proteinTargetG = useSettingsStore((s) => s.proteinTargetG);

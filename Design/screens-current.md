@@ -1,4 +1,4 @@
-# FitQuest / FitJourney: thiết kế màn hình hiện tại
+# FitJourney: thiết kế màn hình hiện tại
 
 > Mô tả những gì **code đang làm** ở bản **0.21.0** (`APP_VERSION` trong `src/utils/buildInfo.ts`), không phải bản kế hoạch.
 > Thiết kế gốc nằm ở `Design/v4-fitquest/` (PNG), `Design/screens.html`, `Design/screens/`, `Design/design-system.html`. Đó là kế hoạch cũ; những chỗ khác với v4 được ghi chú ở từng màn và ở mục 4.
@@ -263,7 +263,7 @@ Quy ước chung cho các màn có AI: lỗi AI hiện bằng `aiErrorText(kind)
 - **Hành vi**: điền sẵn thông tin lần đăng nhập trước (sau khi phiên 24 giờ hết hạn). Đăng ký xong thì báo "Kiểm tra email". Quên mật khẩu: kiểm tra email trước, gửi link đặt lại, chỉ báo một câu chung (không lộ email có tồn tại hay không).
 - **Trạng thái**: thiếu trường thì `Alert` "Thiếu thông tin"; lỗi thì `Alert` "Lỗi"; ghi chú reset hiện ngay trong màn (xanh hoặc đỏ).
 - **Dev**: chỉ khi `__DEV__` có nút ghost "Login Dev (dữ liệu mẫu)" → `enterDevMode()`: tài khoản offline với 21 ngày dữ liệu giả (cân 110 → ~105,9 kg…); AI ảnh dùng bản giả `src/ai/devPhotoAnalysis.ts`, luôn ghi là mô phỏng.
-- **So với v4**: Q02-Auth; tên hiển thị vẫn là "FitJourney" (logo, `auth.title`), không phải "FitQuest".
+- **So với v4**: Q02-Auth; tên hiển thị là "FitJourney" (logo, `auth.title`).
 
 #### `/role-select` (`app/role-select.tsx`), modal
 - Tiêu đề "Bạn là ai?" + phụ đề. Hai `RoleCard` (icon, tiêu đề, mô tả, chevron):
@@ -711,7 +711,7 @@ Rỗng: "Cần ít nhất 2 ngày có dữ liệu để vẽ biểu đồ.", "Ch
 7. **Hai hệ boss song song**: boss tuần "Quái Một Ký Mỡ" (7700 HP, reset 05:00 thứ Hai; Trại, `/boss`, Bản đồ > Biểu đồ "Boss theo tuần") và boss chặng 5 kg (Bản đồ). Màn Boss đặt tiêu đề mục là "Nhật ký trận", trùng tên với Nhật ký trận ở Trại.
 8. **"Thành tích" có hai nghĩa**: mục "Thành tích" trong Lịch sử là huy hiệu chuỗi ngày (kiểu FitJourney cũ), còn `/achievements` là sticker/banner.
 9. **Gợi ý sai ở Hồ sơ**: dòng "Cook book ăn kiêng" dùng chuỗi `cookbook.empty` ("Chưa có món nào…") làm gợi ý, kể cả khi cook book đã có món. Hai dòng "Tổng kết tuần (AI)" và "Phân tích" dùng chung icon `flame`.
-10. **Tên app chưa thống nhất**: màn đăng nhập và `auth.title` vẫn là "FitJourney", `RELEASE_NOTES.md` ghi "FitJourney", còn thiết kế và bộ nhớ dự án gọi là "FitQuest". Vai trò client gọi là "Fatty" (role-select, coach-account) nhưng Hồ sơ gọi coach là "Hiệp sĩ dẫn đường".
+10. **Tên app**: thống nhất là "FitJourney" (từ 1.0.x; trước đó thiết kế gọi là "FitQuest"). Vai trò client gọi là "Fatty" (role-select, coach-account) nhưng Hồ sơ gọi coach là "Hiệp sĩ dẫn đường".
 11. **Chuỗi viết cứng / chưa i18n**: `Alert` liên kết coach trong onboarding; nút "Login Dev (dữ liệu mẫu)" (chỉ dev).
 12. **Từ điển chữ tách rời**: `src/i18n/strings.ts`, `src/game/strings.ts` và từ điển riêng cho food / habits / uric / learn / insights / feedback. Cùng một khái niệm có thể có nhiều key (ví dụ "Quay lại": `common.back`, `planScreen.back`, `historyScreen.back`, `ach.back`, `hb.back`…).
 13. **Bộ màu sáng cũ** (`src/theme/tokens.ts`, `Card`, `Badge`, `ProgressBar` không có `dark`) vẫn còn cho `today-classic`. Vài màn chính vẫn dùng component cũ ở chế độ `dark` (`ProgressBar`, `TdeeCard`, `WaterTimeline`, `DailyMealBreakdownTable`, `ProofCapture`, `MealRecipeSuggestion`, `PlanChatAssistant`, `DateOffsetPicker`), không phải component `quest/`. Biểu đồ dùng hai thư viện: `react-native-chart-kit` (Cân nặng, Lịch sử, Uric) và SVG riêng (`WeightChart`, `TrailMap`).

@@ -7,7 +7,7 @@ import { quest, questFonts } from '../theme/quest';
 interface DateOffsetPickerProps {
   selectedDate: Date;
   onChange: (date: Date) => void;
-  /** FitQuest dark styling. */
+  /** FitJourney dark styling. */
   dark?: boolean;
 }
 

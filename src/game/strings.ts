@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useSettingsStore } from '../store/useSettingsStore';
 
-// FitQuest copy lives here (not in src/i18n/strings.ts) so the game layer can grow without
+// FitJourney copy lives here (not in src/i18n/strings.ts) so the game layer can grow without
 // touching the large shared dictionary; it follows the same vi/en language setting.
 
 const vi = {

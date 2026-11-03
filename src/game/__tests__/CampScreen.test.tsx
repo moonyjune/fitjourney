@@ -67,7 +67,7 @@ function button(r: ReactTestRenderer, label: string) {
   return found;
 }
 
-describe('FitQuest Camp screen', () => {
+describe('FitJourney Camp screen', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {

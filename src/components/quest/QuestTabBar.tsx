@@ -47,7 +47,7 @@ function isHidden(options: { href?: unknown; tabBarItemStyle?: StyleProp<ViewSty
   return (StyleSheet.flatten(options?.tabBarItemStyle) as ViewStyle | undefined)?.display === 'none';
 }
 
-/** The FitQuest bottom bar: Camp · Train · [+] · Map · Profile, with the gold diamond in the middle
+/** The FitJourney bottom bar: Camp · Train · [+] · Map · Profile, with the gold diamond in the middle
  *  opening Quick add. Only routes that are listed above and not hidden (`href: null` in the layout) appear. */
 export function QuestTabBar({ state, descriptors, navigation, insets, coach = false }: BottomTabBarProps & { coach?: boolean }) {
   const g = useGameText();

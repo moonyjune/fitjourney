@@ -55,7 +55,7 @@ import { useToastStore } from '../../store/useToastStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 
-describe('Plan screen (FitQuest)', () => {
+describe('Plan screen (FitJourney)', () => {
   let renderer: ReactTestRenderer | undefined;
   const render = async (element: React.ReactElement = <PlanScreen />) => {
     let r!: ReactTestRenderer;

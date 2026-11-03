@@ -99,7 +99,7 @@ function pressable(r: ReactTestRenderer, match: (label: string) => boolean): Rea
   return found;
 }
 
-describe('FitQuest tabs', () => {
+describe('FitJourney tabs', () => {
   let renderer: ReactTestRenderer | undefined;
 
   function render(element: React.ReactElement): ReactTestRenderer {

@@ -23,7 +23,7 @@ interface PlanChatAssistantProps {
   onApply: (plan: PlanData) => Promise<void> | void;
   /** Pre-fills the message input (e.g. from a workout card's "Edit with AI" shortcut). */
   initialDraft?: string;
-  /** FitQuest dark styling (default: classic light). */
+  /** FitJourney dark styling (default: classic light). */
   dark?: boolean;
 }
 

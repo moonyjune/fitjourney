@@ -21,7 +21,7 @@ interface TdeeCardProps {
   caloriesConsumedToday: number;
   /** Calories burned through logged exercise today — on top of TDEE, not part of it. */
   caloriesBurnedExerciseToday: number;
-  /** Dark FitQuest look (default off = classic light). */
+  /** Dark FitJourney look (default off = classic light). */
   dark?: boolean;
   /** The day is a cheat day: its balance is not counted, so it reads "Cheat day · không tính kcal" instead of a figure. */
   cheatDay?: boolean;

@@ -101,7 +101,7 @@ export interface ExtraFoodItem {
   loggedAtISO: string;
   /** Null for older entries logged before this field existed. */
   mealTime: ExtraMealTime | null;
-  /** Optional hand-entered nutrients for the FitQuest "stay under the line" missions. Absent on
+  /** Optional hand-entered nutrients for the FitJourney "stay under the line" missions. Absent on
    *  older entries (treated as 0). Stored inside the existing extra_items jsonb column. */
   purineMg?: number;
   saltG?: number;

@@ -20,7 +20,7 @@ export const DEFAULT_PHOTO_CONTACT = 'https://fitjourney-vn.vercel.app';
  *  refused, so no photo was ever found and the model never called. */
 export function photoUserAgent(contact?: string): string {
   const c = cleanText(contact, 120) || DEFAULT_PHOTO_CONTACT;
-  return `FitQuest/1.0 (dish photos for a diet app; ${c})`;
+  return `FitJourney/1.0 (dish photos for a diet app; ${c})`;
 }
 /** The Accept header of a thumbnail request. Openverse's thumbnail endpoint answers 406 to "image/*" (it negotiates on exact types),
  *  so every Openverse candidate was lost: the photo types are named and anything else is still accepted (the type is checked after). */

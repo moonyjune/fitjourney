@@ -1,4 +1,4 @@
-# FitQuest: đề xuất cải tiến UI/UX
+# FitJourney: đề xuất cải tiến UI/UX
 
 > **Trạng thái: đã làm xong ở 0.28.0–0.34.0** (GĐ0–6, mỗi giai đoạn một bản; kiểm thử GĐ7 sau 0.34.0). Điều hướng hiện tại: `Design/screens-current.md` mục 0.
 
@@ -7,7 +7,7 @@
 > Dựa trên: code ở bản 0.21.0, `Design/screens-current.md` (mục 4, 16 chỗ chưa nhất quán) và `Design/v4-fitquest`.
 > Mockup "ĐỀ XUẤT" và hộp thoại theo luật thâm hụt của **0.23.0**: thâm hụt hôm nay là số dự kiến "~X" tới khi chốt, đòn boss tuần chờ chốt, ngày thiếu bữa có dòng ⚠ + "Ghi bổ sung", chưa ghi bữa thì không có số. Nay theo **0.26** (kho cám dỗ, mẻ quán, model riêng từng tính năng: 27, 36, 39, 06b) và **0.25.0**: thêm "Tôi không ăn sáng", Bỏ bữa + Hoàn tác, ⚠ ở lịch / danh sách tháng (0.24.0), "Thông báo khi đóng app" và lock screen (0.25.0), màn mở app (xem `dialogs.md`, 46–47). Chưa vẽ 0.26.0. Ảnh "HIỆN TẠI" vẽ app trước 0.23.0.
 
-**PDF:** `FitQuest-UIUX-proposal.pdf` gom toàn bộ đề xuất (sơ đồ chuyển màn, thay đổi chung, từng màn trước / sau kèm mô tả, 47 hộp thoại, xoá / gộp, kế hoạch, đã chốt). **Sơ đồ chuyển màn hình:** `flow.png` (mã `html/flow.html`): mỗi tab / màn chính một cột, nhãn trên mỗi ô là thao tác mở nó.
+**PDF:** `FitJourney-UIUX-proposal.pdf` gom toàn bộ đề xuất (sơ đồ chuyển màn, thay đổi chung, từng màn trước / sau kèm mô tả, 47 hộp thoại, xoá / gộp, kế hoạch, đã chốt). **Sơ đồ chuyển màn hình:** `flow.png` (mã `html/flow.html`): mỗi tab / màn chính một cột, nhãn trên mỗi ô là thao tác mở nó.
 
 **Ảnh:** `overview.png` là bảng tổng hợp. Từng màn nằm trong `png/`, rộng 390 pt và chụp ở 2x. Mỗi ảnh là **cả màn hình theo chiều cuộn**, từ đầu tới cuối trang, không còn cắt ở 844 pt. Thanh tab và nút lưu cố định được vẽ ở cuối trang. Mã HTML nằm trong `html/` và mở được trực tiếp trong trình duyệt.
 Ảnh "HIỆN TẠI" vẽ lại màn hiện có, kèm chấm đỏ đánh số đúng vấn đề nêu dưới đây. Ảnh "ĐỀ XUẤT" là thiết kế mới.
@@ -66,7 +66,7 @@
 2. Không nhắc lại điều giao diện đã cho thấy. Ví dụ "Không bắt buộc" thì dùng nhãn "tuỳ chọn" xám.
 3. Số liệu: mặc định chỉ hiện **kcal + đạm**. Purine / muối / đường hiện dưới dạng badge chỉ khi gần hoặc vượt ngưỡng, còn lại nằm trong "Chi tiết ▸".
 4. Một khái niệm một từ: "Quay lại" dùng chung một key (đang có 5 key), "Thành tích" chỉ dùng cho sticker / banner, huy hiệu chuỗi gọi là "Mốc lửa trại".
-5. Tên app thống nhất là **FitQuest**. Màn đăng nhập, `auth.title` và `RELEASE_NOTES.md` vẫn ghi "FitJourney" (§4.10).
+5. Tên app thống nhất là **FitJourney** (§4.10).
 6. Lỗi AI: 1 câu ngắn + 1 nút ("Thử lại" / "Tự nhập"), thay cho 7 biến thể dài.
 
 ### 2.4 Hình ảnh
@@ -188,7 +188,7 @@ Chú thích: **P0** = làm trước (gỡ điểm nghẽn hằng ngày), **P1** 
 | Check-in (`checkin.tsx`) | Sheet 1 màn: 5 mặt tâm trạng 56 pt, thèm / đói dạng thanh trượt 5 nấc, tình trạng tập dạng chip, ghi chú tuỳ chọn. Bỏ khối "Nhiệm vụ / Boss hôm nay" lặp từ Trại | Lặp số liệu, form dài | P1 / S |
 | Lên cấp, Thành tích | Giữ. Thêm ảnh banner lớn khi trang bị; "Thành tích" chỉ dùng cho sticker / banner | Nhất quán tên gọi | P2 / S |
 | Thói quen, Axit uric, Kiến thức, Phân tích, CSDL món | Áp dụng ScreenTemplate, chữ ngắn, empty state minh hoạ; đặt lối vào trong Hồ sơ › Mục tiêu (uric) / Cook book (CSDL) / Nhật ký (Phân tích) | Hiện mỗi màn một kiểu | P2 / M |
-| Onboarding, Đăng nhập, Chọn vai trò | Đổi "FitJourney" thành FitQuest; onboarding 3 bước có minh hoạ boss; `Alert` liên kết coach đưa sang i18n | Ấn tượng đầu tiên, §4.10–4.11 | P2 / M |
+| Onboarding, Đăng nhập, Chọn vai trò | Tên app thống nhất "FitJourney"; onboarding 3 bước có minh hoạ boss; `Alert` liên kết coach đưa sang i18n | Ấn tượng đầu tiên, §4.10–4.11 | P2 / M |
 | Coach (`clients`, `client/[id]`, `coach-account`) | Danh sách học viên có avatar + badge trạng thái (Tốt / Chậm / Cần nhắc) + ảnh bữa gần nhất; chi tiết học viên dùng lại Nhật ký (Ngày / Tuần) chế độ chỉ đọc | Tái dùng màn Nhật ký mới, bớt code riêng | P2 / M |
 | Thử thách cám dỗ (`TemptationDialog`) | Giữ dạng chat; ảnh món to; 2 nút 56 pt; câu phản ứng ngắn | Đã khá tốt | P2 / S |
 

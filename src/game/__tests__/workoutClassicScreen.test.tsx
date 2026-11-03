@@ -41,7 +41,7 @@ import { usePlanStore } from '../../store/usePlanStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 
-describe('Classic workout screen (FitQuest)', () => {
+describe('Classic workout screen (FitJourney)', () => {
   let renderer: ReactTestRenderer | undefined;
   const render = async () => {
     let r!: ReactTestRenderer;

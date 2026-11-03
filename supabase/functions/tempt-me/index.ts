@@ -105,7 +105,7 @@ async function ogImageOf(pageUrl: string): Promise<string | null> {
   if (!url) return null;
   try {
     const response = await fetch(url, {
-      headers: { 'user-agent': 'Mozilla/5.0 (FitQuest temptation preview)', accept: 'text/html' },
+      headers: { 'user-agent': 'Mozilla/5.0 (FitJourney temptation preview)', accept: 'text/html' },
       redirect: 'follow',
       signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
     });

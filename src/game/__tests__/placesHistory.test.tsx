@@ -139,7 +139,7 @@ describe('dish photos: the root cause (no photo was ever found, so the model was
   });
 
   it('the User-Agent always names a contact (Wikimedia policy), even without the DISH_PHOTO_CONTACT secret', () => {
-    expect(photoUserAgent()).toMatch(/^FitQuest\/1\.0 \(.*; https:\/\/fitjourney-vn\.vercel\.app\)$/);
+    expect(photoUserAgent()).toMatch(/^FitJourney\/1\.0 \(.*; https:\/\/fitjourney-vn\.vercel\.app\)$/);
     expect(photoUserAgent('me@example.com')).toContain('me@example.com');
   });
 });

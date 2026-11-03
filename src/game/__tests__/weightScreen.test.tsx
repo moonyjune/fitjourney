@@ -31,7 +31,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useToastStore } from '../../store/useToastStore';
 import { useWeightStore } from '../../store/useWeightStore';
 
-describe('Weight screen (FitQuest)', () => {
+describe('Weight screen (FitJourney)', () => {
   let renderer: ReactTestRenderer | undefined;
   const render = async () => {
     let r!: ReactTestRenderer;

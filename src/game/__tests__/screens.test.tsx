@@ -113,7 +113,7 @@ function textInput(r: ReactTestRenderer, label: string): ReactTestInstance {
   return found;
 }
 
-describe('FitQuest logging screens', () => {
+describe('FitJourney logging screens', () => {
   let renderer: ReactTestRenderer | undefined;
 
   function render(element: React.ReactElement): ReactTestRenderer {

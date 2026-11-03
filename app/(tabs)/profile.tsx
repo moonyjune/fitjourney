@@ -251,7 +251,7 @@ export default function ProfileScreen() {
       </SettingsGroup>
 
       <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.build}>
-        {`FitQuest ${APP_VERSION}`}
+        {`FitJourney ${APP_VERSION}`}
       </HudText>
     </ScrollView>
   );

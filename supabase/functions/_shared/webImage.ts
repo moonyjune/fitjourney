@@ -178,7 +178,7 @@ async function readCapped(response: Awaited<ReturnType<PageFetch>>, max: number)
   return new TextDecoder('utf-8', { fatal: false }).decode(all);
 }
 
-const BROWSER_UA = 'Mozilla/5.0 (compatible; FitQuestBot/1.0; +https://fitjourney-vn.vercel.app)';
+const BROWSER_UA = 'Mozilla/5.0 (compatible; FitJourneyBot/1.0; +https://fitjourney-vn.vercel.app)';
 const MAX_REDIRECTS = 3;
 
 /** A GET that follows redirects itself (at most MAX_REDIRECTS), checking every address is public before asking it, so a public page

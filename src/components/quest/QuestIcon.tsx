@@ -10,7 +10,7 @@ interface QuestIconProps {
   strokeWidth?: number;
 }
 
-/** Stroke icons matching the FitQuest design (24×24 grid). Decorative: hidden from screen readers. */
+/** Stroke icons matching the FitJourney design (24×24 grid). Decorative: hidden from screen readers. */
 export function QuestIcon({ name, size = 18, color, strokeWidth = 2 }: QuestIconProps) {
   const common = { fill: 'none', stroke: color, strokeWidth, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
   return (

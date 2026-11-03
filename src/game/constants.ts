@@ -1,7 +1,7 @@
 import { KCAL_PER_KG_FAT } from '../utils/tdee';
 import { STREAK_MIN_DEFICIT_KCAL } from '../utils/streak';
 
-// FitQuest rules — see Design/v4-fitquest/0-phong-cach-luat-choi for the design this implements.
+// FitJourney rules — see Design/v4-fitquest/0-phong-cach-luat-choi for the design this implements.
 
 /** Weekly boss HP = the kcal needed to lose 1 kg of fat, so defeating it means roughly 1 kg lost. */
 export const BOSS_MAX_HP = KCAL_PER_KG_FAT;

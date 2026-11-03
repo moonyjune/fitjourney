@@ -10,7 +10,7 @@ interface WaterTimelineProps {
   schedule: WaterCheckpoint[];
   currentMl: number;
   now?: Date;
-  /** Dark FitQuest look (default off = classic light). */
+  /** Dark FitJourney look (default off = classic light). */
   dark?: boolean;
 }
 

@@ -1,4 +1,4 @@
-# FitQuest: các hộp thoại, sheet và màn con trong thiết kế mới
+# FitJourney: các hộp thoại, sheet và màn con trong thiết kế mới
 
 > Bổ sung cho `README.md`. Bản đề xuất trước chỉ vẽ màn chính, nên chưa thấy các hộp thoại bên trong. File này liệt kê **mọi hộp thoại, sheet và màn con app đang có** (theo code 0.22.1), chỉ ra mỗi cái mở từ đâu trong thiết kế mới và chức năng có còn đủ không.
 > Ảnh: `png/dialogs/NN-*.png` (rộng 390, chụp 2x, cả chiều dài). Tổng hợp: `dialogs-overview.png`. Mã HTML: `html/dialogs/`.

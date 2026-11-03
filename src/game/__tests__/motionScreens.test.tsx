@@ -76,7 +76,7 @@ function opacities(r: ReactTestRenderer): number[] {
 /** pointerEvents lives in the style now (the prop form is deprecated on web). */
 const pointer = (props: { pointerEvents?: string; style?: unknown }) => props.pointerEvents ?? (StyleSheet.flatten(props.style as never) as { pointerEvents?: string } | undefined)?.pointerEvents;
 
-describe('motion on the FitQuest screens', () => {
+describe('motion on the FitJourney screens', () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') });
     Object.values(mockRouter).forEach((m) => m.mockClear());

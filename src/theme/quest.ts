@@ -1,6 +1,6 @@
-// FitQuest (Ver 4) design tokens — the dark game-HUD look from Design/v4-fitquest.
+// FitJourney (Ver 4) design tokens — the dark game-HUD look from Design/v4-fitquest.
 // Kept separate from tokens.ts so the classic light screens keep working unchanged during the
-// migration; once every screen is on FitQuest the two can be merged.
+// migration; once every screen is on FitJourney the two can be merged.
 
 export const quest = {
   bg: '#110D22',

@@ -19,7 +19,7 @@ interface AppIntroProps {
   durationMs?: number;
 }
 
-/** Branded loading screen in the FitQuest look: the level shield rises in over a soft gold glow, the name and tagline
+/** Branded loading screen in the FitJourney look: the level shield rises in over a soft gold glow, the name and tagline
  *  fade up, and an XP-style bar fills while the app finishes starting. With reduced motion everything just appears. */
 export function AppIntro({ durationMs = 1200 }: AppIntroProps) {
   const g = useGameText();

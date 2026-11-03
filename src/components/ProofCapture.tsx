@@ -27,7 +27,7 @@ interface ProofCaptureProps {
   contextLabel?: string;
   /** The plan's target calories, given to the AI as a sanity-check reference point. */
   plannedCalories?: number;
-  /** `quest` restyles it for the dark FitQuest screens; behaviour is identical. Defaults to `light`. */
+  /** `quest` restyles it for the dark FitJourney screens; behaviour is identical. Defaults to `light`. */
   variant?: 'light' | 'quest';
 }
 

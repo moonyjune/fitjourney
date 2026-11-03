@@ -43,7 +43,7 @@ import { usePlanStore } from '../../store/usePlanStore';
 import { toDateKey } from '../../utils/date';
 import { getDayType } from '../../constants/plan';
 
-describe('Nutrition screen (FitQuest)', () => {
+describe('Nutrition screen (FitJourney)', () => {
   let renderer: ReactTestRenderer | undefined;
   let alertSpy: jest.SpiedFunction<typeof Alert.alert>;
   const key = toDateKey(new Date());

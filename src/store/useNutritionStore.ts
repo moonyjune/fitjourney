@@ -37,7 +37,7 @@ interface NutritionState {
     calories: number,
     proteinG: number,
     mealTime: ExtraMealTime | null,
-    /** Optional FitQuest fields; omitted ones are simply not stored on the item. */
+    /** Optional FitJourney fields; omitted ones are simply not stored on the item. */
     extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri'> & {
       /** More photos of the same meal (after `photoUri`, which is the one shown first); kept as its proof photos. */
       morePhotoUris?: string[];

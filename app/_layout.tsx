@@ -40,7 +40,7 @@ export default function RootLayout() {
   const role = useSettingsStore((s) => s.role);
   const hydrateFromRemote = useSettingsStore((s) => s.hydrateFromRemote);
   const segments = useSegments();
-  // FitQuest HUD font. On a load error we carry on with the system font rather than block the app.
+  // FitJourney HUD font. On a load error we carry on with the system font rather than block the app.
   const [fontsLoaded, fontError] = useFonts({ ChakraPetch_500Medium, ChakraPetch_600SemiBold, ChakraPetch_700Bold });
 
   const [profileChecked, setProfileChecked] = useState(false);

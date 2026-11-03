@@ -55,7 +55,7 @@ interface DailyMealBreakdownTableProps {
    *  the whole draft at once. Omit for a read-only view. */
   editable?: boolean;
   onSave?: (draft: DailyLogDraft) => void;
-  /** Dark FitQuest look (default off = classic light). */
+  /** Dark FitJourney look (default off = classic light). */
   dark?: boolean;
 }
 

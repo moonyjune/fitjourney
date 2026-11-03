@@ -14,7 +14,7 @@ interface Props {
   mealLabel: string;
   targetCalories: number;
   targetProtein: number;
-  /** Dark FitQuest look (default off = classic light). */
+  /** Dark FitJourney look (default off = classic light). */
   dark?: boolean;
   /** Adds a button (labelled `useLabel`) that takes the suggested dish in place of the plan's (the plan meal screen). */
   onUse?: (recipe: Recipe) => void;

@@ -10,7 +10,7 @@ interface ProgressBarProps {
   unit: string;
   /** Overrides the automatic red/blue/yellow/green-by-percentage coloring below. */
   color?: string;
-  /** Dark FitQuest look (default off = classic light). */
+  /** Dark FitJourney look (default off = classic light). */
   dark?: boolean;
 }
 
