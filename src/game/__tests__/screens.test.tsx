@@ -10,7 +10,7 @@ const mockRouter = {
   dismissTo: jest.fn(),
   setParams: jest.fn(),
 };
-let mockParams: { slot?: string; date?: string } = { slot: 'meal3' };
+let mockParams: { slot?: string; date?: string; photo?: string } = { slot: 'meal3' };
 
 // The factory runs when the screens import expo-router, before `mockRouter` is initialised, so the
 // router methods defer to it at call time instead of capturing it here.
@@ -34,6 +34,8 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
 jest.mock('expo-image-picker', () => ({}));
+const mockPickPhoto = jest.fn<(source: string) => Promise<unknown>>(async () => null);
+jest.mock('../../utils/pickPhoto', () => ({ pickPhoto: (s: string) => mockPickPhoto(s), pickPhotos: jest.fn(async () => null) }));
 jest.mock('../../utils/photoStorage', () => ({
   persistPickedPhoto: jest.fn(),
   imageUriToBase64: jest.fn(),
@@ -44,6 +46,7 @@ jest.mock('../../sync/cloudSync', () => ({
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
+  deleteWeightEntry: jest.fn(),
   pushProofPhoto: jest.fn(),
   deleteProofPhoto: jest.fn(async () => undefined),
   pushFeelingRecord: jest.fn(),
@@ -71,6 +74,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useCheatDayStore } from '../../store/useCheatDayStore';
+import { useEatAgainStore } from '../../store/useEatAgainStore';
 import { useSkippedMealStore } from '../../store/useSkippedMealStore';
 import { deleteFeelingRecord, pushFeelingRecord, pushNutritionLog } from '../../sync/cloudSync';
 
@@ -118,6 +122,7 @@ describe('FitQuest logging screens', () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') }); // Friday, eating window open
     Object.values(mockRouter).forEach((fn) => fn.mockClear());
+    mockPickPhoto.mockClear();
     useProofStore.setState({ photos: [] });
     useSelectedDayStore.setState({ selectedKey: null });
     mockRouter.canGoBack.mockReturnValue(true);
@@ -150,12 +155,54 @@ describe('FitQuest logging screens', () => {
   });
 
   describe('Quick add', () => {
-    it('shows the next meal, today water and the workout state', () => {
+    /** Picks a day in the date chip's calendar sheet and confirms it. */
+    function pickDate(r: ReactTestRenderer, chip: string, day: string) {
+      act(() => pressable(r, (l) => l.startsWith(`Ngày ghi: ${chip}`)).props.onPress());
+      act(() => pressable(r, (l) => l.startsWith(day)).props.onPress());
+      act(() => pressable(r, (l) => l.startsWith('Ghi cho ')).props.onPress());
+    }
+
+    it('puts the photo first, then typing, saved foods, water and the small chips', () => {
       const text = allText(render(<QuickAddScreen />));
       expect(text).toContain('Ghi nhanh');
-      expect(text).toContain('Bữa kế · 19:15');
-      expect(text).toContain('Đã xong hôm nay'); // the 14 min workout is already logged
-      expect(text).toContain('Đã uống 3,200 / 4,500 ml');
+      expect(text).toContain('Chụp món ăn');
+      expect(text).toContain('Nói / gõ món');
+      expect(text).toContain('Món đã lưu');
+      expect(text).toContain('3.2 / 4.5 L');
+      expect(text).toContain('106.2 kg'); // the last weighing on the weight chip
+      expect(text).toContain('Cảm giác');
+      expect(text).toContain('Tập khác');
+      expect(text).not.toContain('−250'); // the minus chips are gone: undo and "Sửa tổng" replace them
+    });
+
+    it('opens the camera at once and hands the photo to Add food, which analyses it', async () => {
+      mockPickPhoto.mockResolvedValueOnce({ uri: 'data:image/jpeg;base64,AAA' });
+      const r = render(<QuickAddScreen />);
+      await act(async () => {
+        pressable(r, (l) => l.startsWith('Chụp món ăn')).props.onPress();
+      });
+      expect(mockPickPhoto).toHaveBeenCalledWith('camera');
+      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/add-food', params: { photo: '1' } });
+      const { takePendingMealPhoto } = require('../../food/pendingPhoto');
+      expect(takePendingMealPhoto()).toBe('data:image/jpeg;base64,AAA');
+      expect(takePendingMealPhoto()).toBeNull(); // taken once
+    });
+
+    it('picks a photo from the library too, and says so when the camera is refused', async () => {
+      mockPickPhoto.mockResolvedValueOnce({ error: 'cameraDeniedAsk' });
+      const r = render(<QuickAddScreen />);
+      await act(async () => {
+        pressable(r, (l) => l.startsWith('Chụp món ăn')).props.onPress();
+      });
+      expect(allText(r)).toContain('Chưa có quyền camera');
+      expect(mockRouter.replace).not.toHaveBeenCalled();
+      mockPickPhoto.mockResolvedValueOnce({ uri: 'file:///x.jpg' });
+      await act(async () => {
+        pressable(r, (l) => l === 'Chọn ảnh có sẵn').props.onPress();
+      });
+      expect(mockPickPhoto).toHaveBeenLastCalledWith('library');
+      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/add-food', params: { photo: '1' } });
+      require('../../food/pendingPhoto').takePendingMealPhoto();
     });
 
     it('adds water to today and reports it in the app toast, whose undo takes exactly that back off', () => {
@@ -166,60 +213,159 @@ describe('FitQuest logging screens', () => {
       expect(toast).toMatchObject({ text: '+500 ml nước · 3,700 ml', tone: 'mana' });
       act(() => useToastStore.getState().undo());
       expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3200);
-      expect(allText(r)).toContain('Đã uống 3,200 / 4,500 ml');
+      expect(allText(r)).toContain('3.2 / 4.5 L');
       expect(useToastStore.getState().toast).toBeNull();
     });
 
-    it('logs meals and water for another day picked with ‹ ›, never a future one', () => {
+    it('a long press on a water chip opens another amount, a typed amount and "Sửa tổng", each with undo', () => {
       const r = render(<QuickAddScreen />);
-      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true); // today is the latest day
-      act(() => pressable(r, (l) => l === 'Ngày trước').props.onPress());
-      act(() => pressable(r, (l) => l === 'Ngày trước').props.onPress());
-      const text = allText(r);
-      expect(text).toContain('T4 21/10');
-      expect(text).toContain('Cho bữa, nước, check-in');
+      act(() => pressable(r, (l) => l === 'Thêm 250 ml nước').props.onLongPress());
+      expect(allText(r)).toContain('Nước · Hôm nay');
+      act(() => textInput(r, 'Lượng nước (ml)').props.onChangeText('350'));
+      act(() => pressable(r, (l) => l === '+ Thêm').props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3550);
 
+      act(() => pressable(r, (l) => l.startsWith('Nước: ')).props.onPress()); // the bar opens it too
+      act(() => textInput(r, 'Lượng nước (ml)').props.onChangeText('99999'));
+      act(() => pressable(r, (l) => l === '+ Thêm').props.onPress());
+      expect(allText(r)).toContain('Nhập từ 1 đến 3,000 ml');
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3550);
+
+      act(() => pressable(r, (l) => l === 'Bớt 250 ml nước (ghi nhầm)').props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3300);
+      expect(useToastStore.getState().toast?.text).toBe('Đã bớt 250 ml · còn 3,300 ml');
+      expect(pushNutritionLog).toHaveBeenLastCalledWith(expect.objectContaining({ dateISO: DATE, waterMl: 3300 }));
+
+      act(() => pressable(r, (l) => l.startsWith('Nước: ')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Đặt lại về 0').props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(0);
+      act(() => useToastStore.getState().undo()); // no confirmation box: undo brings it back
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3300);
+    });
+
+    it('taking water off never goes below 0', () => {
+      useNutritionStore.setState({
+        logs: { [DATE]: { dateISO: DATE, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 100 } },
+      });
+      const r = render(<QuickAddScreen />);
+      act(() => pressable(r, (l) => l.startsWith('Nước: ')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Bớt 250 ml nước (ghi nhầm)').props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(0);
+      expect(useToastStore.getState().toast?.text).toBe('Đã bớt 100 ml · còn 0 ml');
+      act(() => pressable(r, (l) => l.startsWith('Nước: ')).props.onPress());
+      expect(pressable(r, (l) => l === 'Bớt 250 ml nước (ghi nhầm)').props.disabled).toBe(true);
+    });
+
+    it('logs water, weight and typed meals for another day picked with the date chip, never a future one', () => {
+      const r = render(<QuickAddScreen />);
+      pickDate(r, 'Hôm nay', 'T4 21/10');
+      expect(useSelectedDayStore.getState().selectedKey).toBe('2026-10-21'); // the day is shared with Camp and the other screens
+      expect(pressable(r, (l) => l.startsWith('Ngày ghi: T4 21/10'))).toBeDefined();
       act(() => pressable(r, (l) => l === 'Thêm 250 ml nước').props.onPress());
       expect(useNutritionStore.getState().logs['2026-10-21'].waterMl).toBe(250);
       expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3200); // today untouched
 
-      act(() => pressable(r, (l) => l.startsWith('Ngoài kế hoạch')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/add-food', params: { date: '2026-10-21' } });
-      act(() => pressable(r, (l) => l.startsWith('Bữa ăn')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenLastCalledWith({ pathname: '/meal/[slot]', params: expect.objectContaining({ date: '2026-10-21' }) });
+      act(() => pressable(r, (l) => l === 'Nói / gõ món').props.onPress());
+      expect(mockRouter.replace).toHaveBeenLastCalledWith({ pathname: '/add-food', params: { date: '2026-10-21' } });
 
-      act(() => pressable(r, (l) => l.startsWith('Ghi cho ngày: T4 21/10')).props.onPress()); // back to today
-      expect(allText(r)).toContain('Hôm nay');
-      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true);
+      act(() => pressable(r, (l) => l.startsWith('Cân nặng, lần cuối 106.2 kg')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Giảm 0.1 kg').props.onPress());
+      act(() => pressable(r, (l) => l === 'Lưu 106.1 kg').props.onPress());
+      const saved = useWeightStore.getState().entries.find((e) => e.weightKg === 106.1)!;
+      expect(new Date(saved.dateISO).getDate()).toBe(21); // the weighing follows the chosen day
+      expect(new Date(saved.dateISO).getHours()).toBe(16);
+
+      // A day in the future cannot be picked.
+      act(() => pressable(r, (l) => l.startsWith('Ngày ghi: ')).props.onPress());
+      const future = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'T7 24/10')[0];
+      expect(future.props.disabled).toBe(true);
     });
 
-    it('steps and saves the weight, rejecting nonsense', () => {
+    it('saves the weight from the stepper sheet with undo, and refuses nonsense', () => {
       const r = render(<QuickAddScreen />);
+      act(() => pressable(r, (l) => l.startsWith('Cân nặng, lần cuối')).props.onPress());
+      expect(allText(r)).toContain('kg · lần trước 106.2');
+      expect(allText(r)).not.toMatch(/Xoá|Xóa/); // no delete in the weight sheet
       act(() => pressable(r, (l) => l === 'Tăng 0.1 kg').props.onPress());
       expect(textInput(r, 'Cân nặng hôm nay (kg)').props.value).toBe('106.3');
+      expect(allText(r)).toContain('+0.1 kg so với lần trước');
+      act(() => pressable(r, (l) => l === 'Lưu 106.3 kg').props.onPress());
+      expect(useWeightStore.getState().entries).toHaveLength(2);
+      expect(useToastStore.getState().toast?.text).toBe('Đã lưu 106.3 kg');
+      act(() => useToastStore.getState().undo());
+      expect(useWeightStore.getState().entries).toHaveLength(1);
 
-      act(() => pressable(r, (l) => l.startsWith('Lưu')).props.onPress());
-      const entries = useWeightStore.getState().entries;
-      expect(entries).toHaveLength(2);
-      expect(entries[entries.length - 1].weightKg).toBe(106.3);
-      expect(allText(r)).toContain('Đã lưu 106.3 kg');
-
+      act(() => pressable(r, (l) => l.startsWith('Cân nặng, lần cuối')).props.onPress());
       act(() => textInput(r, 'Cân nặng hôm nay (kg)').props.onChangeText('abc'));
-      act(() => pressable(r, (l) => l.startsWith('Lưu')).props.onPress());
-      expect(useWeightStore.getState().entries).toHaveLength(2); // nothing new saved
+      act(() => pressable(r, (l) => l.startsWith('Lưu ')).props.onPress());
+      expect(useWeightStore.getState().entries).toHaveLength(1); // nothing new saved
       expect(allText(r)).toContain('Nhập cân nặng hợp lệ');
     });
 
-    it('routes each tile to the right place', () => {
+    it('"Ăn lại" logs a recent dish with one tap for the chosen day, with undo; a long press opens its menu', () => {
+      useNutritionStore.setState({
+        logs: {
+          '2026-10-22': {
+            dateISO: '2026-10-22',
+            mealsEaten: {},
+            extraCalories: 0,
+            extraProteinG: 0,
+            waterMl: 0,
+            extraItems: [
+              { id: 'a', name: 'Phở bò', calories: 480, proteinG: 28, purineMg: 150, mealTime: 'breakfast', loggedAtISO: new Date('2026-10-22T08:00:00').toISOString() },
+              { id: 'b', name: 'phở  bò', calories: 500, proteinG: 30, mealTime: 'lunch', loggedAtISO: new Date('2026-10-21T12:00:00').toISOString() },
+              { id: 'c', name: 'Cơm tấm', calories: 620, proteinG: 30, mealTime: 'lunch', loggedAtISO: new Date('2026-10-22T12:00:00').toISOString() },
+              { id: 'd', name: 'Không ăn', calories: 0, proteinG: 0, mealTime: 'dinner', loggedAtISO: new Date('2026-10-22T19:00:00').toISOString() },
+            ],
+          },
+          [DATE]: { dateISO: DATE, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 3200 },
+        },
+      });
       const r = render(<QuickAddScreen />);
-      act(() => pressable(r, (l) => l.startsWith('Bữa ăn')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/meal/[slot]', params: { slot: 'meal3' } });
-      act(() => pressable(r, (l) => l.startsWith('Ngoài kế hoạch')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/add-food', params: {} });
-      act(() => pressable(r, (l) => l.startsWith('Buổi tập')).props.onPress());
-      expect(mockRouter.dismissTo).toHaveBeenCalledWith('/(tabs)/workout');
-      act(() => pressable(r, (l) => l.startsWith('Cảm giác')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/checkin', params: {} });
+      const text = allText(r);
+      expect(text).toContain('Ăn lại');
+      expect(text).toContain('Cơm tấm');
+      expect(text.match(/Phở bò/g)).toHaveLength(1); // the same dish once
+      expect(text).not.toContain('Không ăn');
+
+      act(() => pressable(r, (l) => l === 'Ghi lại Phở bò, 480 kcal').props.onPress());
+      const items = useNutritionStore.getState().logs[DATE].extraItems;
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ name: 'Phở bò', calories: 480, proteinG: 28, purineMg: 150, mealTime: 'late_afternoon_snack' }); // 16:10
+      expect(useToastStore.getState().toast?.text).toContain('Đã ghi Phở bò · 480 kcal');
+      act(() => useToastStore.getState().undo());
+      expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
+
+      act(() => pressable(r, (l) => l === 'Ghi lại Cơm tấm, 620 kcal').props.onLongPress());
+      expect(allText(r)).toContain('620 kcal · 30 g đạm · lần cuối 22/10');
+      act(() => pressable(r, (l) => l === 'Ghi với khẩu phần khác').props.onPress());
+      expect(mockRouter.replace).toHaveBeenLastCalledWith({
+        pathname: '/add-food',
+        params: { name: 'Cơm tấm', calories: '620', protein: '30', mealTime: 'late_afternoon_snack' },
+      });
+
+      act(() => pressable(r, (l) => l === 'Ghi lại Cơm tấm, 620 kcal').props.onLongPress());
+      act(() => pressable(r, (l) => l === 'Ẩn khỏi Ăn lại').props.onPress());
+      expect(allText(r)).not.toContain('Cơm tấm');
+      act(() => useToastStore.getState().undo());
+      expect(allText(r)).toContain('Cơm tấm');
+      useEatAgainStore.setState({ hidden: [] });
+    });
+
+    it('"Món đã lưu" opens the food lookup and hands the picked total to Add food', () => {
+      const r = render(<QuickAddScreen />);
+      act(() => pressable(r, (l) => l === 'Món đã lưu').props.onPress());
+      expect(allText(r)).toContain('Món trong Cook book');
+      act(() => pressable(r, (l) => l === 'Món trong Cook book ▸').props.onPress());
+      expect(mockRouter.replace).toHaveBeenLastCalledWith('/cookbook');
+    });
+
+    it('routes the feeling and other-workout chips', () => {
+      const r = render(<QuickAddScreen />);
+      act(() => pressable(r, (l) => l === 'Cảm giác').props.onPress());
+      expect(mockRouter.replace).toHaveBeenCalledWith('/checkin');
+      act(() => pressable(r, (l) => l === 'Tập khác').props.onPress());
+      expect(mockRouter.replace).toHaveBeenCalledWith('/workout-classic');
     });
 
     it('closes from the backdrop, falling back to home when there is nothing to go back to', () => {
@@ -272,6 +418,19 @@ describe('FitQuest logging screens', () => {
   });
 
   describe('Add food', () => {
+    it('takes the photo handed over by "Chụp món ăn" once (AI off: no analysis, the photo waits with the form)', () => {
+      const { setPendingMealPhoto, takePendingMealPhoto } = require('../../food/pendingPhoto');
+      const { useAiPhotoStore } = require('../../store/useAiPhotoStore');
+      useAiPhotoStore.setState({ aiEnabled: false });
+      setPendingMealPhoto('file:///meal.jpg');
+      mockParams = { photo: '1' };
+      const r = render(<AddFoodScreen />);
+      const photo = r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh món ăn đã chọn 1' && n.props.source?.uri === 'file:///meal.jpg');
+      expect(photo.length).toBeGreaterThan(0);
+      expect(takePendingMealPhoto()).toBeNull();
+      useAiPhotoStore.setState({ aiEnabled: true });
+    });
+
     it('refuses an empty entry', () => {
       const r = render(<AddFoodScreen />);
       act(() => pressable(r, (l) => l === 'Thêm vào hôm nay').props.onPress());
@@ -336,14 +495,14 @@ describe('FitQuest logging screens', () => {
   });
 
   describe('Check-in', () => {
-    it("summarises today's missions and boss damage", () => {
-      const text = allText(render(<CheckinScreen />));
+    it('asks for the feeling only: no missions or boss tiles (they are on Camp), with the date chip', () => {
+      const r = render(<CheckinScreen />);
+      const text = allText(r);
       expect(text).toContain('Nghỉ ở lửa trại');
-      // 16:10 with the plan's later meals still to come: the workout is done, the deficit mission and today's boss hit wait for the
-      // day to be settled (the hit is shown as pending).
-      expect(text).toContain('1/7');
-      expect(text).toMatch(/chờ chốt ~[\d,]+/);
       expect(text).toContain('Rất tốt'); // the app's real mood scale
+      expect(text).not.toContain('1/7');
+      expect(text).not.toMatch(/chờ chốt/);
+      expect(pressable(r, (l) => l.startsWith('Ngày ghi: Hôm nay'))).toBeDefined();
     });
 
     it('will not save until mood, craving and hunger are all chosen', () => {
@@ -392,25 +551,25 @@ describe('FitQuest logging screens', () => {
     it('starts the quick-add sheet on the day selected in the week strip', () => {
       pickInStrip('T4 21/10');
       const r = render(<QuickAddScreen />);
-      expect(pressable(r, (l) => l.startsWith('Ghi cho ngày: T4 21/10'))).toBeDefined();
+      expect(pressable(r, (l) => l.startsWith('Ngày ghi: T4 21/10'))).toBeDefined();
       act(() => pressable(r, (l) => l === 'Thêm 250 ml nước').props.onPress());
       expect(useNutritionStore.getState().logs['2026-10-21'].waterMl).toBe(250);
       expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3200);
-      act(() => pressable(r, (l) => l.startsWith('Cảm giác')).props.onPress());
-      expect(mockRouter.replace).toHaveBeenLastCalledWith({ pathname: '/checkin', params: { date: '2026-10-21' } });
+      act(() => pressable(r, (l) => l === 'Cảm giác').props.onPress());
+      expect(mockRouter.replace).toHaveBeenLastCalledWith('/checkin'); // the check-in reads the shared day itself
     });
 
     it('stays on today when today is selected', () => {
       pickInStrip('T6 23/10');
       expect(useSelectedDayStore.getState().selectedKey).toBeNull();
       const r = render(<QuickAddScreen />);
-      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true);
+      expect(pressable(r, (l) => l.startsWith('Ngày ghi: Hôm nay'))).toBeDefined();
     });
 
     it('records the check-in for the selected past day', () => {
       pickInStrip('T4 21/10');
       const r = render(<CheckinScreen />);
-      expect(pressable(r, (l) => l.startsWith('Ghi cho ngày: T4 21/10'))).toBeDefined();
+      expect(pressable(r, (l) => l.startsWith('Ngày ghi: T4 21/10'))).toBeDefined();
       act(() => pressable(r, (l) => l === 'Tốt').props.onPress());
       act(() => pressable(r, (l) => l === 'Mức thèm ăn 2').props.onPress());
       act(() => pressable(r, (l) => l === 'Mức đói 3').props.onPress());
@@ -442,41 +601,23 @@ describe('FitQuest logging screens', () => {
       expect(deleteFeelingRecord).toHaveBeenCalledWith('cloud-abc');
     });
 
-    it('moves the check-in between days with ‹ ›, today adding a new one as before', () => {
+    it('moves the check-in between days with the date chip (and the shared day with it), today adding a new one as before', () => {
       useFeelingStore.setState({
         records: [{ id: 'r1', loggedAtISO: new Date('2026-10-22T20:00:00').toISOString(), mood: 'great', cravingLevel: 1, hungerLevel: 2, workoutCondition: null, note: 'ổn' }],
       });
       const r = render(<CheckinScreen />);
       expect(allText(r)).not.toContain('Ngày này đã có check-in');
-      act(() => pressable(r, (l) => l === 'Ngày trước').props.onPress());
+      act(() => pressable(r, (l) => l.startsWith('Ngày ghi: Hôm nay')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Hôm qua').props.onPress());
+      act(() => pressable(r, (l) => l.startsWith('Ghi cho Hôm qua')).props.onPress());
       expect(textInput(r, 'Ghi chú').props.value).toBe('ổn');
-      act(() => pressable(r, (l) => l.startsWith('Ghi cho ngày: Hôm qua')).props.onPress()); // back to today
+      expect(allText(r)).toContain('Ngày này đã có check-in');
+      expect(useSelectedDayStore.getState().selectedKey).toBe('2026-10-22');
+      act(() => pressable(r, (l) => l.startsWith('Ngày ghi: Hôm qua')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Hôm nay').props.onPress());
+      act(() => pressable(r, (l) => l.startsWith('Ghi cho Hôm nay')).props.onPress()); // back to today
       expect(textInput(r, 'Ghi chú').props.value).toBe('');
-      expect(pressable(r, (l) => l === 'Ngày sau').props.disabled).toBe(true);
-    });
-  });
-
-  describe('Water decrease', () => {
-    it('takes water back off the day and syncs it', () => {
-      const r = render(<QuickAddScreen />);
-      act(() => pressable(r, (l) => l === 'Bớt 500 ml nước (ghi nhầm)').props.onPress());
-      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(2700);
-      expect(pushNutritionLog).toHaveBeenLastCalledWith(expect.objectContaining({ dateISO: DATE, waterMl: 2700 }));
-      const text = allText(r);
-      expect(text).toContain('Đã bớt 500 ml · còn 2,700 ml');
-      expect(text).toContain('Đã uống 2,700 / 4,500 ml');
-    });
-
-    it('never goes below 0', () => {
-      useNutritionStore.setState({
-        logs: { [DATE]: { dateISO: DATE, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, extraItems: [], waterMl: 100 } },
-      });
-      const r = render(<QuickAddScreen />);
-      act(() => pressable(r, (l) => l === 'Bớt 250 ml nước (ghi nhầm)').props.onPress());
-      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(0);
-      expect(pushNutritionLog).toHaveBeenLastCalledWith(expect.objectContaining({ waterMl: 0 }));
-      expect(allText(r)).toContain('Đã bớt 100 ml · còn 0 ml');
-      expect(pressable(r, (l) => l === 'Bớt 250 ml nước (ghi nhầm)').props.disabled).toBe(true);
+      expect(useSelectedDayStore.getState().selectedKey).toBeNull();
     });
   });
 

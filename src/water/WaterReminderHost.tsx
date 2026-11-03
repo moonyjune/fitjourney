@@ -1,14 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { AppState, Platform } from 'react-native';
 import { WaterReminderDialog } from '../components/quest/WaterReminderDialog';
-import { formatGameText } from '../game/strings';
+import { formatGameText, type GameKey } from '../game/strings';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { usePushStore } from '../store/usePushStore';
+import { showToast } from '../store/useToastStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { useTemptationStore } from '../store/useTemptationStore';
 import { useWaterReminderStore } from '../store/useWaterReminderStore';
 import { toDateKey } from '../utils/date';
-import { dueWaterReminder, type WaterReminder } from './reminder';
+import { dueWaterReminder, waterCheerIndex, type WaterReminder } from './reminder';
 import { currentWaterPlan } from './useWaterPlan';
 
 /** How often the water plan is checked while the app is open. */
@@ -33,7 +34,33 @@ function browserNotify(reminder: WaterReminder) {
   }
 }
 
-/** Mounted once in the root layout (client role): while the app is open and reminders are on, checks the day's water plan and, at
+/** The pop-up is on: its own switch (Profile > "Pop-up uống nước"), or, never set, the reminders switch that used to drive it. */
+export function waterPopupOn(settings: { waterPopupEnabled?: boolean; remindersEnabled: boolean }): boolean {
+  return settings.waterPopupEnabled ?? settings.remindersEnabled;
+}
+
+/** Sets the day's water to `reachMl` (adds only what is missing from it as it is now: it may have changed, e.g. synced from another
+ *  device, since the pop-up opened), closes the pop-up and cheers in a toast whose "Hoàn tác" takes the added water back off. */
+export function drinkFromPopup(reachMl: number): void {
+  const reminder = useWaterReminderStore.getState().open;
+  useWaterReminderStore.getState().close();
+  if (!reminder) return;
+  const nutrition = useNutritionStore.getState();
+  const before = nutrition.logs[reminder.dateKey]?.waterMl ?? 0;
+  const added = Math.max(0, reachMl - before);
+  if (added > 0) nutrition.addWater(reminder.dateKey, added);
+  const language = useSettingsStore.getState().language;
+  const cheer = formatGameText(language, `water.cheer.${waterCheerIndex(reminder.key)}` as GameKey);
+  const total = (before + added).toLocaleString('en-US');
+  showToast({
+    text: added > 0 ? formatGameText(language, 'water.pop.toast', { ml: added, total, cheer }) : cheer,
+    tone: 'mana',
+    durationMs: 6000,
+    undo: added > 0 ? () => useNutritionStore.getState().addWater(reminder.dateKey, -added) : undefined,
+  });
+}
+
+/** Mounted once in the root layout (client role): while the app is open and the water pop-up is on, checks the day's water plan and, at
  *  each drink time, shows a pop-up with how much to drink now (plus the browser's notification when the tab is in the background).
  *  The OS notifications scheduled on a phone cover the times the app is closed. */
 export function WaterReminderHost({ enabled }: { enabled: boolean }) {
@@ -51,7 +78,9 @@ export function WaterReminderHost({ enabled }: { enabled: boolean }) {
     if (!enabled) return;
     const tick = () => {
       const store = useWaterReminderStore.getState();
-      if (!useSettingsStore.getState().remindersEnabled || store.open || useTemptationStore.getState().open) return;
+      if (!waterPopupOn(useSettingsStore.getState()) || store.open || useTemptationStore.getState().open) return;
+      // "Nhắc sau 30′": nothing until the snooze is over.
+      if (store.snoozedUntil != null && Date.now() < store.snoozedUntil) return;
       // On a phone with the app in the background the OS notification does the job; the web page keeps running in a hidden tab.
       if (!foreground.current && Platform.OS !== 'web') return;
       const now = new Date();
@@ -71,16 +100,8 @@ export function WaterReminderHost({ enabled }: { enabled: boolean }) {
   return (
     <WaterReminderDialog
       reminder={enabled ? open : null}
-      onDrink={(reachMl) => {
-        // The button is a milestone ("reached 3,500 ml"), not an amount: add only what is missing from the day's water as it is now
-        // (it may have changed, e.g. synced from another device, since the pop-up opened).
-        const reminder = useWaterReminderStore.getState().open;
-        if (reminder) {
-          const now = useNutritionStore.getState().logs[reminder.dateKey]?.waterMl ?? 0;
-          if (reachMl > now) useNutritionStore.getState().addWater(reminder.dateKey, reachMl - now);
-        }
-        useWaterReminderStore.getState().close();
-      }}
+      onDrink={drinkFromPopup}
+      onSnooze={() => useWaterReminderStore.getState().snooze()}
       onClose={() => useWaterReminderStore.getState().close()}
     />
   );

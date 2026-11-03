@@ -36,14 +36,16 @@ const toQty = (text: string): number => {
   return Number.isFinite(v) && v > 0 ? v : 0;
 };
 
-/** Pick foods from the food database, enter how much was eaten, and use the total for the item being added. */
-export function FoodLookup({ onApply, onOpenDb }: { onApply: (result: LookupResult) => void; onOpenDb: () => void }) {
+/** Pick foods from the food database, enter how much was eaten, and use the total for the item being added.
+ *  `alwaysOpen`: shown open without its fold-out header (inside the quick-add "Món đã lưu" sheet). */
+export function FoodLookup({ onApply, onOpenDb, alwaysOpen }: { onApply: (result: LookupResult) => void; onOpenDb: () => void; alwaysOpen?: boolean }) {
   const f = useFoodText();
   const lang = useSettingsStore((s) => s.language);
   const foods = useAllFoods();
   const recentIds = useFoodDbStore((s) => s.recent);
   const touchRecent = useFoodDbStore((s) => s.touchRecent);
-  const [open, setOpen] = useState(false);
+  const [folded, setOpen] = useState(false);
+  const open = alwaysOpen || folded;
   const [query, setQuery] = useState('');
   const [basket, setBasket] = useState<BasketLine[]>([]);
 
@@ -77,7 +79,8 @@ export function FoodLookup({ onApply, onOpenDb }: { onApply: (result: LookupResu
   }
 
   return (
-    <View style={styles.card}>
+    <View style={alwaysOpen ? undefined : styles.card}>
+      {!alwaysOpen && (
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={f('fdb.lookupTitle')} onPress={() => setOpen(!open)} style={styles.head}>
         <QuestIcon name="bowl" size={20} color={quest.gold} />
         <HudText size={14} style={styles.flex}>
@@ -85,9 +88,10 @@ export function FoodLookup({ onApply, onOpenDb }: { onApply: (result: LookupResu
         </HudText>
         <QuestIcon name="chevron" size={18} color={quest.textSecondary} />
       </Pressable>
+      )}
 
       {open && (
-        <View style={styles.body}>
+        <View style={alwaysOpen ? styles.bareBody : styles.body}>
           <HudText size={12} weight="medium" color={quest.textSecondary}>
             {f('fdb.lookupHint')}
           </HudText>
@@ -178,6 +182,7 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 14 },
   flex: { flex: 1, minWidth: 0 },
   body: { gap: 12, paddingHorizontal: 14, paddingBottom: 14 },
+  bareBody: { gap: 12 },
   list: { gap: 8 },
   eyebrow: { letterSpacing: 1.4 },
   result: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingVertical: 6, paddingHorizontal: 10, borderRadius: questRadius.row, backgroundColor: quest.raised2 },

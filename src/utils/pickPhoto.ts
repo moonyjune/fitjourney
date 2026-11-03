@@ -12,7 +12,8 @@ export async function pickPhoto(source: 'camera' | 'library'): Promise<PickResul
         const permission = await ImagePicker.requestCameraPermissionsAsync();
         if (!permission.granted) return { error: permission.canAskAgain === false ? 'cameraDenied' : 'cameraDeniedAsk' };
       }
-      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 });
+      // The back camera: on web this is the file input's `capture="environment"`, which opens the phone's camera straight away.
+      const result = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6, cameraType: ImagePicker.CameraType?.back });
       return !result.canceled && result.assets[0] ? { uri: result.assets[0].uri } : null;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });

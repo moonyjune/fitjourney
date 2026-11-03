@@ -1,7 +1,7 @@
 import Svg, { Path, Circle } from 'react-native-svg';
 import { hiddenSvgProps } from './hiddenSvg';
 
-export type QuestIconName = 'check' | 'clock' | 'flame' | 'dumbbell' | 'x' | 'camp' | 'back' | 'alert' | 'minus' | 'plus' | 'camera' | 'bowl' | 'drop' | 'list' | 'smile' | 'map' | 'chart' | 'user' | 'lock' | 'chevron' | 'bell' | 'globe' | 'plan' | 'out' | 'swap' | 'volume' | 'volumeOff' | 'edit' | 'trash' | 'photos' | 'chevronLeft' | 'chevronDown' | 'calendar' | 'undo';
+export type QuestIconName = 'check' | 'clock' | 'flame' | 'dumbbell' | 'x' | 'camp' | 'back' | 'alert' | 'minus' | 'plus' | 'camera' | 'bowl' | 'drop' | 'list' | 'smile' | 'map' | 'chart' | 'user' | 'lock' | 'chevron' | 'bell' | 'globe' | 'plan' | 'out' | 'swap' | 'volume' | 'volumeOff' | 'edit' | 'trash' | 'photos' | 'chevronLeft' | 'chevronDown' | 'calendar' | 'undo' | 'mic' | 'search' | 'scale';
 
 interface QuestIconProps {
   name: QuestIconName;
@@ -83,6 +83,14 @@ export function QuestIcon({ name, size = 18, color, strokeWidth = 2 }: QuestIcon
       {name === 'swap' && <Path {...common} d="M4 8h14l-3-3M20 16H6l3 3" />}
       {name === 'edit' && <Path {...common} d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16zM13.5 6.5l4 4" />}
       {name === 'trash' && <Path {...common} d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" />}
+      {name === 'mic' && <Path {...common} d="M9 6a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6" />}
+      {name === 'search' && (
+        <>
+          <Circle {...common} cx={11} cy={11} r={6.5} />
+          <Path {...common} d="M16 16l4.5 4.5" />
+        </>
+      )}
+      {name === 'scale' && <Path {...common} d="M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM8 9a4 4 0 0 1 8 0zM12 9l1.5-2.5" />}
       {name === 'drop' && <Path {...common} d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" />}
     </Svg>
   );

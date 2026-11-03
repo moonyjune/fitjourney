@@ -18,6 +18,8 @@ import type { WorkoutLogEntry } from '../src/types';
 import { todayKey } from '../src/store/useNutritionStore';
 import { getDayType } from '../src/constants/plan';
 import { usePlanStore } from '../src/store/usePlanStore';
+import { useSelectedDayStore, workingDayKey } from '../src/store/useSelectedDayStore';
+import { momentOnDay } from '../src/utils/logDate';
 import { formatDateVi, toDateKey } from '../src/utils/date';
 import { iconForWorkoutLabel, workoutIntensity, type WorkoutIntensity } from '../src/utils/workoutIntensity';
 import { useGameText } from '../src/game/strings';
@@ -222,7 +224,11 @@ export default function WorkoutScreen() {
     [entries, dateKey]
   );
 
-  const [logDate, setLogDate] = useState(new Date());
+  // Starts on the day chosen with the date chip (Camp / quick add), like every logging screen (README §2.1).
+  const [logDate, setLogDate] = useState(() => {
+    const now = new Date();
+    return momentOnDay(workingDayKey(useSelectedDayStore.getState().selectedKey, now), now);
+  });
   const [editingId, setEditingId] = useState<string | null>(null);
   const removeEntry = useWorkoutStore((s) => s.removeEntry);
 

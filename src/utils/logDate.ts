@@ -34,3 +34,11 @@ export function logDateParam(raw: unknown, now: Date): string {
   if (value > today || value < oldestLogDateKey(now)) return today;
   return value;
 }
+
+/** A moment on `dateKey` for something logged now (a weighing, a workout): now for today, else that day at the current time of day. */
+export function momentOnDay(dateKey: string, now: Date): Date {
+  if (dateKey === toDateKey(now)) return new Date(now.getTime());
+  const at = dateOfKey(dateKey);
+  at.setHours(now.getHours(), now.getMinutes(), 0, 0);
+  return at;
+}

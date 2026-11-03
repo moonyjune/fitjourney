@@ -48,7 +48,7 @@ interface NutritionState {
       /** The meal's breakdown, when it has one (2 or more parts); kept only when it is well-formed. */
       parts?: MealPart[];
     }
-  ) => void;
+  ) => string;
   removeExtraItem: (dateKey: string, itemId: string) => void;
   /** Changes a logged off-plan food in place (amounts, totals, breakdown, photo) and saves it, with no AI call. `photoUri: null` removes
    *  the photo; a new one replaces the old (its proof and file go) and is saved as a meal proof. */
@@ -183,6 +183,7 @@ export const useNutritionStore = create<NutritionState>()(
             useProofStore.getState().addProof({ taskType: 'meal', taskRefId: extraProofRef(item.id), photoUri, note: name, dateISO: item.loggedAtISO });
           }
         }
+        return item.id;
       },
       updateExtra: (dateKey, itemId, patch) => {
         const old = (get().logs[dateKey]?.extraItems ?? []).find((i) => i.id === itemId);

@@ -134,6 +134,7 @@ export default function ProfileScreen() {
   const session = useAuthStore((s) => s.session);
   const language = useSettingsStore((s) => s.language);
   const remindersEnabled = useSettingsStore((s) => s.remindersEnabled);
+  const waterPopupEnabled = useSettingsStore((s) => s.waterPopupEnabled ?? s.remindersEnabled);
   const pushEnabled = usePushStore((s) => s.enabled);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushNote, setPushNote] = useState<string | null>(null);
@@ -418,6 +419,23 @@ export default function ProfileScreen() {
           accessibilityLabel={g('profile.reminders')}
           value={remindersEnabled}
           onValueChange={toggleReminders}
+          trackColor={{ false: quest.raised2, true: quest.gold }}
+          thumbColor={quest.text}
+        />
+      </View>
+      {/* The in-app water pop-up has its own switch (dialogs.md decision 9): reminders can stay on without it. */}
+      <View style={styles.settingRow}>
+        <QuestIcon name="drop" size={20} color={quest.mana} />
+        <View style={styles.flex}>
+          <HudText size={15}>{g('profile.waterPopup')}</HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('profile.waterPopupHint')}
+          </HudText>
+        </View>
+        <Switch
+          accessibilityLabel={g('profile.waterPopup')}
+          value={waterPopupEnabled}
+          onValueChange={(value) => updateSettings({ waterPopupEnabled: value })}
           trackColor={{ false: quest.raised2, true: quest.gold }}
           thumbColor={quest.text}
         />

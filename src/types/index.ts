@@ -179,6 +179,9 @@ export interface UserSettings {
   clientSetupDone: boolean;
   startDateISO: string;
   remindersEnabled: boolean;
+  /** The in-app water pop-up at each drink time (Profile > "Pop-up uống nước"), apart from the reminders. On this device only (not
+   *  synced); unset follows `remindersEnabled`, which used to switch the pop-up too. */
+  waterPopupEnabled?: boolean;
   /** Has the user picked an initial mode yet? Gates the role-select screen (first launch only). */
   roleChosen: boolean;
   /** Which tab set is currently shown. A single account can have both capabilities enabled
