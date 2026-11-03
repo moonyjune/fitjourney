@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
@@ -18,18 +18,33 @@ interface Props {
   height?: number;
   /** Told which photo is in view (0-based), e.g. so "remove" acts on it. */
   onIndex?: (index: number) => void;
+  /** The photo shown first (0-based). */
+  initialIndex?: number;
+  /** Makes each photo a button (e.g. "open it full screen"), told which one was pressed. */
+  onPressPhoto?: (index: number) => void;
+  /** Accessible name of that button. */
+  pressLabel?: string;
+  /** Colour behind each photo (the full-screen viewer uses black). */
+  backdrop?: string;
 }
 
 /** The photos of one meal side by side in a row: swipe, or use ‹ › to move one photo at a time; "2/3" says which photo is in view
  *  (worked out from the scroll position while swiping, so it always matches the photo shown).
  *  A photo that cannot be loaded (its file is on another device) says so instead of staying blank. */
-export function PhotoStrip({ photos, height = 280, onIndex }: Props) {
+export function PhotoStrip({ photos, height = 280, onIndex, initialIndex = 0, onPressPhoto, pressLabel, backdrop }: Props) {
   const g = useGameText();
   const scroller = useRef<ScrollView>(null);
   const [width, setWidth] = useState(0);
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() => Math.max(0, Math.min(photos.length - 1, initialIndex)));
   const [broken, setBroken] = useState<Record<string, boolean>>({});
   const at = Math.min(index, Math.max(0, photos.length - 1));
+  // Open on `initialIndex`: once the width is known, jump to its page (no animation).
+  const placed = useRef(false);
+  useEffect(() => {
+    if (placed.current || width <= 0) return;
+    placed.current = true;
+    if (at > 0) scroller.current?.scrollTo?.({ x: at * width, animated: false });
+  }, [width, at]);
 
   function show(next: number) {
     const i = Math.max(0, Math.min(photos.length - 1, next));
@@ -66,13 +81,23 @@ export function PhotoStrip({ photos, height = 280, onIndex }: Props) {
               <HudText size={12} weight="medium" color={quest.hpText}>
                 {g('photo.unavailable')}
               </HudText>
+            ) : onPressPhoto ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={pressLabel ?? g('photo.zoom')} onPress={() => onPressPhoto(i)} style={styles.press}>
+                <Image
+                  source={{ uri: p.uri }}
+                  onError={() => setBroken((b) => ({ ...b, [p.uri]: true }))}
+                  resizeMode="contain"
+                  accessibilityLabel={g('photo.strip.alt', { n: i + 1, total: photos.length, name: p.label ?? '' })}
+                  style={[styles.photo, { height }, backdrop ? { backgroundColor: backdrop } : null]}
+                />
+              </Pressable>
             ) : (
               <Image
                 source={{ uri: p.uri }}
                 onError={() => setBroken((b) => ({ ...b, [p.uri]: true }))}
                 resizeMode="contain"
                 accessibilityLabel={g('photo.strip.alt', { n: i + 1, total: photos.length, name: p.label ?? '' })}
-                style={[styles.photo, { height }]}
+                style={[styles.photo, { height }, backdrop ? { backgroundColor: backdrop } : null]}
               />
             )}
           </View>
@@ -119,6 +144,7 @@ export function PhotoStrip({ photos, height = 280, onIndex }: Props) {
 const styles = StyleSheet.create({
   wrap: { width: '100%', gap: 8 },
   page: { alignItems: 'center', justifyContent: 'center' },
+  press: { width: '100%' },
   photo: { width: '100%', borderRadius: questRadius.row, backgroundColor: quest.raised },
   nav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
   arrow: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },

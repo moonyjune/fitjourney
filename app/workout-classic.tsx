@@ -13,6 +13,7 @@ import { WorkoutEntryForm, type PhotoChange, type WorkoutFormValues } from '../s
 import { FadeInUp } from '../src/components/quest/motion';
 import { useProofStore } from '../src/store/useProofStore';
 import { useWorkoutStore } from '../src/store/useWorkoutStore';
+import { deleteWorkoutWithUndo } from '../src/food/mealActions';
 import { addWorkoutWithPhoto, detachWorkoutPhoto, replaceWorkoutPhoto, workoutProofFor } from '../src/utils/workoutPhotos';
 import type { WorkoutLogEntry } from '../src/types';
 import { todayKey } from '../src/store/useNutritionStore';
@@ -80,7 +81,6 @@ interface EntryBlockProps {
 function EntryBlock({ entry, compact, sourceTemplate, editing, onEdit, onStopEditing }: EntryBlockProps) {
   const { t } = useTranslation();
   const g = useGameText();
-  const removeEntry = useWorkoutStore((s) => s.removeEntry);
   const updateEntry = useWorkoutStore((s) => s.updateEntry);
   const proof = useProofStore((s) => workoutProofFor(s.photos, entry.id));
   const [editDate, setEditDate] = useState(() => new Date(entry.dateISO));
@@ -131,7 +131,7 @@ function EntryBlock({ entry, compact, sourceTemplate, editing, onEdit, onStopEdi
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${t('common.delete')}: ${entry.label}`}
-        onPress={() => removeEntry(entry.id)}
+        onPress={() => deleteWorkoutWithUndo(entry.id, g('journal.wo.deleted', { name: entry.label }))}
         style={({ pressed }) => [styles.deleteButton, pressed && { opacity: 0.7 }]}
       >
         <HudText size={13} color={quest.hpText}>

@@ -24,6 +24,8 @@ import { usePlanStore } from '../store/usePlanStore';
 import type { MealPart, MealSlot } from '../types';
 import { PLAN_SLOT_MEAL } from '../insights/days';
 import { isSkippedMealItem, logSkippedMeal } from '../food/skipMeal';
+import { deleteExtraWithUndo, logExtraAgain, unmarkPlanMealWithUndo } from '../food/mealActions';
+import { mealTimeAt } from '../food/eatAgain';
 import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
 import { selectedDayKey, useSelectedDayStore } from '../store/useSelectedDayStore';
@@ -525,6 +527,20 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
     if (openItem.kind === 'meal') return addSlotPhoto(selectedKey, openItem.slot, uri);
     return false;
   }
+  // "Xoá bữa" in the sheet: a logged food is deleted, a ticked plan meal un-ticked; both with "Hoàn tác" instead of a confirm.
+  const openStored = openItem?.kind === 'extra' ? logs[selectedKey]?.extraItems?.find((i) => i.id === rawExtraId(openItem)) : undefined;
+  const canDeleteOpen = !client && (openItem?.kind === 'extra' ? !!openStored : openItem?.kind === 'meal' && openItem.eaten);
+  function deleteOpen() {
+    if (client || !openItem) return;
+    if (openItem.kind === 'extra') deleteExtraWithUndo(selectedKey, rawExtraId(openItem), g('journal.mealDeleted', { name: openItem.name || g('journal.extra') }));
+    else if (openItem.kind === 'meal') unmarkPlanMealWithUndo(selectedKey, openItem.slot, g('journal.planUnmarked', { name: openItem.label }));
+  }
+  /** "Ăn lại món này": the same food logged again for today, at the meal of the moment, with "Hoàn tác". */
+  function eatOpenAgain() {
+    if (client || !openStored || !(openStored.calories > 0)) return;
+    const mealTime = mealTimeAt(now);
+    logExtraAgain(todayKey, openStored, mealTime, g('quick.againLoggedMeal', { name: openStored.name, kcal: Math.round(openStored.calories).toLocaleString('en-US'), meal: t(`extraMealTime.${mealTime}` as StringKey) }));
+  }
   async function removePhoto(photo: MealPhotoRef): Promise<boolean> {
     if (client || !openItem) return false;
     if (openItem.kind === 'extra') return removeExtraPhoto(selectedKey, rawExtraId(openItem), photo);
@@ -741,8 +757,17 @@ export function JournalView({ client, embedded }: { client?: ClientSnapshot; emb
           </HudText>
         )}
       </Outer>
-      <WorkoutDetailDialog entries={openWorkoutEntries} lang={language === 'en' ? 'en' : 'vi'} onClose={() => setOpenWorkout(null)} />
-      <MealDetailDialog detail={detail} onClose={() => setOpenId(null)} canEditParts={!client} onEditPart={editPart} onAddPhoto={client ? undefined : addPhoto} onRemovePhoto={client ? undefined : removePhoto} />
+      <WorkoutDetailDialog entries={openWorkoutEntries} lang={language === 'en' ? 'en' : 'vi'} onClose={() => setOpenWorkout(null)} editable={!client} />
+      <MealDetailDialog
+        detail={detail}
+        onClose={() => setOpenId(null)}
+        canEditParts={!client}
+        onEditPart={editPart}
+        onAddPhoto={client ? undefined : addPhoto}
+        onRemovePhoto={client ? undefined : removePhoto}
+        onEatAgain={!client && openStored && openStored.calories > 0 ? eatOpenAgain : undefined}
+        onDelete={canDeleteOpen ? deleteOpen : undefined}
+      />
     </View>
   );
 }

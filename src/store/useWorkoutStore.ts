@@ -15,7 +15,9 @@ interface WorkoutState {
   /** Returns the entry that was created (callers that don't need it can ignore it). */
   addEntry: (entry: Omit<WorkoutLogEntry, 'id' | 'dateISO'>, dateISO?: string) => WorkoutLogEntry;
   /** Removes the entry together with its photo (the proof entry and the persisted file). */
-  removeEntry: (id: string) => void;
+  removeEntry: (id: string, opts?: { keepPhotos?: boolean }) => void;
+  /** Puts a removed entry back as it was (same id, so photos kept with `keepPhotos` belong to it again) and syncs it. */
+  restoreEntry: (entry: WorkoutLogEntry, index?: number) => void;
   /** Changes an existing entry and syncs it like a new one (the cloud write upserts by id). Returns the updated entry,
    *  or undefined when the id is unknown. Everything derived from the logs (missions, XP, streak) follows by itself. */
   updateEntry: (id: string, patch: WorkoutEntryPatch) => WorkoutLogEntry | undefined;
@@ -26,7 +28,7 @@ interface WorkoutState {
 }
 
 /** Drops the photo(s) attached to a workout entry: the proof entries (which also delete their file). */
-function discardWorkoutPhotos(entryId: string): void {
+export function discardWorkoutPhotos(entryId: string): void {
   const proofs = useProofStore.getState();
   for (const p of proofs.photos.filter((x) => x.taskType === 'workout' && x.taskRefId === entryId)) {
     proofs.removeProof(p.id);
@@ -43,10 +45,18 @@ export const useWorkoutStore = create<WorkoutState>()(
         set((state) => ({ entries: [...state.entries, fullEntry] }));
         return fullEntry;
       },
-      removeEntry: (id) => {
-        discardWorkoutPhotos(id);
+      removeEntry: (id, opts) => {
+        if (!opts?.keepPhotos) discardWorkoutPhotos(id);
         set((state) => ({ entries: state.entries.filter((e) => e.id !== id) }));
         deleteWorkoutEntry(id);
+      },
+      restoreEntry: (entry, index) => {
+        if (get().entries.some((e) => e.id === entry.id)) return;
+        pushWorkoutEntry(entry);
+        set((state) => {
+          const at = index == null ? state.entries.length : Math.max(0, Math.min(state.entries.length, index));
+          return { entries: [...state.entries.slice(0, at), entry, ...state.entries.slice(at)] };
+        });
       },
       updateEntry: (id, patch) => {
         const entry = get().entries.find((e) => e.id === id);

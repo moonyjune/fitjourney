@@ -43,8 +43,12 @@ jest.mock('../../utils/photoStorage', () => ({
 }));
 jest.mock('../../sync/cloudSync', () => ({
   pushUserData: jest.fn(),
+  fetchMealRecipe: jest.fn(async () => null),
+  pushMealRecipe: jest.fn(async () => undefined),
+  requestMealRecipe: jest.fn(async () => ({ ok: false, message: 'off' })),
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
+  deleteWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
   deleteWeightEntry: jest.fn(),
   pushProofPhoto: jest.fn(),
@@ -414,6 +418,85 @@ describe('FitQuest logging screens', () => {
     it('handles an unknown meal without crashing', () => {
       mockParams = { slot: 'nope' };
       expect(allText(render(<MealDetailScreen />))).toContain('Không tìm thấy bữa ăn này');
+    });
+
+    it('eaten as planned: the toast says so and its "Hoàn tác" un-ticks the meal', () => {
+      const r = render(<MealDetailScreen />);
+      act(() => pressable(r, (l) => l.startsWith('Đã ăn đúng kế hoạch · 713 kcal')).props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].mealsEaten.meal3).toBe(true);
+      expect(useToastStore.getState().toast?.text).toBe('Đã ghi Bữa 3 - Tối (Chốt cửa sổ ăn) · 713 kcal');
+      act(() => useToastStore.getState().undo());
+      expect(useNutritionStore.getState().logs[DATE].mealsEaten.meal3).toBe(false);
+    });
+
+    it('a dish not eaten logs what was eaten as one food of that meal, with its dishes as parts, and can be undone', () => {
+      const r = render(<MealDetailScreen />);
+      act(() => pressable(r, (l) => l === '200g ức gà áp chảo/nướng mộc: Không ăn').props.onPress());
+      expect(allText(r)).toContain('383 kcal'); // 713 − 330
+      act(() => pressable(r, (l) => l === 'Đã ăn · 383 kcal').props.onPress());
+      const log = useNutritionStore.getState().logs[DATE];
+      expect(log.mealsEaten.meal3).toBeFalsy();
+      expect(log.extraItems).toHaveLength(1);
+      const item = log.extraItems[0];
+      expect(item).toMatchObject({ calories: 383, mealTime: 'dinner' });
+      expect(item.parts?.map((p) => p.name)).toEqual([
+        '180g khoai tây nghiền (hoặc 150g khoai lang luộc)',
+        '1 bát salad lớn (dưa chuột, cà chua, hành tây)',
+        '2 quả trứng luộc nguyên quả',
+        '1 ly sữa tươi tách béo không đường (200ml)',
+      ]);
+      // It now shows under "Đã ghi ở bữa này" and opens its detail sheet.
+      expect(allText(r)).toContain('ĐÃ GHI Ở BỮA NÀY');
+      act(() => pressable(r, (l) => l.startsWith('Xem chi tiết: 180g khoai tây')).props.onPress());
+      expect(allText(r)).toContain('Xoá bữa');
+      act(() => pressable(r, (l) => l === 'Đóng').props.onPress());
+      act(() => useToastStore.getState().undo());
+      expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
+    });
+
+    it('a swapped dish counts with its own name, kcal and protein', () => {
+      const r = render(<MealDetailScreen />);
+      act(() => pressable(r, (l) => l === '200g ức gà áp chảo/nướng mộc: Thay món').props.onPress());
+      act(() => textInput(r, 'Tên món thay').props.onChangeText('Cá hồi áp chảo'));
+      act(() => textInput(r, 'Kcal').props.onChangeText('300'));
+      act(() => textInput(r, 'Đạm (g)').props.onChangeText('34'));
+      act(() => pressable(r, (l) => l === 'Đã ăn · 683 kcal').props.onPress());
+      const item = useNutritionStore.getState().logs[DATE].extraItems[0];
+      expect(item.calories).toBe(683);
+      expect(item.parts?.[0]).toMatchObject({ name: 'Cá hồi áp chảo', calories: 300, proteinG: 34 });
+    });
+
+    it('"Dùng món này" swaps the whole meal for the suggested dish', async () => {
+      const cloud = require('../../sync/cloudSync');
+      cloud.fetchMealRecipe.mockResolvedValueOnce({ dishName: 'Bún chả ít bún', emoji: '🍜', durationMinutes: 25, difficulty: 2, caloriesKcal: 450, proteinG: 32, ingredients: [], steps: [] });
+      const r = render(<MealDetailScreen />);
+      await act(async () => {});
+      act(() => pressable(r, (l) => l === 'Dùng món này: Bún chả ít bún').props.onPress());
+      expect(allText(r)).toContain('Cả bữa thay bằng Bún chả ít bún');
+      act(() => pressable(r, (l) => l === 'Đã ăn · 450 kcal').props.onPress());
+      expect(useNutritionStore.getState().logs[DATE].extraItems[0]).toMatchObject({ name: 'Bún chả ít bún', calories: 450, proteinG: 32 });
+    });
+
+    it('"Bỏ bữa này" marks the meal skipped (not missing), with Hoàn tác on the toast and on the screen', () => {
+      useSkippedMealStore.setState({ days: {}, entries: {} });
+      const r = render(<MealDetailScreen />);
+      act(() => pressable(r, (l) => l === 'Bỏ bữa này: không tính là thiếu bữa').props.onPress());
+      expect(useSkippedMealStore.getState().days[DATE]).toEqual(['meal3']);
+      expect(allText(r)).toContain('Đã bỏ bữa này');
+      act(() => useToastStore.getState().undo());
+      expect(useSkippedMealStore.getState().days[DATE]).toBeUndefined();
+      act(() => pressable(r, (l) => l === 'Bỏ bữa này: không tính là thiếu bữa').props.onPress());
+      act(() => pressable(r, (l) => l === 'Hoàn tác bỏ bữa này').props.onPress());
+      expect(useSkippedMealStore.getState().days[DATE]).toBeUndefined();
+    });
+
+    it('nothing marked eaten: the button says so and does nothing', () => {
+      const r = render(<MealDetailScreen />);
+      for (const item of ['200g ức gà áp chảo/nướng mộc', '180g khoai tây nghiền (hoặc 150g khoai lang luộc)', '1 bát salad lớn (dưa chuột, cà chua, hành tây)', '2 quả trứng luộc nguyên quả', '1 ly sữa tươi tách béo không đường (200ml)']) {
+        act(() => pressable(r, (l) => l === `${item}: Không ăn`).props.onPress());
+      }
+      const button = r.root.findAll((n) => n.props.accessibilityLabel === 'Chưa chọn món nào đã ăn' && n.props.accessibilityState)[0];
+      expect(button.props.accessibilityState.disabled).toBe(true);
     });
   });
 
@@ -801,6 +884,62 @@ describe('FitQuest logging screens', () => {
       expect(saved).toMatchObject({ name: 'MỘT-MÓN 300g', calories: 390, proteinG: 8, purineMg: 60 });
       expect(saved.parts).toBeUndefined();
       expect(allText(r)).toContain('MỘT-MÓN 300g · 390 kcal · 8 g đạm');
+    });
+
+    it('"Xoá bữa" deletes the meal at once; "Hoàn tác" brings it back with its photo, which goes only when the toast does', () => {
+      useNutritionStore.getState().addExtra(DATE, 'Bánh XOÁ', 300, 10, 'afternoon_snack', { photoUri: 'file:///docs/proofs/extra-x.jpg' });
+      const id = useNutritionStore.getState().getLog(DATE).extraItems[0].id;
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('Bánh XOÁ')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Xoá bữa: Bánh XOÁ').props.onPress());
+      expect(useNutritionStore.getState().getLog(DATE).extraItems).toHaveLength(0);
+      expect(useToastStore.getState().toast?.text).toBe('Đã xoá Bánh XOÁ');
+      expect(useProofStore.getState().photos).toHaveLength(1); // kept for the undo
+      act(() => useToastStore.getState().undo());
+      expect(useNutritionStore.getState().getLog(DATE).extraItems.map((i) => i.id)).toEqual([id]);
+      expect(useProofStore.getState().photos).toHaveLength(1);
+
+      act(() => pressable(r, (l) => l.includes('Bánh XOÁ')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Xoá bữa: Bánh XOÁ').props.onPress());
+      act(() => useToastStore.getState().hide());
+      expect(useProofStore.getState().photos).toHaveLength(0);
+    });
+
+    it('"Ăn lại món này" logs the same food again for today, with Hoàn tác', () => {
+      useNutritionStore.getState().addExtra(DATE, 'Phở LẠI', 450, 25, 'lunch', { fromFoodDb: true });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('Phở LẠI')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Ăn lại món này').props.onPress());
+      const items = useNutritionStore.getState().getLog(DATE).extraItems.filter((i) => i.name === 'Phở LẠI');
+      expect(items).toHaveLength(2);
+      expect(items[1].mealTime).toBe('late_afternoon_snack'); // 16:10
+      expect(useToastStore.getState().toast?.text).toContain('Đã ghi Phở LẠI · 450 kcal');
+      act(() => useToastStore.getState().undo());
+      expect(useNutritionStore.getState().getLog(DATE).extraItems.filter((i) => i.name === 'Phở LẠI')).toHaveLength(1);
+    });
+
+    it('a photo in the meal sheet opens full screen', () => {
+      useNutritionStore.getState().addExtra(DATE, 'Bánh ẢNH', 300, 10, 'afternoon_snack', { photoUri: 'file:///docs/proofs/extra-z.jpg' });
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('Bánh ẢNH')).props.onPress());
+      const before = r.root.findAll((n) => n.props.source?.uri === 'file:///docs/proofs/extra-z.jpg' && (n.type as unknown) === 'Image').length;
+      act(() => pressable(r, (l) => l === 'Xem ảnh lớn').props.onPress());
+      expect(r.root.findAll((n) => n.props.source?.uri === 'file:///docs/proofs/extra-z.jpg' && (n.type as unknown) === 'Image').length).toBeGreaterThan(before);
+    });
+
+    it('the workout sheet deletes a workout with Hoàn tác, and edits it in place', () => {
+      const r = render(<JournalScreen />);
+      act(() => pressable(r, (l) => l.includes('Xem chi tiết buổi tập')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Sửa buổi tập: Ngày A').props.onPress());
+      expect(allText(r)).toContain('Lưu thay đổi');
+      act(() => pressable(r, (l) => l === 'Đóng').props.onPress());
+
+      act(() => pressable(r, (l) => l.includes('Xem chi tiết buổi tập')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Xoá buổi tập: Ngày A').props.onPress());
+      expect(useWorkoutStore.getState().entries).toHaveLength(0);
+      expect(useToastStore.getState().toast?.text).toBe('Đã xoá Ngày A');
+      act(() => useToastStore.getState().undo());
+      expect(useWorkoutStore.getState().entries.map((e) => e.id)).toEqual(['x']);
     });
 
     it('a "Không ăn" record opens with no part list', () => {
