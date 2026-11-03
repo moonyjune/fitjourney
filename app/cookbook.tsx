@@ -10,7 +10,6 @@ import { purineWarning } from '../src/cookbook/filters';
 import { ideaFromRecipe } from '../src/cookbook/recipes';
 import { CookbookFinder } from '../src/components/quest/CookbookFinder';
 import { DishCard } from '../src/components/quest/DishCard';
-import { FlashNotice, useFlash } from '../src/components/quest/FlashNotice';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { RecipeDialog } from '../src/components/quest/RecipeDialog';
@@ -45,7 +44,6 @@ export default function CookbookScreen() {
   const [sort, setSort] = useState<SortId>('newest');
   const [quick, setQuick] = useState<QuickId[]>([]);
   const [open, setOpen] = useState<DinnerIdea | null>(null);
-  const [flash, showFlash] = useFlash();
   // The share of the next meal still to come today, to tell which dishes fit it.
   const brief = useMemo(() => {
     const prefs = pickPrefs({ kcal: prefKcal, proteinG: prefProtein, strictKcal: prefStrict });
@@ -75,7 +73,6 @@ export default function CookbookScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
         <QuestHeader title={g('cookbook.title')} onBack={goBack} backLabel={g('common.back')} />
-        <FlashNotice text={flash} />
 
         <View style={styles.segment} accessibilityRole="tablist">
           {TABS.map((t) => {
@@ -160,7 +157,7 @@ export default function CookbookScreen() {
           </View>
         )}
       </ScrollView>
-      <RecipeDialog idea={open} brief={open?.cheat ? undefined : (brief ?? undefined)} mealLabel="" onClose={() => setOpen(null)} onRemoved={(name) => showFlash(g('recipe.removed', { name }))} />
+      <RecipeDialog idea={open} brief={open?.cheat ? undefined : (brief ?? undefined)} mealLabel="" onClose={() => setOpen(null)} />
     </View>
   );
 }

@@ -1,7 +1,7 @@
 import Svg, { Path, Circle } from 'react-native-svg';
 import { hiddenSvgProps } from './hiddenSvg';
 
-export type QuestIconName = 'check' | 'clock' | 'flame' | 'dumbbell' | 'x' | 'camp' | 'back' | 'alert' | 'minus' | 'plus' | 'camera' | 'bowl' | 'drop' | 'list' | 'smile' | 'map' | 'chart' | 'user' | 'lock' | 'chevron' | 'bell' | 'globe' | 'plan' | 'out' | 'swap' | 'volume' | 'volumeOff' | 'edit' | 'trash' | 'photos' | 'chevronLeft';
+export type QuestIconName = 'check' | 'clock' | 'flame' | 'dumbbell' | 'x' | 'camp' | 'back' | 'alert' | 'minus' | 'plus' | 'camera' | 'bowl' | 'drop' | 'list' | 'smile' | 'map' | 'chart' | 'user' | 'lock' | 'chevron' | 'bell' | 'globe' | 'plan' | 'out' | 'swap' | 'volume' | 'volumeOff' | 'edit' | 'trash' | 'photos' | 'chevronLeft' | 'chevronDown' | 'calendar' | 'undo';
 
 interface QuestIconProps {
   name: QuestIconName;
@@ -65,6 +65,9 @@ export function QuestIcon({ name, size = 18, color, strokeWidth = 2 }: QuestIcon
       )}
       {name === 'chevron' && <Path {...common} d="M9 6l6 6-6 6" />}
       {name === 'chevronLeft' && <Path {...common} d="M15 6l-6 6 6 6" />}
+      {name === 'chevronDown' && <Path {...common} d="M6 9l6 6 6-6" />}
+      {name === 'calendar' && <Path {...common} d="M5 6h14a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM4 10h16M8 3v4M16 3v4" />}
+      {name === 'undo' && <Path {...common} d="M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" />}
       {name === 'photos' && <Path {...common} d="M8 8h12v12H8zM4 16V4h12M8 17l3.5-4 2.5 3 2-2 4 3" />}
       {name === 'volume' && <Path {...common} d="M4 9.5v5h4l5 4v-13l-5 4zM16.5 9a4 4 0 0 1 0 6M19 6.5a8 8 0 0 1 0 11" />}
       {name === 'volumeOff' && <Path {...common} d="M4 9.5v5h4l5 4v-13l-5 4zM17 9.5l4 5M21 9.5l-4 5" />}

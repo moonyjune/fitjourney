@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
-import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { QuestSegment } from '../src/components/quest/QuestSegment';
+import { ScreenTemplate } from '../src/components/quest/ScreenTemplate';
 import { fmtInt } from '../src/insights/format';
 import { useInsights } from '../src/insights/useInsights';
 import { buildLiveFacts } from '../src/learn/liveFacts';
@@ -18,7 +17,6 @@ import { useLearnStore } from '../src/store/useLearnStore';
 import { useNutritionStore } from '../src/store/useNutritionStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { quest, questRadius } from '../src/theme/quest';
-import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 
 type Tab = 'theory' | 'snack';
@@ -93,7 +91,6 @@ function TopicCard({ topic, open, onToggle, fact, note }: { topic: LearnTopic; o
 export default function LearnScreen() {
   const t = useLearnText();
   const lang = useSettingsStore((s) => s.language);
-  const insets = useSafeAreaInsets();
   useLightStatusBar();
   const { insights, thresholds } = useInsights();
   const logs = useNutritionStore((s) => s.logs);
@@ -119,117 +116,112 @@ export default function LearnScreen() {
   }
 
   return (
-    <View style={styles.screen}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
-        <QuestHeader title={t('learn.title')} onBack={goBack} backLabel={t('learn.back')} />
-        <View style={styles.segment}>
-          <QuestSegment<Tab>
-            accessibilityLabel={t('learn.title')}
-            value={tab}
-            onChange={switchTab}
-            options={[
-              { value: 'theory', label: t('learn.tabTheory') },
-              { value: 'snack', label: t('learn.tabSnack') },
-            ]}
-          />
-        </View>
+    <ScreenTemplate title={t('learn.title')} onBack={goBack} backLabel={t('learn.back')}>
+      <View style={styles.segment}>
+        <QuestSegment<Tab>
+          accessibilityLabel={t('learn.title')}
+          value={tab}
+          onChange={switchTab}
+          options={[
+            { value: 'theory', label: t('learn.tabTheory') },
+            { value: 'snack', label: t('learn.tabSnack') },
+          ]}
+        />
+      </View>
 
-        <View style={styles.search}>
-          <QuestField label={t(tab === 'theory' ? 'learn.searchTopics' : 'learn.searchSnacks')} value={query} onChangeText={setQuery} autoCapitalize="none" />
-        </View>
+      <View style={styles.search}>
+        <QuestField label={t(tab === 'theory' ? 'learn.searchTopics' : 'learn.searchSnacks')} value={query} onChangeText={setQuery} autoCapitalize="none" />
+      </View>
 
-        {tab === 'theory' ? (
-          <>
-            <View style={styles.chips}>
-              <QuestChip label={t('learn.all')} selected={section === null} onPress={() => setSection(null)} />
-              {LEARN_SECTIONS.map((s) => (
-                <QuestChip key={s} label={t(SECTION_KEY[s])} selected={section === s} onPress={() => setSection(section === s ? null : s)} />
-              ))}
-            </View>
-            {topics.length === 0 ? (
-              <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.empty}>
-                {t('learn.empty')}
-              </HudText>
-            ) : (
-              topics.map((topic) => (
-                <TopicCard
-                  key={topic.id}
-                  topic={topic}
-                  open={openId === topic.id}
-                  onToggle={() => setOpenId(openId === topic.id ? null : topic.id)}
-                  fact={facts[topic.id] ?? null}
-                  note={notes[String(topic.id)] ?? null}
-                />
-              ))
-            )}
-            <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.foot}>
-              {t('learn.evidenceNote')}
+      {tab === 'theory' ? (
+        <>
+          <View style={styles.chips}>
+            <QuestChip label={t('learn.all')} selected={section === null} onPress={() => setSection(null)} />
+            {LEARN_SECTIONS.map((s) => (
+              <QuestChip key={s} label={t(SECTION_KEY[s])} selected={section === s} onPress={() => setSection(section === s ? null : s)} />
+            ))}
+          </View>
+          {topics.length === 0 ? (
+            <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.empty}>
+              {t('learn.empty')}
             </HudText>
-          </>
-        ) : (
-          <>
-            <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.intro}>
-              {t('learn.snackIntro')}
+          ) : (
+            topics.map((topic) => (
+              <TopicCard
+                key={topic.id}
+                topic={topic}
+                open={openId === topic.id}
+                onToggle={() => setOpenId(openId === topic.id ? null : topic.id)}
+                fact={facts[topic.id] ?? null}
+                note={notes[String(topic.id)] ?? null}
+              />
+            ))
+          )}
+          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.foot}>
+            {t('learn.evidenceNote')}
+          </HudText>
+        </>
+      ) : (
+        <>
+          <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.intro}>
+            {t('learn.snackIntro')}
+          </HudText>
+          {snacks.length === 0 ? (
+            <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.empty}>
+              {t('learn.empty')}
             </HudText>
-            {snacks.length === 0 ? (
-              <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.empty}>
-                {t('learn.empty')}
-              </HudText>
-            ) : (
-              snacks.map((s) => {
-                const band = kcalBand(s.kcal);
-                return (
-                  <View key={s.id} style={styles.card}>
-                    <View style={styles.snackBody}>
-                      <View style={styles.headRow}>
-                        <View style={styles.flex}>
-                          <HudText size={11} color={quest.textSecondary}>
-                            {t('learn.craving')}
-                          </HudText>
-                          <HudText size={14}>{s.craving}</HudText>
-                        </View>
-                        <View accessibilityLabel={`${fmtInt(s.kcal, lang)} kcal: ${t(BAND_KEY[band])}`} style={[styles.kcal, { borderColor: BAND_COLOR[band] }]}>
-                          <HudText size={13} color={BAND_COLOR[band]}>
-                            {t('learn.kcal', { n: fmtInt(s.kcal, lang) })}
-                          </HudText>
-                        </View>
-                      </View>
-                      <HudText size={11} color={quest.textSecondary}>
-                        {t('learn.swap')}
-                      </HudText>
-                      <HudText size={13} weight="medium" color={quest.text}>
-                        {s.swap}
-                      </HudText>
-                      <HudText size={12} weight="medium" color={quest.textSecondary}>
-                        {`${t('learn.portion')}: ${s.portion}`}
-                      </HudText>
-                      {s.note ? (
-                        <HudText size={12} weight="medium" color={quest.manaText}>
-                          {s.note}
+          ) : (
+            snacks.map((s) => {
+              const band = kcalBand(s.kcal);
+              return (
+                <View key={s.id} style={styles.card}>
+                  <View style={styles.snackBody}>
+                    <View style={styles.headRow}>
+                      <View style={styles.flex}>
+                        <HudText size={11} color={quest.textSecondary}>
+                          {t('learn.craving')}
                         </HudText>
-                      ) : null}
+                        <HudText size={14}>{s.craving}</HudText>
+                      </View>
+                      <View accessibilityLabel={`${fmtInt(s.kcal, lang)} kcal: ${t(BAND_KEY[band])}`} style={[styles.kcal, { borderColor: BAND_COLOR[band] }]}>
+                        <HudText size={13} color={BAND_COLOR[band]}>
+                          {t('learn.kcal', { n: fmtInt(s.kcal, lang) })}
+                        </HudText>
+                      </View>
                     </View>
+                    <HudText size={11} color={quest.textSecondary}>
+                      {t('learn.swap')}
+                    </HudText>
+                    <HudText size={13} weight="medium" color={quest.text}>
+                      {s.swap}
+                    </HudText>
+                    <HudText size={12} weight="medium" color={quest.textSecondary}>
+                      {`${t('learn.portion')}: ${s.portion}`}
+                    </HudText>
+                    {s.note ? (
+                      <HudText size={12} weight="medium" color={quest.manaText}>
+                        {s.note}
+                      </HudText>
+                    ) : null}
                   </View>
-                );
-              })
-            )}
-            <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.foot}>
-              {t('learn.snackLegend')}
-            </HudText>
-          </>
-        )}
-        <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.foot}>
-          {t('learn.disclaimer')}
-        </HudText>
-      </ScrollView>
-    </View>
+                </View>
+              );
+            })
+          )}
+          <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.foot}>
+            {t('learn.snackLegend')}
+          </HudText>
+        </>
+      )}
+      <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.foot}>
+        {t('learn.disclaimer')}
+      </HudText>
+    </ScreenTemplate>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
-  segment: { marginTop: 14 },
+  segment: { marginTop: 6 },
   search: { marginTop: 14 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   flex: { flex: 1, minWidth: 0 },

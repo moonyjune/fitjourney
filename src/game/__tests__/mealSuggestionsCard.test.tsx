@@ -50,6 +50,7 @@ import { MealSuggestionsCard } from '../../components/quest/MealSuggestionsCard'
 import type { FoodEntry } from '../../food/types';
 import { mergeFoods, useFoodDbStore } from '../../store/useFoodDbStore';
 import { useCookbookStore } from '../../store/useCookbookStore';
+import { useToastStore } from '../../store/useToastStore';
 import { useLimitsStore } from '../../store/useLimitsStore';
 import { useMealIdeasStore } from '../../store/useMealIdeasStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
@@ -475,7 +476,12 @@ describe('Meal suggestions card (Camp)', () => {
     expect(useCookbookStore.getState().recipes.find((x) => x.name === 'Cá hấp gừng')).toBeUndefined();
     expect(allText(r)).not.toContain('CÁCH NẤU');
     expect(find(r, 'Lưu vào cook book')).toBeFalsy();
-    expect(allText(r)).toContain('Đã xóa "Cá hấp gừng" khỏi cook book.');
+    // The app toast says so, and its undo puts the dish back.
+    const toast = useToastStore.getState().toast;
+    expect(toast?.text).toBe('Đã xóa "Cá hấp gừng" khỏi cook book.');
+    act(() => useToastStore.getState().undo());
+    expect(useCookbookStore.getState().recipes.find((x) => x.name === 'Cá hấp gừng')?.rating).toBe(4);
+    expect(useToastStore.getState().toast).toBeNull();
   });
 
   it.each([

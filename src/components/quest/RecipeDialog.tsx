@@ -5,6 +5,7 @@ import { useAiErrorText } from '../../ai/usePhotoAnalysis';
 import { ideaFromRecipe, recipeFromIdea, recipeKey, stepIcon } from '../../cookbook/recipes';
 import { useGameText } from '../../game/strings';
 import { useCookbookStore } from '../../store/useCookbookStore';
+import { showToast } from '../../store/useToastStore';
 import { requestDishRecipe } from '../../sync/cloudSync';
 import { quest, questRadius } from '../../theme/quest';
 import { pickPhoto } from '../../utils/pickPhoto';
@@ -18,7 +19,8 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 /** One dish in full: ingredients, difficulty, time, the steps (each with a picture), the nutrition set against what is left for the meal, the user's
  *  stars, and the photo of how it turned out. A dish without a recipe (one of the user's own foods) can have one written by the AI, once; it is kept in
  *  the cook book, so it is never asked twice. */
-/** `onRemoved` is told the dish's name once it was taken out of the cook book (the dialog closes then), so the screen can confirm it. */
+/** Removing the dish from the cook book closes the dialog and confirms it with the app toast, whose "Hoàn tác" puts the same entry back;
+ *  `onRemoved` is then told the dish's name. */
 export function RecipeDialog({ idea, brief, mealLabel, onClose, onLog, onRemoved }: { idea: DinnerIdea | null; brief?: DinnerBrief; mealLabel?: string; onClose: () => void; onLog?: (idea: DinnerIdea) => void; onRemoved?: (name: string) => void }) {
   const g = useGameText();
   const aiErrorText = useAiErrorText();
@@ -209,8 +211,10 @@ export function RecipeDialog({ idea, brief, mealLabel, onClose, onLog, onRemoved
                 icon="trash"
                 title={g('recipe.removeFromBook')}
                 onPress={() => {
+                  const removed = store.recipes.find((r) => r.id === id);
                   store.remove(id);
                   onClose();
+                  showToast({ text: g('recipe.removed', { name: shown.name }), undo: removed ? () => useCookbookStore.getState().save(removed) : undefined });
                   onRemoved?.(shown.name);
                 }}
               />

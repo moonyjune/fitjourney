@@ -2,7 +2,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import type { DinnerIdea } from '../../ai/dinner';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
-import { DishPhoto, DishPhotoCredit } from './DishPhoto';
+import { DishPhotoCredit } from './DishPhoto';
+import { DishThumb } from './DishThumb';
 import { HudText } from './HudText';
 
 export interface DishCardProps {
@@ -39,13 +40,8 @@ export function DishCard({ idea, onPress, purineHigh, cheat, rating, cooked, fit
   const minutes = idea.recipe?.minutes;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={idea.name} onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      {photo ? (
-        <DishPhoto name={idea.name} emoji={idea.recipe?.emoji ?? '🍽️'} size={56} />
-      ) : (
-        <View style={styles.emoji}>
-          <HudText size={22}>{idea.recipe?.emoji ?? '🍽️'}</HudText>
-        </View>
-      )}
+      {/* Without `photo`: the recipe's emoji (or one guessed from the name) on a colour by kind of dish, no web photo asked for. */}
+      <DishThumb name={idea.name} emoji={idea.recipe?.emoji} size={photo ? 56 : 42} radius={10} off={!photo} />
       <View style={styles.body}>
         <HudText size={14} numberOfLines={1}>
           {idea.name}
@@ -75,7 +71,6 @@ export function DishCard({ idea, onPress, purineHigh, cheat, rating, cooked, fit
 const styles = StyleSheet.create({
   card: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, paddingVertical: 8, paddingHorizontal: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   pressed: { backgroundColor: quest.raised },
-  emoji: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.raised2 },
   body: { flex: 1, gap: 4, minWidth: 0 },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
   badge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1, borderColor: quest.border, backgroundColor: quest.bg },

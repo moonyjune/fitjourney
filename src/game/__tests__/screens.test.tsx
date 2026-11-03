@@ -66,6 +66,7 @@ import { useFeelingStore } from '../../store/useFeelingStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
 import { useSelectedDayStore } from '../../store/useSelectedDayStore';
+import { useToastStore } from '../../store/useToastStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -157,11 +158,16 @@ describe('FitQuest logging screens', () => {
       expect(text).toContain('Đã uống 3,200 / 4,500 ml');
     });
 
-    it('adds water to today and reports it', () => {
+    it('adds water to today and reports it in the app toast, whose undo takes exactly that back off', () => {
       const r = render(<QuickAddScreen />);
       act(() => pressable(r, (l) => l === 'Thêm 500 ml nước').props.onPress());
       expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3700);
-      expect(allText(r)).toContain('+500 ml');
+      const toast = useToastStore.getState().toast;
+      expect(toast).toMatchObject({ text: '+500 ml nước · 3,700 ml', tone: 'mana' });
+      act(() => useToastStore.getState().undo());
+      expect(useNutritionStore.getState().logs[DATE].waterMl).toBe(3200);
+      expect(allText(r)).toContain('Đã uống 3,200 / 4,500 ml');
+      expect(useToastStore.getState().toast).toBeNull();
     });
 
     it('logs meals and water for another day picked with ‹ ›, never a future one', () => {

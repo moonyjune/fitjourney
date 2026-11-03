@@ -24,6 +24,7 @@ import { WaterReminderHost } from '../src/water/WaterReminderHost';
 import { WebPushHost } from '../src/notifications/WebPushHost';
 import { watchPushAccount } from '../src/notifications/pushAccount';
 import { signOutIdle } from '../src/auth/signOut';
+import { ToastHost } from '../src/components/quest/Toast';
 
 // Minimum time the branded intro stays on screen, so it isn't just a 1-frame flash on warm starts.
 const MIN_INTRO_MS = 1200;
@@ -190,6 +191,8 @@ export default function RootLayout() {
           <Stack.Screen name="auth" options={{ animation: 'fade' }} />
         </Stack>
       )}
+      {/* The one toast ("Đã thêm 250 ml · Hoàn tác"), above every screen: showToast() in src/store/useToastStore.ts. */}
+      {ready && <ToastHost />}
     </SafeAreaProvider>
   );
 }

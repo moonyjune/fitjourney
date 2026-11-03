@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { HudText } from '../src/components/quest/HudText';
 import { LogDayPicker } from '../src/components/quest/LogDayPicker';
@@ -7,6 +7,7 @@ import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestIcon, type QuestIconName } from '../src/components/quest/QuestIcon';
 import { QuestSheet } from '../src/components/quest/QuestSheet';
+import { Stepper } from '../src/components/quest/Stepper';
 import { WATER_QUICK_ADD_ML, WATER_QUICK_REMOVE_ML, getDayType } from '../src/constants/plan';
 import { MISSION_XP } from '../src/game/constants';
 import { evaluateDay } from '../src/game/missions';
@@ -16,8 +17,9 @@ import { logDayLabel } from '../src/game/useLogDate';
 import { useNutritionStore } from '../src/store/useNutritionStore';
 import { useSelectedDayStore, workingDayKey } from '../src/store/useSelectedDayStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
+import { showToast } from '../src/store/useToastStore';
 import { useWeightStore } from '../src/store/useWeightStore';
-import { quest, questFonts, questRadius } from '../src/theme/quest';
+import { quest } from '../src/theme/quest';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import { toDateKey } from '../src/utils/date';
 import { dateOfKey, oldestLogDateKey, shiftDateKey } from '../src/utils/logDate';
@@ -29,11 +31,6 @@ const MAX_KG = 300;
 
 function pad(n: number): string {
   return String(n).padStart(2, '0');
-}
-
-function parseKg(text: string): number | null {
-  const value = parseFloat(text.replace(',', '.'));
-  return Number.isFinite(value) && value >= MIN_KG && value <= MAX_KG ? value : null;
 }
 
 function closeSheet() {
@@ -99,25 +96,19 @@ export default function QuickAddScreen() {
   const waterMl = input.log?.waterMl ?? 0;
 
   const currentKg = latest?.weightKg ?? startWeightKg;
-  const [weightText, setWeightText] = useState(currentKg.toFixed(1));
+  const [weightKg, setWeightKg] = useState(() => Math.round(currentKg * 10) / 10);
+  // False while the typed weight is not a number in MIN_KG..MAX_KG; saving is refused then.
+  const [weightValid, setWeightValid] = useState(true);
   const [savedKg, setSavedKg] = useState<string | null>(null);
   const [weightError, setWeightError] = useState(false);
   const [lastWaterMl, setLastWaterMl] = useState<number | null>(null);
 
-  function stepWeight(delta: number) {
-    const base = parseKg(weightText) ?? currentKg;
-    const next = Math.min(MAX_KG, Math.max(MIN_KG, Math.round((base + delta) * 10) / 10));
-    setWeightText(next.toFixed(1));
-    setSavedKg(null);
-    setWeightError(false);
-  }
-
   function saveWeight() {
-    const kg = parseKg(weightText);
-    if (kg == null) {
+    if (!weightValid) {
       setWeightError(true);
       return;
     }
+    const kg = weightKg;
     addWeight(kg);
     setWeightError(false);
     const label = kg.toFixed(1);
@@ -135,15 +126,26 @@ export default function QuickAddScreen() {
   /** Route params that carry the picked day; none for today, so the screens keep their usual "today" behaviour. */
   const dateParams: Record<string, string> = isToday ? {} : { date: dateKey };
 
-  /** Adds `ml` of water to the day; a negative amount takes some off (a mistake fixed), never below 0. */
+  /** Adds `ml` of water to the day; a negative amount takes some off (a mistake fixed), never below 0.
+   *  An addition is confirmed by the app toast with "Hoàn tác", which takes exactly that amount back off the same day. */
   function addWaterMl(ml: number) {
     const change = Math.max(-waterMl, ml);
     if (change === 0) return;
     addWater(dateKey, change);
-    setLastWaterMl(change);
+    if (change > 0) {
+      setLastWaterMl(null);
+      const day = dateKey;
+      showToast({
+        text: g('quick.waterAdded', { ml: change, total: (waterMl + change).toLocaleString('en-US') }),
+        tone: 'mana',
+        undo: () => useNutritionStore.getState().addWater(day, -change),
+      });
+    } else {
+      setLastWaterMl(change);
+    }
   }
 
-  const parsedKg = parseKg(weightText);
+  const parsedKg = weightValid ? weightKg : null;
   const kgLeft = Math.max(0, (parsedKg ?? currentKg) - goalWeightKg);
   const mealTime = nextMeal ? `${pad(nextMeal.startHour)}:${pad(nextMeal.startMinute)}` : '';
 
@@ -223,9 +225,9 @@ export default function QuickAddScreen() {
           ))}
         </View>
         {isToday && <WaterNextDrink schedule={water.schedule} waterMl={waterMl} now={now} />}
-        {lastWaterMl != null && (
+        {lastWaterMl != null && lastWaterMl < 0 && (
           <HudText size={12} weight="medium" color={quest.manaText} accessibilityLiveRegion="polite" style={styles.feedback}>
-            {lastWaterMl > 0 ? `+${lastWaterMl} ml` : g('quick.waterRemoved', { ml: -lastWaterMl, total: waterMl.toLocaleString('en-US') })}
+            {g('quick.waterRemoved', { ml: -lastWaterMl, total: waterMl.toLocaleString('en-US') })}
           </HudText>
         )}
 
@@ -235,25 +237,28 @@ export default function QuickAddScreen() {
             {g('quick.weightLeft', { kg: kgLeft.toFixed(1), goal: goalWeightKg })}
           </HudText>
         </View>
-        <View style={styles.stepper}>
-          <Pressable accessibilityRole="button" accessibilityLabel={g('quick.weightDown')} onPress={() => stepWeight(-0.1)} style={styles.stepBtn}>
-            <QuestIcon name="minus" size={20} color={quest.text} strokeWidth={2.6} />
-          </Pressable>
-          <TextInput
-            accessibilityLabel={g('quick.weightField')}
-            keyboardType="decimal-pad"
-            value={weightText}
-            onChangeText={(text) => {
-              setWeightText(text);
-              setSavedKg(null);
-              setWeightError(false);
-            }}
-            style={[styles.weightInput, weightError && { borderColor: quest.gold }]}
-          />
-          <Pressable accessibilityRole="button" accessibilityLabel={g('quick.weightUp')} onPress={() => stepWeight(0.1)} style={styles.stepBtn}>
-            <QuestIcon name="plus" size={20} color={quest.text} strokeWidth={2.6} />
-          </Pressable>
-        </View>
+        <Stepper
+          value={weightKg}
+          onChange={(kg) => {
+            setWeightKg(kg);
+            setSavedKg(null);
+            setWeightError(false);
+          }}
+          onValidChange={(ok) => {
+            setWeightValid(ok);
+            setSavedKg(null);
+            if (ok) setWeightError(false);
+          }}
+          invalid={weightError}
+          step={0.1}
+          min={MIN_KG}
+          max={MAX_KG}
+          decimals={1}
+          unit="kg"
+          label={g('quick.weightField')}
+          lessLabel={g('quick.weightDown')}
+          moreLabel={g('quick.weightUp')}
+        />
         {weightError && (
           <HudText size={12} weight="medium" color={quest.goldLight} accessibilityLiveRegion="polite" style={styles.feedback}>
             {g('quick.weightInvalid')}
@@ -304,29 +309,5 @@ const styles = StyleSheet.create({
   chipRowGap: { marginTop: 8 },
   chipCell: { flex: 1 },
   feedback: { marginTop: 8 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 99,
-    backgroundColor: quest.panel,
-    borderWidth: 1.5,
-    borderColor: quest.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weightInput: {
-    flex: 1,
-    minWidth: 0, // lets the field shrink so the + button is never pushed off the row
-    minHeight: 56,
-    textAlign: 'center',
-    fontSize: 30,
-    fontFamily: questFonts.bold,
-    color: quest.text,
-    backgroundColor: quest.panel,
-    borderRadius: questRadius.panel,
-    borderWidth: 1.5,
-    borderColor: quest.border,
-  },
   cta: { marginTop: 14 },
 });
