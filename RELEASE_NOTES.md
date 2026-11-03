@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.28.0 | no | — |
 | 0.27.2 | no | — |
 | 0.27.1 | no | — |
 | 0.27.0 | yes | analyze-proof-photo, analyze-weekly-feelings, coach-digest, boss-banter, dish-photo, estimate-workout-kcal, parse-meal-text, generate-meal-recipe, read-nutrition-label, suggest-dinner, suggest-cheat-places, suggest-plan-update, weekly-report, suggest-swap, tempt-me, send-push |
@@ -82,6 +83,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.28.0
+Redesign, phase 0 (foundation; Design/uiux-proposal).
+- Tab bar trimmed to 5 slots: Trại · Tập · (+) · Hành trình · Hồ sơ ("Bản đồ" renamed "Hành trình"). Weight, Nutrition, History, Plan and free-form workout logging open as their own pages (with a back button) at the same URLs. The old "Hôm nay" screen is removed; its link redirects to Camp.
+- 44 long hints shortened to one line (≤ 60 characters, vi and en); the detail that was cut will come back behind ⓘ in later phases.
+- Adding water in Quick add shows a small "+250 ml nước · … ml" notice with "Hoàn tác" (5 s); removing a dish from the cook book can be undone the same way. The old flash notice is replaced by this toast.
+- Weight in Quick add uses the new stepper: a big number, hold − / + to run, tap the number to type.
+- The "Kiến thức" screen uses the new screen frame (52 pt header); cook book cards show an emoji on a colour by kind of dish when there is no photo.
+- (Internal) Shared components for the redesign: ScreenTemplate, BottomSheet, Toast + Undo, Stepper, DishThumb, DateChip + DatePickerSheet.
 
 ## 0.27.2
 - New app icon, logo option B "Khiên làm gọn" (Design/logo-proposal): the splash shield, road and gem, filling ~88% of the icon with a thicker border, a bolder road and 3 dashes, readable at 29 px; a simplified favicon (no dashes, bigger gem) readable at 16 px; Android adaptive foreground / background / monochrome from the same shapes. Exported from Design/logo-proposal/svg/B-*.svg. The in-app logo and the splash are unchanged.
