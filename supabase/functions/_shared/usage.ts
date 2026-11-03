@@ -14,7 +14,8 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   digest: 5,
   // Cheat day > where to eat: each call runs several web searches ($0.01 each), so it gets fewer.
   places: 10,
-  /** The temptation challenge (Hard): at most 5 pop-ups a day, plus one spare. Each may search the web. */
+  /** The temptation challenge (Hard): only the old one-call-per-pop-up way (no pool tables). A pop-up from the shared pool makes no
+   *  call, and the pool's refills are system work that counts against no player (tempt-me, 0.26.7). */
   tempt: 6,
   /** Battle banter (Map): one day's boss/player exchange per call; yesterday's is asked once on its own, the rest by a tap. */
   banter: 10,
@@ -85,10 +86,12 @@ export const MODEL_PRICES: Partial<Record<string, { in: number; out: number }>> 
 };
 
 /** Features that may run on their own model (ai_settings key `model.<group>`), and the model each uses when none is saved (null:
- *  the global model). `photo` covers the dish photo checks (dish-photo, the temptation pool's pictures) and the pool's web photo search. */
-export const MODEL_GROUPS = ['places', 'tempt', 'photo'] as const;
+ *  the global model). `photo` covers the dish photo checks (dish-photo, the temptation pool's pictures) and the pool's web photo search.
+ *  `short` covers the text-only calls that write a few short lines (boss-banter, coach-digest); they send no images, no sampling or
+ *  thinking parameters, and a forced tool call (which Haiku 5.5 takes; a model that refuses it is asked with tool_choice auto). */
+export const MODEL_GROUPS = ['places', 'tempt', 'photo', 'short'] as const;
 export type ModelGroup = (typeof MODEL_GROUPS)[number];
-export const GROUP_DEFAULT_MODEL: Record<ModelGroup, string | null> = { places: null, tempt: 'claude-haiku-5-5', photo: 'claude-haiku-5-5' };
+export const GROUP_DEFAULT_MODEL: Record<ModelGroup, string | null> = { places: null, tempt: 'claude-haiku-5-5', photo: 'claude-haiku-5-5', short: 'claude-haiku-5-5' };
 export const modelKey = (group: ModelGroup): string => `model.${group}`;
 
 /** The group whose model a feature's calls use, or null (the global model). */
@@ -96,6 +99,7 @@ export function modelGroupOf(feature: AiFeature): ModelGroup | null {
   if (feature === 'places') return 'places';
   if (feature === 'tempt') return 'tempt';
   if (feature === 'dishphoto') return 'photo';
+  if (feature === 'banter' || feature === 'digest') return 'short';
   return null;
 }
 

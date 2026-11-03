@@ -446,7 +446,8 @@ $$;
 revoke all on function public.ai_usage_bump(uuid, date, text, bigint, bigint, numeric, text) from public, anon, authenticated;
 grant execute on function public.ai_usage_bump(uuid, date, text, bigint, bigint, numeric, text) to service_role;
 
--- Tổng chi phí ước tính của tất cả người dùng trong một ngày (dùng cho trần ngân sách toàn hệ thống).
+-- Tổng chi phí ước tính của tất cả người dùng trong một ngày (dùng cho trần ngân sách toàn hệ thống). 0.26.7: định nghĩa lại bên dưới
+-- (sau bảng tempt_pool_meta) để cộng cả chi phí hệ thống của kho cám dỗ trong ngày.
 create or replace function public.ai_cost_on_day(p_day date)
 returns numeric
 language sql
@@ -527,9 +528,10 @@ alter table public.ai_settings enable row level security;
 revoke all on public.ai_settings from public, anon, authenticated;
 -- 0.26.4: model riêng cho từng nhóm tính năng (model.places = Tìm quán, model.tempt = kho cám dỗ, model.photo = kiểm tra / tìm ảnh món).
 -- Không đặt thì: places dùng model chung; tempt và photo dùng claude-haiku-5-5 (giá tính theo bảng MODEL_PRICES trong _shared/usage.ts).
+-- model.short: câu ngắn chỉ có chữ (boss-banter, coach-digest), mặc định claude-haiku-5-5.
 alter table public.ai_settings drop constraint if exists ai_settings_key_check;
 alter table public.ai_settings add constraint ai_settings_key_check
-  check (key in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo'));
+  check (key in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo', 'model.short'));
 
 create or replace function public.ai_admin_get_settings()
 returns table (key text, value text)
@@ -559,7 +561,7 @@ begin
   if not public.is_ai_admin() then
     raise exception 'Không có quyền đổi.';
   end if;
-  if p_key not in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo') then
+  if p_key not in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo', 'model.short') then
     raise exception 'Cài đặt không hợp lệ.';
   end if;
   if v = '' then
@@ -1110,7 +1112,13 @@ $$;
 revoke all on function public.tempt_pool_claim_photos(timestamptz) from public, anon, authenticated;
 grant execute on function public.tempt_pool_claim_photos(timestamptz) to service_role;
 
--- Cộng chi phí một lần gọi AI cho kho (seed, kiểm tra ảnh) vào tempt_pool_meta. Chỉ service role.
+-- 0.26.7: mọi lần nạp kho (kể cả nạp do pop-up của một người chơi) và việc tìm ảnh là việc của hệ thống: chi phí cộng vào đây, không
+-- vào ai_usage hay hạn mức của ai. system_cost_day / system_cost_today = chi phí của kho trong ngày (giờ Việt Nam), để trần ngân sách
+-- toàn hệ thống (AI_DAILY_BUDGET_USD, hàm ai_cost_on_day) tính cả nó.
+alter table public.tempt_pool_meta add column if not exists system_cost_day date;
+alter table public.tempt_pool_meta add column if not exists system_cost_today numeric not null default 0;
+
+-- Cộng chi phí một lần gọi AI cho kho (nạp kho, seed, kiểm tra / tìm ảnh) vào tempt_pool_meta. Chỉ service role.
 create or replace function public.tempt_pool_add_cost(p_in bigint, p_out bigint, p_cost numeric)
 returns void
 language sql
@@ -1120,8 +1128,25 @@ as $$
   update public.tempt_pool_meta
      set system_tokens_in = system_tokens_in + coalesce(p_in, 0),
          system_tokens_out = system_tokens_out + coalesce(p_out, 0),
-         system_cost_usd = system_cost_usd + coalesce(p_cost, 0)
+         system_cost_usd = system_cost_usd + coalesce(p_cost, 0),
+         system_cost_today = case when system_cost_day = (now() at time zone 'Asia/Ho_Chi_Minh')::date
+                                  then system_cost_today + coalesce(p_cost, 0) else coalesce(p_cost, 0) end,
+         system_cost_day = (now() at time zone 'Asia/Ho_Chi_Minh')::date
    where id = 1;
 $$;
 revoke all on function public.tempt_pool_add_cost(bigint, bigint, numeric) from public, anon, authenticated;
 grant execute on function public.tempt_pool_add_cost(bigint, bigint, numeric) to service_role;
+
+-- Tổng chi phí ước tính của một ngày cho trần ngân sách toàn hệ thống: mọi người dùng (ai_usage) cộng chi phí hệ thống của kho cám dỗ
+-- trong ngày đó (định nghĩa lại ở đây vì cần bảng tempt_pool_meta).
+create or replace function public.ai_cost_on_day(p_day date)
+returns numeric
+language sql
+security definer set search_path = public
+stable
+as $$
+  select coalesce((select sum(cost_usd) from public.ai_usage where day = p_day), 0)
+       + coalesce((select system_cost_today from public.tempt_pool_meta where id = 1 and system_cost_day = p_day), 0);
+$$;
+revoke all on function public.ai_cost_on_day(date) from public, anon, authenticated;
+grant execute on function public.ai_cost_on_day(date) to service_role;

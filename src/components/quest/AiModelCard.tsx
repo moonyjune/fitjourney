@@ -20,8 +20,8 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
   const [priceOut, setPriceOut] = useState('');
   const [busy, setBusy] = useState(false);
   // Per-feature models (0.26.4): what was loaded, and what is typed now. Empty = the feature's default.
-  const [groupSaved, setGroupSaved] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '' });
-  const [groupModel, setGroupModel] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '' });
+  const [groupSaved, setGroupSaved] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '', short: '' });
+  const [groupModel, setGroupModel] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '', short: '' });
   const pricing = pricingFrom(model, priceIn, priceOut);
   const forecast = pricing && usage ? forecastPerUser(usage, pricing) : null;
   const [message, setMessage] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);
@@ -56,7 +56,7 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
     if (!pi.ok || !po.ok) return setMessage({ kind: 'bad', text: g('aiModel.badPrice') });
     const groupChecks = MODEL_GROUPS.map((k) => [k, checkModel(groupModel[k])] as const);
     if (groupChecks.some(([, c]) => !c.ok)) return setMessage({ kind: 'bad', text: g('aiModel.badModel') });
-    const changedGroups = groupChecks.flatMap(([k, c]) => (c.ok && c.value !== groupSaved[k] ? [[modelKey(k) as 'model.places' | 'model.tempt' | 'model.photo', c.value] as const] : []));
+    const changedGroups = groupChecks.flatMap(([k, c]) => (c.ok && c.value !== groupSaved[k] ? [[modelKey(k) as Parameters<typeof saveAiSetting>[0], c.value] as const] : []));
     setBusy(true);
     setMessage(null);
     for (const [key, value] of [['model', m.value], ['price_in', pi.value], ['price_out', po.value], ...changedGroups] as const) {

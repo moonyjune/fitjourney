@@ -67,7 +67,9 @@ import {
   type TemptRequest,
 } from '../../../supabase/functions/_shared/tempt';
 import { itemFromAi } from '../../temptation/item';
-import { featureConfig, MODEL_PRICES, modelGroupOf } from '../../../supabase/functions/_shared/usage';
+import { featureConfig, GROUP_DEFAULT_MODEL, MODEL_GROUPS, MODEL_PRICES, modelGroupOf } from '../../../supabase/functions/_shared/usage';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 // ----- places: one big search, served page by page -----
 
@@ -476,6 +478,50 @@ describe('per-feature models (0.26.4)', () => {
     expect(featureConfig(global, [{ key: 'model.photo', value: 'claude-new-9' }], 'photo')).toEqual({ model: 'claude-new-9', priceInPerMtok: 3, priceOutPerMtok: 15 });
     expect(featureConfig(global, [{ key: 'model.photo', value: 'Bad!' }], 'photo').model).toBe('claude-haiku-5-5');
     expect(MODEL_PRICES['claude-haiku-5-5']).toEqual({ in: 0.1, out: 0.5 });
+  });
+});
+
+describe('short-text features on their own model (0.26.7)', () => {
+  const global = { model: 'claude-sonnet-5-5', priceInPerMtok: 2, priceOutPerMtok: 10 };
+  it('puts boss banter and the coach digest on the `short` group, Haiku by default', () => {
+    expect(modelGroupOf('banter')).toBe('short');
+    expect(modelGroupOf('digest')).toBe('short');
+    expect(MODEL_GROUPS).toContain('short');
+    expect(GROUP_DEFAULT_MODEL.short).toBe('claude-haiku-5-5');
+    expect(featureConfig(global, [], modelGroupOf('banter'))).toEqual({ model: 'claude-haiku-5-5', priceInPerMtok: 0.1, priceOutPerMtok: 0.5 });
+    expect(featureConfig(global, [{ key: 'model.short', value: 'claude-opus-5-5' }], modelGroupOf('digest'))).toEqual({ model: 'claude-opus-5-5', priceInPerMtok: 4, priceOutPerMtok: 20 });
+    expect(featureConfig(global, [{ key: 'model.short', value: 'claude-sonnet-5-5' }], 'short')).toBe(global);
+  });
+  it('leaves photos, meal parsing, numbers, recipes, dinners, the weekly report and places where they were', () => {
+    for (const f of ['photo', 'text', 'label', 'recipe', 'report', 'swap', 'dinner', 'workout'] as const) expect(modelGroupOf(f)).toBeNull();
+    expect(modelGroupOf('places')).toBe('places');
+  });
+  it('lets the database store and the admin set model.short (schema.sql)', () => {
+    const sql = readFileSync(join(__dirname, '../../../supabase/schema.sql'), 'utf8');
+    const lists = sql.match(/'model', 'price_in', 'price_out'[^)]*\)/g) ?? [];
+    expect(lists.length).toBeGreaterThanOrEqual(2);
+    for (const k of MODEL_GROUPS) expect(lists.slice(-2).every((l) => l.includes(`'model.${k}'`))).toBe(true);
+  });
+});
+
+describe('temptation pool refills are system cost (0.26.7)', () => {
+  const sql = readFileSync(join(__dirname, '../../../supabase/schema.sql'), 'utf8');
+  const fn = readFileSync(join(__dirname, '../../../supabase/functions/tempt-me/index.ts'), 'utf8');
+  it('never checks or charges the player for a refill', () => {
+    expect(fn).not.toMatch(/aiAllowance/);
+    expect(fn).toMatch(/systemAllowance\(ctx\.admin\)\)\.ok && \(await claimRefill/);
+    const start = fn.slice(fn.indexOf('function startRefill'), fn.indexOf('function inBackground'));
+    expect(start).toMatch(/systemContext\(admin\)/);
+    expect(start).toMatch(/systemRecord\(admin\)/);
+    // Every pool call is logged on the pool.
+    expect(fn.match(/runAiCall\(/g)?.length).toBe(fn.match(/\{ record \}/g)?.length);
+  });
+  it('counts the pool cost of the day in the global cap (ai_cost_on_day, defined last after tempt_pool_meta)', () => {
+    const last = sql.lastIndexOf('create or replace function public.ai_cost_on_day');
+    expect(last).toBeGreaterThan(sql.indexOf('create table if not exists public.tempt_pool_meta'));
+    expect(sql.slice(last, last + 600)).toMatch(/system_cost_today from public\.tempt_pool_meta where id = 1 and system_cost_day = p_day/);
+    const add = sql.lastIndexOf('create or replace function public.tempt_pool_add_cost');
+    expect(sql.slice(add, add + 900)).toMatch(/system_cost_day = \(now\(\) at time zone 'Asia\/Ho_Chi_Minh'\)::date/);
   });
 });
 

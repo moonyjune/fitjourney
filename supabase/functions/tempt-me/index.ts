@@ -27,11 +27,14 @@
 // model.photo, default claude-haiku-5-5). After the libraries, a web search (3 searches per 8 dishes) finds a page showing the dish
 // and its og:image is used; "no photo" only after that.
 // Without the tables (schema.sql not run yet) the function answers the old way: one AI call with up to 2 searches and 1 fetch.
-// Cost: a refill ~$0.5 (logged under the feature `tempt` for the player who triggered it); a pop-up from the pool $0.
-// Calls per user per day: app_settings key `ai_quota.tempt` (default 6; a refill counts its calls).
+// Cost (0.26.7): every refill, even one a player's pop-up started, and all picture work are system work: logged on the pool
+// (tempt_pool_meta.system_cost_*, tempt_pool_add_cost), never on the player's ai_usage, quota or daily budget. They are held back
+// only by the claim guards (one refill at a time, at most every 12 h / 2 h; one picture job at a time) and by the global daily cap
+// AI_DAILY_BUDGET_USD when set (ai_cost_on_day counts the pool's cost of the day). A pop-up from the pool costs $0.
+// Calls per user per day: app_settings key `ai_quota.tempt` (default 6) only for the old way below (no pool tables).
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
-import { aiAllowance, jsonResponse, runAiCall, serveAi, type AiContext } from '../_shared/ai.ts';
+import { jsonResponse, runAiCall, serveAi, systemAllowance, type AiContext } from '../_shared/ai.ts';
 import { cleanDishPhotoRequest } from '../_shared/dishPhoto.ts';
 import { imageBlockOf, lookupDishPhotos, within } from '../_shared/dishPhotoLookup.ts';
 import type { TokenUsage } from '../_shared/usage.ts';
@@ -149,7 +152,7 @@ const CRON_SECRET = Deno.env.get('PUSH_CRON_SECRET') ?? '';
 
 type Record_ = (usage: TokenUsage | undefined, costUsd: number, model: string) => Promise<void>;
 
-/** Logs a call made for the pool itself (seed, pictures) on the pool's meta row, not on any player's usage. */
+/** Logs a call made for the pool itself (refills, seed, pictures) on the pool's meta row, not on any player's usage. */
 const systemRecord =
   (admin: SupabaseClient): Record_ =>
   async (usage, costUsd, model) => {
@@ -158,7 +161,7 @@ const systemRecord =
     console.log('[tempt-me] pool call', model, 'cost', costUsd.toFixed(4));
   };
 
-/** A context for work done for nobody in particular (the seed): service role everywhere. */
+/** A context for work done for nobody in particular (refills, the seed, pictures): service role everywhere, no player. */
 const systemContext = (admin: SupabaseClient): AiContext => ({ userId: '', userClient: admin, admin });
 
 function sameSecret(a: string, b: string): boolean {
@@ -215,7 +218,7 @@ async function finishRefill(admin: SupabaseClient, added: number): Promise<void>
 /** What each refill call of this invocation did (returned by the seed so a failure can be read without the function logs). */
 const refillNotes: Record<string, unknown>[] = [];
 
-async function refillChunk(ctx: AiContext, chunk: PoolChunk, known: Set<string>, knownNames: string[], date: string, record?: Record_): Promise<PoolRow[]> {
+async function refillChunk(ctx: AiContext, chunk: PoolChunk, known: Set<string>, knownNames: string[], date: string, record: Record_): Promise<PoolRow[]> {
   const note: Record<string, unknown> = { chunk: chunk.id };
   refillNotes.push(note);
   let items: TemptPoolItem[] = [];
@@ -266,8 +269,11 @@ async function refillChunk(ctx: AiContext, chunk: PoolChunk, known: Set<string>,
 }
 
 /** Starts a refill with `chunks` at once. `first` resolves with the rows of the first call that added any (or [] when none did), `all`
- *  with every row added, once every call is done (and the meta row is updated). */
-function startRefill(ctx: AiContext, rows: PoolRow[], date: string, chunks: PoolChunk[], record?: Record_): { first: Promise<PoolRow[]>; all: Promise<PoolRow[]> } {
+ *  with every row added, once every call is done (and the meta row is updated). Always system work (0.26.7): the calls run without a
+ *  player (systemContext) and are logged on the pool (systemRecord), whoever's pop-up started the refill. */
+function startRefill(admin: SupabaseClient, rows: PoolRow[], date: string, chunks: PoolChunk[]): { first: Promise<PoolRow[]>; all: Promise<PoolRow[]> } {
+  const ctx = systemContext(admin);
+  const record = systemRecord(admin);
   const known = new Set(rows.map((r) => poolNameKey(r.item.name)));
   const knownNames = rows.slice(0, KNOWN_NAMES_SENT).map((r) => r.item.name);
   let resolveFirst: (rows: PoolRow[]) => void = () => undefined;
@@ -446,6 +452,7 @@ async function repairPhotos(admin: SupabaseClient, rows: PoolRow[]): Promise<Poo
 /** Runs a picture backfill when no other one is running (tempt_pool_claim_photos), then frees the claim. */
 async function backfillClaimed(admin: SupabaseClient, rows: PoolRow[], max: number, budgetMs: number): Promise<number | null> {
   if (!rows.some((r) => needsPhoto(r.item))) return 0;
+  if (!(await systemAllowance(admin)).ok) return null;
   const { data, error } = await admin.rpc('tempt_pool_claim_photos', { p_running_before: new Date(Date.now() - PHOTOS_RUNNING_MS).toISOString() });
   if (error || data !== true) {
     if (error) console.warn('[tempt-me] picture work not claimed:', JSON.stringify(error));
@@ -475,8 +482,9 @@ async function fromPool(ctx: AiContext, req: TemptRequest): Promise<Response | n
   const at = new Date();
   const pick = pickPoolItem(rows, shown, now, at, req.avoid);
   const urgent = !pick || pick.repeat;
-  if (poolNeedsRefill(rows, shown, now, at) && (await aiAllowance(ctx, 'tempt')).ok && (await claimRefill(ctx.admin, refillGuards(at, urgent)))) {
-    const refill = startRefill(ctx, rows, req.date, POOL_CHUNKS);
+  // A refill is system work (0.26.7): not this player's quota or budget, only the claim guards and the global daily cap.
+  if (poolNeedsRefill(rows, shown, now, at) && (await systemAllowance(ctx.admin)).ok && (await claimRefill(ctx.admin, refillGuards(at, urgent)))) {
+    const refill = startRefill(ctx.admin, rows, req.date, POOL_CHUNKS);
     // The new items get their pictures right after (what does not fit in the time is done by later pop-ups).
     const afterwards = refill.all.then((added) => backfillClaimed(ctx.admin, added, added.length, REFILL_PHOTOS_BUDGET_MS));
     if (!urgent) {
@@ -509,13 +517,15 @@ async function seedStep(admin: SupabaseClient): Promise<Response> {
     const { data: m } = await admin.from(META).select('system_cost_usd').eq('id', 1).maybeSingle();
     return jsonResponse({ step, ...poolSeedStatus(rows, generated), ...extra, poolCostUsd: Number(m?.system_cost_usd ?? 0) });
   };
+  const allowed = await systemAllowance(admin);
+  if (!allowed.ok) return report(generated ? 'photos' : 'generate', { error: allowed.error });
   if (!generated) {
     const now = new Date();
     // Any earlier refill does not matter for the seed; one running does.
     const far = new Date(now.getTime() + 86_400_000).toISOString();
     if (!(await claimRefill(admin, { runningBefore: new Date(now.getTime() - 10 * 60_000).toISOString(), doneBefore: far, failedBefore: far }))) return report('generate', { busy: true });
     const today = new Date(now.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
-    const added = await startRefill(systemContext(admin), rows, today, seedChunks(rows.length), systemRecord(admin)).all;
+    const added = await startRefill(admin, rows, today, seedChunks(rows.length)).all;
     rows = [...added, ...rows];
     generated = seedGenerated(rows.length, added.length);
     if (generated) await admin.from(META).update({ seeded_at: new Date().toISOString() }).eq('id', 1);

@@ -7,7 +7,8 @@
 // The app builds the day's summary from its logs (deficit, level, damage, weigh-in, workouts, foods) and sends only that; it is
 // cleaned here (_shared/banter.ts) and the model writes 3-6 Vietnamese lines from it, inventing nothing. Nothing is stored here: the
 // app keeps the exchanges (user_data key `bossTalk`). Asked automatically once for yesterday when the Map opens, otherwise by a tap.
-// Calls per user per day: app_settings key `ai_quota.banter` (default 10).
+// Calls per user per day: app_settings key `ai_quota.banter` (default 10). Model: the `short` group (ai_settings model.short, default
+// claude-haiku-5-5; see MODEL_GROUPS in _shared/usage.ts).
 
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
 import { BANTER_SYSTEM, BANTER_TOOL, banterPrompt, cleanBanterAnswer, cleanBanterSummary } from '../_shared/banter.ts';

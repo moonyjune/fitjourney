@@ -8,6 +8,7 @@
 // opaque keys c1, c2... (no names, emails or ids). The model writes a summary and, when useful, a short message the coach
 // could send; who is "good", "watch" or "nudge" is decided on the device, not here. Only accounts that have a coach code
 // (a coach) may use it. Nothing is stored here.
+// Model: the `short` group (ai_settings model.short, default claude-haiku-5-5; see MODEL_GROUPS in _shared/usage.ts).
 
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
 import { cleanWeek, isDate } from '../_shared/week.ts';

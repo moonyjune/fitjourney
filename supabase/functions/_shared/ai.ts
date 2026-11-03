@@ -426,6 +426,15 @@ export async function aiAllowance(ctx: AiContext, feature: AiFeature): Promise<{
   return { ok: true };
 }
 
+/** Whether work done for nobody in particular (the temptation pool's refills and pictures, logged on the pool) may make a call now:
+ *  only the global daily cap (AI_DAILY_BUDGET_USD) applies, no player's quota or budget. ai_cost_on_day counts the pool's own cost
+ *  of the day too (schema.sql 0.26.7), so system spend respects the cap and adds to it. */
+export async function systemAllowance(admin: SupabaseClient): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
+  if (Deno.env.get('AI_DISABLED') === '1') return { ok: false, error: 'Tính năng AI đang tạm tắt.', status: 503 };
+  if (GLOBAL_BUDGET > 0 && budgetReached(await globalCostToday(admin), GLOBAL_BUDGET)) return { ok: false, error: GLOBAL_BUDGET_MESSAGE, status: 503 };
+  return { ok: true };
+}
+
 /** What one call gave: the tool input, the usage, and what the web showed (`findings` of a `webSearch` call, `web` of a
  *  `serverTools` call). */
 export type AiCallResult = { input: Record<string, unknown>; usage?: TokenUsage; findings: WebFindings | null; web?: WebOutcome; model: string; stopReason?: string };

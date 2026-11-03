@@ -344,12 +344,15 @@ describe('AI & cost screen', () => {
       expect(input(r, 'Tìm quán (cheat day)').props.value).toBe('claude-opus-5-5');
       expect(input(r, 'Kho món cám dỗ').props.placeholder).toBe('claude-haiku-5-5');
       expect(input(r, 'Tìm quán (cheat day)').props.placeholder).toBe('Model chung ở trên');
+      expect(input(r, 'Câu ngắn (boss, nhận xét)').props.placeholder).toBe('claude-haiku-5-5');
       await act(async () => input(r, 'Kiểm tra / tìm ảnh món').props.onChangeText('claude-sonnet-5-5'));
       await act(async () => input(r, 'Tìm quán (cheat day)').props.onChangeText(''));
+      await act(async () => input(r, 'Câu ngắn (boss, nhận xét)').props.onChangeText(' claude-opus-5-5 '));
       await act(async () => saveButton(r).props.onPress());
       expect(mockSave.mock.calls.slice(3)).toEqual([
         ['model.places', ''],
         ['model.photo', 'claude-sonnet-5-5'],
+        ['model.short', 'claude-opus-5-5'],
       ]);
       mockSave.mockClear();
       await act(async () => saveButton(r).props.onPress());
