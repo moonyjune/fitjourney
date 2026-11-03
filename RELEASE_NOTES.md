@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.27.1 | no | — |
 | 0.27.0 | yes | analyze-proof-photo, analyze-weekly-feelings, coach-digest, boss-banter, dish-photo, estimate-workout-kcal, parse-meal-text, generate-meal-recipe, read-nutrition-label, suggest-dinner, suggest-cheat-places, suggest-plan-update, weekly-report, suggest-swap, tempt-me, send-push |
 | 0.26.6 | no | — |
 | 0.26.5 | no | tempt-me, dish-photo |
@@ -80,6 +81,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.27.1
+- App icon (for now): the large shield of the splash image on the dark background, about 80% of the icon instead of ~55%, so the road and the gem stay readable at small sizes (iPhone Home Screen icon, PWA icons, favicon, Android foreground). The new logo is still being chosen (Design/logo-proposal).
 
 ## 0.27.0
 - Boss banter and the coach digest run on their own model, "Câu ngắn (boss, nhận xét)" on the AI & cost screen (ai_settings key `model.short`), Claude Haiku 5.5 by default.
