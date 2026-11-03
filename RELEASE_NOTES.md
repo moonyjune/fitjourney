@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.33.0 | no | — |
 | 0.32.0 | no | — |
 | 0.31.0 | no | — |
 | 0.30.0 | no | — |
@@ -87,6 +88,14 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.33.0
+Redesign, phase 5 (one Journal).
+- One Journal ("Nhật ký", /journal) with Ngày | Tuần | Tháng replaces History, the full-page battle log and the boss's weekly log; /history opens Tháng.
+- Ngày: the day chip picks the day; 4 numbers, the deficit with its rules, water, the timeline, a nutrient table (kcal, protein, purine, salt, sugar, junk food against the limits) and the editable meal table. A food mission on Camp opens Ngày scrolled to its row, lit, with a link to the cook book filtered.
+- Tuần: the week strip (tap a day to open it), the weekly boss card with the full 7-day log, deficit bars against the target, weight / water / mood, "Tổng kết tuần (AI)", the week's check-ins and mood chart, weekly averages, the bosses week by week.
+- Tháng: a calendar coloured by deficit with ⚠ for a missing meal (tap opens the day), a short summary with "Phân tích sâu ▸", weight → "Cân nặng", campfire milestones, coach notes, progress milestones, charts and the month's days.
+- ⓘ brings back the full deficit colour rules and why today's boss hit waits. The boss page keeps HP and today's hit and adds "Xem cả tuần". The coach's view of a client's diary uses the same three tabs, read-only. The weekly summary's weight change sign is fixed.
 
 ## 0.32.0
 Redesign, phase 4 (Cook book, Cheat day, food database).
