@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.31.0 | no | — |
 | 0.30.0 | no | — |
 | 0.29.0 | no | — |
 | 0.28.0 | no | — |
@@ -85,6 +86,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.31.0
+Redesign, phase 3 (Train, Journey, Weight) and a check of phases 0–2.
+- Train: a "today" card with the suggested group, minutes and kcal and one "Bắt đầu · giọng HLV" button; groups A / B / C as 44 pt chips plus "Bài kế hoạch" for the plan's own workouts (log with "Hoàn tác"; "Sửa bằng AI" goes to the plan).
+- Today's exercises are rows with figures (tap for how, tick to remove); "Thêm / bớt bài" opens every exercise in a sheet.
+- "Tập khác" is a sheet: run, swim, cycling, a watch photo (the AI logs it, with "Hoàn tác") and "✨ AI ước tính kcal", for the picked day; (+) › Tập khác opens it too. "Tuần này" lists this week's workouts. In a session "Xong set" is bigger (64 pt).
+- Journey: the boss blocking the road drawn big, its HP in kg and "còn X kg nữa để hạ"; three badges; every boss as a node by zone down to the goal; the latest banter line. Tap a boss for its sheet: skills, banter (AI) and the damage log. The Map / Chart switch is gone.
+- Weight is one page with one chart (2 weeks / 1 month / 3 months / all; actual and predicted, today, boss lines and where each fell), milestones, and weighings deleted with "Hoàn tác"; + opens the weight sheet; it opens from the "Cân nặng" chip on Journey. The weekly bosses list moved to the weekly boss page.
+- Check of phases 0–2: small buttons are at least 44 pt to tap ("Bỏ bữa", "Không ăn bữa này", mission cook-book links, meal and check-in chips, the day chip, − / + per food, water presets); "Tổng kết tuần" on Camp stays after Monday until closed (×) or the weekly report is opened; a plan meal page shows its full name; meal totals say "g đạm"; the full-screen photo no longer repeats the dish name; "Nhắc sau 30′" fits; "Ghi món này" names its meal for screen readers; English skip chip "Skip {meal}"; three unused old components removed.
 
 ## 0.30.0
 Redesign, phase 2 (logging a meal).
