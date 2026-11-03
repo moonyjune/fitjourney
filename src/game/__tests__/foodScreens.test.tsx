@@ -54,6 +54,7 @@ import { addByHand, editItem, readItem, saveMeal } from '../../testing/mealFlow'
 import FoodDbScreen from '../../../app/food-db';
 import { BUILT_IN_FOODS } from '../../food/foodData';
 import { useFoodDbStore } from '../../store/useFoodDbStore';
+import { useToastStore } from '../../store/useToastStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
@@ -112,7 +113,7 @@ afterEach(() => {
 describe('Food database screen', () => {
   it('lists the built-in foods and searches them without accents', async () => {
     const r = await mount(<FoodDbScreen />);
-    expect(allText(r)).toContain('114 MÓN');
+    expect(allText(r)).toContain('114 món');
     expect(allText(r)).toContain('Lòng trắng trứng');
     await type(r, 'Tìm món (vd: ức gà, phở)', 'dau phu');
     const text = allText(r);
@@ -173,7 +174,7 @@ describe('Food database screen', () => {
     await tap(r, 'Lưu');
     expect(useFoodDbStore.getState().custom).toHaveLength(1);
     expect(useFoodDbStore.getState().custom[0]).toMatchObject({ name: 'Bánh gạo', kcal: 360, proteinG: 6, purineMg: 10, unit: 'g', unitG: 1, group: 'starch' });
-    expect(allText(r)).toContain('115 MÓN');
+    expect(allText(r)).toContain('115 món');
     expect(allText(r)).toContain('Bánh gạo');
   });
 
@@ -194,24 +195,24 @@ describe('Food database screen', () => {
     expect(allText(r)).not.toContain('Đã sửa theo nhãn');
   });
 
-  it('deletes your own food only after a second tap', async () => {
+  it('deletes your own food at once, and the toast\'s undo brings it back', async () => {
     useFoodDbStore.getState().addCustom({ name: 'Bánh gạo', group: 'starch', unit: 'g', unitG: 1, kcal: 360, proteinG: 6, purineMg: 10, sugarG: 1, sodiumMg: 20, confidence: 'medium' });
     const r = await mount(<FoodDbScreen />);
     await tap(r, 'Bánh gạo');
     expect(allText(r)).toContain('Món của bạn');
     await tap(r, 'Xóa món');
-    expect(useFoodDbStore.getState().custom).toHaveLength(1);
-    expect(allText(r)).toContain('Bấm lần nữa để xóa');
-    await tap(r, 'Bấm lần nữa để xóa');
     expect(useFoodDbStore.getState().custom).toHaveLength(0);
-    expect(allText(r)).toContain('114 MÓN');
+    expect(allText(r)).toContain('114 món');
+    expect(useToastStore.getState().toast?.text).toBe('Đã xoá Bánh gạo');
+    act(() => useToastStore.getState().undo());
+    expect(useFoodDbStore.getState().custom).toMatchObject([{ name: 'Bánh gạo', kcal: 360 }]);
   });
 
   it('speaks English and goes back', async () => {
     useSettingsStore.setState({ language: 'en' });
     const r = await mount(<FoodDbScreen />);
     expect(allText(r)).toContain('Food database');
-    expect(allText(r)).toContain('114 FOODS');
+    expect(allText(r)).toContain('114 foods');
     expect(has(r, 'Seafood')).toBe(true);
     await tap(r, 'Back');
     expect(mockRouter.back).toHaveBeenCalled();

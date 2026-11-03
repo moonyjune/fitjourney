@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: () => true },
+  router: { push: (...a: unknown[]) => mockRouterPush(...a), replace: jest.fn(), back: jest.fn(), canGoBack: () => true },
   useLocalSearchParams: () => ({}),
   useFocusEffect: () => undefined,
 }));
@@ -24,6 +25,7 @@ jest.mock('../../sync/cloudSync', () => ({
   requestDishRecipe: jest.fn(),
 }));
 
+import CheatDayScreen from '../../../app/cheat-day';
 import CookbookScreen from '../../../app/cookbook';
 import type { DinnerBrief, DinnerIdea } from '../../ai/dinner';
 import { fakeCheatDinner, fakeCheatPlaces } from '../../ai/devPhotoAnalysis';
@@ -543,14 +545,21 @@ const type = async (r: ReactTestRenderer, label: string, text: string) => {
   });
 };
 
-describe('Cook book screen: cheat day', () => {
+describe('Cheat day screen', () => {
   let renderer: ReactTestRenderer | undefined;
-  const mount = async (finder = true) => {
+  const mount = async () => {
     await act(async () => {
-      renderer = create(<CookbookScreen />);
+      renderer = create(<CheatDayScreen />);
     });
-    if (finder) await press(renderer!, '✨ Gợi ý');
     return renderer!;
+  };
+  /** The location chip opens the "where" sheet; the address is typed there. */
+  const setArea = async (r: ReactTestRenderer, text: string) => {
+    const chip = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('Vị trí tìm quán:'))[0];
+    await act(async () => {
+      chip.props.onPress();
+    });
+    await type(r, 'Địa chỉ / khu vực của bạn', text);
   };
 
   beforeEach(() => {
@@ -572,12 +581,13 @@ describe('Cook book screen: cheat day', () => {
     renderer = undefined;
   });
 
-  it('ticking cheat day + eat out + an area: dishes without a budget, then places with reliability, all kept after a reload', async () => {
+  it('eat out + an area + AI dishes: dishes without a budget, then short place cards (details in ⓘ), all kept after a reload', async () => {
     const r = await mount();
-    await press(r, 'Cheat day');
+    expect(allText(r)).toContain('Không tính kcal · không quy tắc');
     expect(allText(r)).not.toMatch(/gout/i);
     await press(r, 'Ăn ngoài');
-    await type(r, 'Địa chỉ / khu vực của bạn', 'Quận 1, TP.HCM');
+    await setArea(r, 'Quận 1, TP.HCM');
+    await press(r, 'Dùng Quận 1, TP.HCM');
     await press(r, 'Gợi ý bằng AI');
     expect(mockDinner).toHaveBeenCalledTimes(1);
     expect(mockDinner.mock.calls[0][4]).toEqual({ where: 'out', context: expect.objectContaining({ time: expect.any(String), slot: expect.any(String) }) });
@@ -585,19 +595,24 @@ describe('Cook book screen: cheat day', () => {
     expect(text).toContain('AI gợi ý cheat day (3)');
     expect(text).toContain('Pizza phô mai (giả lập)');
     // Cheat day has no rules: no purine warning or badge, no limit check; kcal stays as information.
-    expect(text).not.toContain('⚠ Purine cao');
     expect(text).not.toContain('Purine');
     expect(text).not.toContain('✗ Vượt');
-    // Places were looked up at once for the eat-out dishes, near the area typed.
+    // Places were looked up at once for the eat-out dishes, near the area typed: one short card each.
     expect(mockPlaces).toHaveBeenCalledTimes(1);
     expect(mockPlaces.mock.calls[0][1]).toBe('Quận 1, TP.HCM');
     expect(mockPlaces.mock.calls[0][3]).toEqual({ typed: false, context: expect.objectContaining({ recent: [] }) });
-    expect(text).toContain('~0.4 km');
-    expect(text).toContain('Tìm trên Google Maps');
     expect(text).toContain('DỮ LIỆU MẪU (chế độ Dev)');
-    expect(text).toContain('Độ tin cậy: Cao');
-    expect(text).toContain('Nguồn mẫu 4.3★ / 120 đánh giá');
-    expect(text).toContain('Kiểm tra lần cuối');
+    expect(text).toContain('Tin cậy cao');
+    expect(text).toContain('★ 4.3 (120) · ~0.4 km');
+    expect(text).toContain('Chỉ đường');
+    // The details are in the ⓘ sheet.
+    expect(text).not.toContain('Độ tin cậy: Cao');
+    await press(r, 'Thông tin quán Quán mẫu A (DỮ LIỆU MẪU)');
+    const info = allText(r);
+    expect(info).toContain('Độ tin cậy: Cao');
+    expect(info).toContain('Nguồn mẫu 4.3★ / 120 đánh giá');
+    expect(info).toContain('Kiểm tra lần cuối');
+    expect(info).toContain('Tìm trên Google Maps');
     // Saved into the cook book's cheat day part, not shared.
     expect(useCookbookStore.getState().recipes.filter((x) => x.cheat)).toHaveLength(3);
     expect(mockShare).not.toHaveBeenCalled();
@@ -605,25 +620,24 @@ describe('Cook book screen: cheat day', () => {
     const again = await mount();
     const t2 = allText(again);
     expect(t2).toContain('Pizza phô mai (giả lập)');
-    expect(t2).toContain('Độ tin cậy: Cao');
+    expect(t2).toContain('Tin cậy cao');
     expect(useCookbookFinderStore.getState().location).toBe('Quận 1, TP.HCM');
   });
 
   it('web search not allowed: says so, and the dishes still come', async () => {
     mockPlaces.mockResolvedValue({ ok: false, message: 'Tìm địa điểm chưa khả dụng: Claude API lỗi (400): web search is not enabled', kind: 'unavailable' });
     const r = await mount();
-    await press(r, 'Cheat day');
     await press(r, 'Ăn ngoài');
-    await type(r, 'Địa chỉ / khu vực của bạn', 'Hà Đông, Hà Nội');
+    await setArea(r, 'Hà Đông, Hà Nội');
     await press(r, 'Gợi ý bằng AI');
     const text = allText(r);
     expect(text).toContain('Tìm địa điểm chưa khả dụng: Claude API lỗi (400): web search is not enabled');
     expect(text).toContain('Bún bò Huế (giả lập)');
   });
 
-  it('no area: asks for one before looking up places; cook at home looks up nothing', async () => {
+  it('no area: asks for one before looking up places; cook at home asks for dishes to cook only', async () => {
     const r = await mount();
-    await press(r, 'Cheat day');
+    expect(allText(r)).toContain('Chọn khu vực');
     await press(r, 'Ăn ngoài');
     await press(r, 'Gợi ý bằng AI');
     expect(mockPlaces).not.toHaveBeenCalled();
@@ -632,23 +646,28 @@ describe('Cook book screen: cheat day', () => {
     expect(mockPlaces).not.toHaveBeenCalled();
     await press(r, 'Tự nấu');
     expect(() => byLabel(r, 'Tìm quán cho các món AI gợi ý')).toThrow();
-    // The search box still works when cooking at home (it is about eating out).
+    expect(() => byLabel(r, 'Tìm quán')).toThrow();
+    // The main button asks for dishes to cook (no places); the wish box stays.
+    mockDinner.mockResolvedValueOnce({ ok: true, result: fakeCheatDinner('home') });
+    await press(r, 'Gợi ý món tự nấu');
+    expect(mockDinner).toHaveBeenCalledTimes(2);
+    expect((mockDinner.mock.calls[1][4] as { where: string }).where).toBe('home');
+    expect(mockPlaces).not.toHaveBeenCalled();
     expect(() => byLabel(r, 'Hôm nay bạn thèm gì, thấy thế nào?', 'onChangeText')).not.toThrow();
   });
 
-  it('the wish box: one "Tìm quán" sends the wish and the recent eating, and shows how it was read, dishes, then places', async () => {
+  it('the wish box: one "Tìm quán" sends the wish and the recent eating, and shows how it was read, the dishes, then places', async () => {
     const day = new Date();
     const key = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
     useNutritionStore.setState({
       logs: { [key]: { dateISO: key, mealsEaten: {}, extraCalories: 450, extraProteinG: 20, waterMl: 0, extraItems: [{ id: 'x', name: 'Phở bò', calories: 450, proteinG: 20, loggedAtISO: day.toISOString(), mealTime: null }] } },
     });
     const r = await mount();
-    await press(r, 'Cheat day');
     await press(r, 'Tìm quán');
     expect(allText(r)).toContain('Nhập địa chỉ / khu vực');
     expect(mockPlaces).not.toHaveBeenCalled();
     await type(r, 'Hôm nay bạn thèm gì, thấy thế nào?', '  buồn, muốn ăn gì <ấm> bụng ');
-    await type(r, 'Địa chỉ / khu vực của bạn', 'Quận 3, TP.HCM');
+    await setArea(r, 'Quận 3, TP.HCM');
     mockPlaces.mockResolvedValueOnce({
       ok: true,
       result: cleanPlacesAnswer(
@@ -674,18 +693,23 @@ describe('Cook book screen: cheat day', () => {
     expect(opts.context.recent).toEqual(['Phở bò']);
     const text = allText(r);
     const read = text.indexOf('AI hiểu là: Bạn đang buồn, cần món nóng hổi ấm bụng');
-    const dish = text.indexOf('Lẩu gà lá é · ~750 kcal');
+    const dish = text.indexOf('Lẩu gà lá é');
     const place = text.indexOf('Quán Lẩu Gà X');
     expect(read).toBeGreaterThanOrEqual(0);
     expect(text).toContain('Món hợp ý bạn (2)');
+    expect(text).toContain('~750 kcal');
     expect(dish).toBeGreaterThan(read);
     expect(place).toBeGreaterThan(dish);
     expect(text).toContain('Cháo sườn sụn');
     expect(text).toContain('Nóng hổi, thơm, ăn cùng bạn bè cho vui');
+    expect(text).toContain('Tin cậy thấp'); // one site only: capped
     // Nothing logged, nothing put in the cook book.
     expect(useNutritionStore.getState().logs[key].extraItems).toHaveLength(1);
     expect(useCookbookStore.getState().recipes.filter((x) => x.cheat)).toHaveLength(0);
-    // A suggested dish's own search: exactly that dish, the wish still goes with it.
+    // Choosing a dish narrows the places to it, and offers a search for exactly that dish (the wish still goes with it).
+    await press(r, 'Cháo sườn sụn');
+    expect(allText(r)).toContain('Quán Cháo sườn sụn · 0');
+    expect(allText(r)).not.toContain('Quán Lẩu Gà X');
     await press(r, '🔎 Tìm quán: Cháo sườn sụn');
     expect(mockPlaces.mock.calls[1][0]).toEqual(['Cháo sườn sụn']);
     expect(mockPlaces.mock.calls[1][3]).toMatchObject({ typed: true, wish: 'buồn, muốn ăn gì ấm bụng' });
@@ -694,7 +718,7 @@ describe('Cook book screen: cheat day', () => {
   it('an empty wish still gets dishes and places from one "Tìm quán" (dev sample)', async () => {
     useCookbookFinderStore.getState().setLocation('Quận 1', null);
     const r = await mount();
-    await press(r, 'Cheat day');
+    expect(allText(r)).toContain('Quận 1');
     await press(r, 'Tìm quán');
     expect(mockPlaces).toHaveBeenCalledTimes(1);
     expect(mockPlaces.mock.calls[0][3]).not.toHaveProperty('wish');
@@ -702,26 +726,36 @@ describe('Cook book screen: cheat day', () => {
     expect(text).toContain('AI hiểu là:');
     expect(text).toContain('Món hợp ý bạn (3)');
     expect(text).toContain('Món mẫu A (giả lập)');
-    expect(text).toContain('Quán gợi ý (3)');
+    expect(text).toContain('Quán gợi ý · 3');
     expect(text).toContain('DỮ LIỆU MẪU (chế độ Dev)');
   });
 
-  it('a cheat dish\'s "find places" searches for it (the wish box stays); the precise position goes with the address', async () => {
+  it('an AI cheat dish\'s "find places" searches for it (the wish box stays); the precise position goes with the address', async () => {
     useCookbookFinderStore.getState().setLocation('123 Lê Lợi, Quận 1, TP.HCM', { lat: 10.7731234, lon: 106.7004321 });
     const r = await mount();
-    await press(r, 'Cheat day');
     await press(r, 'Ăn ngoài');
     await press(r, 'Gợi ý bằng AI');
     mockPlaces.mockClear();
-    expect(allText(r)).toContain('Tọa độ: 10.77312, 106.70043');
     await press(r, '🔎 Tìm quán: Pizza phô mai (giả lập)');
     expect(useCookbookFinderStore.getState().query).toBe('');
     expect(mockPlaces.mock.calls[0]).toEqual([['Pizza phô mai (giả lập)'], '123 Lê Lợi, Quận 1, TP.HCM', { lat: 10.77312, lon: 106.70043 }, { typed: true, context: expect.anything() }]);
-    // Editing the address keeps the position; "clear" drops it.
-    await type(r, 'Địa chỉ / khu vực của bạn', '125 Lê Lợi, Quận 1, TP.HCM');
+    // The "where" sheet: coordinates shown; editing the address keeps the position; "clear" drops it.
+    await setArea(r, '125 Lê Lợi, Quận 1, TP.HCM');
+    expect(allText(r)).toContain('Tọa độ: 10.77312, 106.70043');
     expect(useCookbookFinderStore.getState().coords).toEqual({ lat: 10.77312, lon: 106.70043 });
     await press(r, 'Bỏ tọa độ');
     expect(useCookbookFinderStore.getState().coords).toBeNull();
+  });
+
+  it('an AI cheat dish opens its recipe page', async () => {
+    useCookbookFinderStore.getState().setLocation('Quận 1', null);
+    const r = await mount();
+    await press(r, 'Tự nấu');
+    mockDinner.mockResolvedValueOnce({ ok: true, result: fakeCheatDinner('home') });
+    await press(r, 'Gợi ý món tự nấu');
+    const name = useCookbookFinderStore.getState().cheatAi[0].name;
+    await press(r, name);
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/recipe/[id]', params: { id: expect.any(String) } });
   });
 
   it('a failed search shows its real reason, never nothing', async () => {
@@ -729,19 +763,23 @@ describe('Cook book screen: cheat day', () => {
     useCookbookFinderStore.getState().setLocation('Quận 1', null);
     useCookbookFinderStore.getState().setQuery('ốc');
     const r = await mount();
-    await press(r, 'Cheat day');
     await press(r, 'Tìm quán');
     expect(allText(r)).toContain('Tìm quán lỗi:');
     expect(allText(r)).toContain('Tìm kiếm quá lâu (hơn 135 giây), hãy thử lại.');
   });
 
-  it('the cook book shows cheat dishes under their own tab only', async () => {
+  it('the cook book shows cheat dishes under their own tab, which leads to the Cheat day screen', async () => {
     useCookbookStore.getState().saveMany([recipeFromIdea(idea('Gà rán giòn', { cheat: true }))]);
-    const r = await mount(false);
+    await act(async () => {
+      renderer = create(<CookbookScreen />);
+    });
+    const r = renderer!;
     expect(allText(r)).toContain('Gà luộc');
     expect(allText(r)).not.toContain('Gà rán giòn');
-    await press(r, '🎉 Cheat day (1)');
+    await press(r, '🎉 Cheat day · 1');
     expect(allText(r)).toContain('Gà rán giòn');
     expect(allText(r)).not.toContain('Gà luộc');
+    await press(r, '🎉 Cheat day: thèm gì, tìm quán');
+    expect(mockRouterPush).toHaveBeenCalledWith('/cheat-day');
   });
 });

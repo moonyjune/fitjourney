@@ -13,10 +13,14 @@ interface CheatPlacesState extends CheatPlacesData {
   /** A new search, or a search shown again with more places ("suggest more"): replaces the entry with the same id. */
   putSearch: (search: PlacesSearch) => void;
   removeSearch: (id: string) => void;
+  /** "Hoàn tác" of removeSearch: the search back, its tombstone dropped. */
+  restoreSearch: (search: PlacesSearch) => void;
   clearHistory: () => void;
   /** Stars a place, or un-stars it when it is saved already. */
   toggleSaved: (place: SavedPlace) => void;
   removeSaved: (key: string) => void;
+  /** "Hoàn tác" of removeSaved: the place back as it was, its tombstone dropped. */
+  restoreSaved: (place: SavedPlace) => void;
   /** Real dish photos found later (dish-photo) kept with a search, so they show again without asking. */
   setDishPhotos: (id: string, photos: Record<string, PlacePhoto>) => void;
 }
@@ -43,6 +47,10 @@ export const useCheatPlacesStore = create<CheatPlacesState>()(
           const s = get();
           commit({ ...dataOf(s), history: s.history.filter((x) => x.id !== id), removed: [{ id: `s:${id}`, atISO: now() }, ...s.removed] });
         },
+        restoreSearch: (search) => {
+          const s = get();
+          commit({ ...dataOf(s), history: [search, ...s.history.filter((x) => x.id !== search.id)], removed: s.removed.filter((r) => r.id !== `s:${search.id}`) });
+        },
         clearHistory: () => {
           const s = get();
           commit({ ...dataOf(s), history: [], clearedAtISO: now() });
@@ -58,6 +66,10 @@ export const useCheatPlacesStore = create<CheatPlacesState>()(
         removeSaved: (key) => {
           const s = get();
           commit({ ...dataOf(s), saved: s.saved.filter((p) => p.key !== key), removed: [{ id: `p:${key}`, atISO: now() }, ...s.removed] });
+        },
+        restoreSaved: (place) => {
+          const s = get();
+          commit({ ...dataOf(s), saved: [place, ...s.saved.filter((p) => p.key !== place.key)], removed: s.removed.filter((r) => r.id !== `p:${place.key}`) });
         },
         setDishPhotos: (id, photos) => {
           const s = get();

@@ -24,9 +24,10 @@ jest.mock('../../sync/cloudSync', () => ({
   requestDishRecipe: jest.fn(),
 }));
 
-import CookbookScreen from '../../../app/cookbook';
+import CheatDayScreen from '../../../app/cheat-day';
 import { fakeCheatPlaces } from '../../ai/devPhotoAnalysis';
 import { recheckPlaces } from '../../cookbook/cheat';
+import { useToastStore } from '../../store/useToastStore';
 import {
   cleanCheatPlacesData,
   EMPTY_CHEAT_PLACES,
@@ -399,14 +400,12 @@ const press = async (r: ReactTestRenderer, label: string) => {
 };
 const count = (text: string, part: string) => text.split(part).length - 1;
 
-describe('Cook book screen: kept places and "Gợi ý tiếp"', () => {
+describe('Cheat day screen: kept places and "Gợi ý tiếp"', () => {
   let renderer: ReactTestRenderer | undefined;
   const mount = async () => {
     await act(async () => {
-      renderer = create(<CookbookScreen />);
+      renderer = create(<CheatDayScreen />);
     });
-    await press(renderer!, '✨ Gợi ý');
-    await press(renderer!, 'Cheat day');
     return renderer!;
   };
 
@@ -451,39 +450,51 @@ describe('Cook book screen: kept places and "Gợi ý tiếp"', () => {
   it('"Gợi ý tiếp" asks again with the places shown excluded and adds the new ones below, none twice', async () => {
     const r = await mount();
     await press(r, 'Tìm quán');
-    await press(r, 'Gợi ý tiếp');
+    await press(r, 'Gợi ý tiếp · quán khác');
     expect(mockPlaces).toHaveBeenCalledTimes(2);
     const [dishes, where, , opts] = mockPlaces.mock.calls[1] as [string[], string, unknown, { exclude: string[]; excludeDishes: string[] }];
     expect([dishes, where]).toEqual([[], 'Quận 4, TP.HCM']);
     expect(opts.exclude).toEqual(['Quán mẫu A (DỮ LIỆU MẪU)', 'Quán mẫu B (DỮ LIỆU MẪU)', 'Quán mẫu C (DỮ LIỆU MẪU)']);
     expect(opts.excludeDishes).toEqual(['Món mẫu A (giả lập)', 'Món mẫu B (giả lập)', 'Món mẫu C (giả lập)']);
     let text = allText(r);
-    expect(text).toContain('Quán gợi ý (6)');
+    expect(text).toContain('Quán gợi ý · 6');
     expect(text.indexOf('Quán mẫu D (DỮ LIỆU MẪU)')).toBeGreaterThan(text.indexOf('Quán mẫu C (DỮ LIỆU MẪU)'));
-    expect(count(text, '📍 Quán mẫu A (DỮ LIỆU MẪU)')).toBe(1);
+    expect(count(text, 'Quán mẫu A (DỮ LIỆU MẪU)')).toBe(1);
     // The server answering a place already shown anyway: it is not shown twice; nothing new says so.
     mockPlaces.mockResolvedValueOnce({ ok: true, result: fakeCheatPlaces([], 'Quận 4', NOW) });
-    await press(r, 'Gợi ý tiếp');
+    await press(r, 'Gợi ý tiếp · quán khác');
     text = allText(r);
-    expect(count(text, '📍 Quán mẫu A (DỮ LIỆU MẪU)')).toBe(1);
+    expect(count(text, 'Quán mẫu A (DỮ LIỆU MẪU)')).toBe(1);
     expect(text).toContain('Không tìm thêm được quán mới nào');
     // The history entry grew with the second page (same search).
     expect(useCheatPlacesStore.getState().history).toHaveLength(1);
     expect(useCheatPlacesStore.getState().history[0].places).toHaveLength(6);
   });
 
-  it('⭐ saves a place (photo included) into "Quán đã lưu", ✕ removes it; the history can be opened and cleared', async () => {
+  it('⭐ saves a place (photo included) into "Quán đã lưu", ✕ removes it with undo; the history can be opened again, removed with undo and cleared', async () => {
     const r = await mount();
     await press(r, 'Tìm quán');
     await press(r, 'Lưu quán Quán mẫu B (DỮ LIỆU MẪU)');
     expect(useCheatPlacesStore.getState().saved.map((p) => p.name)).toEqual(['Quán mẫu B (DỮ LIỆU MẪU)']);
     expect(allText(r)).toContain('⭐ Đã lưu');
-    await press(r, '⭐ Quán đã lưu (1)');
+    expect(allText(r)).toContain('⭐ Quán đã lưu (1)');
     expect(allText(r)).toContain('Địa chỉ mẫu, Quận 4, TP.HCM');
     await press(r, 'Xóa Quán mẫu B (DỮ LIỆU MẪU)');
     expect(useCheatPlacesStore.getState().saved).toEqual([]);
-    await press(r, '🕘 Lịch sử tìm quán (1)');
-    expect(allText(r)).toContain('AI tự chọn · 3 quán');
+    act(() => useToastStore.getState().undo());
+    expect(useCheatPlacesStore.getState().saved.map((p) => p.name)).toEqual(['Quán mẫu B (DỮ LIỆU MẪU)']);
+    // History: one row (the wish, or "AI tự chọn"), "Xem lại" opens it in a sheet.
+    expect(allText(r)).toContain('🕘 Lịch sử tìm quán (1)');
+    expect(allText(r)).toContain('AI tự chọn');
+    expect(allText(r)).toContain('Hôm nay · Món mẫu A (giả lập), Món mẫu B (giả lập), Món mẫu C (giả lập) · 3 quán');
+    await press(r, 'Xem lại lần tìm: AI tự chọn');
+    expect(allText(r)).toContain('Gần: Quận 4, TP.HCM');
+    // ✕ removes a search at once; "Hoàn tác" brings it back.
+    const id = useCheatPlacesStore.getState().history[0].id;
+    await press(r, 'Xóa AI tự chọn · Hôm nay');
+    expect(useCheatPlacesStore.getState().history).toEqual([]);
+    act(() => useToastStore.getState().undo());
+    expect(useCheatPlacesStore.getState().history.map((h) => h.id)).toEqual([id]);
     await press(r, 'Xóa lịch sử');
     await press(r, 'Bấm lần nữa để xóa hết');
     expect(useCheatPlacesStore.getState().history).toEqual([]);
