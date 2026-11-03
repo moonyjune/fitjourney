@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+ <defs><radialGradient id="B_bgGlow" cx="50%" cy="48%" r="68%"><stop offset="0" stop-color="#2C2140"/><stop offset=".55" stop-color="#1B1530"/><stop offset="1" stop-color="#110D22"/></radialGradient>
+   <clipPath id="B_sh"><path d="M48 5 L85 17.5 V50 C85 72.5 68.5 89 48 95 C27.5 89 11 72.5 11 50 V17.5 Z"/></clipPath></defs>
+ <rect width="1024" height="1024" fill="url(#B_bgGlow)"/>
+</svg>

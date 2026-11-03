@@ -1,123 +1,113 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Logo icon app</title>
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
-<style>
-:root { --bg:#110D22; --r1:#241C44; --r2:#2A2150; --gold:#FFC83D; --goldL:#FFE08A; --hp:#FF5470; --mana:#4CC9F0; --xp:#8BFF6B; --t:#F4F1FF; --t2:#B3AACF; }
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Logo icon app</title><link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet"><style>
+:root { --bg:#110D22; --r1:#241C44; --r2:#2A2150; --gold:#FFC83D; --goldL:#FFE08A; --t:#F4F1FF; --t2:#B3AACF; --line:#3A3270; }
 * { box-sizing:border-box; }
-body { margin:0; background:#0B0818; color:var(--t); font:15px/1.45 "Chakra Petch",-apple-system,sans-serif; padding:40px 48px 60px; width:2000px; }
-h1 { margin:0 0 4px; font-size:34px; } .sub { color:var(--t2); margin-bottom:28px; }
-.grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:28px; }
-.card { background:var(--r1); border:1px solid #3A3270; border-radius:24px; padding:26px; display:grid; grid-template-columns:300px 1fr; gap:26px; }
-.card.cur { grid-column:1 / -1; grid-template-columns:200px 1fr; opacity:.9; }
-.ic { border-radius:22.4%; overflow:hidden; display:block; box-shadow:0 10px 30px rgba(0,0,0,.45); }
-.name { font-size:24px; font-weight:700; } .name b { color:var(--gold); margin-right:8px; }
-.why { color:var(--t2); margin:8px 0 14px; }
-.sizes { display:flex; align-items:flex-end; gap:18px; margin-bottom:16px; }
-.sizes div { text-align:center; color:var(--t2); font-size:12px; }
-.sizes .ic { margin:0 auto 6px; box-shadow:0 4px 10px rgba(0,0,0,.4); }
-.homes { display:flex; gap:14px; }
-.home { width:250px; border-radius:22px; padding:16px 14px; display:grid; grid-template-columns:repeat(4, 1fr); gap:12px 6px; }
-.home.dark { background:linear-gradient(160deg,#1d2748,#0e1222); } .home.light { background:linear-gradient(160deg,#f6d9c6,#b9c9ef); }
-.home .app { text-align:center; font-size:9.5px; font-family:-apple-system,sans-serif; } .home.dark .app { color:#fff; } .home.light .app { color:#222; }
-.home .ph { width:46px; height:46px; border-radius:22.4%; margin:0 auto 3px; }
-.home .app .ic { margin:0 auto 3px; }
-.pros { font-size:13.5px; color:var(--t); margin:0; padding-left:18px; } .pros li { margin:2px 0; }
-.pros .c { color:var(--t2); }
+body { margin:0; background:#0B0818; color:var(--t); font:15px/1.45 "Chakra Petch",-apple-system,sans-serif; padding:36px 44px 56px; }
+a { color:var(--goldL); }
+h1 { margin:0 0 4px; font-size:34px; } h1 b { color:var(--gold); margin-right:10px; }
+h2 { margin:0 0 14px; font-size:19px; letter-spacing:.3px; } h2 small { color:var(--t2); font-weight:500; font-size:13px; margin-left:8px; }
+.sub { color:var(--t2); margin-bottom:24px; }
+.sec { background:var(--r1); border:1px solid var(--line); border-radius:22px; padding:24px 26px; margin-bottom:22px; }
+.row { display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap; }
+.ios { border-radius:22.37%; display:block; }
+.lbl { color:var(--t2); font-size:12px; text-align:center; margin-top:6px; }
+.sizes { display:flex; align-items:flex-end; gap:22px; flex-wrap:wrap; }
+.cell { display:flex; flex-direction:column; align-items:center; }
+.zoom canvas { image-rendering:pixelated; border-radius:4px; }
+ul { margin:6px 0 0; padding-left:18px; } li { margin:3px 0; }
+.k { color:var(--t2); font-size:13px; text-transform:uppercase; letter-spacing:1.2px; margin:14px 0 4px; }
+.sw { display:flex; gap:10px; flex-wrap:wrap; margin-top:6px; } .sw div { font-size:12px; color:var(--t2); text-align:center; } .sw i { display:block; width:58px; height:38px; border-radius:8px; border:1px solid #ffffff22; margin-bottom:4px; }
+.home { width:390px; height:500px; border-radius:40px; padding:54px 22px 0; position:relative; overflow:hidden; font-family:-apple-system,"SF Pro Text",sans-serif; }
+.home.dark { background:linear-gradient(165deg,#24305a,#0d1124 70%); } .home.light { background:linear-gradient(165deg,#f8dcc8,#bccbf0); }
+.home .grid { display:grid; grid-template-columns:repeat(4,60px); justify-content:space-between; row-gap:22px; }
+.home .app { width:60px; text-align:center; font-size:11px; } .home.dark .app { color:#fff; } .home.light .app { color:#1b1b1f; }
+.home .app span { display:block; margin-top:5px; white-space:nowrap; }
+.home .ph { width:60px; height:60px; border-radius:22.37%; }
+.home .dock { position:absolute; left:14px; right:14px; bottom:14px; height:92px; border-radius:32px; display:grid; grid-template-columns:repeat(4,60px); justify-content:space-around; align-items:center; }
+.home.dark .dock { background:#ffffff26; } .home.light .dock { background:#ffffff66; }
+.home .time { position:absolute; top:16px; left:44px; font-weight:600; font-size:16px; } .home.dark .time { color:#fff; } .home.light .time { color:#111; }
+.droid { position:relative; overflow:hidden; }
+.droid img { position:absolute; }
+.phone { width:390px; height:844px; border-radius:52px; background:var(--bg); border:10px solid #2c2840; position:relative; overflow:hidden; display:flex; flex-direction:column; align-items:center; justify-content:space-between; padding:56px 0; }
+.intro-c { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:28px; }
+.shieldWrap { width:251px; height:251px; position:relative; display:flex; align-items:center; justify-content:center; }
+.glow { position:absolute; width:317px; height:317px; left:-33px; top:-33px; background:radial-gradient(circle, rgba(255,200,61,.34) 0%, rgba(255,200,61,.10) 55%, rgba(255,200,61,0) 100%); border-radius:50%; }
+.vt { font-weight:500; font-size:11px; color:var(--t2); letter-spacing:1.2px; text-align:center; }
+.nm { font-weight:700; font-size:34px; letter-spacing:4px; text-align:center; }
+.tg { font-weight:500; font-size:13px; color:var(--t2); line-height:19px; text-align:center; padding:0 32px; margin-top:8px; }
+.foot { display:flex; flex-direction:column; align-items:center; gap:10px; }
+.eb { font-weight:700; font-size:11px; color:var(--t2); letter-spacing:1.6px; }
+.track { width:220px; height:8px; border-radius:4px; background:var(--r1); overflow:hidden; } .track i { display:block; width:68%; height:8px; border-radius:4px; background:var(--gold); }
+.auth { width:390px; background:var(--bg); border-radius:28px; border:10px solid #2c2840; padding:36px 24px 30px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.auth .tt { font-weight:700; font-size:26px; } .auth .st { font-weight:500; font-size:14px; color:var(--t2); }
+.auth .seg { margin-top:16px; width:100%; height:44px; border-radius:12px; background:var(--r1); display:grid; grid-template-columns:1fr 1fr; padding:4px; font-weight:600; font-size:14px; } .auth .seg div { display:flex; align-items:center; justify-content:center; border-radius:9px; color:var(--t2); } .auth .seg .on { background:var(--r2); color:var(--t); }
+.lock { display:flex; align-items:center; gap:18px; padding:26px 30px; border-radius:18px; }
+.lock .w { font-weight:700; letter-spacing:.5px; } .lock .w em { font-style:normal; color:var(--gold); }
+.lock.light { background:#F4F1FF; } .lock.light .w { color:#1C1538; } .lock.light .w em { color:#C8901A; }
+.lock.dark { background:var(--bg); }
+.files { font-family:ui-monospace,Menlo,monospace; font-size:13px; color:var(--t2); }
+
+body { width:2000px; }
+.grid2 { display:grid; grid-template-columns:repeat(2,1fr); gap:24px; }
+.card { background:var(--r1); border:1px solid var(--line); border-radius:24px; padding:24px; display:grid; grid-template-columns:260px 1fr; gap:24px; color:inherit; text-decoration:none; }
+.name { font-size:24px; font-weight:700; } .name b { color:var(--gold); margin-right:8px; } .go { font-size:13px; color:var(--goldL); font-weight:500; margin-left:10px; }
+.why { color:var(--t2); margin:8px 0 12px; } .why b { color:var(--t); font-weight:600; }
+.pros { font-size:13.5px; margin:0; padding-left:18px; list-style:none; } .pros .c { color:var(--t2); }
+.cmp { display:flex; gap:22px; align-items:flex-end; }
 </style></head><body>
-<svg width="0" height="0" style="position:absolute">
- <defs>
-  <radialGradient id="bgGlow" cx="50%" cy="46%" r="62%"><stop offset="0" stop-color="#3A2A62"/><stop offset=".6" stop-color="#1C1538"/><stop offset="1" stop-color="#110D22"/></radialGradient>
-  <linearGradient id="flameOut" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FF7A2F"/><stop offset=".55" stop-color="#FFB13B"/><stop offset="1" stop-color="#FFC83D"/></linearGradient>
-  <linearGradient id="flameIn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFF6D6"/></linearGradient>
-  <radialGradient id="fireGlow" cx="50%" cy="62%" r="45%"><stop offset="0" stop-color="#FF9A3C" stop-opacity=".45"/><stop offset="1" stop-color="#FF9A3C" stop-opacity="0"/></radialGradient>
-  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2150"/><stop offset="1" stop-color="#110D22"/></linearGradient>
-  <linearGradient id="mtn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A3C86"/><stop offset="1" stop-color="#241C44"/></linearGradient>
-  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFB627"/></linearGradient>
-
-  <!-- A: Lửa trại -->
-  <symbol id="A" viewBox="0 0 1024 1024">
-   <rect width="1024" height="1024" fill="url(#bgGlow)"/>
-   <circle cx="512" cy="600" r="380" fill="url(#fireGlow)"/>
-   <g fill="#8A5634" stroke="#5E3720" stroke-width="10">
-    <rect x="292" y="706" width="440" height="78" rx="39" transform="rotate(-13 512 745)"/>
-    <rect x="292" y="706" width="440" height="78" rx="39" transform="rotate(13 512 745)"/>
-   </g>
-   <path d="M512 196 C600 312 712 392 690 566 C674 690 598 744 512 744 C426 744 350 690 334 566 C318 442 404 392 438 312 C452 386 468 420 500 444 C488 352 478 278 512 196 Z" fill="url(#flameOut)"/>
-   <path d="M512 404 C566 470 620 524 610 608 C602 680 560 716 512 716 C464 716 422 680 414 608 C408 554 452 516 466 470 C478 514 494 536 512 546 C504 494 498 452 512 404 Z" fill="url(#flameIn)"/>
-   <circle cx="648" cy="300" r="13" fill="#FFC83D"/><circle cx="372" cy="262" r="9" fill="#FFE08A"/><circle cx="700" cy="420" r="8" fill="#FFB13B"/>
-  </symbol>
-
-  <!-- B: Khiên làm gọn -->
-  <symbol id="B" viewBox="0 0 1024 1024">
-   <rect width="1024" height="1024" fill="url(#bgGlow)"/>
-   <clipPath id="shB"><path d="M512 120 L846 226 V520 C846 722 700 862 512 922 C324 862 178 722 178 520 V226 Z"/></clipPath>
-   <path d="M512 120 L846 226 V520 C846 722 700 862 512 922 C324 862 178 722 178 520 V226 Z" fill="#2A2150"/>
-   <g clip-path="url(#shB)">
-    <path d="M380 940 C392 800 470 730 520 650 C556 592 556 548 514 506 L548 482 C612 534 626 600 594 666 C560 736 546 820 620 940 Z" fill="url(#gold)"/>
-    <path d="M462 860 L470 812 M502 742 L522 708 M548 640 L556 610" stroke="#2A2150" stroke-width="18" stroke-linecap="round"/>
-   </g>
-   <path d="M512 120 L846 226 V520 C846 722 700 862 512 922 C324 862 178 722 178 520 V226 Z" fill="none" stroke="#FFC83D" stroke-width="44" stroke-linejoin="round"/>
-   <path d="M512 214 L600 324 L512 452 L424 324 Z" fill="#FFE08A"/>
-   <path d="M512 214 L600 324 L512 356 L424 324 Z" fill="#FFF6D6"/>
-  </symbol>
-
-  <!-- C: Đỉnh núi -->
-  <symbol id="C" viewBox="0 0 1024 1024">
-   <rect width="1024" height="1024" fill="url(#sky)"/>
-   <circle cx="790" cy="230" r="60" fill="#FFE08A" opacity=".9"/><circle cx="815" cy="214" r="54" fill="#2A2150"/>
-   <circle cx="220" cy="210" r="7" fill="#F4F1FF"/><circle cx="330" cy="150" r="5" fill="#F4F1FF"/><circle cx="640" cy="130" r="6" fill="#F4F1FF"/>
-   <path d="M-40 900 L330 470 L560 900 Z" fill="#241C44"/>
-   <path d="M120 900 L512 300 L904 900 Z" fill="url(#mtn)"/>
-   <path d="M512 300 L586 414 L548 400 L512 440 L476 400 L438 414 Z" fill="#E9E4FF"/>
-   <rect y="880" width="1024" height="144" fill="#110D22"/>
-   <path d="M330 1000 C420 900 640 860 600 760 C566 676 440 680 470 590 C494 516 560 500 524 430" fill="none" stroke="#FFC83D" stroke-width="30" stroke-linecap="round" stroke-dasharray="44 34"/>
-   <rect x="506" y="190" width="14" height="124" rx="7" fill="#FFC83D"/>
-   <path d="M520 196 L640 226 L520 262 Z" fill="#FF5470"/>
-  </symbol>
-
-  <!-- D: Huy hiệu cấp -->
-  <symbol id="D" viewBox="0 0 1024 1024">
-   <rect width="1024" height="1024" fill="url(#bgGlow)"/>
-   <path d="M512 130 L842 320 V704 L512 894 L182 704 V320 Z" fill="#2A2150" stroke="#FFC83D" stroke-width="44" stroke-linejoin="round"/>
-   <path d="M512 210 L770 358 V666 L512 814 L254 666 V358 Z" fill="none" stroke="#4A3C86" stroke-width="10"/>
-   <path d="M410 700 V362 H626" fill="none" stroke="#FFD25C" stroke-width="86" stroke-linecap="round" stroke-linejoin="round"/>
-   <path d="M410 520 H560" fill="none" stroke="#FFD25C" stroke-width="86" stroke-linecap="round"/>
-   <path d="M610 640 L700 640 L700 550" fill="none" stroke="#8BFF6B" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
-   <path d="M700 640 L610 550" stroke="#8BFF6B" stroke-width="40" stroke-linecap="round"/>
-   <g fill="#FFC83D"><circle cx="452" cy="776" r="16"/><circle cx="512" cy="790" r="16"/><circle cx="572" cy="776" r="16"/></g>
-  </symbol>
- </defs>
-</svg>
-
-<h1>Logo icon ứng dụng · 4 phương án</h1>
-<div class="sub">Vẽ vector (không dùng AI tạo ảnh), cùng bảng màu của app (#110D22 · tím #2A2150 · vàng #FFC83D). Mỗi phương án: icon lớn, các cỡ thật (180 iPhone · 120 · 60 · 29 Cài đặt), và trên Màn hình chính tối / sáng.</div>
-
-<div class="grid">
- <div class="card cur">
-  <div><img class="ic" src="../../assets/icon.png" width="200" height="200"></div>
-  <div><div class="name"><b>Hiện tại</b>Khiên + con đường + viên ngọc</div>
-  <div class="why">Ý tốt (hành trình tới mục tiêu) nhưng ở cỡ nhỏ: khiên chỉ chiếm ~55% icon, viền vàng mảnh, con đường và nét đứt bị mất, viên ngọc trông như dấu chấm của chữ "i".</div>
-  <div class="sizes"><div><img class="ic" src="../../assets/icon.png" width="60" height="60">60</div><div><img class="ic" src="../../assets/icon.png" width="29" height="29">29</div></div></div>
- </div>
-</div>
-<div class="grid" id="concepts" style="margin-top:28px"></div>
-
+<h1>Logo icon ứng dụng · 4 phương án hoàn chỉnh</h1>
+<div class="sub">Vẽ vector tay, bảng màu của app (#110D22 · tím #2A2150 · vàng #FFC83D). Bấm vào từng phương án để xem bộ đầy đủ: cỡ thật, Màn hình chính, Android adaptive + đơn sắc, màn khởi động, đăng nhập, logo chữ. Mọi cỡ nhỏ ở đây đều vẽ từ SVG đúng số điểm ảnh.</div>
+<div class="sec"><h2>So sánh cỡ nhỏ <small>4 phương án và icon hiện tại (assets/icon.png, 0.27.1)</small></h2>
+ <div class="row" style="gap:60px;align-items:flex-end">
+  <div><div class="k" style="margin-top:0">60 px (Màn hình chính @1x)</div><div class="cmp"><div class="cell"><canvas data-src="svg/A-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">A</div></div><div class="cell"><canvas data-src="svg/B-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">B</div></div><div class="cell"><canvas data-src="svg/C-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">C</div></div><div class="cell"><canvas data-src="svg/D-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">D</div></div>
+    <div class="cell" style="margin-left:18px"><canvas data-src="../../assets/icon.png" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">0.27.1</div></div></div></div>
+  <div><div class="k" style="margin-top:0">29 px (Cài đặt)</div><div class="cmp"><div class="cell"><canvas data-src="svg/A-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">A</div></div><div class="cell"><canvas data-src="svg/B-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">B</div></div><div class="cell"><canvas data-src="svg/C-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">C</div></div><div class="cell"><canvas data-src="svg/D-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">D</div></div>
+    <div class="cell" style="margin-left:18px"><canvas data-src="../../assets/icon.png" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">0.27.1</div></div></div></div>
+  <div><div class="k" style="margin-top:0">29 px phóng to 4×</div><div class="cmp zoom"><div class="cell"><canvas data-src="svg/A-icon.svg" data-size="29" data-zoom="4" data-round="1"></canvas><div class="lbl">A</div></div><div class="cell"><canvas data-src="svg/B-icon.svg" data-size="29" data-zoom="4" data-round="1"></canvas><div class="lbl">B</div></div><div class="cell"><canvas data-src="svg/C-icon.svg" data-size="29" data-zoom="4" data-round="1"></canvas><div class="lbl">C</div></div><div class="cell"><canvas data-src="svg/D-icon.svg" data-size="29" data-zoom="4" data-round="1"></canvas><div class="lbl">D</div></div>
+    <div class="cell" style="margin-left:18px"><canvas data-src="../../assets/icon.png" data-size="29" data-zoom="4" data-round="1"></canvas><div class="lbl">0.27.1</div></div></div></div>
+ </div></div>
+<div class="grid2"><a class="card" href="options/A.html">
+     <div><img class="ios" src="svg/A-icon.svg" width="260" height="260"></div>
+     <div><div class="name"><b>A</b>Lửa trại <span class="go">mở bộ logo →</span></div>
+      <div class="why">Ngọn lửa trại = đốt calo mỗi ngày, chuỗi 🔥 và tab "Trại". Lõi sáng của ngọn lửa là một <b>con đường uốn lượn thu nhỏ dần lên đỉnh</b>: hành trình giảm cân "cháy" đều từng ngày. Ba tàn lửa bay chéo lên như những bước tiến.</div>
+      <ul class="pros"><li>+ Hình khối đơn giản nhất, đọc được cả ở 16 px</li><li>+ Màu cam ấm nổi bật giữa các icon xanh / trắng trên Màn hình chính</li><li class="c">− Con đường trong lõi lửa chỉ thấy rõ từ ~60 px; nhỏ hơn thì chỉ còn là ngọn lửa</li></ul>
+      <div class="sizes" style="margin-top:14px"><div class="cell"><canvas data-src="svg/A-icon.svg" data-size="120" data-zoom="1" data-round="1"></canvas><div class="lbl">120</div></div><div class="cell"><canvas data-src="svg/A-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">60</div></div><div class="cell"><canvas data-src="svg/A-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">29</div></div>
+       <div class="cell" style="margin-left:10px"><canvas data-src="svg/A-favicon.svg" data-size="16" data-zoom="1" ></canvas><div class="lbl">16</div></div>
+       <div class="cell" style="margin-left:16px;background:var(--bg);padding:10px;border-radius:12px"><img src="svg/A-mark.svg" width="76" height="76"><div class="lbl">mark 76</div></div></div>
+     </div></a><a class="card" href="options/B.html">
+     <div><img class="ios" src="svg/B-icon.svg" width="260" height="260"></div>
+     <div><div class="name"><b>B</b>Khiên làm gọn <span style="font-size:13px;color:#110D22;background:var(--gold);border-radius:6px;padding:2px 8px">ĐÃ CHỌN</span> <span class="go">mở bộ logo →</span></div>
+      <div class="why">Giữ đúng hình của màn khởi động (assets/splash-icon.png, FitJourneyLogo.tsx): <b>chiếc khiên</b> (bảo vệ sức khoẻ, chất RPG), <b>con đường</b> uốn lên thu nhỏ dần và <b>viên ngọc</b> mục tiêu ở cuối đường. Cùng tỉ lệ, cùng màu; chỉ đổi độ đậm nét theo cỡ hiển thị.</div>
+      <ul class="pros"><li>+ Đổi ít nhất: người dùng hiện tại vẫn nhận ra, splash không đổi</li><li>+ Ở 29 px vẫn thấy khiên + đường + ngọc</li><li class="c">− Vẫn 3 thành phần, kém "một nét nhìn là nhớ" hơn A / D</li></ul>
+      <div class="sizes" style="margin-top:14px"><div class="cell"><canvas data-src="svg/B-icon.svg" data-size="120" data-zoom="1" data-round="1"></canvas><div class="lbl">120</div></div><div class="cell"><canvas data-src="svg/B-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">60</div></div><div class="cell"><canvas data-src="svg/B-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">29</div></div>
+       <div class="cell" style="margin-left:10px"><canvas data-src="svg/B-favicon.svg" data-size="16" data-zoom="1" ></canvas><div class="lbl">16</div></div>
+       <div class="cell" style="margin-left:16px;background:var(--bg);padding:10px;border-radius:12px"><img src="svg/B-mark.svg" width="76" height="76"><div class="lbl">mark 76</div></div></div>
+     </div></a><a class="card" href="options/C.html">
+     <div><img class="ios" src="svg/C-icon.svg" width="260" height="260"></div>
+     <div><div class="name"><b>C</b>Đỉnh núi <span class="go">mở bộ logo →</span></div>
+      <div class="why">Ngọn núi đêm, <b>con đường vàng</b> uốn từ chân núi lên đỉnh có <b>cờ đỏ</b>: hành trình tới cân nặng mục tiêu (mốc "Đích"). Trăng và sao chỉ có ở icon lớn để tạo không khí trại đêm.</div>
+      <ul class="pros"><li>+ Kể chuyện "hành trình tới đích" rõ nhất</li><li>+ Hợp tab Hành trình, mốc cân nặng và boss tuần</li><li class="c">− Vẫn là một "cảnh" nhiều lớp: ở 16–29 px chỉ còn tam giác + cờ</li></ul>
+      <div class="sizes" style="margin-top:14px"><div class="cell"><canvas data-src="svg/C-icon.svg" data-size="120" data-zoom="1" data-round="1"></canvas><div class="lbl">120</div></div><div class="cell"><canvas data-src="svg/C-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">60</div></div><div class="cell"><canvas data-src="svg/C-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">29</div></div>
+       <div class="cell" style="margin-left:10px"><canvas data-src="svg/C-favicon.svg" data-size="16" data-zoom="1" ></canvas><div class="lbl">16</div></div>
+       <div class="cell" style="margin-left:16px;background:var(--bg);padding:10px;border-radius:12px"><img src="svg/C-mark.svg" width="76" height="76"><div class="lbl">mark 76</div></div></div>
+     </div></a><a class="card" href="options/D.html">
+     <div><img class="ios" src="svg/D-icon.svg" width="260" height="260"></div>
+     <div><div class="name"><b>D</b>Huy hiệu cấp <span class="go">mở bộ logo →</span></div>
+      <div class="why">Huy hiệu lục giác như phần thưởng lên cấp, <b>chữ F</b> đậm vuông vức (FitJourney). Mũi tên cũ được thay bằng <b>đường xu hướng đi xuống kết thúc bằng ngôi sao</b>: cân nặng giảm dần và chạm mục tiêu, như biểu đồ cân của app.</div>
+      <ul class="pros"><li>+ Gọn và "ra dáng thương hiệu" nhất, chữ F dễ nhớ</li><li>+ Hợp hệ thống huy hiệu / cấp độ trong app</li><li class="c">− Ngôi sao + đường xu hướng chỉ rõ từ ~40 px</li></ul>
+      <div class="sizes" style="margin-top:14px"><div class="cell"><canvas data-src="svg/D-icon.svg" data-size="120" data-zoom="1" data-round="1"></canvas><div class="lbl">120</div></div><div class="cell"><canvas data-src="svg/D-icon.svg" data-size="60" data-zoom="1" data-round="1"></canvas><div class="lbl">60</div></div><div class="cell"><canvas data-src="svg/D-icon.svg" data-size="29" data-zoom="1" data-round="1"></canvas><div class="lbl">29</div></div>
+       <div class="cell" style="margin-left:10px"><canvas data-src="svg/D-favicon.svg" data-size="16" data-zoom="1" ></canvas><div class="lbl">16</div></div>
+       <div class="cell" style="margin-left:16px;background:var(--bg);padding:10px;border-radius:12px"><img src="svg/D-mark.svg" width="76" height="76"><div class="lbl">mark 76</div></div></div>
+     </div></a></div>
 <script>
-const C = [
- ['A','Lửa trại','Ngọn lửa trên 2 khúc củi: đúng tên tab "Trại" và chuỗi 🔥. Hình đơn giản, ấm, nhận ra ngay cả ở 29 px; nổi bật giữa các icon xanh / trắng.',['Rõ nhất ở cỡ nhỏ','Gắn với chuỗi ngày và "Trại"','Ít nói về giảm cân / hành trình']],
- ['B','Khiên làm gọn','Giữ ý tưởng hiện tại nhưng khiên to (~80% icon), viền dày, con đường đậm 3 nét đứt, viên ngọc lớn tách hẳn khỏi đường.',['Giữ nhận diện cũ (đổi ít)','Rõ hơn bản hiện tại nhiều','Vẫn hơi nhiều chi tiết ở 29 px']],
- ['C','Đỉnh núi','Ngọn núi đêm, con đường vàng nét đứt dẫn lên đỉnh có cờ đỏ: hành trình tới cân nặng mục tiêu (mốc "Đích 72 kg").',['Kể chuyện "hành trình" rõ nhất','Hợp tab "Hành trình"','Nhiều lớp, nhỏ thì cờ / đường hơi mờ']],
- ['D','Huy hiệu cấp','Lục giác viền vàng chữ F đậm, mũi tên xanh XP chỉ xuống (cân giảm), 3 chấm cấp: kiểu huy hiệu game.',['Chữ F dễ nhớ, rất gọn','Màu xanh XP tạo điểm nhấn','Mũi tên đi xuống có thể đọc thành "giảm điểm"']],
-];
-const box = document.getElementById('concepts');
-const icon = (id, s) => `<svg class="ic" width="${s}" height="${s}"><use href="#${id}"/></svg>`;
-const ph = ['#34C759','#0A84FF','#FF9F0A','#5E5CE6','#FF375F','#64D2FF','#30D158'];
-const home = (id, cls) => { let h = `<div class="home ${cls}">`; for (let i = 0; i < 8; i++) h += i === 5 ? `<div class="app">${icon(id, 46)}FitJourney</div>` : `<div class="app"><div class="ph" style="background:${ph[i % ph.length]}"></div>App</div>`; return h + '</div>'; };
-for (const [id, name, why, pc] of C) {
- box.insertAdjacentHTML('beforeend', `<div class="card"><div>${icon(id, 300)}</div><div>
-  <div class="name"><b>${id}</b>${name}</div><div class="why">${why}</div>
-  <ul class="pros"><li>+ ${pc[0]}</li><li>+ ${pc[1]}</li><li class="c">− ${pc[2]}</li></ul>
-  <div class="sizes" style="margin-top:14px">${[120, 60, 29].map((s) => `<div>${icon(id, s)}${s}</div>`).join('')}</div>
-  <div class="homes">${home(id, 'dark')}${home(id, 'light')}</div></div></div>`);
-}
-</script>
-</body></html>
+function load(src){return new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=src;});}
+function rr(c,s,rad){c.beginPath();c.moveTo(rad,0);c.arcTo(s,0,s,s,rad);c.arcTo(s,s,0,s,rad);c.arcTo(0,s,0,0,rad);c.arcTo(0,0,s,0,rad);c.closePath();}
+(async()=>{for(const cv of document.querySelectorAll('canvas[data-src]')){
+ const s=+cv.dataset.size, z=+(cv.dataset.zoom||1), img=await load(cv.dataset.src);
+ cv.width=s;cv.height=s;cv.style.width=s*z+'px';cv.style.height=s*z+'px';const c=cv.getContext('2d');
+ if(cv.dataset.tint){c.fillStyle=cv.dataset.bgc;c.beginPath();c.arc(s/2,s/2,s/2,0,7);c.fill();
+  const o=document.createElement('canvas');o.width=s*1.5;o.height=s*1.5;const oc=o.getContext('2d');oc.drawImage(img,0,0,s*1.5,s*1.5);
+  oc.globalCompositeOperation='source-in';oc.fillStyle=cv.dataset.tint;oc.fillRect(0,0,s*1.5,s*1.5);c.save();c.beginPath();c.arc(s/2,s/2,s/2,0,7);c.clip();c.drawImage(o,-s/4,-s/4);c.restore();continue;}
+ if(cv.dataset.round){c.save();rr(c,s,s*0.2237);c.clip();}
+ c.drawImage(img,0,0,s,s);}
+ document.body.dataset.ready=1;})();
+</script></body></html>

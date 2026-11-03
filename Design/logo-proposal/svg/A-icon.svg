@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+ <defs><radialGradient id="A_bgGlow" cx="50%" cy="46%" r="62%"><stop offset="0" stop-color="#3A2A62"/><stop offset=".6" stop-color="#1C1538"/><stop offset="1" stop-color="#110D22"/></radialGradient>
+   <linearGradient id="A_flame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FF6A2B"/><stop offset=".5" stop-color="#FFA234"/><stop offset="1" stop-color="#FFC83D"/></linearGradient>
+   <linearGradient id="A_core" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFF6D6"/></linearGradient>
+   <radialGradient id="A_fire" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FF9A3C" stop-opacity=".42"/><stop offset="1" stop-color="#FF9A3C" stop-opacity="0"/></radialGradient>
+   <clipPath id="A_flameClip"><path d="M512 150 C566 252 704 330 704 540 C704 684 618 772 512 772 C406 772 320 684 320 540 C320 450 364 390 408 348 C410 410 430 452 462 474 C450 372 468 250 512 150 Z"/></clipPath>
+   <mask id="A_mono" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><path d="M512 150 C566 252 704 330 704 540 C704 684 618 772 512 772 C406 772 320 684 320 540 C320 450 364 390 408 348 C410 410 430 452 462 474 C450 372 468 250 512 150 Z" fill="#fff"/><path d="M418 762 C376 670 434 610 482 556 C520 512 530 452 518 380 C584 440 614 510 580 578 C548 640 532 694 606 762 Z" fill="#000"/></mask></defs>
+ <rect width="1024" height="1024" fill="url(#A_bgGlow)"/><circle cx="512" cy="590" r="420" fill="url(#A_fire)"/>
+ <g>
+   <g transform="rotate(12 512 800)"><rect x="296" y="763" width="432" height="74" rx="37" fill="#7A4A2D"/><circle cx="333" cy="800" r="24" fill="#D9A06A"/><circle cx="333" cy="800" r="11" fill="#B0754A"/></g>
+   <g transform="rotate(-12 512 800)"><rect x="296" y="763" width="432" height="74" rx="37" fill="#8A5634"/><circle cx="691" cy="800" r="24" fill="#D9A06A"/><circle cx="691" cy="800" r="11" fill="#B0754A"/></g>
+  </g>
+   <path d="M512 150 C566 252 704 330 704 540 C704 684 618 772 512 772 C406 772 320 684 320 540 C320 450 364 390 408 348 C410 410 430 452 462 474 C450 372 468 250 512 150 Z" fill="url(#A_flame)"/>
+   <g clip-path="url(#A_flameClip)"><path d="M432 762 C392 676 446 616 490 562 C528 514 538 458 522 392 C574 444 600 508 570 572 C540 632 524 690 592 762 Z" fill="url(#A_core)"/><path d="M496 724 L500 694 M528 616 L540 594" stroke="#FFB13B" stroke-width="14" stroke-linecap="round"/></g>
+   <circle cx="690" cy="304" r="17" fill="#FFC83D"/><circle cx="742" cy="236" r="12" fill="#FFE08A"/><circle cx="778" cy="180" r="8" fill="#FFF6D6"/>
+ 
+</svg>
