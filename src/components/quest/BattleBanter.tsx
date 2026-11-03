@@ -149,6 +149,29 @@ function BanterCard({ shown, open, onToggle, onAsk, busy, locked, error, fresh }
   );
 }
 
+/** Journey asks the AI for yesterday's exchange once on its own when it opens (the full list now lives in the boss sheet, so this
+ *  keeps the "asked when the Map opens" rule and the latest line on Journey up to date). The day is marked first: a failure keeps the
+ *  template and is never retried. `BanterSection` does the same when it is shown first; the mark stops a second request. */
+export function useAutoBanter(shown: readonly BanterShown[], todayKey: string): void {
+  const saveTalk = useBossTalkStore((s) => s.saveTalk);
+  const markAutoTried = useBossTalkStore((s) => s.markAutoTried);
+  const autoTried = useBossTalkStore((s) => s.autoTried);
+  const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
+  const hydrated = useBossTalkStore.persist?.hasHydrated?.() !== false && useNutritionStore.persist?.hasHydrated?.() !== false;
+  const autoDate = aiEnabled && hydrated ? autoBanterDay(shown, todayKey, autoTried) : null;
+  useEffect(() => {
+    if (!autoDate) return;
+    const day = shown.find((d) => d.date === autoDate);
+    if (!day) return;
+    markAutoTried(autoDate);
+    void requestBossBanter(day.summary).then((out) => {
+      if (out.ok) saveTalk({ date: day.date, ...out.text, source: out.sample ? 'sample' : 'ai', deficitKcal: day.summary.deficitKcal, madeAtISO: new Date().toISOString() });
+    });
+    // Only a new day to ask starts a request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoDate]);
+}
+
 /** The latest exchange of one stage boss (newest first list), for its detail sheet. */
 export function latestBanterFor(shown: readonly BanterShown[], bossIndex: number): BanterShown | undefined {
   return shown.find((d) => d.boss.index === bossIndex);

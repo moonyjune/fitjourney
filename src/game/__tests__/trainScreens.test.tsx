@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
-let mockParams: { ids?: string; group?: string; id?: string } = {};
+let mockParams: { ids?: string; group?: string; id?: string; other?: string } = {};
 
 jest.mock('expo-router', () => ({
   router: {
@@ -34,6 +34,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 jest.mock('../../sync/cloudSync', () => ({
   pushNutritionLog: jest.fn(),
   pushWorkoutEntry: jest.fn(),
+  deleteWorkoutEntry: jest.fn(),
   pushWeightEntry: jest.fn(),
   pushProfile: jest.fn(),
   pushPlan: jest.fn(),
@@ -46,8 +47,11 @@ jest.mock('../../sync/cloudSync', () => ({
 import TrainScreen from '../../../app/(tabs)/workout';
 import DetailScreen from '../../../app/train/detail';
 import SessionScreen from '../../../app/train/session';
+import { usePlanStore } from '../../store/usePlanStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useToastStore } from '../../store/useToastStore';
 import { useTrainingStore } from '../../store/useTrainingStore';
+import { OtherWorkoutSheet } from '../../components/quest/OtherWorkoutSheet';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { EXERCISE_BY_ID } from '../training/exercises';
@@ -104,17 +108,24 @@ describe('Train tab, exercise detail and session', () => {
   });
 
   describe('Train tab', () => {
+    const openPicker = (r: ReactTestRenderer) => press(r, 'Thêm / bớt bài · 9 bài trong thư viện');
+
     it("pre-selects the day's group and says why", () => {
       const r = render(<TrainScreen />);
       const text = allText(r);
-      expect(text).toContain('Nhiệm vụ Tập luyện');
+      expect(text).toContain('Tập');
+      expect(text).toContain('T6 · gợi ý hôm nay');
       expect(text).toContain('Hôm nay gợi ý nhóm B');
-      expect(text).toContain('3 đã chọn');
+      expect(text).toMatch(/3 bài \+ cằm lùi · ≈\d+ kcal/);
       for (const name of ['Chống đẩy tường', 'Dip ghế co gối', 'Dead bug']) {
         expect(pressable(r, byLabel(`Chọn ${name}`)).props.accessibilityState.selected).toBe(true);
       }
+      expect(pressable(r, byLabel('B · Thân trên')).props.accessibilityState.selected).toBe(true);
+      // Exercises outside today's group are only in the "Thêm / bớt bài" sheet.
+      expect(() => pressable(r, byLabel('Chọn Squat ngồi ghế'))).toThrow();
+      openPicker(r);
       expect(pressable(r, byLabel('Chọn Squat ngồi ghế')).props.accessibilityState.selected).toBe(false);
-      expect(text).toContain('3 bài + cằm lùi');
+      expect(allText(r)).toContain('3 / 9 bài');
     });
 
     it('swaps the selection when another group is chosen and notes the override', () => {
@@ -123,29 +134,33 @@ describe('Train tab, exercise detail and session', () => {
       const text = allText(r);
       expect(text).toContain('Hôm nay gợi ý B · bạn đổi sang A');
       expect(pressable(r, byLabel('Chọn Squat ngồi ghế')).props.accessibilityState.selected).toBe(true);
+      expect(pressable(r, byLabel('A · Thân dưới')).props.accessibilityState.selected).toBe(true);
+      openPicker(r);
       expect(pressable(r, byLabel('Chọn Dead bug')).props.accessibilityState.selected).toBe(false);
     });
 
     it('needs at least 2 exercises and has no upper limit', () => {
       const r = render(<TrainScreen />);
+      openPicker(r);
       press(r, 'Chọn Squat ngồi ghế'); // a fourth
       press(r, 'Chọn Cầu mông'); // and a fifth
       expect(pressable(r, byLabel('Chọn Squat ngồi ghế')).props.accessibilityState.selected).toBe(true);
       expect(pressable(r, byLabel('Chọn Cầu mông')).props.accessibilityState.selected).toBe(true);
-      expect(allText(r)).toContain('5 đã chọn');
-      press(r, 'Bắt đầu');
+      expect(allText(r)).toContain('5 / 9 bài');
+      press(r, 'Xong · 5 bài + cằm lùi');
+      press(r, 'Bắt đầu · giọng HLV');
       expect(mockRouter.push).toHaveBeenCalledWith({
         pathname: '/train/session',
         params: { ids: 'wallPushup,chairDip,deadBug,chairSquat,glutBridge,chinTuck', group: 'B' },
       });
       ['Chọn Dead bug', 'Chọn Dip ghế co gối', 'Chọn Squat ngồi ghế', 'Chọn Cầu mông'].forEach((l) => press(r, l)); // down to one
       expect(allText(r)).toContain('Chọn ít nhất 2 bài');
-      expect(isDisabled(r, 'Bắt đầu')).toBe(true);
+      expect(isDisabled(r, 'Bắt đầu · giọng HLV')).toBe(true);
     });
 
     it('starts the session with the picked exercises plus the always-on chin tuck', () => {
       const r = render(<TrainScreen />);
-      press(r, 'Bắt đầu');
+      press(r, 'Bắt đầu · giọng HLV');
       expect(mockRouter.push).toHaveBeenCalledWith({
         pathname: '/train/session',
         params: { ids: 'wallPushup,chairDip,deadBug,chinTuck', group: 'B' },
@@ -155,7 +170,10 @@ describe('Train tab, exercise detail and session', () => {
     it('shows each exercise at the level the user has reached', () => {
       useTrainingStore.setState({ progress: { chairSquat: { level: 3, lastChangeISO: '2026-10-10T08:00:00.000Z', ratings: [] } } });
       const r = render(<TrainScreen />);
-      expect(allText(r)).toMatch(/3 × 15\s+·\s+Cấp 3/);
+      press(r, 'A · Thân dưới');
+      expect(allText(r)).toMatch(/3 × 15\s+Cấp 3/);
+      openPicker(r);
+      expect(allText(r)).toMatch(/Cấp 3 · 3 × 15/);
     });
 
     it('opens the exercise detail', () => {
@@ -175,6 +193,73 @@ describe('Train tab, exercise detail and session', () => {
       jest.setSystemTime(new Date('2026-10-25T17:00:00'));
       const text = allText(render(<TrainScreen />));
       expect(text).toContain('Chủ nhật gợi ý nghỉ chủ động · bạn tập nhóm A');
+    });
+
+    it("lists this week's workouts (Monday on) and opens one", () => {
+      useWorkoutStore.setState({
+        entries: [
+          { id: 'old', dateISO: '2026-10-18T08:00:00', templateId: null, label: 'Bơi tuần trước', durationMin: 40, caloriesBurned: 300 },
+          { id: 'mon', dateISO: '2026-10-19T07:00:00', templateId: null, label: 'Chạy bộ', durationMin: 32, caloriesBurned: 290 },
+          { id: 'thu', dateISO: '2026-10-22T18:00:00', templateId: null, label: 'Nhóm B', durationMin: 17, caloriesBurned: 110 },
+        ],
+      });
+      const r = render(<TrainScreen />);
+      const text = allText(r);
+      expect(text).toContain('2 buổi');
+      expect(text).toContain('T5 22/10 · 17′ · 110 kcal');
+      expect(text).toContain('T2 19/10 · 32′ · 290 kcal');
+      expect(text).not.toContain('Bơi tuần trước');
+      expect(text.indexOf('Nhóm B')).toBeLessThan(text.indexOf('Chạy bộ')); // newest first
+      press(r, 'Xem buổi tập Chạy bộ, T2 19/10');
+      expect(allText(r)).toContain('07:00–07:32'); // the workout sheet
+      press(r, 'Sửa / xoá buổi đã ghi');
+      expect(mockRouter.push).toHaveBeenCalledWith('/workout-classic');
+    });
+
+    it('keeps the plan\'s own workouts behind "Bài kế hoạch": logs one for the chosen day with undo, and edits it with AI', () => {
+      const plan = usePlanStore.getState().plan;
+      usePlanStore.setState({
+        plan: {
+          ...plan,
+          workoutTemplates: [{ id: 'cardio', label: 'Cardio sáng', timeRange: '06:00–06:30', durationMin: 30, caloriesBurned: 200, description: 'Đi bộ nhanh' }],
+        },
+      });
+      const r = render(<TrainScreen />);
+      press(r, 'Bài kế hoạch');
+      expect(pressable(r, byLabel('Bài kế hoạch')).props.accessibilityState.selected).toBe(true);
+      expect(allText(r)).toContain('Cardio sáng');
+      press(r, '+ Ghi nhận: Cardio sáng');
+      expect(useWorkoutStore.getState().entries[0]).toMatchObject({ templateId: 'cardio', label: 'Cardio sáng', durationMin: 30, caloriesBurned: 200 });
+      expect(useToastStore.getState().toast?.text).toBe('Đã ghi Cardio sáng');
+      act(() => useToastStore.getState().undo());
+      expect(useWorkoutStore.getState().entries).toHaveLength(0);
+      press(r, '✏️ Sửa bằng AI');
+      expect(mockRouter.push).toHaveBeenCalledWith('/plan?editWorkout=Cardio%20s%C3%A1ng');
+      usePlanStore.setState({ plan });
+    });
+
+    it('opens "Tập khác" with the kind filled in and logs a typed workout with undo', async () => {
+      const r = render(<TrainScreen />);
+      press(r, 'Chạy / đi bộ');
+      expect(r.root.findAll((n) => n.props.testID === 'other-workout-sheet').length).toBeGreaterThan(0);
+      const field = (label: string) => r.root.findAll((n) => n.props.accessibilityLabel === label && typeof n.props.onChangeText === 'function')[0];
+      expect(field('Tên buổi tập').props.value).toBe('Chạy / đi bộ');
+      act(() => field('Thời lượng (phút)').props.onChangeText('32'));
+      act(() => field('Calo đốt').props.onChangeText('290'));
+      await act(async () => {
+        await pressable(r, byLabel('Ghi nhận')).props.onPress();
+      });
+      expect(useWorkoutStore.getState().entries[0]).toMatchObject({ templateId: null, label: 'Chạy / đi bộ', durationMin: 32, caloriesBurned: 290 });
+      expect(r.root.findByType(OtherWorkoutSheet).props.visible).toBe(false); // the sheet closed
+      expect(useToastStore.getState().toast?.text).toBe('Đã ghi Chạy / đi bộ · 32′ · 290 kcal');
+      act(() => useToastStore.getState().undo());
+      expect(useWorkoutStore.getState().entries).toHaveLength(0);
+    });
+
+    it('opens "Tập khác" from (+) (the other param)', () => {
+      mockParams = { other: '123' };
+      const r = render(<TrainScreen />);
+      expect(r.root.findAll((n) => n.props.testID === 'other-workout-sheet').length).toBeGreaterThan(0);
     });
   });
 
@@ -206,6 +291,13 @@ describe('Train tab, exercise detail and session', () => {
         if (i < sets - 1) press(r, 'Bỏ qua nghỉ');
       }
     }
+
+    it('has a big "Xong set" button (64 pt, README §3.5)', () => {
+      mockParams = { ids: 'chairSquat', group: 'A' };
+      const r = render(<SessionScreen />);
+      const button = r.root.findAll((n) => n.props.title === 'Xong set' && n.props.size !== undefined)[0];
+      expect(button.props.size).toBe('large');
+    });
 
     it('counts reps, rests between sets and logs one workout at the end', () => {
       mockParams = { ids: 'chairSquat', group: 'A' };

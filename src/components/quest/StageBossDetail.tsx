@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { BossArchetype, StageBoss, Zone } from '../../game/stageBosses';
 import { useGameText, type GameKey } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { formatDateVi } from '../../utils/date';
 import { HudText } from './HudText';
-import { QuestButton } from './QuestButton';
+import { BottomSheet } from './BottomSheet';
 import { BOSS_LURE_PINK, StageBossArt } from './StageBossArt';
 import { FadeInUp } from './motion/FadeInUp';
 import { PulseRing } from './motion/PulseRing';
 import { SparkleBurst } from './motion/SparkleBurst';
+import { XpBar } from './XpBar';
 
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
 
@@ -93,55 +94,46 @@ export function StageBossDetail({ boss, zone, currentKg, onClose, children }: De
       ];
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <Pressable accessibilityRole="button" accessibilityLabel={g('stage.close')} style={StyleSheet.absoluteFill} onPress={onClose} />
-        <FadeInUp distance={32} duration={320} style={styles.sheet}>
-          <View accessibilityViewIsModal style={styles.sheetInner}>
-            <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-              <View style={styles.hero}>
-                <View style={[styles.portrait, { borderColor: defeated ? quest.border : boss.tier >= 4 ? quest.gold : quest.bossBorder }]}>
-                  <StageBossArt archetype={boss.archetype} tier={boss.tier} size={120} defeated={defeated} idle={!defeated} />
-                  {!defeated && (
-                    <View style={styles.burst}>
-                      <SparkleBurst count={10} radius={70} colors={TEMPT_COLORS} />
-                    </View>
-                  )}
-                </View>
-                <HudText size={20} accessibilityRole="header" style={styles.center}>
-                  {name}
-                </HudText>
-                <HudText size={13} color={quest.gold} accessibilityLabel={`${g('stage.tier', { n: boss.tier })} · ${rankName(boss.tier, g)}`}>
-                  {`${stars(boss.tier)} · ${rankName(boss.tier, g)}${boss.isFinal ? ` · ${g('stage.final')}` : ''}`}
-                </HudText>
-                <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.center}>
-                  {`${zone ? `${zoneTitle(zone, g)} · ` : ''}${g('region.range', { from: boss.fromKg, to: boss.toKg })} · ${g('stage.hp', { left: boss.hpLeftKg.toFixed(1), max: boss.hpKg })}`}
-                </HudText>
-                <HudText size={14} color={defeated ? quest.xp : quest.hpText} style={styles.center}>
-                  {status}
-                </HudText>
+    <BottomSheet visible onClose={onClose} closeLabel={g('stage.close')} eyebrow={zone ? zoneTitle(zone, g) : undefined} testID="stage-boss-sheet">
+      <View style={styles.content}>
+        <View style={styles.hero}>
+          <View style={[styles.portrait, { borderColor: defeated ? quest.border : boss.tier >= 4 ? quest.gold : quest.bossBorder }]}>
+            <StageBossArt archetype={boss.archetype} tier={boss.tier} size={130} defeated={defeated} idle={!defeated} />
+            {!defeated && (
+              <View style={styles.burst}>
+                <SparkleBurst count={10} radius={74} colors={TEMPT_COLORS} />
               </View>
-              <BossChat archetype={boss.archetype} tier={boss.tier} defeated={defeated} name={name} lines={lines} />
-              {children}
-            </ScrollView>
-            <QuestButton title={g('stage.close')} variant="ghost" onPress={onClose} />
+            )}
           </View>
-        </FadeInUp>
+          <HudText size={20} accessibilityRole="header" style={styles.center}>
+            {name}
+          </HudText>
+          <HudText size={13} color={quest.gold} style={styles.center} accessibilityLabel={`${g('stage.tier', { n: boss.tier })} · ${rankName(boss.tier, g)}`}>
+            {`${stars(boss.tier)} · ${rankName(boss.tier, g)}${boss.isFinal ? ` · ${g('stage.final')}` : ''}`}
+          </HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.center}>
+            {`${g('stage.tier', { n: boss.tier })} · ${g('region.range', { from: boss.fromKg, to: boss.toKg })} · ${g('stage.hp', { left: boss.hpLeftKg.toFixed(1), max: boss.hpKg })}`}
+          </HudText>
+          <View style={styles.hpBar}>
+            <XpBar ratio={boss.hpKg > 0 ? boss.hpLeftKg / boss.hpKg : 0} color={quest.hp} trackColor={quest.bg} height={10} />
+          </View>
+          <HudText size={14} color={defeated ? quest.xp : quest.hpText} style={styles.center}>
+            {status}
+          </HudText>
+        </View>
+        <BossChat archetype={boss.archetype} tier={boss.tier} defeated={defeated} name={name} lines={lines} />
+        {children}
       </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'center', padding: 16, backgroundColor: 'rgba(8,6,18,0.78)' },
-  sheet: { maxHeight: '92%', maxWidth: 520, width: '100%', alignSelf: 'center' },
-  // Bounded by the sheet, so a long detail (chat, damage panel) scrolls instead of running off the screen.
-  sheetInner: { flexShrink: 1, maxHeight: '100%', gap: 12, padding: 16, borderRadius: 20, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.panel },
-  scroll: { flexGrow: 0, flexShrink: 1 },
-  content: { gap: 14 },
-  hero: { alignItems: 'center', gap: 4 },
-  portrait: { width: 148, height: 148, borderRadius: 74, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bossPanel, marginBottom: 6 },
-  burst: { position: 'absolute', left: 74, top: 74, pointerEvents: 'none' },
+  content: { gap: 14, paddingBottom: 8 },
+  hero: { alignItems: 'stretch', gap: 4, padding: 14, borderRadius: 20, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel },
+  hpBar: { marginTop: 6 },
+  portrait: { alignSelf: 'center', width: 160, height: 160, borderRadius: 80, borderWidth: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: quest.bossPanel, marginBottom: 6 },
+  burst: { position: 'absolute', left: 80, top: 80, pointerEvents: 'none' },
   center: { textAlign: 'center' },
   chat: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   avatarCol: { paddingTop: 2 },

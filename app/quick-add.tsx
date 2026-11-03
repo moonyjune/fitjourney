@@ -228,7 +228,7 @@ export default function QuickAddScreen() {
         <View style={styles.smallRow}>
           <SmallChip icon="scale" tint={quest.textSecondary} label={`${lastKg} kg`} accessibilityLabel={g('quick.weightChipA11y', { kg: lastKg })} onPress={() => setSheet('weight')} />
           <SmallChip icon="smile" tint={quest.gold} label={g('quick.tileCheckin')} onPress={() => router.replace('/checkin')} />
-          <SmallChip icon="dumbbell" tint={quest.xp} label={g('quick.otherWorkout')} onPress={() => router.replace('/workout-classic')} />
+          <SmallChip icon="dumbbell" tint={quest.xp} label={g('quick.otherWorkout')} onPress={() => router.replace({ pathname: '/(tabs)/workout', params: { other: String(Date.now()) } })} />
         </View>
       </ScrollView>
 

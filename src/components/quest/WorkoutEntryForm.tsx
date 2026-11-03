@@ -25,8 +25,8 @@ export interface WorkoutFormValues {
 export type PhotoChange = { kind: 'none' } | { kind: 'replace'; uri: string } | { kind: 'remove' };
 
 interface WorkoutEntryFormProps {
-  /** Prefilled values (editing an entry); omitted for a new one. */
-  initial?: { label: string; durationMin: number; caloriesBurned: number };
+  /** Prefilled values (editing an entry, or a quick pick like "Chạy / đi bộ" that fills only the name); omitted for a new one. */
+  initial?: { label: string; durationMin?: number; caloriesBurned?: number };
   /** The photo already attached to the entry being edited (a persisted file), if any. */
   existingPhotoUri?: string | null;
   /** Editing only: the date of the entry and how it is changed. */

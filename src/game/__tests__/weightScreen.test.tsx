@@ -12,7 +12,6 @@ jest.mock('expo-router', () => ({
 }));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
-jest.mock('react-native-chart-kit', () => ({ LineChart: () => null }));
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')
 );
@@ -29,6 +28,7 @@ jest.mock('../../sync/cloudSync', () => ({
 
 import WeightScreen from '../../../app/weight';
 import { useSettingsStore } from '../../store/useSettingsStore';
+import { useToastStore } from '../../store/useToastStore';
 import { useWeightStore } from '../../store/useWeightStore';
 
 describe('Weight screen (FitQuest)', () => {
@@ -46,11 +46,6 @@ describe('Weight screen (FitQuest)', () => {
   const press = async (r: ReactTestRenderer, label: string) => {
     await act(async () => {
       byLabel(r, label, 'onPress').props.onPress();
-    });
-  };
-  const type = async (r: ReactTestRenderer, text: string) => {
-    await act(async () => {
-      byLabel(r, 'Log new weight', 'onChangeText').props.onChangeText(text);
     });
   };
   const allText = (r: ReactTestRenderer) => {
@@ -77,28 +72,41 @@ describe('Weight screen (FitQuest)', () => {
 
   it('shows the empty states with no entries', async () => {
     const r = await render();
-    expect(allText(r)).toContain('No weigh-ins yet');
-    expect(allText(r)).toContain('No weight data yet');
+    expect(allText(r)).toContain('No weigh-ins yet — the dashed line is the goal-based prediction.');
+    expect(allText(r)).toContain('No weigh-ins yet. Tap + to log one.');
   });
 
-  it('adds an entry with a comma decimal and clears the field', async () => {
+  it('draws one chart with the actual line, the prediction and the boss lines, and switches its range', async () => {
+    useWeightStore.setState({ entries: [{ id: 'a', dateISO: new Date().toISOString(), weightKg: 98 }] });
     const r = await render();
-    await type(r, '98,4');
-    await press(r, 'Save');
-    expect(useWeightStore.getState().entries.map((e) => e.weightKg)).toEqual([98.4]);
-    expect(allText(r)).toContain('98.4 kg');
-    expect(byLabel(r, 'Log new weight', 'onChangeText').props.value).toBe('');
+    const chart = r.root.findAll((n) => n.props.accessibilityRole === 'image' && String(n.props.accessibilityLabel).startsWith('Weight chart from'))[0];
+    expect(chart).toBeDefined();
+    const text = allText(r);
+    expect(text).toContain('Actual');
+    expect(text).toContain('Predicted');
+    expect(text).toContain('−2.0 lost');
+    expect(text).toContain('8.0 to go');
+    expect(text).toContain('20% journey');
+    const selected = (label: string) => byLabel(r, label, 'onPress').props.accessibilityState.selected;
+    expect(selected('1 month')).toBe(true);
+    await press(r, 'All');
+    expect(selected('All')).toBe(true);
+    expect(selected('1 month')).toBe(false);
   });
 
-  it.each(['', 'abc', '0', '-5'])('ignores invalid input %p', async (bad) => {
+  it('logs a weighing from the + sheet (the stepper starts at the last weight)', async () => {
+    useWeightStore.setState({ entries: [{ id: 'a', dateISO: new Date(Date.now() - 864e5).toISOString(), weightKg: 99 }] });
     const r = await render();
-    await type(r, bad);
-    await press(r, 'Save');
-    expect(useWeightStore.getState().entries).toEqual([]);
+    await press(r, 'Log weight');
+    expect(r.root.findAll((n) => n.props.testID === 'weight-sheet').length).toBeGreaterThan(0);
+    await press(r, 'Save 99.0 kg');
+    expect(useWeightStore.getState().entries.map((e) => e.weightKg)).toEqual([99, 99]);
+    expect(useToastStore.getState().toast?.text).toBe('Saved 99.0 kg');
   });
 
-  it('deletes an entry from the history', async () => {
-    useWeightStore.setState({ entries: [{ id: 'a', dateISO: new Date().toISOString(), weightKg: 99 }] });
+  it('deletes a weighing with undo', async () => {
+    const dateISO = new Date().toISOString();
+    useWeightStore.setState({ entries: [{ id: 'a', dateISO, weightKg: 99, note: 'sáng' }] });
     const r = await render();
     expect(allText(r)).toContain('99.0 kg');
     const del = r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Delete ') && typeof n.props.onPress === 'function')[0];
@@ -106,6 +114,13 @@ describe('Weight screen (FitQuest)', () => {
       del.props.onPress();
     });
     expect(useWeightStore.getState().entries).toEqual([]);
+    expect(useToastStore.getState().toast?.text).toMatch(/^Deleted the weigh-in of \d\d\/\d\d$/);
+    await act(async () => {
+      useToastStore.getState().undo();
+    });
+    const back = useWeightStore.getState().entries;
+    expect(back).toHaveLength(1);
+    expect(back[0]).toMatchObject({ dateISO, weightKg: 99, note: 'sáng' });
   });
 
   it('lists the newest entry first', async () => {
