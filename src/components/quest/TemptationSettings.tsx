@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { TEMPTATION_RESIST_XP } from '../../game/constants';
 import { useGameText } from '../../game/strings';
 import { useMealModeStore } from '../../store/useMealModeStore';
@@ -8,6 +8,7 @@ import type { TemptFrequency, TemptLevel } from '../../temptation/schedule';
 import { temptationXp } from '../../temptation/stats';
 import { summonTemptation } from '../../temptation/summon';
 import { quest, questFonts, questRadius } from '../../theme/quest';
+import { HitSwitch } from './HitSwitch';
 import { HudText } from './HudText';
 import { InfoButton } from './InfoButton';
 import { QuestButton } from './QuestButton';
@@ -62,13 +63,7 @@ export function TemptationSettings() {
             <InfoButton about={g('tempt.title')} body={[g('rd6.info.tempt', { xp: TEMPTATION_RESIST_XP })]} />
           </View>
         </View>
-        <Switch
-          accessibilityLabel={g('tempt.title')}
-          value={settings.enabled}
-          onValueChange={(enabled) => setSettings({ enabled })}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
+        <HitSwitch accessibilityLabel={g('tempt.title')} value={settings.enabled} onValueChange={(enabled) => setSettings({ enabled })} />
       </View>
 
       {settings.enabled && (

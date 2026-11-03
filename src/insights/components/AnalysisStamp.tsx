@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
   wrap: { marginTop: 6, gap: 4 },
   row: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   at: { flexShrink: 1 },
-  chip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },
   chipOutdated: { borderColor: quest.gold },
   pressed: { opacity: 0.7 },
 });

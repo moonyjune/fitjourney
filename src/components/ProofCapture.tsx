@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useProofStore } from '../store/useProofStore';
+import { showToast } from '../store/useToastStore';
 import { useNutritionStore } from '../store/useNutritionStore';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { persistPickedPhoto } from '../utils/photoStorage';
@@ -99,7 +100,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   async function pickFromLibrary() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert(t('proof.permissionTitle'), t('proof.libraryPermissionMessage'));
+      showToast({ text: t('proof.libraryPermissionMessage'), tone: 'danger' });
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 });
@@ -111,7 +112,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert(t('proof.permissionTitle'), t('proof.cameraPermissionMessage'));
+      showToast({ text: t('proof.cameraPermissionMessage'), tone: 'danger' });
       return;
     }
     const result = await ImagePicker.launchCameraAsync({ quality: 0.6 });
@@ -150,7 +151,7 @@ export function ProofCapture({ dateKey, taskType, taskRefId, contextLabel, plann
 
   async function handleSave() {
     if (!pendingUri) {
-      Alert.alert(t('proof.missingPhotoTitle'), t('proof.missingPhotoMessage'));
+      showToast({ text: t('proof.missingPhotoMessage'), tone: 'danger' });
       return;
     }
     setBusy(true);

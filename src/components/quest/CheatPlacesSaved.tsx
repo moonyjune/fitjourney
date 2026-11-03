@@ -105,13 +105,18 @@ export function CheatPlacesSaved() {
   const saved = useCheatPlacesStore((s) => s.saved);
   const history = useCheatPlacesStore((s) => s.history);
   const [viewing, setViewing] = useState<PlacesSearch | null>(null);
-  const [confirm, setConfirm] = useState(false);
   const savedKeys = new Set(saved.map((p) => p.key));
   const store = useCheatPlacesStore.getState;
 
   const removeSaved = (p: SavedPlace) => {
     store().removeSaved(p.key);
     showToast({ text: g('rd4.saved.removed', { name: p.name }), undo: () => store().restoreSaved(p) });
+  };
+  // Done at once with "Hoàn tác" (decision 3: only the diary purge and sign-out still ask).
+  const clearHistory = () => {
+    const { history: before, clearedAtISO } = store();
+    store().clearHistory();
+    showToast({ text: g('rd7.history.cleared', { n: before.length }), undo: () => store().restoreHistory(before, clearedAtISO) });
   };
   const removeSearch = (s: PlacesSearch) => {
     store().removeSearch(s.id);
@@ -164,18 +169,9 @@ export function CheatPlacesSaved() {
               </Pressable>
             </View>
           ))}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={confirm ? g('cheat.clearConfirm') : g('cheat.clearHistory')}
-            onPress={() => {
-              if (!confirm) return setConfirm(true);
-              store().clearHistory();
-              setConfirm(false);
-            }}
-            style={[styles.chip, confirm && styles.chipDanger]}
-          >
-            <HudText size={12} color={confirm ? quest.onGold : quest.textSecondary}>
-              {confirm ? g('cheat.clearConfirm') : g('cheat.clearHistory')}
+          <Pressable accessibilityRole="button" accessibilityLabel={g('cheat.clearHistory')} onPress={clearHistory} style={styles.chip}>
+            <HudText size={12} color={quest.textSecondary}>
+              {g('cheat.clearHistory')}
             </HudText>
           </Pressable>
         </>
@@ -194,6 +190,5 @@ const styles = StyleSheet.create({
   place: { gap: 6, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   search: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   chip: { minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
-  chipDanger: { backgroundColor: quest.hp, borderColor: quest.hp },
   round: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: quest.border },
 });

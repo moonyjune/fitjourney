@@ -215,7 +215,8 @@ describe('Classic workout screen: editing, photo and AI prefill', () => {
         (Alert.alert as jest.Mock).mockClear();
         await type(r, 'edit-e1-duration', bad);
         await press(formOf(r, 'edit-e1', 'Lưu thay đổi'), 'Lưu thay đổi');
-        expect(Alert.alert).toHaveBeenCalledWith('Lỗi', expect.stringContaining('Nhập đầy đủ'));
+        expect(Alert.alert).not.toHaveBeenCalled(); // a red line in the form instead (dialogs.md 43)
+        expect(r.root.findAll((n) => n.props.accessibilityRole === 'alert' && String(n.props.children).includes('Nhập đầy đủ')).length).toBeGreaterThan(0);
         expect(inputById(r, 'edit-e1-duration').props.value).toBe(bad); // draft kept
       }
       expect(useWorkoutStore.getState().entries[0]).toMatchObject({ label: 'Đi bộ nhanh', durationMin: 8 });

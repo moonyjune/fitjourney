@@ -190,5 +190,5 @@ const styles = StyleSheet.create({
   qty: { width: 72, height: 44, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, textAlign: 'center', fontSize: 15 },
   unit: { minWidth: 34 },
   remove: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
-  link: { minHeight: 36, justifyContent: 'center' },
+  link: { minHeight: 44, justifyContent: 'center' },
 });

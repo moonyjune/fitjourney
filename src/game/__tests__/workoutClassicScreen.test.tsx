@@ -129,7 +129,9 @@ describe('Classic workout screen (FitQuest)', () => {
     await type(r, 'Thời lượng (phút)', '30');
     await press(r, 'Ghi nhận');
     expect(useWorkoutStore.getState().entries).toHaveLength(0);
-    expect(Alert.alert).toHaveBeenCalledWith('Lỗi', expect.stringContaining('Nhập đầy đủ'));
+    // A red line under the form, not a system alert (dialogs.md 43).
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(r.root.findAll((n) => n.props.accessibilityRole === 'alert' && String(n.props.children).includes('Nhập đầy đủ')).length).toBeGreaterThan(0);
     expect(find(r, 'Tên buổi tập', 'onChangeText').props.value).toBe('Đạp xe'); // the draft is kept
   });
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { quest, questRadius } from '../../theme/quest';
+import { HitSwitch } from './HitSwitch';
 import { HudText } from './HudText';
 import { QuestIcon, type QuestIconName } from './QuestIcon';
 
@@ -48,11 +49,11 @@ export function SettingsLinkRow({ icon, emoji, color = quest.gold, label, value,
       style={({ pressed }) => [styles.row, !first && styles.divider, pressed && styles.pressed]}
     >
       <IconTile icon={icon} emoji={emoji} color={color} />
-      <HudText size={15} style={styles.label} numberOfLines={1}>
+      <HudText size={15} style={value ? styles.linkLabel : styles.label} numberOfLines={1}>
         {label}
       </HudText>
       {value ? (
-        <HudText size={13} weight="medium" color={quest.textSecondary} numberOfLines={1} style={styles.value}>
+        <HudText size={13} weight="medium" color={quest.textSecondary} numberOfLines={2} style={styles.value}>
           {value}
         </HudText>
       ) : null}
@@ -87,7 +88,7 @@ export function SettingsSwitchRow({ icon, emoji, color = quest.gold, label, hint
       <View style={styles.label}>
         <HudText size={15}>{label}</HudText>
         {hint || info ? (
-          <View style={styles.hintRow}>
+          <View style={[styles.hintRow, info ? styles.hintRowInfo : null]}>
             {hint ? (
               <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.hintText}>
                 {hint}
@@ -102,14 +103,7 @@ export function SettingsSwitchRow({ icon, emoji, color = quest.gold, label, hint
           </HudText>
         ) : null}
       </View>
-      <Switch
-        accessibilityLabel={label}
-        value={value}
-        disabled={disabled}
-        onValueChange={onChange}
-        trackColor={{ false: quest.raised2, true: quest.gold }}
-        thumbColor={quest.text}
-      />
+      <HitSwitch accessibilityLabel={label} value={value} disabled={disabled} onValueChange={onChange} />
     </View>
   );
 }
@@ -123,7 +117,12 @@ const styles = StyleSheet.create({
   divider: { borderTopWidth: 1, borderTopColor: quest.border },
   pressed: { backgroundColor: quest.raised },
   label: { flex: 1, minWidth: 0 },
-  value: { maxWidth: '48%', textAlign: 'right' },
-  hintRow: { flexDirection: 'row', alignItems: 'center', marginVertical: -8 },
+  // The name stays whole (mockup 08); a long value wraps to a second line instead of cutting the name.
+  linkLabel: { flexShrink: 0, maxWidth: '62%' },
+  value: { flex: 1, minWidth: 0, textAlign: 'right' },
+  hintRow: { flexDirection: 'row', alignItems: 'center' },
+  // The ⓘ button is 44 pt tall: let it overlap the row's padding instead of pushing the hint down. Without it, no pull (the hint
+  // would slide under the name).
+  hintRowInfo: { marginVertical: -8 },
   hintText: { flexShrink: 1 },
 });

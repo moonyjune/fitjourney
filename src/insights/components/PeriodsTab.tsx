@@ -261,6 +261,6 @@ const styles = StyleSheet.create({
   kaizenTitle: { letterSpacing: 1.2 },
   missingDay: { gap: 4, marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },
   chipPressed: { opacity: 0.7 },
 });

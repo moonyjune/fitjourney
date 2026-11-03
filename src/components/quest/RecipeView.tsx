@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   facts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   fact: { gap: 2, paddingHorizontal: 10, paddingVertical: 6, borderRadius: questRadius.row, backgroundColor: quest.raised },
   block: { gap: 6 },
-  detailsBtn: { minHeight: 32, justifyContent: 'center', alignSelf: 'flex-start' },
+  detailsBtn: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   starRow: { flexDirection: 'row', gap: 4 },
   star: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   ingredient: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 36, paddingHorizontal: 10, borderRadius: questRadius.row, backgroundColor: quest.raised },

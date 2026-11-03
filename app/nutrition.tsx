@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   checkbox: { width: 28, height: 28, borderRadius: 8, borderWidth: 2, borderColor: quest.border, alignItems: 'center', justifyContent: 'center' },
   checkboxChecked: { backgroundColor: quest.xp, borderColor: quest.xp },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { minHeight: 36, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
+  chip: { minHeight: 44, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised, alignItems: 'center', justifyContent: 'center' },
   waterChip: { minHeight: 44, paddingHorizontal: 14, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel, alignItems: 'center', justifyContent: 'center' },
   customWaterRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   input: { minHeight: 48, paddingHorizontal: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, fontSize: 15, fontFamily: questFonts.semibold },

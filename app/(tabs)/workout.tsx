@@ -82,7 +82,8 @@ export default function TrainScreen() {
   const [picked, setPicked] = useState<ExerciseId[]>(GROUP_EXERCISES[suggested ?? 'A']);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [other, setOther] = useState<{ open: boolean; preset: OtherWorkoutPreset }>({ open: false, preset: null });
-  const [openWorkout, setOpenWorkout] = useState<WorkoutLogEntry | null>(null);
+  const [openWorkoutId, setOpenWorkoutId] = useState<string | null>(null);
+  const openWorkout = openWorkoutId ? (entries.find((e) => e.id === openWorkoutId) ?? null) : null;
 
   // (+) › "Tập khác" opens this tab with the sheet up.
   useEffect(() => {
@@ -372,7 +373,7 @@ export default function TrainScreen() {
               key={e.id}
               accessibilityRole="button"
               accessibilityLabel={g('train.weekOpen', { name: e.label, day: dayLabel(e) })}
-              onPress={() => setOpenWorkout(e)}
+              onPress={() => setOpenWorkoutId(e.id)}
               style={[styles.weekRow, i < weekEntries.length - 1 && styles.weekRowBorder]}
             >
               <QuestIcon name="dumbbell" size={18} color={e.details ? quest.gold : quest.hpText} />
@@ -439,7 +440,8 @@ export default function TrainScreen() {
       </BottomSheet>
 
       <OtherWorkoutSheet visible={other.open} preset={other.preset} onClose={() => setOther({ open: false, preset: null })} />
-      <WorkoutDetailDialog entries={openWorkout ? [openWorkout] : null} lang={lang} onClose={() => setOpenWorkout(null)} />
+      {/* The workout read from the store, so an edit shows at once; "Sửa", "Ảnh", "Xoá" (+ Hoàn tác) as in the Journal (dialogs.md 12). */}
+      <WorkoutDetailDialog entries={openWorkout ? [openWorkout] : null} lang={lang} onClose={() => setOpenWorkoutId(null)} editable />
     </ScreenTemplate>
   );
 }

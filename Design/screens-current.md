@@ -5,6 +5,20 @@
 > Nguồn: `app/**`, `src/components/quest/**`, `src/screens/*`, `src/theme/quest.ts`, các bảng chữ `src/**/strings.ts` (chữ trích ở đây là bản tiếng Việt). Chỗ nào chưa chắc chắn có ghi "(chưa kiểm chứng)".
 > Ngày viết: 2026-11-02.
 
+> **Cập nhật 0.34.0 (redesign GĐ0–6, `Design/uiux-proposal/`)**: mục 0 dưới đây là điều hướng hiện tại. Các mục 1–4 còn tả bản 0.21.0, giữ để đối chiếu; chỗ nào khác mục 0 thì theo mục 0.
+
+## 0. Điều hướng hiện tại (0.34.0)
+
+- **Thanh tab 5 ô**: Trại (`(tabs)/index`) · Tập (`(tabs)/workout`) · **(+)** (`/quick-add`) · Hành trình (`(tabs)/map`) · Hồ sơ (`(tabs)/profile`). Coach: Học viên (`clients`) · Tài khoản (`coach-account`).
+- **Trại**: chip ngày "📅 Hôm nay ▾" (sheet chọn ngày, dùng chung cho mọi màn ghi), thẻ "Hôm nay" + thanh boss tuần (sheet Boss tuần → "Xem cả tuần" = Nhật ký › Tuần), 3 ô 1 chạm (Chụp món → `/add-food`, +250 ml + Hoàn tác, Tập N′ → `/train/session`), 7 vòng nhiệm vụ (sheet), Bữa kế tiếp, thẻ check-in buổi tối, thẻ "Tổng kết tuần" thứ Hai, dòng thời gian ngắn → Nhật ký.
+- **(+)**: Chụp món · Nói / gõ món · Món đã lưu (→ `/add-food`, 2 bước, "Lưu bữa"), Ăn lại, nước (giữ để nhập số khác), cân (sheet stepper), Cảm giác (`/checkin`), Tập khác (sheet).
+- **Tập**: thẻ hôm nay + "Bắt đầu · giọng HLV" (`/train/session`, thoát hỏi bằng hộp trong app), nhóm A / B / C / Bài kế hoạch, "Thêm / bớt bài" (sheet), dòng bài → `/train/detail`, "Tập khác" (sheet: chạy, bơi, ảnh đồng hồ, ✨ AI ước tính kcal), "Tuần này", "Sửa / xoá buổi đã ghi" → `/workout-classic`.
+- **Hành trình**: boss chặng lớn, nút boss theo vùng → sheet (kỹ năng, khẩu chiến, nhật ký sát thương); chip "Cân nặng" → `/weight` (một biểu đồ, lần cân xoá + Hoàn tác, + mở sheet cân).
+- **Nhật ký** (`/journal?tab=day|week|month`, `focus=<nhiệm vụ>`): Ngày (số, thâm hụt, nước, dòng thời gian, bảng dinh dưỡng, bảng bữa) · Tuần (dải tuần, boss tuần + log 7 ngày, "Tổng kết tuần (AI)" → `/weekly-report`) · Tháng (lịch, "Phân tích sâu ▸" → `/insights`, "Cân nặng" → `/weight`). Đường cũ: `/history` → Tháng, `/boss` vẫn mở trang boss (có "Xem cả tuần"), `/today-classic` → Trại.
+- **Cook book** (`/cookbook`): tìm + sheet lọc, "Món của tôi | 🎉 Cheat day", lưới ảnh, "✨ Gợi ý món mới" (sheet); món → `/recipe/[id]`; `/cheat-day` (thèm gì, chip vị trí, quán + ⓘ, đã lưu, lịch sử: xoá / xoá hết đều có Hoàn tác); `/food-db`.
+- **Hồ sơ**: thẻ danh tính, 3 số, lối tắt Nhật ký / Thành tích / Cook book; Cài đặt: Mục tiêu & kế hoạch (`/plan`, → `/plan-menu`), Nước uống, Giới hạn & 16:8 (→ `/uric`), Nhắc nhở & cám dỗ, AI (→ `/ai-admin` chỉ admin), Coach & tài khoản (ngôn ngữ, coach, Nhập nhật ký → `/import-diary`, Đăng xuất) = `/settings/*`; Thêm: Thói quen, Kiến thức, Dinh dưỡng (`/nutrition`), Lịch sử, Tổng kết tuần (AI), Phân tích.
+- **Hộp xác nhận** chỉ còn 2: xoá nhật ký trước ngày và đăng xuất (cộng "Thoát buổi tập?" khi đang tập). Mọi xoá khác làm ngay với toast "Hoàn tác"; lỗi nhập là dòng đỏ, quyền / coach cập nhật kế hoạch là toast.
+
 ---
 
 ## 1. Tổng quan điều hướng

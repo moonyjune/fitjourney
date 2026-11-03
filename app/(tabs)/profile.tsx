@@ -155,7 +155,7 @@ export default function ProfileScreen() {
     },
   ];
 
-  // Pages that have no other way in yet (the Journal will gather Nutrition, History, the weekly review and Analysis).
+  // Other pages. History, the weekly review and Analysis also open from the Journal (Tháng / Tuần); kept here as shortcuts.
   const more: { key: string; icon: QuestIconName; color: string; label: string; value?: string; route: string }[] = [
     { key: 'habits', icon: 'check', color: quest.xp, label: tb('hb.profileRow'), value: tracked.length ? g('rd6.more.habitsValue', { n: habitsDone, t: tracked.length }) : undefined, route: '/habits' },
     { key: 'learn', icon: 'list', color: quest.mana, label: tl('learn.profileRow'), value: g('rd6.more.learnValue', { n: LEARN_TOPICS.length }), route: '/learn' },

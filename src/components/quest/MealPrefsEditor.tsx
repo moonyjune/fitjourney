@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Switch, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useGameText } from '../../game/strings';
 import { cleanPref, MEAL_KCAL_RANGE, MEAL_PROTEIN_RANGE, useMealPrefStore } from '../../store/useMealPrefStore';
 import { quest } from '../../theme/quest';
+import { HitSwitch } from './HitSwitch';
 import { HudText } from './HudText';
 import { QuestField } from './QuestField';
 
@@ -54,13 +55,7 @@ export function MealPrefsEditor() {
             {g('meals.prefs.strictHint')}
           </HudText>
         </View>
-        <Switch
-          accessibilityLabel={g('meals.prefs.strict')}
-          value={strictKcal}
-          onValueChange={(v) => setPrefs({ strictKcal: v })}
-          trackColor={{ false: quest.raised2, true: quest.gold }}
-          thumbColor={quest.text}
-        />
+        <HitSwitch accessibilityLabel={g('meals.prefs.strict')} value={strictKcal} onValueChange={(v) => setPrefs({ strictKcal: v })} />
       </View>
     </View>
   );

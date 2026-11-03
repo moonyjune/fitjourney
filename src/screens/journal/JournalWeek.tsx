@@ -18,7 +18,7 @@ import { useGameText, type GameKey } from '../../game/strings';
 import type { StringKey } from '../../i18n/strings';
 import { useTranslation } from '../../i18n/useTranslation';
 import { fetchWeeklySuggestion, pushWeeklySuggestion, requestWeeklySuggestion } from '../../sync/cloudSync';
-import { quest, questRadius } from '../../theme/quest';
+import { quest, questFonts, questRadius } from '../../theme/quest';
 import { chartWidthFor } from '../../theme/responsive';
 import type { Mood } from '../../types';
 import { thinLabels } from '../../utils/chartLabels';
@@ -51,6 +51,8 @@ const chartConfig = {
   decimalPlaces: 0,
   color: (opacity = 1) => `rgba(255, 200, 61, ${opacity})`,
   labelColor: (opacity = 1) => `rgba(179, 170, 207, ${opacity})`,
+  // The app font on the axes (the SVG text otherwise falls back to the browser's serif).
+  propsForLabels: { fontFamily: questFonts.medium },
 };
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -74,7 +76,8 @@ interface JournalWeekProps {
 export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }: JournalWeekProps) {
   const g = useGameText();
   const { t } = useTranslation();
-  const chartWidth = chartWidthFor(useWindowDimensions().width);
+  // Inside a panel (14 padding + 1.5 border each side), so the last bar's label is not cut off.
+  const chartWidth = chartWidthFor(useWindowDimensions().width) - 31;
   const { now, todayKey, evaluate, levelOf, cheatDays, deficitTarget, readOnly, logs, settings, weights, feelings, subjectId } = subject;
 
   const weekKey = weekStartKey(dateOf(selectedKey));
@@ -162,7 +165,7 @@ export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }
     });
     return (Object.keys(counts) as Mood[])
       .filter((mood) => counts[mood] > 0)
-      .map((mood) => ({ name: t(MOOD_LABEL_KEY[mood]), population: counts[mood], color: MOOD_COLORS[mood], legendFontColor: quest.textSecondary, legendFontSize: 12 }));
+      .map((mood) => ({ name: t(MOOD_LABEL_KEY[mood]), population: counts[mood], color: MOOD_COLORS[mood], legendFontColor: quest.textSecondary, legendFontSize: 12, legendFontFamily: questFonts.medium }));
   }, [feelings, t]);
 
   // The AI's note on the week's feelings (kept per week in the cloud); asked for this week only.

@@ -32,7 +32,6 @@ export const STRINGS = {
     'common.new': '+ Mới',
     'common.signOut': 'Đăng xuất',
     'common.loading': 'Đang tải...',
-    'common.error': 'Lỗi',
     'common.reset': 'Đặt lại',
     'common.notAvailable': 'N/A',
     'common.add': 'Thêm',
@@ -99,7 +98,7 @@ export const STRINGS = {
     'mode.startPersonalTracking': 'Bắt đầu theo dõi cá nhân',
 
     'coachAccount.codeTitle': 'Mã Coach',
-    'coachAccount.codeHint': 'Chia sẻ mã này cho học viên để họ liên kết tài khoản:',
+    'coachAccount.codeHint': 'Chia sẻ mã này cho học viên để họ liên kết tài khoản.',
     'coachAccount.remindersTitle': 'Nhắc nhở',
     'coachAccount.deviceReminders': 'Nhắc nhở trên thiết bị',
 
@@ -308,7 +307,7 @@ export const STRINGS = {
     'history.surplusShort': 'Ăn dư',
 
     'clients.yourCodeTitle': 'Mã của bạn',
-    'clients.shareCodeHint': 'Chia sẻ mã này cho học viên để họ liên kết tài khoản:',
+    'clients.shareCodeHint': 'Chia sẻ mã này cho học viên để họ liên kết tài khoản.',
     'clients.listTitle': 'Học viên ({n})',
     'clients.empty': 'Chưa có học viên nào liên kết. Gửi mã ở trên cho họ nhé.',
     'clients.noWeight': 'Chưa có cân nặng',
@@ -425,10 +424,8 @@ export const STRINGS = {
     'waterTimeline.increment': '+{ml}ml',
     'waterTimeline.target': 'Mục tiêu cộng dồn: {ml}ml',
 
-    'proof.permissionTitle': 'Cần quyền truy cập',
     'proof.libraryPermissionMessage': 'Vui lòng cho phép truy cập thư viện ảnh để đính kèm minh chứng.',
     'proof.cameraPermissionMessage': 'Vui lòng cho phép dùng camera để chụp ảnh minh chứng.',
-    'proof.missingPhotoTitle': 'Thiếu ảnh',
     'proof.missingPhotoMessage': 'Vui lòng chụp hoặc chọn một ảnh minh chứng.',
     'proof.removeLink': 'Xóa ảnh minh chứng',
     'proof.addButton': '📷 Thêm ảnh minh chứng',
@@ -477,7 +474,6 @@ export const STRINGS = {
     'common.new': '+ New',
     'common.signOut': 'Sign out',
     'common.loading': 'Loading...',
-    'common.error': 'Error',
     'common.reset': 'Reset',
     'common.notAvailable': 'N/A',
     'common.add': 'Add',
@@ -544,7 +540,7 @@ export const STRINGS = {
     'mode.startPersonalTracking': 'Start personal tracking',
 
     'coachAccount.codeTitle': 'Coach code',
-    'coachAccount.codeHint': 'Share this code with clients so they can link their account:',
+    'coachAccount.codeHint': 'Share this code with clients so they can link their account.',
     'coachAccount.remindersTitle': 'Reminders',
     'coachAccount.deviceReminders': 'On-device reminders',
 
@@ -753,7 +749,7 @@ export const STRINGS = {
     'history.surplusShort': 'Surplus',
 
     'clients.yourCodeTitle': 'Your code',
-    'clients.shareCodeHint': 'Share this code with clients so they can link their account:',
+    'clients.shareCodeHint': 'Share this code with clients so they can link their account.',
     'clients.listTitle': 'Clients ({n})',
     'clients.empty': 'No clients linked yet. Share the code above with them.',
     'clients.noWeight': 'No weight yet',
@@ -870,10 +866,8 @@ export const STRINGS = {
     'waterTimeline.increment': '+{ml}ml',
     'waterTimeline.target': 'Cumulative target: {ml}ml',
 
-    'proof.permissionTitle': 'Permission needed',
     'proof.libraryPermissionMessage': 'Please allow photo library access to attach proof.',
     'proof.cameraPermissionMessage': 'Please allow camera access to take a proof photo.',
-    'proof.missingPhotoTitle': 'Missing photo',
     'proof.missingPhotoMessage': 'Please take or choose a proof photo.',
     'proof.removeLink': 'Remove proof photo',
     'proof.addButton': '📷 Add proof photo',

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Switch, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
@@ -22,6 +22,7 @@ import { useWeightStore } from '../src/store/useWeightStore';
 import { useWorkoutStore } from '../src/store/useWorkoutStore';
 import { quest, questRadius } from '../src/theme/quest';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { HitSwitch } from '../src/components/quest/HitSwitch';
 import { useGameText } from '../src/game/strings';
 import { showToast } from '../src/store/useToastStore';
 import { toDateKey } from '../src/utils/date';
@@ -96,7 +97,7 @@ function HabitForm({ habit, onDone }: { habit: Habit | null; onDone: () => void 
         <HudText size={14} style={styles.flex}>
           {h('hb.formTracked')}
         </HudText>
-        <Switch accessibilityLabel={h('hb.formTracked')} value={form.tracked} onValueChange={(v) => set({ tracked: v })} trackColor={{ false: quest.raised2, true: quest.gold }} thumbColor={quest.text} />
+        <HitSwitch accessibilityLabel={h('hb.formTracked')} value={form.tracked} onValueChange={(v) => set({ tracked: v })} />
       </View>
       {error && (
         <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">

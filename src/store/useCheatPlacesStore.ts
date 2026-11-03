@@ -16,6 +16,8 @@ interface CheatPlacesState extends CheatPlacesData {
   /** "Hoàn tác" of removeSearch: the search back, its tombstone dropped. */
   restoreSearch: (search: PlacesSearch) => void;
   clearHistory: () => void;
+  /** "Hoàn tác" of clearHistory: the searches and the earlier clear date back. */
+  restoreHistory: (history: PlacesSearch[], clearedAtISO: string | null) => void;
   /** Stars a place, or un-stars it when it is saved already. */
   toggleSaved: (place: SavedPlace) => void;
   removeSaved: (key: string) => void;
@@ -54,6 +56,11 @@ export const useCheatPlacesStore = create<CheatPlacesState>()(
         clearHistory: () => {
           const s = get();
           commit({ ...dataOf(s), history: [], clearedAtISO: now() });
+        },
+        restoreHistory: (history, clearedAtISO) => {
+          const s = get();
+          const ids = new Set(history.map((h) => h.id));
+          commit({ ...dataOf(s), history: [...s.history.filter((h) => !ids.has(h.id)), ...history], clearedAtISO });
         },
         toggleSaved: (place) => {
           const s = get();

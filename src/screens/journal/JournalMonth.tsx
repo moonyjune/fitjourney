@@ -16,7 +16,7 @@ import type { StringKey } from '../../i18n/strings';
 import { useTranslation } from '../../i18n/useTranslation';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { fetchFeedback } from '../../sync/cloudSync';
-import { quest, questRadius } from '../../theme/quest';
+import { quest, questFonts, questRadius } from '../../theme/quest';
 import { chartWidthFor } from '../../theme/responsive';
 import { EXTRA_PROOF_PREFIX, type CoachFeedback, type ProofPhoto } from '../../types';
 import { thinLabels } from '../../utils/chartLabels';
@@ -48,6 +48,8 @@ const chartConfig = {
   decimalPlaces: 0,
   color: (opacity = 1) => `rgba(255, 200, 61, ${opacity})`,
   labelColor: (opacity = 1) => `rgba(179, 170, 207, ${opacity})`,
+  // The app font on the axes (the SVG text otherwise falls back to the browser's serif).
+  propsForLabels: { fontFamily: questFonts.medium },
   propsForDots: { r: '3' },
 };
 /** The colour key under the calendar (the full rules are behind ⓘ). */
@@ -95,7 +97,7 @@ export function JournalMonth({ subject, days, byKey, selectedKey, onOpenDay }: J
   const g = useGameText();
   const { t, language } = useTranslation();
   const chartWidth = chartWidthFor(useWindowDimensions().width);
-  const lineChartWidth = chartWidth - 16;
+  const lineChartWidth = chartWidth - 31; // inside a panel: 14 padding + 1.5 border each side
   const { todayKey, levelOf, readOnly, settings, weights, workouts, logs, mealTemplates, tdeeKcal, cheatDays, deficitTarget, subjectId, streak } = subject;
   const saveDayLog = useNutritionStore((s) => s.saveDayLog);
 
@@ -572,7 +574,7 @@ const styles = StyleSheet.create({
   toggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
   proofLink: { marginTop: 6, alignSelf: 'flex-start', minHeight: 32, justifyContent: 'center' },
   workouts: { marginTop: 6, gap: 6 },
-  workoutsHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, minHeight: 32, paddingVertical: 4 },
+  workoutsHead: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, minHeight: 44, paddingVertical: 4 },
   calNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   calNavButton: { width: 44, height: 44, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, alignItems: 'center', justifyContent: 'center' },
   calTitle: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },

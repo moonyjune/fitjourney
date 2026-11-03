@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { appStorage } from '../lib/appStorage';
-import { Alert } from 'react-native';
 import type { PlanData } from '../types';
 import { DEFAULT_PLAN } from '../constants/plan';
 import { pullPlan, pushPlan } from '../sync/cloudSync';
+import { formatGameText } from '../game/strings';
+import { useSettingsStore } from './useSettingsStore';
+import { showToast } from './useToastStore';
 
 interface PlanState {
   plan: PlanData;
@@ -50,7 +52,14 @@ export const usePlanStore = create<PlanState>()(
         if (remote && remote.updatedAtISO > get().updatedAtISO) {
           set({ plan: remote.plan, updatedAtISO: remote.updatedAtISO });
           if (hadPlanBefore) {
-            Alert.alert('Kế hoạch đã được cập nhật', 'Coach của bạn vừa cập nhật thực đơn/lịch tập mới.');
+            // A toast with "Xem" instead of a system alert (dialogs.md 43).
+            const language = useSettingsStore.getState().language;
+            showToast({
+              text: formatGameText(language, 'rd7.plan.coachUpdated'),
+              tone: 'mana',
+              durationMs: 8000,
+              action: { label: formatGameText(language, 'rd7.plan.view'), onPress: () => void import('expo-router').then(({ router }) => router.push('/plan-menu')) },
+            });
           }
         }
       },

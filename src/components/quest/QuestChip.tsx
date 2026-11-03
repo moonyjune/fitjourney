@@ -11,7 +11,7 @@ interface QuestChipProps {
   disabled?: boolean;
 }
 
-/** Pill toggle / quick action. 40 px tall plus a hit slop so the touch target is still 44 px. */
+/** Pill toggle / quick action, 44 px tall. A long label stays on one line inside the row (ends with …; the full text is its label). */
 export function QuestChip({ label, selected, onPress, tone = 'gold', accessibilityLabel, disabled }: QuestChipProps) {
   const accent = tone === 'gold' ? quest.gold : quest.mana;
   return (
@@ -29,7 +29,7 @@ export function QuestChip({ label, selected, onPress, tone = 'gold', accessibili
         disabled && { opacity: 0.4 },
       ]}
     >
-      <HudText size={13} color={selected ? quest.onGold : quest.text}>
+      <HudText size={13} color={selected ? quest.onGold : quest.text} numberOfLines={1}>
         {label}
       </HudText>
     </Pressable>
@@ -37,5 +37,5 @@ export function QuestChip({ label, selected, onPress, tone = 'gold', accessibili
 }
 
 const styles = StyleSheet.create({
-  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  chip: { minHeight: 44, maxWidth: '100%', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
 });

@@ -212,6 +212,12 @@ describe('Train tab, exercise detail and session', () => {
       expect(text.indexOf('Nhóm B')).toBeLessThan(text.indexOf('Chạy bộ')); // newest first
       press(r, 'Xem buổi tập Chạy bộ, T2 19/10');
       expect(allText(r)).toContain('07:00–07:32'); // the workout sheet
+      // Own workouts: the sheet edits and deletes them here too (dialogs.md 12), deleting with "Hoàn tác".
+      expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Sửa buổi tập: Chạy bộ' && typeof n.props.onPress === 'function').length).toBeGreaterThan(0);
+      press(r, 'Xoá buổi tập: Chạy bộ');
+      expect(useWorkoutStore.getState().entries.map((e) => e.id)).not.toContain('mon');
+      act(() => useToastStore.getState().undo());
+      expect(useWorkoutStore.getState().entries.map((e) => e.id)).toContain('mon');
       press(r, 'Sửa / xoá buổi đã ghi');
       expect(mockRouter.push).toHaveBeenCalledWith('/workout-classic');
     });
@@ -455,16 +461,19 @@ describe('Train tab, exercise detail and session', () => {
       expect(useTrainingStore.getState().progress.chairSquat?.ratings.map((x) => x.rating)).toEqual(['hard']);
     });
 
-    it('asks before throwing a workout away', () => {
+    it('asks in the in-app box before throwing a workout away (no system alert)', () => {
       mockParams = { ids: 'chairSquat', group: 'A' };
       const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
       const r = render(<SessionScreen />);
       press(r, 'Thoát buổi tập');
-      expect(alert).toHaveBeenCalledTimes(1);
+      expect(alert).not.toHaveBeenCalled();
+      expect(r.root.findAll((n) => n.props.testID === 'quit-confirm').length).toBeGreaterThan(0);
+      expect(allText(r)).toContain('Thoát buổi tập?');
+      expect(allText(r)).toContain('Buổi tập này sẽ không được ghi lại.');
+      press(r, 'Tiếp tục tập');
       expect(mockRouter.back).not.toHaveBeenCalled(); // nothing is thrown away until the user confirms
-      const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
-      expect(buttons.map((b) => b.text)).toEqual(['Tiếp tục tập', 'Thoát']);
-      act(() => buttons[1].onPress?.());
+      press(r, 'Thoát buổi tập');
+      press(r, 'Thoát');
       expect(mockRouter.back).toHaveBeenCalled();
       alert.mockRestore();
       expect(useWorkoutStore.getState().entries).toHaveLength(0);
@@ -629,14 +638,11 @@ describe('Train tab, exercise detail and session', () => {
     });
 
     it('stops speaking when the workout is quit and when the screen goes away', () => {
-      const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
       const r = render(<SessionScreen />);
       press(r, 'Thoát buổi tập');
-      const buttons = alert.mock.calls[0][2] as { text: string; onPress?: () => void }[];
       mockStop.mockClear();
-      act(() => buttons[1].onPress?.());
+      press(r, 'Thoát');
       expect(mockStop).toHaveBeenCalled();
-      alert.mockRestore();
       mockStop.mockClear();
       act(() => renderer?.unmount());
       renderer = undefined;

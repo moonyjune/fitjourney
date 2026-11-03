@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { aiNumberText, useAiFields } from '../../ai/useAiFields';
 import { decideWorkoutAutoLog } from '../../ai/workoutAutoLog';
 import { useAiErrorText, useConfidenceText, usePhotoAnalysis } from '../../ai/usePhotoAnalysis';
@@ -86,6 +86,8 @@ export function WorkoutEntryForm({
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
+  // A red line instead of a system alert when a field is missing (dialogs.md 43).
+  const [missing, setMissing] = useState(false);
   const [aiNote, setAiNote] = useState<{ confidence: string | null; reasoning: string; summary: string | null; kept: boolean } | null>(null);
   // Photo-first flow state: working (analysing / auto-logging), "AI wasn't sure, please check", and the confirmation card.
   const [working, setWorking] = useState(false);
@@ -244,9 +246,10 @@ export function WorkoutEntryForm({
     const durationMin = parseFloat(duration.replace(',', '.'));
     const caloriesBurned = parseFloat(calories.replace(',', '.'));
     if (!label.trim() || !(durationMin > 0) || !(caloriesBurned > 0)) {
-      Alert.alert(t('common.error'), t('workout.errorMissingFields'));
+      setMissing(true);
       return;
     }
+    setMissing(false);
     const photo: PhotoChange = newPhoto ? { kind: 'replace', uri: newPhoto } : photoRemoved ? { kind: 'remove' } : { kind: 'none' };
     setSaving(true);
     setSaveFailed(false);
@@ -319,6 +322,11 @@ export function WorkoutEntryForm({
             </HudText>
           ) : null}
         </View>
+      )}
+      {missing && (
+        <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">
+          {t('workout.errorMissingFields')}
+        </HudText>
       )}
       {saveFailed && (
         <HudText size={12} weight="medium" color={quest.hpText} accessibilityRole="alert" accessibilityLiveRegion="polite">

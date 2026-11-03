@@ -430,7 +430,7 @@ export function DailyMealBreakdownTable({
 /** The camera button next to a meal already saved on the day: opens its photos (add up to 3, view, remove). */
 function PhotoButton({ label, color, onPress }: { label: string; color: string; onPress: () => void }) {
   return (
-    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} hitSlop={8} onPress={onPress} style={{ paddingHorizontal: 6, paddingVertical: 4 }}>
+    <TouchableOpacity accessibilityRole="button" accessibilityLabel={label} hitSlop={8} onPress={onPress} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
       <QuestIcon name="camera" size={18} color={color} strokeWidth={2.2} />
     </TouchableOpacity>
   );
@@ -521,11 +521,11 @@ const makeStyles = (dark: boolean) => {
   fieldTime: { width: 64 },
   fieldNum: { flex: 1, minWidth: 56 },
   fieldInput: { fontSize: 13, color: c.text, borderWidth: 1, borderColor: c.input, borderRadius: radius.sm, paddingHorizontal: spacing.xs + 2, paddingVertical: 6, minHeight: 36, ...font },
-  deleteBtn: { minWidth: 30, minHeight: 36, alignItems: 'center', justifyContent: 'center' },
+  deleteBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   extraTime: { fontSize: 10, color: c.muted },
   timeInvalid: { borderColor: c.danger },
   partRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  partEditBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  partEditBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   parts: { paddingHorizontal: spacing.sm, paddingBottom: spacing.xs + 2, gap: 2 },
   partsTitle: { fontSize: 10, fontWeight: '800', color: c.muted, textTransform: 'uppercase' },
   partLine: { fontSize: 11, color: c.muted },
@@ -533,7 +533,7 @@ const makeStyles = (dark: boolean) => {
   skippedText: { color: c.muted, fontStyle: 'italic' },
   skipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.xs + 2, paddingHorizontal: spacing.sm, paddingTop: spacing.sm },
   skipTitle: { fontSize: 11, fontWeight: '700', color: c.muted },
-  skipChip: { minHeight: 32, paddingHorizontal: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, justifyContent: 'center' },
+  skipChip: { minHeight: 44, paddingHorizontal: spacing.sm, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, justifyContent: 'center' },
   skipChipText: { fontSize: 12, fontWeight: '700', color: c.muted, ...font },
   deleteText: { color: c.danger, fontSize: 12, fontWeight: '700' },
   totalRow: { backgroundColor: c.total, borderTopWidth: 1, borderTopColor: c.saveBorder },
@@ -551,7 +551,7 @@ const makeStyles = (dark: boolean) => {
   },
   unsavedHint: { fontSize: 11, color: c.muted, flex: 1 },
   actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, padding: spacing.sm },
-  actionBtn: { minHeight: 40, paddingHorizontal: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, justifyContent: 'center' },
+  actionBtn: { minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.sm, borderWidth: 1, borderColor: c.border, justifyContent: 'center' },
   actionText: { fontWeight: '700', fontSize: 13, color: c.totalText, ...font },
   darkSave: { backgroundColor: quest.gold, borderRadius: radius.sm, paddingHorizontal: spacing.md, minHeight: 44, justifyContent: 'center' },
   darkSaveText: { color: quest.onGold, fontSize: 13, fontFamily: questFonts.bold },

@@ -307,7 +307,7 @@ function DeficitLevelRow({ level, target, cheat, onToggleCheat }: { level: Defic
             onPress={() => {
               onToggleCheat();
             }}
-            style={[styles.levelChip, { borderColor: cheat ? DEFICIT_LEVEL_COLOR.cheat : quest.border }]}
+            style={[styles.levelChip, styles.cheatChip, { borderColor: cheat ? DEFICIT_LEVEL_COLOR.cheat : quest.border }]}
           >
             <HudText size={12} color={cheat ? DEFICIT_LEVEL_COLOR.cheat : quest.textSecondary}>
               {cheat ? '☑' : '☐'} {g('deficit.cheatMark')}
@@ -717,6 +717,7 @@ const styles = StyleSheet.create({
   tableToggle: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', marginTop: 8 },
   levelHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 32, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1.5 },
+  cheatChip: { minHeight: 44, borderRadius: 22 },
   levelDot: { width: 8, height: 8, borderRadius: 4 },
   waterBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, padding: 10, borderRadius: questRadius.row, backgroundColor: quest.panel, borderWidth: 1.5, borderColor: quest.border },
   sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginTop: 20, marginBottom: 8 },

@@ -645,6 +645,7 @@ export async function pushCoachFeedback(
 
 /** Feedback for a given client, newest first. Works for the client themself or their coach (RLS-scoped). */
 export async function fetchFeedback(clientUserId: string): Promise<CoachFeedback[]> {
+  if (useAuthStore.getState().devMode) return []; // the offline dev account has no rows (its id is not a uuid)
   try {
     const { data, error } = await supabase
       .from('coach_feedback')
@@ -809,6 +810,7 @@ export async function fetchFeelingRecords(userId: string, sinceISO: string): Pro
 
 /** Cached AI weekly suggestion for a given week, if one was already generated. */
 export async function fetchWeeklySuggestion(userId: string, weekKey: string): Promise<string | null> {
+  if (useAuthStore.getState().devMode) return null;
   try {
     const { data, error } = await supabase
       .from('weekly_suggestions')

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { StyleSheet, Switch, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { HudText } from '../../src/components/quest/HudText';
 import { QuestButton } from '../../src/components/quest/QuestButton';
 import { QuestSegment } from '../../src/components/quest/QuestSegment';
@@ -10,6 +10,7 @@ import { useAuthStore } from '../../src/store/useAuthStore';
 import { useSettingsStore } from '../../src/store/useSettingsStore';
 import { useSyncQueueStore } from '../../src/sync/syncQueue';
 import { useGameText } from '../../src/game/strings';
+import { HitSwitch } from '../../src/components/quest/HitSwitch';
 import { useTranslation } from '../../src/i18n/useTranslation';
 import { quest, questRadius } from '../../src/theme/quest';
 import { useLightStatusBar } from '../../src/theme/useLightStatusBar';
@@ -106,13 +107,7 @@ export default function CoachAccountScreen() {
             {t('coachAccount.deviceReminders')}
           </HudText>
         </View>
-        <Switch
-          accessibilityLabel={t('coachAccount.deviceReminders')}
-          value={remindersEnabled}
-          onValueChange={(v) => updateSettings({ remindersEnabled: v })}
-          trackColor={{ false: quest.raised2, true: quest.mana }}
-          thumbColor={quest.text}
-        />
+        <HitSwitch accessibilityLabel={t('coachAccount.deviceReminders')} value={remindersEnabled} onValueChange={(v) => updateSettings({ remindersEnabled: v })} color={quest.mana} />
       </View>
 
       <View style={styles.card}>

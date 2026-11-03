@@ -1,4 +1,6 @@
-# FitQuest: đề xuất cải tiến UI/UX (bản chờ duyệt)
+# FitQuest: đề xuất cải tiến UI/UX
+
+> **Trạng thái: đã làm xong ở 0.28.0–0.34.0** (GĐ0–6, mỗi giai đoạn một bản; kiểm thử GĐ7 sau 0.34.0). Điều hướng hiện tại: `Design/screens-current.md` mục 0.
 
 > Phạm vi: mọi màn của app người dùng (client), có ghi chú ngắn cho màn Coach. Bản này **không sửa code app**. Bạn duyệt ảnh trước, sau đó mới làm theo từng giai đoạn.
 > Giữ nguyên: màu, màu chữ và bảng màu trong `src/theme/quest.ts`, font Chakra Petch (`questFonts`), bo góc (`questRadius`: 12 / 16 / 14).

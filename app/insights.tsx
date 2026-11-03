@@ -160,11 +160,11 @@ const styles = StyleSheet.create({
   empty: { marginTop: 16 },
   refreshPanel: { marginTop: 14, gap: 6 },
   radios: { flexDirection: 'row', gap: 8, marginTop: 6, marginBottom: 2 },
-  radio: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised2 },
+  radio: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised2 },
   radioOn: { borderColor: quest.mana },
   pressed: { opacity: 0.7 },
   allRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  allButton: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },
+  allButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: quest.mana, backgroundColor: quest.raised2 },
   allButtonOutdated: { borderColor: quest.gold },
   allAt: { flexShrink: 1 },
 });

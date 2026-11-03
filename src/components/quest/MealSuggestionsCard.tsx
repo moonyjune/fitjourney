@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   card: { gap: 6, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   meal: { gap: 4, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
   ideaButtons: { gap: 6 },
-  listHead: { paddingVertical: 4 },
+  listHead: { minHeight: 44, justifyContent: 'center' },
   search: { borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, paddingHorizontal: 10, paddingVertical: 8, color: quest.text, backgroundColor: quest.bg },
   idea: { gap: 3, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg },
 });

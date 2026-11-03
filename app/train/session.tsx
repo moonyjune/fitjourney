@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
-import { Alert, Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
+import { ConfirmSheet } from '../../src/components/quest/ConfirmSheet';
 import { ExerciseFigure } from '../../src/components/quest/ExerciseFigure';
 import { ExercisePlanList, usePlanRowLabel } from '../../src/components/quest/ExercisePlanList';
 import { StepTuner } from '../../src/components/quest/StepTuner';
@@ -58,18 +59,6 @@ const STROKE = 14;
 function leave() {
   if (router.canGoBack()) router.back();
   else router.replace('/(tabs)/workout');
-}
-
-function confirmQuit(title: string, keep: string, quit: string, onQuit: () => void) {
-  // `onQuit` is responsible for silencing speech before leaving.
-  if (Platform.OS === 'web') {
-    if (typeof window !== 'undefined' && window.confirm(title)) onQuit();
-    return;
-  }
-  Alert.alert(title, undefined, [
-    { text: keep, style: 'cancel' },
-    { text: quit, style: 'destructive', onPress: onQuit },
-  ]);
 }
 
 function formatClock(totalSeconds: number): string {
@@ -169,6 +158,8 @@ export default function SessionScreen() {
   const [holdStartedAt, setHoldStartedAt] = useState<number | null>(null);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [result, setResult] = useState<{ durationMin: number; kcal: number } | null>(null);
+  // "Thoát buổi tập?" in the in-app box (dialogs.md 15 / 43): the workout so far is not logged.
+  const [quitOpen, setQuitOpen] = useState(false);
   // The screen stays on for the whole session (the voice coach and timers run while the phone lies untouched), until it is saved.
   useScreenAwake(result === null);
   // Timed auto count of a rep set: the clock (not the user's taps) decides when each rep is done and when the set ends.
@@ -587,12 +578,7 @@ export default function SessionScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={g('train.s.quit')}
-            onPress={() =>
-              confirmQuit(g('train.s.quitConfirm'), g('train.s.quitKeep'), g('train.s.quitLeave'), () => {
-                stopSpeaking();
-                leave();
-              })
-            }
+            onPress={() => setQuitOpen(true)}
             style={styles.close}
           >
             <QuestIcon name="x" size={20} color={quest.text} strokeWidth={2.4} />
@@ -776,6 +762,20 @@ export default function SessionScreen() {
           </View>
         )}
       </View>
+      <ConfirmSheet
+        visible={quitOpen}
+        title={g('train.s.quitTitle')}
+        message={g('train.s.quitBody')}
+        cancelLabel={g('train.s.quitKeep')}
+        confirmLabel={g('train.s.quitLeave')}
+        onCancel={() => setQuitOpen(false)}
+        onConfirm={() => {
+          setQuitOpen(false);
+          stopSpeaking();
+          leave();
+        }}
+        testID="quit-confirm"
+      />
     </View>
   );
 }
@@ -850,5 +850,5 @@ const styles = StyleSheet.create({
   stat: { flex: 1, alignItems: 'center', padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   rateRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   rateButtons: { flexDirection: 'row', borderRadius: 10, backgroundColor: quest.bg, padding: 3, gap: 2 },
-  rate: { minWidth: 44, minHeight: 36, paddingHorizontal: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  rate: { minWidth: 44, minHeight: 44, paddingHorizontal: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
 });

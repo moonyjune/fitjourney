@@ -244,7 +244,7 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
 const styles = StyleSheet.create({
   card: { gap: 8, padding: 12, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.manaPanel },
   presets: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
+  chip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel },
   chipOn: { backgroundColor: quest.gold, borderColor: quest.gold },
   input: { color: quest.text, borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, paddingHorizontal: 12, paddingVertical: 8, minHeight: 44, fontSize: 14, fontFamily: questFonts.semibold, backgroundColor: quest.bg },
   forecast: { gap: 4, padding: 10, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.manaBorder, backgroundColor: quest.panel },

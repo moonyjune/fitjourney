@@ -32,7 +32,7 @@ export function StepTuner({ values, unit, perSide, onChange, onReset, keys = ['s
           {g('train.tune.title')}
         </HudText>
         {onReset && (
-          <Pressable accessibilityRole="button" accessibilityLabel={g('train.tune.reset')} onPress={() => onReset()} hitSlop={8}>
+          <Pressable accessibilityRole="button" accessibilityLabel={g('train.tune.reset')} onPress={() => onReset()} style={styles.reset}>
             <HudText size={12} weight="medium" color={quest.manaText}>
               {g('train.tune.reset')}
             </HudText>
@@ -80,9 +80,10 @@ export function StepTuner({ values, unit, perSide, onChange, onReset, keys = ['s
 const styles = StyleSheet.create({
   box: { padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, gap: 8 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  reset: { minHeight: 44, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   flex: { flex: 1, minWidth: 0 },
-  btn: { width: 40, height: 40, borderRadius: 10, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, alignItems: 'center', justifyContent: 'center' },
+  btn: { width: 44, height: 44, borderRadius: 10, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, alignItems: 'center', justifyContent: 'center' },
   off: { opacity: 0.35 },
   value: { minWidth: 44, textAlign: 'center' },
 });

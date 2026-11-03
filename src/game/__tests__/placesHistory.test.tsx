@@ -495,9 +495,12 @@ describe('Cheat day screen: kept places and "Gợi ý tiếp"', () => {
     expect(useCheatPlacesStore.getState().history).toEqual([]);
     act(() => useToastStore.getState().undo());
     expect(useCheatPlacesStore.getState().history.map((h) => h.id)).toEqual([id]);
+    // "Xóa lịch sử" clears at once (no second tap); "Hoàn tác" brings the searches back.
     await press(r, 'Xóa lịch sử');
-    await press(r, 'Bấm lần nữa để xóa hết');
     expect(useCheatPlacesStore.getState().history).toEqual([]);
+    expect(useToastStore.getState().toast?.text).toBe('Đã xoá lịch sử tìm quán (1 lần tìm)');
+    act(() => useToastStore.getState().undo());
+    expect(useCheatPlacesStore.getState().history.map((h) => h.id)).toEqual([id]);
   });
 
   it('a place photo from the web shows with its credit, and disappears when the picture does not load', async () => {
