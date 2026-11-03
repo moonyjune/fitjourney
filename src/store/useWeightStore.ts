@@ -6,7 +6,8 @@ import { deleteWeightEntry, pushWeightEntry } from '../sync/cloudSync';
 
 interface WeightState {
   entries: WeightEntry[];
-  addEntry: (weightKg: number, note?: string, dateISO?: string) => void;
+  /** Adds a weighing and returns its id (so it can be undone). */
+  addEntry: (weightKg: number, note?: string, dateISO?: string) => string;
   removeEntry: (id: string) => void;
   latest: () => WeightEntry | null;
 }
@@ -15,20 +16,22 @@ export const useWeightStore = create<WeightState>()(
   persist(
     (set, get) => ({
       entries: [],
-      addEntry: (weightKg, note, dateISO) =>
+      addEntry: (weightKg, note, dateISO) => {
+        const entry: WeightEntry = {
+          id: `${Date.now()}`,
+          dateISO: dateISO ?? new Date().toISOString(),
+          weightKg,
+          note,
+        };
         set((state) => {
-          const entry: WeightEntry = {
-            id: `${Date.now()}`,
-            dateISO: dateISO ?? new Date().toISOString(),
-            weightKg,
-            note,
-          };
           const entries = [...state.entries, entry].sort(
             (a, b) => new Date(a.dateISO).getTime() - new Date(b.dateISO).getTime()
           );
           pushWeightEntry(entry);
           return { entries };
-        }),
+        });
+        return entry.id;
+      },
       removeEntry: (id) => {
         set((state) => ({ entries: state.entries.filter((e) => e.id !== id) }));
         deleteWeightEntry(id);

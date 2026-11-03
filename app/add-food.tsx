@@ -26,6 +26,7 @@ import { FoodLookup, type LookupResult } from '../src/food/components/FoodLookup
 import { lookupDescribedFood } from '../src/food/describeLookup';
 import { joinTitle, sumParts } from '../src/food/mealParts';
 import { emptyRow, num, rowAmount, rowFromFigures, rowHasNoFigures, rowIsEmpty, rowIsSavable, rowPart, scaleRow, type MealRow } from '../src/food/mealRows';
+import { takePendingMealPhoto } from '../src/food/pendingPhoto';
 import { parsePrefill } from '../src/food/prefill';
 import { findRememberedFood, portionOf } from '../src/food/remember';
 import { useFoodText } from '../src/food/strings';
@@ -39,6 +40,7 @@ import type { StringKey } from '../src/i18n/strings';
 import { useTranslation } from '../src/i18n/useTranslation';
 import { SKIPPED_MEAL_NAME } from '../src/insights/missing';
 import { useAiCalibrationStore } from '../src/store/useAiCalibrationStore';
+import { useAiPhotoStore } from '../src/store/useAiPhotoStore';
 import { useAllFoods } from '../src/store/useFoodDbStore';
 import { useNutritionStore } from '../src/store/useNutritionStore';
 import { quest, questRadius } from '../src/theme/quest';
@@ -85,8 +87,12 @@ export default function AddFoodScreen() {
   const nextKey = useRef(0);
   const newKey = (prefix: string) => `${prefix}${nextKey.current++}`;
 
+  // "Chụp món ăn" in the quick-add sheet: the photo just taken comes in memory (`photo=1`) and is analysed at once when AI is on.
+  const handedPhoto = useRef<string | null | undefined>(undefined);
+  if (handedPhoto.current === undefined) handedPhoto.current = params.photo === '1' ? takePendingMealPhoto() : null;
+
   const [text, setText] = useState(textParam);
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<string[]>(() => (handedPhoto.current ? [handedPhoto.current] : []));
   const [rows, setRows] = useState<MealRow[]>(() => [
     pre.name || pre.calories || pre.protein
       ? rowFromFigures('pre', { name: pre.name, calories: num(pre.calories), proteinG: num(pre.protein), purineMg: num(pre.purine), saltG: num(pre.salt), sugarG: num(pre.sugar) }, pre.fromDb)
@@ -116,6 +122,14 @@ export default function AddFoodScreen() {
       alive.current = false;
     };
   }, []);
+
+  const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
+  const autoAnalysed = useRef(false);
+  useEffect(() => {
+    if (autoAnalysed.current || !handedPhoto.current || !aiEnabled) return;
+    autoAnalysed.current = true;
+    void analyze();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const patch = (key: string, change: Partial<MealRow>) => setRows((all) => all.map((r) => (r.key === key ? { ...r, ...change } : r)));
   /** A figure or the name typed by hand: the amount is read from the name again and later scaling starts from these figures. */

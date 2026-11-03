@@ -2,17 +2,15 @@ import { useState } from 'react';
 import { AccessibilityInfo, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { HudText } from '../src/components/quest/HudText';
-import { LogDayPicker } from '../src/components/quest/LogDayPicker';
+import { DateChip } from '../src/components/quest/DateChip';
 import { MoodFace } from '../src/components/quest/MoodFace';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
 import { QuestIcon } from '../src/components/quest/QuestIcon';
 import { QuestSheet } from '../src/components/quest/QuestSheet';
-import { DefaultBossArt } from '../src/components/quest/StageBossArt';
-import { MISSION_ORDER } from '../src/game/constants';
 import { useGameText, type GameKey } from '../src/game/strings';
-import { useDayEvaluator, useGameState, useNow } from '../src/game/useGameState';
+import { useNow } from '../src/game/useGameState';
 import { logDayLabel } from '../src/game/useLogDate';
 import type { StringKey } from '../src/i18n/strings';
 import { useTranslation } from '../src/i18n/useTranslation';
@@ -23,7 +21,7 @@ import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 import { ScaleRow } from '../src/components/quest/ScaleRow';
 import type { FeelingRecord, Mood, WorkoutCondition } from '../src/types';
 import { toDateKey } from '../src/utils/date';
-import { dateOfKey, logDateParam, oldestLogDateKey, shiftDateKey } from '../src/utils/logDate';
+import { dateOfKey, logDateParam, oldestLogDateKey } from '../src/utils/logDate';
 
 const MOODS: { key: Mood; label: StringKey }[] = [
   { key: 'great', label: 'feeling.moodGreat' },
@@ -56,16 +54,14 @@ export default function CheckinScreen() {
   const { t, language } = useTranslation();
   useLightStatusBar();
   const now = useNow();
-  const game = useGameState(now);
-  const evaluate = useDayEvaluator(now);
   const records = useFeelingStore((s) => s.records);
   const addRecord = useFeelingStore((s) => s.addRecord);
   const updateRecord = useFeelingStore((s) => s.updateRecord);
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
   const todayKey = toDateKey(now);
 
-  // The day the check-in is for: the one picked in the quick-add sheet (route param), else the day selected in the battle log's
-  // week strip, else today; changeable with ‹ › (up to MAX_LOG_DAYS_BACK days back, never the future).
+  // The day the check-in is for: a `date` route param, else the shared selected day (the date chip of Camp and quick add), else
+  // today; changeable with the date chip (up to MAX_LOG_DAYS_BACK days back, never the future), which also moves the shared day.
   const [picked, setPicked] = useState<string | null>(() => {
     const start = dateParam ? logDateParam(dateParam, now) : workingDayKey(useSelectedDayStore.getState().selectedKey, now);
     return start === todayKey ? null : start;
@@ -94,14 +90,6 @@ export default function CheckinScreen() {
   }
 
   const complete = mood != null && craving != null && hunger != null;
-  const day = isToday ? game.today : evaluate(dateKey);
-  const doneCount = day.missions.filter((m) => m.status === 'done').length;
-  // The boss tile shows the day's damage while that day is in the boss's week.
-  const bossDay = isToday ? game.boss.days[game.boss.days.length - 1] : game.boss.days.find((d) => d.dateKey === dateKey);
-  const dayDamage = bossDay?.damage ?? 0;
-  // Today with meals still to come: its hit is an estimate, dealt once the day is settled.
-  const dayValue = bossDay?.pending ? g('checkin.bossPending', { n: bossDay.pendingDamage.toLocaleString('en-US') }) : `−${dayDamage.toLocaleString('en-US')}`;
-  const bossLabel = g(isToday ? 'checkin.boss' : 'checkin.bossDay');
   const shownDate = isToday ? now : dateOfKey(dateKey);
   const date = shownDate.toLocaleDateString(language === 'en' ? 'en-US' : 'vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit' });
 
@@ -132,53 +120,25 @@ export default function CheckinScreen() {
               {g('checkin.title')}
             </HudText>
           </View>
+          <DateChip
+            size="small"
+            value={dateKey}
+            now={now}
+            hint={g('quick.dateHintAll')}
+            onChange={(key) => {
+              useSelectedDayStore.getState().select(key, now);
+              pickDay(key);
+            }}
+          />
           <Pressable accessibilityRole="button" accessibilityLabel={g('common.close')} onPress={closeSheet} style={styles.close}>
             <QuestIcon name="x" size={20} color={quest.text} strokeWidth={2.2} />
           </Pressable>
         </View>
-
-        <LogDayPicker dateKey={dateKey} now={now} onShift={(days) => pickDay(shiftDateKey(dateKey, days))} onToday={() => pickDay(null)} />
         {existing && (
           <HudText size={12} weight="medium" color={quest.goldLight} style={styles.editing}>
             {g('checkin.editing')}
           </HudText>
         )}
-
-        <View style={styles.summary}>
-          <View accessible accessibilityLabel={`${g('checkin.missions')} ${doneCount}/${MISSION_ORDER.length}`} style={[styles.sumTile, { borderColor: quest.border }]}>
-            <HudText size={11} color={quest.textSecondary} style={styles.eyebrow}>
-              {g('checkin.missions').toUpperCase()}
-            </HudText>
-            <HudText size={22} color={quest.gold}>
-              {`${doneCount}/${MISSION_ORDER.length}`}
-            </HudText>
-            <View style={styles.pips}>
-              {day.missions.map((m) => (
-                <View key={m.id} style={[styles.pip, { backgroundColor: m.status === 'done' ? quest.gold : quest.raised2 }]} />
-              ))}
-            </View>
-          </View>
-          {bossDay && (
-          <View
-            accessible
-            accessibilityLabel={`${bossLabel} ${dayValue}, ${g('checkin.bossLeft', { n: game.boss.hpLeft })}`}
-            style={[styles.sumTile, { borderColor: quest.bossBorder, backgroundColor: quest.bossPanel }]}
-          >
-            <HudText size={11} color={quest.hpText} style={styles.eyebrow}>
-              {bossLabel.toUpperCase()}
-            </HudText>
-            <View style={styles.bossLine}>
-              <DefaultBossArt size={28} defeated={game.boss.defeated} />
-              <HudText size={bossDay.pending ? 15 : 22} color={bossDay.pending ? quest.textSecondary : quest.text}>
-                {dayValue}
-              </HudText>
-            </View>
-            <HudText size={11} weight="medium" color={quest.textSecondary}>
-              {g('checkin.bossLeft', { n: game.boss.hpLeft.toLocaleString('en-US') })}
-            </HudText>
-          </View>
-          )}
-        </View>
 
         <View style={styles.block}>
           <HudText size={15}>{g('checkin.mood')}</HudText>
@@ -269,11 +229,6 @@ const styles = StyleSheet.create({
   titleText: { flex: 1 },
   eyebrow: { letterSpacing: 1.6 },
   close: { width: 44, height: 44, borderRadius: 99, backgroundColor: quest.panel, alignItems: 'center', justifyContent: 'center' },
-  summary: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  sumTile: { flex: 1, padding: 12, gap: 2, borderRadius: questRadius.panel, borderWidth: 1.5, backgroundColor: quest.panel },
-  bossLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pips: { flexDirection: 'row', gap: 3, marginTop: 4 },
-  pip: { flex: 1, height: 5, borderRadius: 2 },
   block: { marginTop: 18, gap: 8 },
   blockHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
   moods: { flexDirection: 'row', gap: 8 },

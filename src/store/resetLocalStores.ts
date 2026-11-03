@@ -7,6 +7,7 @@ import {
 } from '../constants/plan';
 import { useAchievementStore } from './useAchievementStore';
 import { useCookbookStore } from './useCookbookStore';
+import { useEatAgainStore } from './useEatAgainStore';
 import { useMealIdeasStore } from './useMealIdeasStore';
 import { useCookbookFinderStore } from './useCookbookFinderStore';
 import { useCelebrationStore } from './useCelebrationStore';
@@ -65,6 +66,7 @@ export function resetAllLocalStores() {
     clientSetupDone: false,
     startDateISO: new Date().toISOString(),
     remindersEnabled: true,
+    waterPopupEnabled: undefined,
     roleChosen: false,
     role: 'client',
     coachEnabled: false,
@@ -88,7 +90,8 @@ export function resetAllLocalStores() {
   useMealModeStore.setState({ fasting: true, skipBreakfast: false });
   useSkippedMealStore.setState({ days: {}, entries: {} });
   useWaterWindowStore.setState({ startMinutes: DEFAULT_WATER_START_MIN, endMinutes: DEFAULT_WATER_END_MIN });
-  useWaterReminderStore.setState({ shown: [], open: null });
+  useWaterReminderStore.setState({ shown: [], open: null, snoozedUntil: null });
+  useEatAgainStore.setState({ hidden: [] });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });
   useCookbookStore.setState({ recipes: [] });
   useMealIdeasStore.setState({ byDay: {} });
