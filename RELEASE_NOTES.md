@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.0.0 | no | — |
 | 0.34.0 | no | — |
 | 0.33.0 | no | — |
 | 0.32.0 | no | — |
@@ -89,6 +90,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.0.0
+The UI/UX redesign is complete (Design/uiux-proposal, phases 0–6 shipped in 0.28.0–0.34.0; this release is the final end-to-end check). The version before the redesign is kept as branch `backup/pre-redesign-0.27.2` and tag `v0.27.2`.
+- The last system pop-ups are gone: leaving a workout asks in the app's own box; "coach updated your plan", missing photo permission and a missing photo are short notices (the coach one with "Xem"); a missing workout field is a red line in the form; "Xóa lịch sử" in Cheat day clears at once with "Hoàn tác". Only two confirms remain: deleting the diary before a date, and signing out.
+- Settings: names are no longer cut off (a long value goes to a second line), the hint no longer slides under the name, and switches are larger to tap (44 pt).
+- More buttons are at least 44 pt to tap: the cheat-day mark and "Xem buổi tập" in the Journal, the meal table's photo / skip / delete / ✎ / "Thêm món", "Chi tiết purine" on a recipe, the Analysis buttons, − / + while training, "Xem thêm món gợi ý".
+- Train › "Tuần này": a workout's sheet has "Sửa", "Ảnh" and "Xoá" (with "Hoàn tác"), as in the Journal. Long plan-workout chips in "Tập khác" end with "…".
+- Journal: the weekly chart's last label is no longer cut off, and chart labels use the app font.
+- English: "Not eating this meal" instead of "Skipped this meal"; the coach code hint no longer ends with ":".
 
 ## 0.34.0
 Redesign, phase 6 (Profile and settings).
