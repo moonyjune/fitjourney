@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheet } from '../src/components/quest/BottomSheet';
 import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestChip } from '../src/components/quest/QuestChip';
 import { QuestField } from '../src/components/quest/QuestField';
-import { QuestHeader } from '../src/components/quest/QuestHeader';
+import { QuestIcon } from '../src/components/quest/QuestIcon';
+import { ScreenTemplate } from '../src/components/quest/ScreenTemplate';
+import { useGameText } from '../src/game/strings';
+import { showToast } from '../src/store/useToastStore';
 import { amountOf, baseUnit, defaultQty, purineLevel } from '../src/food/calc';
 import { searchFoods } from '../src/food/search';
 import { GROUP_LABEL, unitLabel, useFoodText, type FoodKey } from '../src/food/strings';
@@ -16,7 +19,6 @@ import { BUILT_IN_FOODS } from '../src/food/foodData';
 import { useAllFoods, useFoodDbStore, validateFood, type FoodFields, type FoodValidation } from '../src/store/useFoodDbStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { quest, questRadius } from '../src/theme/quest';
-import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
 
 const ERROR_KEY: Record<Exclude<FoodValidation, null>, FoodKey> = {
@@ -158,8 +160,8 @@ function FoodRow({ food, expanded, onToggle, onEdit }: { food: FoodEntry; expand
   const edited = useFoodDbStore((s) => !!s.overrides[food.id]);
   const removeCustom = useFoodDbStore((s) => s.removeCustom);
   const resetOverride = useFoodDbStore((s) => s.resetOverride);
+  const g = useGameText();
   const [qty, setQty] = useState(String(defaultQty(food)));
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const level = purineLevel(food.purineMg);
   const base = baseUnit(food);
   const amount = amountOf(food, toNum(qty));
@@ -242,9 +244,14 @@ function FoodRow({ food, expanded, onToggle, onEdit }: { food: FoodEntry; expand
             {edited && <QuestChip label={f('fdb.resetEdit')} onPress={() => resetOverride(food.id)} />}
             {isCustom && (
               <QuestChip
-                label={confirmDelete ? f('fdb.deleteConfirm') : f('fdb.delete')}
+                label={f('fdb.delete')}
                 tone="mana"
-                onPress={() => (confirmDelete ? removeCustom(food.id) : setConfirmDelete(true))}
+                onPress={() => {
+                  // Gone at once; the toast's "Hoàn tác" adds it back (README §4: undo instead of a second tap).
+                  const { id: _id, ...fields } = food;
+                  removeCustom(food.id);
+                  showToast({ text: g('rd4.fdb.removed', { name: food.name }), undo: () => useFoodDbStore.getState().addCustom(fields) });
+                }}
               />
             )}
           </View>
@@ -264,11 +271,11 @@ function Tag({ text, color }: { text: string; color: string }) {
   );
 }
 
-/** Profile > Food database: browse and search the table, calculate an amount, edit values from a label, add your own foods. */
+/** Profile > Food database (dialog 30, ScreenTemplate): browse and search the table, calculate an amount, edit values from a label, add
+ *  your own foods (the form opens in a sheet), delete one of yours with "Hoàn tác". */
 export default function FoodDbScreen() {
   const f = useFoodText();
   const lang = useSettingsStore((s) => s.language);
-  const insets = useSafeAreaInsets();
   useLightStatusBar();
   const foods = useAllFoods();
   const [query, setQuery] = useState('');
@@ -278,57 +285,57 @@ export default function FoodDbScreen() {
   const shown = useMemo(() => searchFoods(foods, query, group), [foods, query, group]);
 
   return (
-    <View style={styles.screen}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 16 }]}>
-        <QuestHeader title={f('fdb.title')} eyebrow={f('fdb.count', { n: foods.length })} onBack={goBack} backLabel={f('fdb.back')} />
-
-        {form ? (
-          <FoodForm key={form.editingId ?? 'new'} initial={form.initial} editingId={form.editingId} onDone={() => setForm(null)} />
-        ) : (
-          <>
-            <View style={styles.search}>
-              <QuestField label={f('fdb.search')} value={query} onChangeText={setQuery} autoCapitalize="none" />
-            </View>
-            <View style={styles.chips}>
-              <QuestChip label={f('fdb.all')} selected={group === null} onPress={() => setGroup(null)} />
-              {FOOD_GROUPS.map((g) => (
-                <QuestChip key={g} label={GROUP_LABEL[lang][g]} selected={group === g} onPress={() => setGroup(group === g ? null : g)} />
-              ))}
-            </View>
-            <View style={styles.addRow}>
-              <QuestButton title={f('fdb.add')} icon="plus" variant="ghost" onPress={() => setForm({ initial: blankForm(), editingId: null })} />
-            </View>
-            {shown.length === 0 ? (
-              <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.empty}>
-                {f('fdb.empty')}
-              </HudText>
-            ) : (
-              shown.map((food) => (
-                <FoodRow
-                  key={food.id}
-                  food={food}
-                  expanded={openId === food.id}
-                  onToggle={() => setOpenId(openId === food.id ? null : food.id)}
-                  onEdit={() => setForm({ initial: formFrom(food), editingId: food.id })}
-                />
-              ))
-            )}
-            <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
-              {f('fdb.disclaimer')}
-            </HudText>
-          </>
-        )}
-      </ScrollView>
-    </View>
+    <ScreenTemplate
+      title={f('fdb.title')}
+      eyebrow={f('fdb.count', { n: foods.length })}
+      onBack={goBack}
+      backLabel={f('fdb.back')}
+      right={
+        <Pressable accessibilityRole="button" accessibilityLabel={f('fdb.add')} onPress={() => setForm({ initial: blankForm(), editingId: null })} style={styles.iconBtn}>
+          <QuestIcon name="plus" size={20} color={quest.gold} strokeWidth={2.4} />
+        </Pressable>
+      }
+    >
+      <QuestField label={f('fdb.search')} value={query} onChangeText={setQuery} autoCapitalize="none" />
+      <View style={styles.chips}>
+        <QuestChip label={f('fdb.all')} selected={group === null} onPress={() => setGroup(null)} />
+        {FOOD_GROUPS.map((g) => (
+          <QuestChip key={g} label={GROUP_LABEL[lang][g]} selected={group === g} onPress={() => setGroup(group === g ? null : g)} />
+        ))}
+      </View>
+      {shown.length === 0 ? (
+        <View style={styles.emptyBox}>
+          <HudText size={40}>🥣</HudText>
+          <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.empty}>
+            {f('fdb.empty')}
+          </HudText>
+          <QuestButton title={f('fdb.add')} icon="plus" variant="ghost" onPress={() => setForm({ initial: blankForm(), editingId: null })} />
+        </View>
+      ) : (
+        shown.map((food) => (
+          <FoodRow
+            key={food.id}
+            food={food}
+            expanded={openId === food.id}
+            onToggle={() => setOpenId(openId === food.id ? null : food.id)}
+            onEdit={() => setForm({ initial: formFrom(food), editingId: food.id })}
+          />
+        ))
+      )}
+      <HudText size={11} weight="medium" color={quest.textSecondary} style={styles.note}>
+        {f('fdb.disclaimer')}
+      </HudText>
+      <BottomSheet visible={form !== null} onClose={() => setForm(null)} title={form?.editingId ? f('fdb.edit') : f('fdb.add')}>
+        {form ? <FoodForm key={form.editingId ?? 'new'} initial={form.initial} editingId={form.editingId} onDone={() => setForm(null)} /> : null}
+      </BottomSheet>
+    </ScreenTemplate>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: quest.bg },
-  content: { paddingHorizontal: 16, paddingBottom: 120 },
-  search: { marginTop: 14 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
-  addRow: { marginTop: 14, marginBottom: 6 },
+  iconBtn: { width: 44, height: 44, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, alignItems: 'center', justifyContent: 'center' },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginBottom: 4 },
+  emptyBox: { alignItems: 'center', gap: 10, paddingVertical: 24 },
   flex: { flex: 1, minWidth: 0 },
   row: { marginTop: 8, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.panel, overflow: 'hidden' },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingVertical: 8, paddingHorizontal: 14 },
@@ -341,7 +348,7 @@ const styles = StyleSheet.create({
   calc: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qty: { width: 90, height: 44, borderRadius: questRadius.row, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.bg, color: quest.text, textAlign: 'center', fontSize: 15 },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  form: { marginTop: 16, gap: 12 },
+  form: { gap: 12, paddingBottom: 8 },
   pair: { flexDirection: 'row', gap: 10 },
   pairCell: { flex: 1, minWidth: 0 },
   empty: { marginTop: 18, textAlign: 'center' },

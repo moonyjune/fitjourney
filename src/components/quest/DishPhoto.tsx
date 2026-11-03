@@ -46,6 +46,8 @@ export interface DishPhotoProps {
   known?: PlacePhoto | null;
   /** Shown when the dish has no photo of its own: e.g. the web photo of a place found for that very dish. */
   fallback?: PlacePhoto | null;
+  /** As wide as its parent, `size` high (photo cards, the recipe page). */
+  fill?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -57,7 +59,7 @@ function otherPhoto(state: ReturnType<typeof useDishPhoto>, known?: PlacePhoto |
 
 /** A dish's real photo (rounded, a shimmer until it is there), or its emoji when there is none. The credit goes next to it with
  *  `DishPhotoCredit`. */
-export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised2, off, known, fallback, style }: DishPhotoProps) {
+export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised2, off, known, fallback, fill, style }: DishPhotoProps) {
   const g = useGameText();
   const state = useDishPhoto(off || known ? null : name);
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised
   const other = otherPhoto(state, known, fallback);
   const photo = known ? null : state?.status === 'done' ? state.photo : null;
   const asking = !off && !known && (!state || state.status === 'loading');
-  const box = { width: size, height: size, borderRadius: radius };
+  const box = { width: fill ? ('100%' as const) : size, height: size, borderRadius: radius };
   if (other && brokenUrl !== other.url) {
     // A picture hot-linked from a web page may be refused: the emoji then.
     return (

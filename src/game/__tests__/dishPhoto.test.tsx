@@ -25,7 +25,9 @@ jest.mock('../../sync/cloudSync', () => ({
   requestDishRecipe: jest.fn(),
 }));
 
+import CheatDayScreen from '../../../app/cheat-day';
 import CookbookScreen from '../../../app/cookbook';
+import { recipeFromIdea } from '../../cookbook/recipes';
 import { fakeCheatDinner } from '../../ai/devPhotoAnalysis';
 import { useDishPhotos } from '../../ai/useDishPhotos';
 import { DishPhoto, DishPhotoCredit } from '../../components/quest/DishPhoto';
@@ -314,12 +316,25 @@ describe('dish photos (app)', () => {
     expect(renderer!.root.findAllByProps({ testID: 'dish-photo-shimmer' })).toHaveLength(0);
   });
 
-  it('Cook book on a cheat day: the AI cheat dishes show their real photo and its credit', async () => {
+  it('Cook book grid: each card shows the dish\'s real photo (one request for the batch)', async () => {
+    useCookbookFinderStore.getState().reset();
+    const dish = (name: string) => recipeFromIdea({ name, calories: 400, proteinG: 30, purineMg: 100, saltG: 1, sugarG: 2, source: 'book' });
+    useCookbookStore.setState({ recipes: [dish('Bún chả ít bún'), dish('Salad ức gà'), dish('Canh chua cá lóc')] });
+    await act(async () => {
+      renderer = create(<CookbookScreen />);
+    });
+    await wait(80);
+    expect(mockPhotos).toHaveBeenCalledTimes(1);
+    expect(mockPhotos.mock.calls[0][0]).toEqual(expect.arrayContaining(['Bún chả ít bún', 'Salad ức gà', 'Canh chua cá lóc']));
+    expect(images(renderer!)).toEqual([PHOTO.url, PHOTO.url, PHOTO.url]);
+  });
+
+  it('Cheat day: the AI cheat dishes show their real photo and its credit', async () => {
     useCookbookFinderStore.getState().reset();
     useCookbookStore.setState({ recipes: [] });
     mockDinner.mockResolvedValue({ ok: true, result: fakeCheatDinner('home') });
     await act(async () => {
-      renderer = create(<CookbookScreen />);
+      renderer = create(<CheatDayScreen />);
     });
     const press = async (label: string) => {
       const node = renderer!.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === label)[0];
@@ -328,10 +343,8 @@ describe('dish photos (app)', () => {
         node.props.onPress();
       });
     };
-    await press('✨ Gợi ý');
-    await press('Cheat day');
     await press('Tự nấu');
-    await press('Gợi ý bằng AI');
+    await press('Gợi ý món tự nấu');
     await wait(80);
     expect(mockPhotos).toHaveBeenCalled();
     const asked = mockPhotos.mock.calls.flatMap((c) => c[0]);

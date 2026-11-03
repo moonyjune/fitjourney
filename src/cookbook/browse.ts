@@ -1,6 +1,6 @@
-import { acceptDinner, type DinnerBrief } from '../ai/dinner';
+import { acceptDinner, type DinnerBrief, type DinnerIdea } from '../ai/dinner';
 import { fold } from '../food/search';
-import { purineWarning } from './filters';
+import { matchFilters, purineWarning, type CookbookFilters } from './filters';
 import { ideaFromRecipe, type CookbookRecipe } from './recipes';
 
 // The cook book list: search (dish name and ingredients, accent-insensitive), quick filters and sort. Pure, unit-tested.
@@ -43,4 +43,30 @@ export function browseCookbook(book: CookbookRecipe[], opts: { query?: string; q
   return book
     .filter((r) => matchesSearch(r, opts.query ?? '') && quick.every((q) => quickTest[q](r, brief)))
     .sort(SORTS[opts.sort ?? 'newest']);
+}
+
+/** The cook book grid with the filter sheet's filters: the dishes matching them (best match first, then in the order given) and the
+ *  rest. Nothing chosen (or only ingredients to avoid): every dish not using an avoided one is a hit. */
+export function splitByFilters(book: CookbookRecipe[], filters: CookbookFilters): { hits: CookbookRecipe[]; misses: CookbookRecipe[] } {
+  const any = filters.occasions.length + filters.cravings.length + filters.types.length + filters.have.length > 0;
+  const scored: { r: CookbookRecipe; score: number; i: number }[] = [];
+  const misses: CookbookRecipe[] = [];
+  book.forEach((r, i) => {
+    const m = matchFilters(ideaFromRecipe(r), filters);
+    if (!m || (any && m.score === 0)) misses.push(r);
+    else scored.push({ r, score: m.score, i });
+  });
+  return { hits: scored.sort((a, b) => b.score - a.score || a.i - b.i).map((x) => x.r), misses };
+}
+
+/** The one badge of a dish card: "Purine cao" first (everyday dishes), else "Vừa" when it fits the next meal, else "+N" kcal over it;
+ *  none on a cheat day or without a meal to check against. */
+export type DishBadge = { kind: 'purine' } | { kind: 'fits' } | { kind: 'over'; kcal: number } | null;
+export function dishBadge(idea: DinnerIdea, brief: DinnerBrief | null, cheat = false): DishBadge {
+  if (cheat || idea.cheat) return null;
+  if (purineWarning(idea)) return { kind: 'purine' };
+  if (!brief) return null;
+  if (acceptDinner(brief, idea)) return { kind: 'fits' };
+  const over = Math.round(idea.calories - brief.budgetKcal);
+  return over > 0 ? { kind: 'over', kcal: over } : null;
 }

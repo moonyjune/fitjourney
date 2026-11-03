@@ -42,15 +42,17 @@ export interface DishThumbProps {
   known?: PlacePhoto | null;
   /** Ask for no web photo: the user's picture or the emoji only. */
   off?: boolean;
+  /** As wide as its parent, `size` high (the photo cards of the cook book grid, the recipe page). */
+  fill?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
 /** A dish's thumbnail: the user's own photo, else the dish's real photo (via `DishPhoto`), else a large emoji on a colour by kind of dish. */
-export function DishThumb({ name, emoji, tint, size = 52, radius = 12, photoUri, known, off, style }: DishThumbProps) {
+export function DishThumb({ name, emoji, tint, size = 52, radius = 12, photoUri, known, off, fill, style }: DishThumbProps) {
   const g = useGameText();
   const [broken, setBroken] = useState<string | null>(null);
   const look = dishLook(name);
-  const box = { width: size, height: size, borderRadius: radius };
+  const box = { width: fill ? ('100%' as const) : size, height: size, borderRadius: radius };
   if (photoUri && broken !== photoUri) {
     return (
       <View style={[styles.box, box, { backgroundColor: tint ?? look.tint }, style]}>
@@ -65,7 +67,7 @@ export function DishThumb({ name, emoji, tint, size = 52, radius = 12, photoUri,
       </View>
     );
   }
-  return <DishPhoto name={name} emoji={emoji ?? look.emoji} size={size} radius={radius} color={tint ?? look.tint} off={off} known={known} style={style} />;
+  return <DishPhoto name={name} emoji={emoji ?? look.emoji} size={size} radius={radius} color={tint ?? look.tint} off={off} known={known} fill={fill} style={style} />;
 }
 
 const styles = StyleSheet.create({

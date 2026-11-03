@@ -462,20 +462,21 @@ describe('Meal suggestions card (Camp)', () => {
     await act(async () => find(r, 'Nhờ AI gợi ý Bữa sáng')!.props.onPress());
     await act(async () => find(r, 'Xem công thức: Cá hấp gừng')!.props.onPress());
     const text = allText(r);
-    expect(text).toContain('NGUYÊN LIỆU');
-    expect(text).toContain('Cá — 200g');
-    expect(text).toContain('CÁCH NẤU');
+    // The same recipe view as the recipe page (redesign GĐ4): section headings, ingredient and amount side by side.
+    expect(text).toContain('Nguyên liệu');
+    expect(text).toContain('Cá 200g');
+    expect(text).toContain('Cách nấu');
     expect(text).toContain('1. Rửa cá');
     expect(text).toContain('20 phút');
     expect(text).toContain('★★☆☆☆'); // difficulty 2
-    expect(text).toContain('PHÂN TÍCH DINH DƯỠNG');
+    expect(text).toContain('650 kcal · 30 g đạm');
     await act(async () => find(r, 'Chấm 4 sao')!.props.onPress());
     expect(useCookbookStore.getState().recipes[0].rating).toBe(4);
 
     // Removing it from the cook book closes the dialog (no "save" button left behind) and says it was done.
     await act(async () => find(r, 'Xóa khỏi cook book')!.props.onPress());
     expect(useCookbookStore.getState().recipes.find((x) => x.name === 'Cá hấp gừng')).toBeUndefined();
-    expect(allText(r)).not.toContain('CÁCH NẤU');
+    expect(allText(r)).not.toContain('Cách nấu');
     expect(find(r, 'Lưu vào cook book')).toBeFalsy();
     // The app toast says so, and its undo puts the dish back.
     const toast = useToastStore.getState().toast;

@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+const mockRouterPush = jest.fn();
 jest.mock('expo-router', () => ({
-  router: { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: () => true },
+  router: { push: (...a: unknown[]) => mockRouterPush(...a), replace: jest.fn(), back: jest.fn(), canGoBack: () => true },
   useLocalSearchParams: () => ({}),
   useFocusEffect: () => undefined,
 }));
@@ -21,6 +22,7 @@ jest.mock('../../sync/cloudSync', () => ({
   shareToCookbook: jest.fn(async () => undefined),
   searchSharedCookbookFiltered: (...a: unknown[]) => mockShared(...a),
   requestDishRecipe: jest.fn(),
+  requestDishPhotos: jest.fn(async () => ({ ok: false, message: 'off', kind: 'disabled' })),
 }));
 
 import CookbookScreen from '../../../app/cookbook';
@@ -41,6 +43,7 @@ import {
 } from '../../cookbook/filters';
 import { filterBrief } from '../../cookbook/finderBrief';
 import { recipeFromIdea } from '../../cookbook/recipes';
+import { useAiPhotoStore } from '../../store/useAiPhotoStore';
 import { useCookbookFinderStore } from '../../store/useCookbookFinderStore';
 import { useCookbookStore } from '../../store/useCookbookStore';
 import { useFoodDbStore } from '../../store/useFoodDbStore';
@@ -183,9 +186,9 @@ describe('suggest-dinner with filters (server)', () => {
 
 // ----- the screen -----
 
-/** The text of the finder card only (the cook book's full list follows it on the screen). */
+/** The text of the "Gợi ý món mới" sheet only (the cook book's grid is behind it). */
 function allText(r: ReactTestRenderer): string {
-  const card = r.root.findAll((n) => typeof n.type === 'string' && n.props.accessibilityLabel === 'Hôm nay muốn ăn gì?')[0];
+  const card = r.root.findAll((n) => typeof n.type === 'string' && n.props.testID === 'cookbook-suggest')[0];
   const parts: string[] = [];
   const walk = (n: ReactTestInstance | string) => {
     if (typeof n === 'string') parts.push(n);
@@ -210,17 +213,30 @@ const press = async (r: ReactTestRenderer, label: string) => {
   });
 };
 
-describe('Cook book screen: the finder', () => {
+describe('Cook book screen: filter sheet and "Gợi ý món mới" sheet', () => {
   let renderer: ReactTestRenderer | undefined;
   const mount = async () => {
     await act(async () => {
       renderer = create(<CookbookScreen />);
     });
-    // The finder lives under the "Gợi ý" tab.
-    await press(renderer!, '✨ Gợi ý');
     return renderer!;
   };
   const openFilters = (r: ReactTestRenderer) => press(r, 'Bộ lọc');
+  /** Closes the filter sheet ("Xem n món khớp"). */
+  const closeFilters = async (r: ReactTestRenderer) => {
+    const node = r.root.findAll((n) => typeof n.props.onPress === 'function' && /^Xem \d+ món khớp$/.test(String(n.props.accessibilityLabel)))[0];
+    await act(async () => {
+      node.props.onPress();
+    });
+  };
+  /** The sticky "✨ Gợi ý món mới cho …": opens the suggestions, which search the cook books at once. */
+  const suggest = async (r: ReactTestRenderer) => {
+    const node = r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel).startsWith('✨ Gợi ý món mới cho'))[0];
+    if (!node) throw new Error('no suggest button');
+    await act(async () => {
+      node.props.onPress();
+    });
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -245,14 +261,15 @@ describe('Cook book screen: the finder', () => {
 
   it('chips and ingredients are remembered; Suggest ranks the cook book and then asks the shared one', async () => {
     const r = await mount();
-    expect(allText(r)).toContain('Hôm nay muốn ăn gì?');
     await openFilters(r);
     await press(r, 'Món nước / súp');
     await press(r, 'Chua cay');
     await press(r, 'Thêm "Cá basa"');
     expect(useCookbookFinderStore.getState().filters).toMatchObject({ cravings: ['sourSpicy'], types: ['soup'], have: ['Cá basa'] });
-    await press(r, 'Gợi ý');
+    await closeFilters(r);
+    await suggest(r);
     const text = allText(r);
+    expect(text).toContain('Hôm nay muốn ăn gì?');
     expect(text).toContain('Trong cook book của bạn (1)');
     expect(text).toContain('Canh chua cá basa');
     expect(text).toContain('Khớp: Chua cay, Món nước / súp, Cá basa');
@@ -263,6 +280,7 @@ describe('Cook book screen: the finder', () => {
     // Reloaded: the filters and the suggestion are still there.
     act(() => r.unmount());
     const again = await mount();
+    await suggest(again);
     expect(allText(again)).toContain('Khớp: Chua cay, Món nước / súp, Cá basa');
   });
 
@@ -272,7 +290,8 @@ describe('Cook book screen: the finder', () => {
     await press(r, 'Thêm vào: Tránh');
     await press(r, 'Thêm "Cá basa"');
     expect(useCookbookFinderStore.getState().filters.avoid).toEqual(['Cá basa']);
-    await press(r, 'Gợi ý');
+    await closeFilters(r);
+    await suggest(r);
     const text = allText(r);
     expect(text).toContain('Gà luộc');
     expect(text).not.toContain('Canh chua cá basa');
@@ -286,6 +305,8 @@ describe('Cook book screen: the finder', () => {
     await press(r, 'Thêm vào: Tránh');
     await typeIngredient(r, 'sua chua');
     await press(r, 'Thêm "Sữa chua không đường"');
+    await closeFilters(r);
+    await suggest(r);
     await press(r, 'Gợi ý bằng AI');
     expect(mockDinner).toHaveBeenCalledTimes(1);
     const [sentBrief, , avoidNames, sentFilters] = mockDinner.mock.calls[0] as [DinnerBrief, string[], string[], CookbookFilters];
@@ -299,15 +320,29 @@ describe('Cook book screen: the finder', () => {
     expect(text).toContain('⚠ Purine cao');
     expect(useCookbookStore.getState().recipes.map((x) => x.name)).toContain('Bạc xỉu ít sữa');
     act(() => r.unmount());
-    expect(allText(await mount())).toContain('Bạc xỉu ít sữa');
+    const again = await mount();
+    await suggest(again);
+    expect(allText(again)).toContain('Bạc xỉu ít sữa');
   });
 
   it('a failure of the AI is shown and the earlier dishes stay', async () => {
     useCookbookFinderStore.getState().setAi([idea('Trà gừng', { source: 'ai', calories: 20, proteinG: 0 })], new Date().toISOString());
     mockDinner.mockResolvedValue({ ok: false, message: 'quota', kind: 'quota' });
     const r = await mount();
+    await suggest(r);
     await press(r, 'Gợi ý bằng AI');
     expect(useCookbookFinderStore.getState().ai.map((i) => i.name)).toEqual(['Trà gừng']);
     expect(r.root.findAll((n) => n.props.accessibilityRole === 'alert').length).toBeGreaterThan(0);
+  });
+
+  it('AI switched off: no AI button, the cook books still answer; a suggested dish opens its recipe page', async () => {
+    useAiPhotoStore.setState({ aiEnabled: false });
+    const r = await mount();
+    await suggest(r);
+    expect(find(r, 'Gợi ý bằng AI')).toBeUndefined();
+    expect(allText(r)).toContain('Trong cook book của bạn (3)');
+    await press(r, 'Gà luộc');
+    expect(mockRouterPush).toHaveBeenCalledWith({ pathname: '/recipe/[id]', params: { id: 'ga luoc' } });
+    useAiPhotoStore.setState({ aiEnabled: true });
   });
 });
