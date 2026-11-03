@@ -1,6 +1,6 @@
 // Pure helpers for the per-user AI quota and the cost estimate (no Deno or network use, so they are unit-tested in jest).
 
-export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter' | 'workout' | 'dishphoto';
+export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter' | 'workout' | 'dishphoto' | 'feelings' | 'planchat';
 
 /** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
@@ -24,6 +24,11 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   /** Real dish photos (cheat day dishes, the temptation pop-up): one check of up to 6 dishes' candidate photos per call; a request the
    *  cache answers makes no call. */
   dishphoto: 40,
+  /** Weekly feelings analysis (Journal): one call per week, which the app keeps (`weekly_suggestions`), so a few a day is plenty. */
+  feelings: 3,
+  /** Plan chat (Plan > chat with the AI, also a coach editing a client's plan): one call per message sent; each carries the whole
+   *  plan and may answer with a whole new one, so it is the dearest text call. */
+  planchat: 10,
 };
 
 export interface TokenUsage {
@@ -234,4 +239,19 @@ export function systemFor(system: string | undefined, toolName: string, forced: 
   if (forced) return system;
   const must = `Bạn PHẢI trả lời bằng cách gọi tool ${toolName} đúng một lần, không viết gì ngoài lời gọi tool.`;
   return system ? `${system} ${must}` : must;
+}
+
+/** What a free-form answer (text, maybe with tool calls; see runAiChat in ai.ts) holds: its text blocks joined and trimmed, and every
+ *  tool call with its input. Blocks of any other kind (thinking, server tools) are left out. */
+export function chatAnswer(blocks: unknown): { text: string; toolUses: { name: string; input: Record<string, unknown> }[] } {
+  const list = Array.isArray(blocks) ? (blocks as Array<Record<string, unknown> | null>) : [];
+  const text = list
+    .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+    .map((b) => b!.text as string)
+    .join('\n')
+    .trim();
+  const toolUses = list
+    .filter((b) => b?.type === 'tool_use' && typeof b.name === 'string')
+    .map((b) => ({ name: b!.name as string, input: (b!.input && typeof b!.input === 'object' ? b!.input : {}) as Record<string, unknown> }));
+  return { text, toolUses };
 }

@@ -1,7 +1,8 @@
 // The common path of every AI Edge Function: CORS, kill switch, API key, sign-in, per-user daily quota, one Claude call
 // with a forced tool (structured output), one retry on a transient failure, and usage/cost logging. Each feature function
 // only builds its prompt and tool. A call with `webSearch` (suggest-cheat-places) instead lets the model search the web first
-// (tool_choice auto, made once, paused turns continued; see callClaudeWithSearch and webSearch.ts). Deploy: every function that imports this is deployed with `npx supabase functions deploy <name>`.
+// (tool_choice auto, made once, paused turns continued; see callClaudeWithSearch and webSearch.ts). A free-form `chat` plan (weekly feelings,
+// plan chat) gets the model's text and any tool calls it chose to make (tool_choice auto, see runAiChat). Deploy: every function that imports this is deployed with `npx supabase functions deploy <name>`.
 //
 // Secrets / env:  ANTHROPIC_API_KEY (required)   AI_MODEL (default claude-sonnet-5-5)   AI_DISABLED=1 (kill switch)
 //                 The admin can change the model and prices on the AI & cost screen (table ai_settings); that wins over AI_MODEL / AI_PRICE_*.
@@ -36,6 +37,7 @@ import {
   type AiFeature,
   type TokenUsage,
   addUsage,
+  chatAnswer,
 } from './usage.ts';
 import {
   collectWebFindings,
@@ -157,7 +159,33 @@ export interface AiContext {
 
 /** What a feature handler returns: the Claude call to make plus how to wrap its tool input in the response, or a ready
  *  response (e.g. a cached report, no AI call and no quota used). */
+/** A free-form call (a chat turn, a few lines of advice): the model answers in text and may call one of `tools` when it wants to
+ *  (tool_choice auto, never forced, so a model that refuses a forced tool call takes it as it is). For analyze-weekly-feelings (text
+ *  only) and suggest-plan-update (a chat that proposes a whole plan through a tool when asked to change it). */
+export interface AiChatCall {
+  /** Anthropic `messages` array. */
+  messages: unknown[];
+  system?: string;
+  maxTokens: number;
+  tools?: ToolDef[];
+  attemptTimeoutMs?: number;
+}
+
+/** What a free-form call gave: the text, every tool call, the usage and the model used. */
+export interface AiChatResult {
+  text: string;
+  toolUses: { name: string; input: Record<string, unknown> }[];
+  usage?: TokenUsage;
+  model: string;
+  stopReason?: string;
+}
+
 export type AiPlan =
+  | {
+      /** A free-form call; `respond` builds the whole response from its answer (the function's own response shape). */
+      chat: AiChatCall;
+      respond: (result: AiChatResult, ctx: AiContext) => Promise<Response> | Response;
+    }
   | {
       call: AiCall;
       responseKey: string;
@@ -416,6 +444,61 @@ async function callClaudeWithSearch(
   }
 }
 
+/** One free-form request (see AiChatCall), retried like callClaude on a transient failure. */
+async function callClaudeChat(
+  call: AiChatCall,
+  model: string
+): Promise<{ text: string; toolUses: AiChatResult['toolUses']; usage?: TokenUsage; stopReason?: string } | { error: string; status: number }> {
+  const tools = call.tools ?? [];
+  const body = JSON.stringify({
+    model,
+    max_tokens: call.maxTokens,
+    ...(call.system ? { system: call.system } : {}),
+    ...(tools.length > 0 ? { tools, tool_choice: toolChoiceFor(tools[0].name, false) } : {}),
+    messages: call.messages,
+  });
+  const started = Date.now();
+  for (let attempt = 0; ; attempt++) {
+    let response: Response | null = null;
+    let failure = 'Claude API không phản hồi.';
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: anthropicHeaders(ANTHROPIC_API_KEY!, Deno.env.get('AI_WORKSPACE_ID')),
+        body,
+        signal: AbortSignal.timeout(call.attemptTimeoutMs ?? ATTEMPT_TIMEOUT_MS),
+      });
+    } catch (error) {
+      failure = `Claude API không phản hồi (${error instanceof Error ? error.message : 'lỗi mạng'}).`;
+    }
+    if (response?.ok) {
+      const data = await response.json();
+      const answer = chatAnswer(data.content);
+      return { ...answer, usage: data.usage, stopReason: data.stop_reason };
+    }
+    const retryable = response === null || shouldRetry(response.status);
+    if (response) {
+      failure = summarizeUpstreamError(response.status, await response.text());
+      console.error('[ai]', failure, 'attempt', attempt + 1, 'request-id', response.headers.get('request-id'));
+    } else {
+      console.error('[ai]', failure, 'attempt', attempt + 1);
+    }
+    if (!retryable || !canRetry(attempt, Date.now() - started)) return { error: failure, status: 502 };
+    await new Promise((resolve) => setTimeout(resolve, RETRY_WAITS_MS[attempt] ?? 1500));
+  }
+}
+
+/** One free-form Claude call, made with the feature's model and logged under `feature` for this user. No quota or budget check: the
+ *  caller (serveAi) asks `aiAllowance` first. */
+export async function runAiChat(ctx: AiContext, feature: AiFeature, call: AiChatCall): Promise<AiChatResult | { error: string; status: number }> {
+  if (!ANTHROPIC_API_KEY) return { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.', status: 500 };
+  const config = await loadConfig(ctx.admin, feature);
+  const outcome = await callClaudeChat(call, config.model);
+  if ('error' in outcome) return outcome;
+  await recordUsage(ctx.admin, ctx.userId, feature, outcome.usage, config);
+  return { ...outcome, model: config.model };
+}
+
 /** Whether this user may make one more call of `feature` now: the feature's daily calls, the user's daily budget and the global one.
  *  The refusal (message and status) otherwise. */
 export async function aiAllowance(ctx: AiContext, feature: AiFeature): Promise<{ ok: true } | { ok: false; error: string; status: number }> {
@@ -460,7 +543,8 @@ export async function runAiCall(
   return { input: outcome.input, usage: outcome.usage, findings: 'findings' in outcome ? outcome.findings : null, web: 'web' in outcome ? outcome.web : undefined, model: config.model, stopReason: outcome.stopReason };
 }
 
-/** Wraps a feature: `plan` receives the parsed JSON body and the context, and returns the Claude call (or a Response). */
+/** Wraps a feature: `plan` receives the parsed JSON body and the context, and returns the Claude call (a forced-tool `call` or a
+ *  free-form `chat`), or a Response. */
 export function serveAi(
   feature: AiFeature,
   plan: (body: Record<string, unknown>, ctx: AiContext) => Promise<AiPlan>,
@@ -505,6 +589,12 @@ export function serveAi(
 
       const allowed = await aiAllowance(ctx, feature);
       if (!allowed.ok) return jsonResponse({ error: allowed.error }, allowed.status);
+
+      if ('chat' in planned) {
+        const answer = await runAiChat(ctx, feature, planned.chat);
+        if ('error' in answer) return jsonResponse({ error: answer.error }, answer.status);
+        return await planned.respond(answer, ctx);
+      }
 
       const outcome = await runAiCall(ctx, feature, planned.call);
       if ('error' in outcome) return jsonResponse({ error: outcome.error }, outcome.status);
