@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.34.0 | no | — |
 | 0.33.0 | no | — |
 | 0.32.0 | no | — |
 | 0.31.0 | no | — |
@@ -88,6 +89,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.34.0
+Redesign, phase 6 (Profile and settings).
+- Profile redone: identity card (level shield, name, title, campfire streak, XP), 3 stats, shortcuts to "Nhật ký", "Thành tích" and "Cook book", and Settings as 6 rows that show their current value.
+- Each setting has its own page: "Mục tiêu & kế hoạch", "Nước uống", "Giới hạn & 16:8" (with "Axit uric"), "Nhắc nhở & cám dỗ", "AI", "Coach & tài khoản" (/settings/…).
+- The plan page keeps only goals, body / TDEE, start date and the AI assistant; the menu, swaps and shopping list are on "Thực đơn & lịch tập" (/plan-menu). Language, reminders, coach and sign-out are no longer duplicated there. Saving shows "Hoàn tác".
+- Signing out asks in an in-app box, sends unsynced changes first ("n thay đổi chưa đồng bộ sẽ được gửi trước") and doesn't sign out if they can't be sent unless you choose "Vẫn đăng xuất".
+- Deleting a habit or a uric result has "Hoàn tác"; deleting the diary before a date asks in a confirm box (one of the only two confirms left, with sign-out).
+- The longer explanations cut in 0.28.0 are back behind ⓘ. Achievements can be filtered by group. Login, onboarding and coach screens show problems as a line or a toast instead of an alert.
 
 ## 0.33.0
 Redesign, phase 5 (one Journal).
