@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 0.29.0 | no | — |
 | 0.28.0 | no | — |
 | 0.27.2 | no | — |
 | 0.27.1 | no | — |
@@ -83,6 +84,22 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 0.29.0
+Redesign, phase 1 (Camp, Quick add, water pop-up).
+- Camp fits in about 1.5 screens: "📅 Hôm nay ▾" at the top picks the day for Camp and every log screen; the "Hôm nay" card has the "còn ăn" ring, eaten / training / deficit (the estimate "~X · chờ chốt" until the day settles) / protein, and the weekly boss bar.
+- Three 1-tap tiles: "Chụp món", "+250 ml" (with "Hoàn tác"), "Tập N′" straight into the session (› for the Train screen).
+- Missions become 7 small rings; tapping opens a sheet. Food missions open the Journal with a link to the cook book already filtered (fits the next meal / low purine).
+- The weekly boss opens as a sheet: HP, today's pending hit, a 7-day strip, "Xem cả tuần", "Tổng kết tuần bằng AI".
+- Next meal: one dish with a photo, "Ghi món này" / "Món khác"; ⓘ / "Xem thêm" opens the share of the remaining meals, wishes per meal, "Nhờ AI" and the shared cookbook.
+- An evening check-in card after 19:00 when today has no check-in; a "Tổng kết tuần" card on Mondays. Camp's timeline is shorter (no water rows); the week strip, number boxes, colour legend and cheat-day mark are in the Journal.
+- Quick add (+) redone: "Chụp món ăn" opens the camera at once and the AI reads the photo; "Nói / gõ món" and "Món đã lưu" (food database + cook book) below.
+- "Ăn lại": 3–6 recent dishes with photos; one tap logs it for the chosen day with "Hoàn tác"; long-press for another portion or to hide it.
+- Water in (+): +250 / +500; long-press (or tap the bar) for another amount, minus 250 ml or reset to 0. The −250 / −500 chips are gone; every change can be undone.
+- Weight opens a stepper sheet (±0.1, typeable), shows the change since the last weighing and saves with "Hoàn tác"; deleting a weighing stays on the Weight page.
+- One shared day chip: weight, check-in and "Tập khác" now log to the chosen day too. Check-in drops the missions / boss boxes (they are on Camp).
+- The water pop-up is a mana sheet: a glass filled to progress, "Uống X ml", 8 drink-time dots, the catch-up plan; "Đã uống X ml", X±250 ml chips, "Nhắc sau 30′"; the cheer moves to a toast (with undo).
+- A separate "Pop-up uống nước" switch in Profile next to "Nhắc nhở" (follows "Nhắc nhở" until changed).
 
 ## 0.28.0
 Redesign, phase 0 (foundation; Design/uiux-proposal).
