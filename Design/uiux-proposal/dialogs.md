@@ -5,7 +5,7 @@
 > Trong mỗi ảnh, khung viền xanh lá ghi rõ: giữ gì, chức năng nào chuyển sang đâu.
 > Mockup đã cập nhật theo **0.23.0** (dòng "0.23.0:" trong khung xanh): hôm nay còn bữa chưa ăn thì thâm hụt là số dự kiến "~X" và đòn boss tuần "chờ chốt" (phần mờ trên thanh HP, nhiệm vụ Thâm hụt chưa xong), ngày cũ thiếu bữa có dòng ⚠ "Chưa ghi …" + nút Ghi bổ sung, chưa ghi bữa nào thì không có số. Ảnh đổi: 03, 09, 17, 18, 19, 20, 28, 33.
 > Mockup nay theo **0.25.0** (dòng "0.24.0:" / "0.25.0:" trong khung xanh). **0.24.0**: "Tôi không ăn sáng" (35), nút Bỏ bữa / Bỏ {bữa} + toast Hoàn tác (07, 28, 43), ngày thiếu bữa số xám + ⚠ trong danh sách và lịch tháng, hôm nay "~X kcal · dự kiến" (07, 28), bữa "Không ăn" từ nhật ký tính là đủ (28). **0.25.0**: công tắc "Thông báo khi đóng app" và các trạng thái (36), thông báo trên lock screen (46 mới). Thêm 47 (màn mở app). Ảnh đổi: 07 (màn chính), 28, 35, 36, 43, 46, 47.
-> **Chưa vẽ 0.26.0** (kho món cám dỗ, tìm quán theo đợt).
+> **0.26** (dòng "0.26" trong khung xanh): 27 cám dỗ lấy từ kho chung ~200 món, ảnh thật riêng từng món + dòng "Ảnh: …", không gọi AI mỗi lần hiện; 36 lời giải thích mức Khó mới; 06b "Gợi ý tiếp" lấy từ mẻ quán đã lưu; 39 model riêng cho từng tính năng và giá theo bảng giá Anthropic.
 
 Ký hiệu cột cuối: **✔** = đủ chức năng · **dời → …** = chức năng vẫn còn nhưng nằm ở chỗ khác · **⚠** = cần bạn chốt (xem cuối file).
 

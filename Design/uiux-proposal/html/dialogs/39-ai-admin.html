@@ -7,9 +7,15 @@
   <div class="header"><div class="iconbtn"><i data-i="back"></i></div><div class="grow"><div class="t12 c2 med">Hồ sơ › AI › chỉ admin</div><span class="h2">AI & chi phí</span></div></div>
   <div class="panel" style="padding:12px">
     <b class="t15">Model AI</b>
-    <div class="row gap6 mt8 wrap"><span class="chip s on">claude-opus-5-5</span><span class="chip s">claude-sonnet-5-5</span><span class="chip s">Mặc định máy chủ</span></div>
-    <div class="row gap8 mt10"><div class="grow"><div class="flabel" style="margin-top:0">Giá vào $/1M</div><div class="field"><span>4.00</span></div></div><div class="grow"><div class="flabel" style="margin-top:0">Giá ra $/1M</div><div class="field"><span>20.00</span></div></div></div>
-    <div class="t12 c2 med mt8">Ước tính 1 người: ~38k token/ngày ≈ $0.31 · 1 tháng ≈ $9.30 ⓘ</div>
+    <div class="row gap6 mt8 wrap"><span class="chip s on">claude-sonnet-5-5</span><span class="chip s">claude-opus-5-5</span><span class="chip s">claude-haiku-5-5</span><span class="chip s">claude-fable-5-1</span></div>
+    <div class="row gap8 mt10"><div class="grow"><div class="flabel" style="margin-top:0">Giá vào $/1M</div><div class="field"><span>2</span></div></div><div class="grow"><div class="flabel" style="margin-top:0">Giá ra $/1M</div><div class="field"><span>10</span></div></div></div>
+    <div class="t12 c2 med mt8">Ước tính 1 người: ~38k token/ngày ≈ $0.12 · 1 tháng ≈ $3.60 ⓘ</div>
+    <div class="t13 med mt12"><b>Model riêng cho từng tính năng</b></div>
+    <div class="t11 c2 med mt4">Để trống = mặc định (hiện mờ trong ô). Chi phí của model riêng tính theo bảng giá Anthropic có sẵn trên máy chủ.</div>
+    <div class="flabel">Tìm quán (cheat day)</div><div class="field"><span class="c2">Model chung ở trên</span></div>
+    <div class="flabel">Kho món cám dỗ</div><div class="field"><span class="c2">claude-haiku-5-5</span></div>
+    <div class="flabel">Kiểm tra / tìm ảnh món</div><div class="field"><span class="c2">claude-haiku-5-5</span></div>
+    <div class="flabel">Câu ngắn (boss, nhận xét)</div><div class="field"><span class="c2">claude-haiku-5-5</span></div>
     <div class="btn sm mt10">Lưu</div>
     <div class="t12 cx med mt6">Đã lưu · có hiệu lực trong ~30 giây</div>
   </div>
@@ -23,6 +29,6 @@
   <div class="lbl"><span class="badge">chạm 1 ngày</span></div>
   <div class="dlg"><b class="t15">Theo người dùng ngày 1/11</b><div class="dr"><span class="grow">Người dùng A</span><span class="c2">71 lượt</span><b>$2.10</b></div><div class="dr"><span class="grow">Người dùng B</span><span class="c2">40 lượt</span><b>$1.15</b></div></div>
   <div class="t11 c2 med mt8">Chi phí ghi theo model + giá lúc gọi; đổi model không tính lại lịch sử. Tài khoản khác: "chưa được cấp quyền".</div>
-  <div class="note ok in"><b>Giữ /ai-admin</b> nguyên chức năng: AiUsageCard, AiModelCard (chọn model, giá vào / ra, ước tính ngày / tháng, lưu, lỗi model / giá / tải), theo ngày (cộng dồn, theo model), chạm ngày → theo người dùng, Đang tải / lỗi / rỗng, từ chối quyền. Chỉ đổi lối vào (Hồ sơ › AI) và khuôn ScreenTemplate.</div>
+  <div class="note ok in"><b>Giữ /ai-admin</b> nguyên chức năng: AiUsageCard, AiModelCard (chọn model, giá vào / ra, ước tính ngày / tháng, lưu, lỗi model / giá / tải), theo ngày (cộng dồn, theo model), chạm ngày → theo người dùng, Đang tải / lỗi / rỗng, từ chối quyền. Chỉ đổi lối vào (Hồ sơ › AI) và khuôn ScreenTemplate.<br><b>0.26.4+:</b> model riêng cho Tìm quán / Kho cám dỗ / Ảnh món (mặc định Haiku cho kho và ảnh); bấm chọn model điền giá tham khảo theo bảng giá Anthropic (Sonnet 5.5 $2/$10, Opus 5.5 $4/$20, Haiku 5.5 $0.10/$0.50, Fable 5.1 $10/$50). Ô "Câu ngắn" theo bản đang làm (boss, nhận xét ngắn dùng Haiku). Chi phí kho cám dỗ ghi riêng cho hệ thống, không tính vào người dùng.</div>
 </div>
 </body></html>

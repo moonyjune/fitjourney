@@ -3,7 +3,7 @@
 > Phạm vi: mọi màn của app người dùng (client), có ghi chú ngắn cho màn Coach. Bản này **không sửa code app**. Bạn duyệt ảnh trước, sau đó mới làm theo từng giai đoạn.
 > Giữ nguyên: màu, màu chữ và bảng màu trong `src/theme/quest.ts`, font Chakra Petch (`questFonts`), bo góc (`questRadius`: 12 / 16 / 14).
 > Dựa trên: code ở bản 0.21.0, `Design/screens-current.md` (mục 4, 16 chỗ chưa nhất quán) và `Design/v4-fitquest`.
-> Mockup "ĐỀ XUẤT" và hộp thoại theo luật thâm hụt của **0.23.0**: thâm hụt hôm nay là số dự kiến "~X" tới khi chốt, đòn boss tuần chờ chốt, ngày thiếu bữa có dòng ⚠ + "Ghi bổ sung", chưa ghi bữa thì không có số. Nay theo **0.25.0**: thêm "Tôi không ăn sáng", Bỏ bữa + Hoàn tác, ⚠ ở lịch / danh sách tháng (0.24.0), "Thông báo khi đóng app" và lock screen (0.25.0), màn mở app (xem `dialogs.md`, 46–47). Chưa vẽ 0.26.0. Ảnh "HIỆN TẠI" vẽ app trước 0.23.0.
+> Mockup "ĐỀ XUẤT" và hộp thoại theo luật thâm hụt của **0.23.0**: thâm hụt hôm nay là số dự kiến "~X" tới khi chốt, đòn boss tuần chờ chốt, ngày thiếu bữa có dòng ⚠ + "Ghi bổ sung", chưa ghi bữa thì không có số. Nay theo **0.26** (kho cám dỗ, mẻ quán, model riêng từng tính năng: 27, 36, 39, 06b) và **0.25.0**: thêm "Tôi không ăn sáng", Bỏ bữa + Hoàn tác, ⚠ ở lịch / danh sách tháng (0.24.0), "Thông báo khi đóng app" và lock screen (0.25.0), màn mở app (xem `dialogs.md`, 46–47). Chưa vẽ 0.26.0. Ảnh "HIỆN TẠI" vẽ app trước 0.23.0.
 
 **PDF:** `FitQuest-UIUX-proposal.pdf` gom toàn bộ đề xuất (sơ đồ chuyển màn, thay đổi chung, từng màn trước / sau kèm mô tả, 47 hộp thoại, xoá / gộp, kế hoạch, đã chốt). **Sơ đồ chuyển màn hình:** `flow.png` (mã `html/flow.html`): mỗi tab / màn chính một cột, nhãn trên mỗi ô là thao tác mở nó.
 
