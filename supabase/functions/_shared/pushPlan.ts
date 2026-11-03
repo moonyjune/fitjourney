@@ -5,7 +5,8 @@
 //
 // Rules (the same as the in-app water pop-up and the phone's scheduled notifications, src/notifications/schedule.ts):
 // - Water: at each drink time the latest one reached (at most WATER_LATE_MIN ago) that was not sent yet, unless the day's water
-//   (nutrition_logs.water_ml, synced) already reached its running total. Several missed times give one message.
+//   (nutrition_logs.water_ml, synced) already reached its running total. Several missed times give one message. On the date of
+//   `today` (a day with its own target) its drink times are used; on other days the day type's.
 // - Meals: every day at each meal's start time (the training-day template, as on the phone).
 // - Workouts: on training weekdays at each workout with a reminder slot.
 // A meal / workout message is sent at most MEAL_LATE_MIN after its time (one cron run may be missed), never twice.
@@ -33,8 +34,11 @@ export interface PushTimed {
 
 export interface PushPlan {
   v: number;
-  /** Water drink times, by day type (labels differ around workouts). */
+  /** Water drink times, by day type (labels differ around workouts), for the target of the days ahead (the setting). */
   water: { training: PushWaterPoint[]; rest: PushWaterPoint[] };
+  /** Today's drink times when today's target is not the setting's (a day keeps the target it was started with); used only on that
+   *  date in the user's time zone. Optional: a plan without it (older app versions) reminds every day from `water`. */
+  today?: { date: string; water: PushWaterPoint[] };
   /** JS weekdays (0 = Sunday) that are training days. */
   trainingDays: number[];
   meals: PushTimed[];
@@ -79,9 +83,12 @@ export function cleanPushPlan(raw: unknown): PushPlan | null {
   if (o.v !== PUSH_PLAN_VERSION) return null;
   const water = (o.water ?? {}) as Record<string, unknown>;
   const days = Array.isArray(o.trainingDays) ? o.trainingDays.filter((d): d is number => isInt(d, 0, 6)) : [];
+  const today = (o.today ?? null) as Record<string, unknown> | null;
+  const todayDate = today && typeof today.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(today.date) ? today.date : null;
   return {
     v: PUSH_PLAN_VERSION,
     water: { training: cleanWater(water.training), rest: cleanWater(water.rest) },
+    ...(todayDate ? { today: { date: todayDate, water: cleanWater(today!.water) } } : {}),
     trainingDays: [...new Set(days)],
     meals: cleanTimed(o.meals),
     workouts: cleanTimed(o.workouts),
@@ -145,8 +152,8 @@ export function duePushes(plan: PushPlan, clock: LocalClock, sent: ReadonlySet<s
   const { dateKey, minutes } = clock;
   const training = plan.trainingDays.includes(clock.weekday);
 
-  // Water: mirrors dueWaterReminder (src/water/reminder.ts).
-  const water = training ? plan.water.training : plan.water.rest;
+  // Water: mirrors dueWaterReminder (src/water/reminder.ts). Today's own drink times when the plan has them for this date.
+  const water = plan.today?.date === dateKey ? plan.today.water : training ? plan.water.training : plan.water.rest;
   const reached = water.filter((p) => p.m <= minutes);
   const latest = reached[reached.length - 1];
   if (latest) {

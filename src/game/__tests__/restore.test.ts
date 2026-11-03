@@ -394,16 +394,44 @@ describe('restore from the cloud', () => {
     });
   });
 
-  it('meals skipped on purpose: marks from either side are kept and the joined set is saved', async () => {
-    useSkippedMealStore.setState({ days: { '2026-10-22': ['meal3'] } });
+  it('meals skipped on purpose: an old cloud list joins this device, and is saved again in the new format', async () => {
+    useSkippedMealStore.setState({ days: { '2026-10-22': ['meal3'] }, entries: { '2026-10-22': { meal3: { skipped: true, at: 100 } } } });
     mockDb.user_data = [{ user_id: 'user-1', key: 'skippedMeals', value: { days: { '2026-10-22': ['meal2'], '2026-10-21': ['breakfast'] } } }];
     await restoreOwnData();
     const joined = { '2026-10-22': ['meal2', 'meal3'], '2026-10-21': ['breakfast'] };
     expect(useSkippedMealStore.getState().days).toEqual(joined);
     await whenPushesSettled();
-    expect(mockDb.user_data.find((r) => r.key === 'skippedMeals')?.value).toEqual({ days: joined });
+    expect(mockDb.user_data.find((r) => r.key === 'skippedMeals')?.value).toEqual({
+      v: 2,
+      entries: { '2026-10-22': { meal2: { skipped: true, at: 0 }, meal3: { skipped: true, at: 100 } }, '2026-10-21': { breakfast: { skipped: true, at: 0 } } },
+      days: joined,
+    });
     resetAllLocalStores();
     expect(useSkippedMealStore.getState().days).toEqual({});
+    expect(useSkippedMealStore.getState().entries).toEqual({});
+  });
+
+  it('meals skipped on purpose: an un-skip made here is not undone by an older skip from another device', async () => {
+    useSkippedMealStore.setState({ days: {}, entries: { '2026-10-22': { meal3: { skipped: false, at: 200 } } } });
+    const cloudValue = { v: 2, entries: { '2026-10-22': { meal3: { skipped: true, at: 100 }, meal1: { skipped: true, at: 150 } } }, days: { '2026-10-22': ['meal1', 'meal3'] } };
+    mockDb.user_data = [{ user_id: 'user-1', key: 'skippedMeals', value: cloudValue }];
+    await restoreOwnData();
+    expect(useSkippedMealStore.getState().days).toEqual({ '2026-10-22': ['meal1'] });
+    await whenPushesSettled();
+    expect(mockDb.user_data.find((r) => r.key === 'skippedMeals')?.value).toEqual({
+      v: 2,
+      entries: { '2026-10-22': { meal1: { skipped: true, at: 150 }, meal3: { skipped: false, at: 200 } } },
+      days: { '2026-10-22': ['meal1'] },
+    });
+
+    // And the other way round: a newer un-skip in the cloud clears the skip here; nothing is saved when the cloud already has it all.
+    useSkippedMealStore.setState({ days: { '2026-10-23': ['lunch'] }, entries: { '2026-10-23': { lunch: { skipped: true, at: 10 } } } });
+    const newer = { v: 2, entries: { '2026-10-23': { lunch: { skipped: false, at: 20 } } }, days: {} };
+    mockDb.user_data = [{ user_id: 'user-1', key: 'skippedMeals', value: newer }];
+    await restoreOwnData();
+    await whenPushesSettled();
+    expect(useSkippedMealStore.getState().days).toEqual({});
+    expect(mockDb.user_data.find((r) => r.key === 'skippedMeals')?.value).toBe(newer);
   });
 
   it('puts nothing on the device when the account changed while the requests were running', async () => {

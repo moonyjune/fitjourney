@@ -165,7 +165,10 @@ export async function currentSubscription(env: PushEnv | null): Promise<Subscrip
 
 interface PlanInput {
   plan: Pick<PlanData, 'mealTemplates' | 'workoutTemplates'>;
+  /** The water target of the days ahead (the setting). */
   targetMl: number;
+  /** Today's target when the day has its own (src/water/schedule.ts dayWaterTargetMl); sent as today's drink times when it differs. */
+  todayTargetMl?: number;
   startMinutes: number;
   endMinutes: number;
   fasting: boolean;
@@ -186,11 +189,15 @@ function nextDateOf(now: Date, type: 'training' | 'rest'): Date {
  *  (src/water/useWaterPlan.ts, src/notifications/schedule.ts), the texts already in the user's language. */
 export function buildPushPlan(input: PlanInput): PushPlan {
   const t = (key: Parameters<typeof formatGameText>[1], params?: Record<string, string | number>) => formatGameText(input.language, key, params);
-  const water = (type: 'training' | 'rest'): PushWaterPoint[] =>
-    waterPlanFor({ ...input, date: nextDateOf(input.now, type) }).schedule.map((c) => ({ m: c.hour * 60 + c.minute, cum: c.cumulativeTargetMl, label: c.label }));
+  const points = (targetMl: number, date: Date): PushWaterPoint[] =>
+    waterPlanFor({ ...input, targetMl, date }).schedule.map((c) => ({ m: c.hour * 60 + c.minute, cum: c.cumulativeTargetMl, label: c.label }));
+  const water = (type: 'training' | 'rest') => points(input.targetMl, nextDateOf(input.now, type));
+  const todayTarget = input.todayTargetMl;
   return {
     v: PUSH_PLAN_VERSION,
     water: { training: water('training'), rest: water('rest') },
+    // Today with its own target (its day type's schedule); the server uses it on this date only, the setting's on the others.
+    ...(todayTarget && todayTarget > 0 && todayTarget !== input.targetMl ? { today: { date: toDateKey(input.now), water: points(todayTarget, input.now) } } : {}),
     trainingDays: [...TRAINING_WEEKDAYS].sort(),
     // Meal times are the same on training and rest days; the phone reminds from the training template too.
     meals: (input.plan.mealTemplates.training ?? []).map((m) => ({ m: m.startHour * 60 + m.startMinute, title: t('push.mealTitle', { label: m.label }), body: t('push.mealBody') })),
@@ -209,7 +216,8 @@ export function currentPushPlan(now = new Date()): PushPlan | null {
   const window = useWaterWindowStore.getState();
   return buildPushPlan({
     plan: usePlanStore.getState().plan,
-    targetMl: dayWaterTargetMl(useNutritionStore.getState().logs[toDateKey(now)], settings.waterTargetMl),
+    targetMl: settings.waterTargetMl,
+    todayTargetMl: dayWaterTargetMl(useNutritionStore.getState().logs[toDateKey(now)], settings.waterTargetMl),
     startMinutes: window.startMinutes,
     endMinutes: window.endMinutes,
     fasting: useMealModeStore.getState().fasting,
@@ -226,10 +234,30 @@ const timeZone = (): string | null => {
   }
 };
 
-/** Saves (or updates) this device's subscription row with the current plan. */
+/** PostgREST / Postgres "no such function": the database has not been given push_claim_subscription yet (schema.sql not run). */
+const isMissingFunction = (error: { code?: string; message?: string } | null) =>
+  !!error && (error.code === 'PGRST202' || error.code === '42883' || /could not find the function|does not exist/i.test(error.message ?? ''));
+
+/** Saves (or updates) this device's subscription row with the current plan, for the signed-in account. Claimed by endpoint
+ *  (push_claim_subscription, SECURITY DEFINER): a row this browser left bound to another account (a sign-out that could not delete
+ *  it) is replaced instead of failing under the owner-only RLS. */
 export async function saveSubscription(sub: SubscriptionKeys, plan: PushPlan | null, userAgent: string): Promise<boolean> {
   const userId = currentUserId();
   if (!userId) return false;
+  const claimed = await supabase.rpc('push_claim_subscription', {
+    p_endpoint: sub.endpoint,
+    p_p256dh: sub.p256dh,
+    p_auth: sub.auth,
+    p_user_agent: userAgent.slice(0, 400),
+    p_plan: plan,
+    p_tz: timeZone(),
+  });
+  if (!claimed.error) return true;
+  if (!isMissingFunction(claimed.error)) {
+    console.warn('[webPush] save failed:', claimed.error);
+    return false;
+  }
+  // Older database: the plain upsert (works while the row is this account's).
   const { error } = await supabase.from('push_subscriptions').upsert(
     {
       user_id: userId,
@@ -257,14 +285,16 @@ export async function enableWebPush(env = browserPushEnv()): Promise<SubscribeRe
   if (!result.ok) return result;
   const plan = currentPushPlan();
   if (!(await saveSubscription(result.subscription, plan, env?.userAgent ?? ''))) return { ok: false, reason: 'failed' };
-  usePushStore.getState().set({ enabled: true, endpoint: result.subscription.endpoint, savedPlanJson: JSON.stringify(plan) });
+  usePushStore.getState().set({ enabled: true, endpoint: result.subscription.endpoint, savedPlanJson: JSON.stringify(plan), userId: currentUserId(), resumeUserId: null });
   return result;
 }
 
-/** Turns push off for this device: unsubscribes and deletes the row (also on sign-out, while still signed in). */
-export async function disableWebPush(env = browserPushEnv()): Promise<void> {
+/** Turns push off for this device: unsubscribes and deletes the row (also on sign-out, while still signed in). `deleteRow` false
+ *  skips the delete (no valid session: RLS would refuse it; the push service then answers 410 for the dropped subscription and
+ *  send-push deletes the row). */
+export async function disableWebPush(env = browserPushEnv(), deleteRow = !!currentUserId()): Promise<void> {
   const endpoint = (await unsubscribePush(env)) ?? usePushStore.getState().endpoint;
-  if (endpoint && currentUserId()) {
+  if (endpoint && deleteRow) {
     const { error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
     if (error) console.warn('[webPush] delete failed:', error);
   }
@@ -275,7 +305,10 @@ export async function disableWebPush(env = browserPushEnv()): Promise<void> {
  *  server dropped or an endpoint the browser renewed is saved again; turns the switch off when the subscription is gone. */
 export async function refreshPushPlan(env = browserPushEnv(), force = false): Promise<void> {
   const state = usePushStore.getState();
-  if (!state.enabled || !currentUserId()) return;
+  const userId = currentUserId();
+  if (!state.enabled || !userId) return;
+  // Bound to another account (its sign-out could not clean up): src/notifications/pushAccount.ts drops it; nothing is saved here.
+  if (state.userId && state.userId !== userId) return;
   const sub = await currentSubscription(env);
   if (!sub) {
     usePushStore.getState().reset();
@@ -284,5 +317,5 @@ export async function refreshPushPlan(env = browserPushEnv(), force = false): Pr
   const plan = currentPushPlan();
   const json = JSON.stringify(plan);
   if (!force && json === state.savedPlanJson && sub.endpoint === state.endpoint) return;
-  if (await saveSubscription(sub, plan, env?.userAgent ?? '')) usePushStore.getState().set({ endpoint: sub.endpoint, savedPlanJson: json });
+  if (await saveSubscription(sub, plan, env?.userAgent ?? '')) usePushStore.getState().set({ endpoint: sub.endpoint, savedPlanJson: json, userId });
 }

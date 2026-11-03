@@ -10,7 +10,6 @@ import { ChakraPetch_600SemiBold } from '@expo-google-fonts/chakra-petch/600Semi
 import { ChakraPetch_700Bold } from '@expo-google-fonts/chakra-petch/700Bold';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/store/useAuthStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { useSessionActivityStore, SESSION_MAX_IDLE_MS } from '../src/store/useSessionActivityStore';
@@ -23,6 +22,8 @@ import { WeeklyReportAutoRefresh } from '../src/ai/useWeeklyReportAutoRefresh';
 import { TemptationHost } from '../src/temptation/TemptationHost';
 import { WaterReminderHost } from '../src/water/WaterReminderHost';
 import { WebPushHost } from '../src/notifications/WebPushHost';
+import { watchPushAccount } from '../src/notifications/pushAccount';
+import { signOutIdle } from '../src/auth/signOut';
 
 // Minimum time the branded intro stays on screen, so it isn't just a 1-frame flash on warm starts.
 const MIN_INTRO_MS = 1200;
@@ -48,8 +49,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     init();
+    // Web Push follows the signed-in account: any sign-out drops this device's subscription (src/notifications/pushAccount.ts).
+    const stopPushWatch = watchPushAccount();
     const timer = setTimeout(() => setMinIntroElapsed(true), MIN_INTRO_MS);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      stopPushWatch();
+    };
   }, [init]);
 
   // Force a fresh login after 24h since the app was last opened/foregrounded — gated into
@@ -61,7 +67,7 @@ export default function RootLayout() {
     (async () => {
       const lastActive = useSessionActivityStore.getState().lastActiveAtISO;
       if (lastActive && Date.now() - new Date(lastActive).getTime() > SESSION_MAX_IDLE_MS) {
-        await supabase.auth.signOut();
+        await signOutIdle();
       }
       useSessionActivityStore.getState().touch();
       setExpiryChecked(true);

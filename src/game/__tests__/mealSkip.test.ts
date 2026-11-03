@@ -17,7 +17,7 @@ import { DEFAULT_MEAL_TEMPLATES } from '../../constants/plan';
 import type { DailyNutritionLog, ExtraFoodItem } from '../../types';
 import { isFasting, setFastingState, setSkipBreakfastState, skipsBreakfast } from '../../utils/mealMode';
 import { useMealModeStore } from '../../store/useMealModeStore';
-import { cleanSkippedMeals, mergeSkippedMeals, useSkippedMealStore } from '../../store/useSkippedMealStore';
+import { cleanSkipEntries, cleanSkippedMeals, daysFromEntries, mergeSkipEntries, mergeSkippedMeals, readSkippedPayload, skippedPayload, useSkippedMealStore } from '../../store/useSkippedMealStore';
 import { mealDefs } from '../mealSlots';
 import { evaluateDay } from '../missions';
 import { computeGameState } from '../state';
@@ -44,7 +44,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   useMealModeStore.setState({ fasting: true, skipBreakfast: false });
-  useSkippedMealStore.setState({ days: {} });
+  useSkippedMealStore.setState({ days: {}, entries: {} });
   setFastingState(true);
   setSkipBreakfastState(false);
 });
@@ -133,10 +133,57 @@ describe('per-day "Skipped" meal', () => {
   it('the store toggles a skip on and off (undo) and saves every change to the cloud', () => {
     useSkippedMealStore.getState().toggle(THURSDAY, 'breakfast');
     expect(useSkippedMealStore.getState().isSkipped(THURSDAY, 'breakfast')).toBe(true);
-    expect(mockPushUserData).toHaveBeenLastCalledWith('skippedMeals', { days: { [THURSDAY]: ['breakfast'] } });
+    expect(mockPushUserData).toHaveBeenLastCalledWith('skippedMeals', {
+      v: 2,
+      entries: { [THURSDAY]: { breakfast: { skipped: true, at: expect.any(Number) } } },
+      days: { [THURSDAY]: ['breakfast'] },
+    });
+    const skippedAt = useSkippedMealStore.getState().entries[THURSDAY].breakfast.at;
     useSkippedMealStore.getState().toggle(THURSDAY, 'breakfast');
     expect(useSkippedMealStore.getState().isSkipped(THURSDAY, 'breakfast')).toBe(false);
-    expect(mockPushUserData).toHaveBeenLastCalledWith('skippedMeals', { days: {} });
+    // The undo is kept as a mark of its own (newer than the skip), so another device's older skip cannot bring it back.
+    const undo = useSkippedMealStore.getState().entries[THURSDAY].breakfast;
+    expect(undo.skipped).toBe(false);
+    expect(undo.at).toBeGreaterThan(skippedAt);
+    expect(mockPushUserData).toHaveBeenLastCalledWith('skippedMeals', { v: 2, entries: { [THURSDAY]: { breakfast: undo } }, days: {} });
+  });
+
+  it('last writer wins per (day, meal): an un-skip on one device survives an older skip synced later from another', () => {
+    const deviceA = { [THURSDAY]: { lunch: { skipped: false, at: 2000 }, dinner: { skipped: true, at: 1500 } } };
+    const deviceB = { [THURSDAY]: { lunch: { skipped: true, at: 1000 }, dinner: { skipped: false, at: 1400 } }, [FRIDAY]: { meal3: { skipped: true, at: 900 } } };
+    const merged = mergeSkipEntries(deviceA, deviceB);
+    expect(merged).toEqual(mergeSkipEntries(deviceB, deviceA));
+    expect(merged[THURSDAY]).toEqual({ dinner: { skipped: true, at: 1500 }, lunch: { skipped: false, at: 2000 } });
+    expect(daysFromEntries(merged)).toEqual({ [FRIDAY]: ['meal3'], [THURSDAY]: ['dinner'] });
+    // An un-skip newer than the skip wins even when it comes from the cloud.
+    expect(daysFromEntries(mergeSkipEntries({ [THURSDAY]: { lunch: { skipped: true, at: 10 } } }, { [THURSDAY]: { lunch: { skipped: false, at: 11 } } }))).toEqual({});
+  });
+
+  it('reads the old { days } payload as skips with no time; any timed mark beats them; equal times keep the skip', () => {
+    const old = readSkippedPayload({ days: { [THURSDAY]: ['lunch', 'lunch'], bad: ['x'] } });
+    expect(old).toEqual({ [THURSDAY]: { lunch: { skipped: true, at: 0 } } });
+    expect(daysFromEntries(mergeSkipEntries(old, { [THURSDAY]: { lunch: { skipped: false, at: 5 } } }))).toEqual({});
+    expect(mergeSkipEntries({ [THURSDAY]: { lunch: { skipped: false, at: 0 } } }, old)[THURSDAY].lunch.skipped).toBe(true);
+    // The new payload: entries win over the days list written beside them.
+    const payload = skippedPayload({ [FRIDAY]: { dinner: { skipped: true, at: 7 }, lunch: { skipped: false, at: 8 } } });
+    expect(payload.days).toEqual({ [FRIDAY]: ['dinner'] });
+    expect(readSkippedPayload({ ...payload, days: { [FRIDAY]: ['lunch'] } })).toEqual(payload.entries);
+    expect(readSkippedPayload(null)).toEqual({});
+  });
+
+  it('keeps only valid marks and the newest 400 days', () => {
+    expect(cleanSkipEntries({ [THURSDAY]: { a: { skipped: 'yes', at: 1 }, b: { skipped: true, at: -3 }, c: null }, x: {}, [FRIDAY]: {} })).toEqual({ [THURSDAY]: { b: { skipped: true, at: 0 } } });
+    const many: Record<string, Record<string, { skipped: boolean; at: number }>> = {};
+    for (let i = 0; i < 450; i++) many[new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10)] = { lunch: { skipped: false, at: i + 1 } };
+    const kept = Object.keys(cleanSkipEntries(many));
+    expect(kept).toHaveLength(400);
+    expect(kept).not.toContain('2025-01-01');
+  });
+
+  it('a device saved with the old format moves its skips into marks when it loads', async () => {
+    const options = useSkippedMealStore.persist.getOptions();
+    const migrated = (await options.migrate!({ days: { [THURSDAY]: ['meal3'] } }, 0)) as { days: unknown; entries: unknown };
+    expect(migrated).toEqual({ days: { [THURSDAY]: ['meal3'] }, entries: { [THURSDAY]: { meal3: { skipped: true, at: 0 } } } });
   });
 
   it('cleans and joins the per-day marks from the cloud', () => {

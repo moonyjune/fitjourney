@@ -86,7 +86,7 @@ export function resetAllLocalStores() {
   resetDishPhotoStore();
   useBossTalkStore.setState({ talks: [], autoTried: null });
   useMealModeStore.setState({ fasting: true, skipBreakfast: false });
-  useSkippedMealStore.setState({ days: {} });
+  useSkippedMealStore.setState({ days: {}, entries: {} });
   useWaterWindowStore.setState({ startMinutes: DEFAULT_WATER_START_MIN, endMinutes: DEFAULT_WATER_END_MIN });
   useWaterReminderStore.setState({ shown: [], open: null });
   useMealPrefStore.setState({ ...NO_MEAL_PREFS });

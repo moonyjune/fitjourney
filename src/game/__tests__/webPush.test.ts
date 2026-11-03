@@ -3,9 +3,14 @@ import { webcrypto } from 'crypto';
 
 const mockUpsert = jest.fn(async (_row: unknown, _opts: unknown) => ({ error: null }));
 const mockDeleteEq = jest.fn(async (_col: string, _val: string) => ({ error: null }));
+const mockRpc = jest.fn(async (_fn: string, _args: Record<string, unknown>) => ({ error: null }));
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('../../lib/supabase', () => ({
-  supabase: { auth: { signOut: jest.fn() }, from: () => ({ upsert: mockUpsert, delete: () => ({ eq: mockDeleteEq }) }) },
+  supabase: {
+    auth: { signOut: jest.fn() },
+    rpc: (fn: string, args: Record<string, unknown>) => mockRpc(fn, args),
+    from: () => ({ upsert: mockUpsert, delete: () => ({ eq: mockDeleteEq }) }),
+  },
 }));
 jest.mock('../../sync/cloudSync', () => ({
   currentUserId: () => 'user-1',
@@ -244,10 +249,11 @@ describe('client: switch on / off', () => {
     useSettingsStore.setState({ remindersEnabled: true, language: 'vi' });
     const result = await enableWebPush(e);
     expect(result.ok).toBe(true);
-    const [row, opts] = mockUpsert.mock.calls[0] as [Record<string, unknown>, unknown];
-    expect(opts).toEqual({ onConflict: 'endpoint' });
-    expect(row).toMatchObject({ user_id: 'user-1', endpoint: 'https://web.push.apple.com/dev1', auth: 'BTBZMqHH6r4Tts7J_aSIgg', tz: expect.any(String) });
-    expect(cleanPushPlan(row.plan)).not.toBeNull();
+    const [fn, args] = mockRpc.mock.calls[0];
+    expect(fn).toBe('push_claim_subscription');
+    expect(args).toMatchObject({ p_endpoint: 'https://web.push.apple.com/dev1', p_auth: 'BTBZMqHH6r4Tts7J_aSIgg', p_tz: expect.any(String) });
+    expect(cleanPushPlan(args.p_plan)).not.toBeNull();
+    expect(mockUpsert).not.toHaveBeenCalled();
     expect(usePushStore.getState()).toMatchObject({ enabled: true, endpoint: 'https://web.push.apple.com/dev1' });
 
     await disableWebPush(e);
