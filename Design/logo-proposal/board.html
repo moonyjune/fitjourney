@@ -1,0 +1,123 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Logo icon app</title>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg:#110D22; --r1:#241C44; --r2:#2A2150; --gold:#FFC83D; --goldL:#FFE08A; --hp:#FF5470; --mana:#4CC9F0; --xp:#8BFF6B; --t:#F4F1FF; --t2:#B3AACF; }
+* { box-sizing:border-box; }
+body { margin:0; background:#0B0818; color:var(--t); font:15px/1.45 "Chakra Petch",-apple-system,sans-serif; padding:40px 48px 60px; width:2000px; }
+h1 { margin:0 0 4px; font-size:34px; } .sub { color:var(--t2); margin-bottom:28px; }
+.grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:28px; }
+.card { background:var(--r1); border:1px solid #3A3270; border-radius:24px; padding:26px; display:grid; grid-template-columns:300px 1fr; gap:26px; }
+.card.cur { grid-column:1 / -1; grid-template-columns:200px 1fr; opacity:.9; }
+.ic { border-radius:22.4%; overflow:hidden; display:block; box-shadow:0 10px 30px rgba(0,0,0,.45); }
+.name { font-size:24px; font-weight:700; } .name b { color:var(--gold); margin-right:8px; }
+.why { color:var(--t2); margin:8px 0 14px; }
+.sizes { display:flex; align-items:flex-end; gap:18px; margin-bottom:16px; }
+.sizes div { text-align:center; color:var(--t2); font-size:12px; }
+.sizes .ic { margin:0 auto 6px; box-shadow:0 4px 10px rgba(0,0,0,.4); }
+.homes { display:flex; gap:14px; }
+.home { width:250px; border-radius:22px; padding:16px 14px; display:grid; grid-template-columns:repeat(4, 1fr); gap:12px 6px; }
+.home.dark { background:linear-gradient(160deg,#1d2748,#0e1222); } .home.light { background:linear-gradient(160deg,#f6d9c6,#b9c9ef); }
+.home .app { text-align:center; font-size:9.5px; font-family:-apple-system,sans-serif; } .home.dark .app { color:#fff; } .home.light .app { color:#222; }
+.home .ph { width:46px; height:46px; border-radius:22.4%; margin:0 auto 3px; }
+.home .app .ic { margin:0 auto 3px; }
+.pros { font-size:13.5px; color:var(--t); margin:0; padding-left:18px; } .pros li { margin:2px 0; }
+.pros .c { color:var(--t2); }
+</style></head><body>
+<svg width="0" height="0" style="position:absolute">
+ <defs>
+  <radialGradient id="bgGlow" cx="50%" cy="46%" r="62%"><stop offset="0" stop-color="#3A2A62"/><stop offset=".6" stop-color="#1C1538"/><stop offset="1" stop-color="#110D22"/></radialGradient>
+  <linearGradient id="flameOut" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FF7A2F"/><stop offset=".55" stop-color="#FFB13B"/><stop offset="1" stop-color="#FFC83D"/></linearGradient>
+  <linearGradient id="flameIn" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFF6D6"/></linearGradient>
+  <radialGradient id="fireGlow" cx="50%" cy="62%" r="45%"><stop offset="0" stop-color="#FF9A3C" stop-opacity=".45"/><stop offset="1" stop-color="#FF9A3C" stop-opacity="0"/></radialGradient>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2A2150"/><stop offset="1" stop-color="#110D22"/></linearGradient>
+  <linearGradient id="mtn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A3C86"/><stop offset="1" stop-color="#241C44"/></linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset="1" stop-color="#FFB627"/></linearGradient>
+
+  <!-- A: Lửa trại -->
+  <symbol id="A" viewBox="0 0 1024 1024">
+   <rect width="1024" height="1024" fill="url(#bgGlow)"/>
+   <circle cx="512" cy="600" r="380" fill="url(#fireGlow)"/>
+   <g fill="#8A5634" stroke="#5E3720" stroke-width="10">
+    <rect x="292" y="706" width="440" height="78" rx="39" transform="rotate(-13 512 745)"/>
+    <rect x="292" y="706" width="440" height="78" rx="39" transform="rotate(13 512 745)"/>
+   </g>
+   <path d="M512 196 C600 312 712 392 690 566 C674 690 598 744 512 744 C426 744 350 690 334 566 C318 442 404 392 438 312 C452 386 468 420 500 444 C488 352 478 278 512 196 Z" fill="url(#flameOut)"/>
+   <path d="M512 404 C566 470 620 524 610 608 C602 680 560 716 512 716 C464 716 422 680 414 608 C408 554 452 516 466 470 C478 514 494 536 512 546 C504 494 498 452 512 404 Z" fill="url(#flameIn)"/>
+   <circle cx="648" cy="300" r="13" fill="#FFC83D"/><circle cx="372" cy="262" r="9" fill="#FFE08A"/><circle cx="700" cy="420" r="8" fill="#FFB13B"/>
+  </symbol>
+
+  <!-- B: Khiên làm gọn -->
+  <symbol id="B" viewBox="0 0 1024 1024">
+   <rect width="1024" height="1024" fill="url(#bgGlow)"/>
+   <clipPath id="shB"><path d="M512 120 L846 226 V520 C846 722 700 862 512 922 C324 862 178 722 178 520 V226 Z"/></clipPath>
+   <path d="M512 120 L846 226 V520 C846 722 700 862 512 922 C324 862 178 722 178 520 V226 Z" fill="#2A2150"/>
+   <g clip-path="url(#shB)">
+    <path d="M380 940 C392 800 470 730 520 650 C556 592 556 548 514 506 L548 482 C612 534 626 600 594 666 C560 736 546 820 620 940 Z" fill="url(#gold)"/>
+    <path d="M462 860 L470 812 M502 742 L522 708 M548 640 L556 610" stroke="#2A2150" stroke-width="18" stroke-linecap="round"/>
+   </g>
+   <path d="M512 120 L846 226 V520 C846 722 700 862 512 922 C324 862 178 722 178 520 V226 Z" fill="none" stroke="#FFC83D" stroke-width="44" stroke-linejoin="round"/>
+   <path d="M512 214 L600 324 L512 452 L424 324 Z" fill="#FFE08A"/>
+   <path d="M512 214 L600 324 L512 356 L424 324 Z" fill="#FFF6D6"/>
+  </symbol>
+
+  <!-- C: Đỉnh núi -->
+  <symbol id="C" viewBox="0 0 1024 1024">
+   <rect width="1024" height="1024" fill="url(#sky)"/>
+   <circle cx="790" cy="230" r="60" fill="#FFE08A" opacity=".9"/><circle cx="815" cy="214" r="54" fill="#2A2150"/>
+   <circle cx="220" cy="210" r="7" fill="#F4F1FF"/><circle cx="330" cy="150" r="5" fill="#F4F1FF"/><circle cx="640" cy="130" r="6" fill="#F4F1FF"/>
+   <path d="M-40 900 L330 470 L560 900 Z" fill="#241C44"/>
+   <path d="M120 900 L512 300 L904 900 Z" fill="url(#mtn)"/>
+   <path d="M512 300 L586 414 L548 400 L512 440 L476 400 L438 414 Z" fill="#E9E4FF"/>
+   <rect y="880" width="1024" height="144" fill="#110D22"/>
+   <path d="M330 1000 C420 900 640 860 600 760 C566 676 440 680 470 590 C494 516 560 500 524 430" fill="none" stroke="#FFC83D" stroke-width="30" stroke-linecap="round" stroke-dasharray="44 34"/>
+   <rect x="506" y="190" width="14" height="124" rx="7" fill="#FFC83D"/>
+   <path d="M520 196 L640 226 L520 262 Z" fill="#FF5470"/>
+  </symbol>
+
+  <!-- D: Huy hiệu cấp -->
+  <symbol id="D" viewBox="0 0 1024 1024">
+   <rect width="1024" height="1024" fill="url(#bgGlow)"/>
+   <path d="M512 130 L842 320 V704 L512 894 L182 704 V320 Z" fill="#2A2150" stroke="#FFC83D" stroke-width="44" stroke-linejoin="round"/>
+   <path d="M512 210 L770 358 V666 L512 814 L254 666 V358 Z" fill="none" stroke="#4A3C86" stroke-width="10"/>
+   <path d="M410 700 V362 H626" fill="none" stroke="#FFD25C" stroke-width="86" stroke-linecap="round" stroke-linejoin="round"/>
+   <path d="M410 520 H560" fill="none" stroke="#FFD25C" stroke-width="86" stroke-linecap="round"/>
+   <path d="M610 640 L700 640 L700 550" fill="none" stroke="#8BFF6B" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
+   <path d="M700 640 L610 550" stroke="#8BFF6B" stroke-width="40" stroke-linecap="round"/>
+   <g fill="#FFC83D"><circle cx="452" cy="776" r="16"/><circle cx="512" cy="790" r="16"/><circle cx="572" cy="776" r="16"/></g>
+  </symbol>
+ </defs>
+</svg>
+
+<h1>Logo icon ứng dụng · 4 phương án</h1>
+<div class="sub">Vẽ vector (không dùng AI tạo ảnh), cùng bảng màu của app (#110D22 · tím #2A2150 · vàng #FFC83D). Mỗi phương án: icon lớn, các cỡ thật (180 iPhone · 120 · 60 · 29 Cài đặt), và trên Màn hình chính tối / sáng.</div>
+
+<div class="grid">
+ <div class="card cur">
+  <div><img class="ic" src="../../assets/icon.png" width="200" height="200"></div>
+  <div><div class="name"><b>Hiện tại</b>Khiên + con đường + viên ngọc</div>
+  <div class="why">Ý tốt (hành trình tới mục tiêu) nhưng ở cỡ nhỏ: khiên chỉ chiếm ~55% icon, viền vàng mảnh, con đường và nét đứt bị mất, viên ngọc trông như dấu chấm của chữ "i".</div>
+  <div class="sizes"><div><img class="ic" src="../../assets/icon.png" width="60" height="60">60</div><div><img class="ic" src="../../assets/icon.png" width="29" height="29">29</div></div></div>
+ </div>
+</div>
+<div class="grid" id="concepts" style="margin-top:28px"></div>
+
+<script>
+const C = [
+ ['A','Lửa trại','Ngọn lửa trên 2 khúc củi: đúng tên tab "Trại" và chuỗi 🔥. Hình đơn giản, ấm, nhận ra ngay cả ở 29 px; nổi bật giữa các icon xanh / trắng.',['Rõ nhất ở cỡ nhỏ','Gắn với chuỗi ngày và "Trại"','Ít nói về giảm cân / hành trình']],
+ ['B','Khiên làm gọn','Giữ ý tưởng hiện tại nhưng khiên to (~80% icon), viền dày, con đường đậm 3 nét đứt, viên ngọc lớn tách hẳn khỏi đường.',['Giữ nhận diện cũ (đổi ít)','Rõ hơn bản hiện tại nhiều','Vẫn hơi nhiều chi tiết ở 29 px']],
+ ['C','Đỉnh núi','Ngọn núi đêm, con đường vàng nét đứt dẫn lên đỉnh có cờ đỏ: hành trình tới cân nặng mục tiêu (mốc "Đích 72 kg").',['Kể chuyện "hành trình" rõ nhất','Hợp tab "Hành trình"','Nhiều lớp, nhỏ thì cờ / đường hơi mờ']],
+ ['D','Huy hiệu cấp','Lục giác viền vàng chữ F đậm, mũi tên xanh XP chỉ xuống (cân giảm), 3 chấm cấp: kiểu huy hiệu game.',['Chữ F dễ nhớ, rất gọn','Màu xanh XP tạo điểm nhấn','Mũi tên đi xuống có thể đọc thành "giảm điểm"']],
+];
+const box = document.getElementById('concepts');
+const icon = (id, s) => `<svg class="ic" width="${s}" height="${s}"><use href="#${id}"/></svg>`;
+const ph = ['#34C759','#0A84FF','#FF9F0A','#5E5CE6','#FF375F','#64D2FF','#30D158'];
+const home = (id, cls) => { let h = `<div class="home ${cls}">`; for (let i = 0; i < 8; i++) h += i === 5 ? `<div class="app">${icon(id, 46)}FitJourney</div>` : `<div class="app"><div class="ph" style="background:${ph[i % ph.length]}"></div>App</div>`; return h + '</div>'; };
+for (const [id, name, why, pc] of C) {
+ box.insertAdjacentHTML('beforeend', `<div class="card"><div>${icon(id, 300)}</div><div>
+  <div class="name"><b>${id}</b>${name}</div><div class="why">${why}</div>
+  <ul class="pros"><li>+ ${pc[0]}</li><li>+ ${pc[1]}</li><li class="c">− ${pc[2]}</li></ul>
+  <div class="sizes" style="margin-top:14px">${[120, 60, 29].map((s) => `<div>${icon(id, s)}${s}</div>`).join('')}</div>
+  <div class="homes">${home(id, 'dark')}${home(id, 'light')}</div></div></div>`);
+}
+</script>
+</body></html>
