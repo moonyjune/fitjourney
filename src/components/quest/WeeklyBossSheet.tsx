@@ -15,29 +15,11 @@ import { HudText } from './HudText';
 import { HitShake } from './motion/HitShake';
 import { QuestButton } from './QuestButton';
 import { DefaultBossArt } from './StageBossArt';
-import { XpBar } from './XpBar';
+import { HpBar } from './HpBar';
 
-/** The weekly boss's HP bar, with today's pending hit (not dealt until the day is settled) as a faded part of it. */
-export function BossHpBar({ boss, height = 8, trackColor = quest.bg }: { boss: BossState; height?: number; trackColor?: string }) {
-  const pending = boss.pendingDamage;
-  return (
-    <View>
-      <XpBar ratio={boss.maxHp > 0 ? boss.hpLeft / boss.maxHp : 0} color={quest.hp} trackColor={trackColor} height={height} from={1} delay={350} />
-      {pending > 0 && boss.maxHp > 0 && !boss.defeated && (
-        <View
-          style={[
-            styles.pending,
-            {
-              height,
-              borderRadius: height / 2,
-              left: `${(Math.max(0, boss.hpLeft - pending) / boss.maxHp) * 100}%`,
-              width: `${(Math.min(pending, boss.hpLeft) / boss.maxHp) * 100}%`,
-            },
-          ]}
-        />
-      )}
-    </View>
-  );
+/** The weekly boss's HP bar, coloured by the HP left, with today's pending hit (not dealt until the day is settled) as a faded part of it. */
+export function BossHpBar({ boss, height = 8, trackColor = quest.bg, delay = 350 }: { boss: BossState; height?: number; trackColor?: string; delay?: number }) {
+  return <HpBar left={boss.hpLeft} max={boss.maxHp} pending={boss.defeated ? 0 : boss.pendingDamage} height={height} trackColor={trackColor} from={1} delay={delay} />;
 }
 
 interface WeeklyBossSheetProps {
@@ -168,7 +150,6 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   bar: { marginVertical: 6 },
   // The HP today's hit will take once settled: dimmed, not gone yet.
-  pending: { position: 'absolute', top: 0, backgroundColor: quest.bg, opacity: 0.6, pointerEvents: 'none' },
   hitCard: { marginTop: 12, gap: 4, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel },
   hitHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   week: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 14 },

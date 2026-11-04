@@ -10,7 +10,7 @@ import { BOSS_LURE_PINK, StageBossArt } from './StageBossArt';
 import { FadeInUp } from './motion/FadeInUp';
 import { PulseRing } from './motion/PulseRing';
 import { SparkleBurst } from './motion/SparkleBurst';
-import { XpBar } from './XpBar';
+import { HpBar } from './HpBar';
 
 type Translate = (key: GameKey, params?: Record<string, string | number>) => string;
 
@@ -115,7 +115,7 @@ export function StageBossDetail({ boss, zone, currentKg, onClose, children }: De
             {`${g('stage.tier', { n: boss.tier })} · ${g('region.range', { from: boss.fromKg, to: boss.toKg })} · ${g('stage.hp', { left: boss.hpLeftKg.toFixed(1), max: boss.hpKg })}`}
           </HudText>
           <View style={styles.hpBar}>
-            <XpBar ratio={boss.hpKg > 0 ? boss.hpLeftKg / boss.hpKg : 0} color={quest.hp} trackColor={quest.bg} height={10} />
+            <HpBar left={boss.hpLeftKg} max={boss.hpKg} trackColor={quest.bg} height={10} from={0} />
           </View>
           <HudText size={14} color={defeated ? quest.xp : quest.hpText} style={styles.center}>
             {status}

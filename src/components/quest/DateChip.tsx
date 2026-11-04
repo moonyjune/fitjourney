@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
+import { dayDeficitMark, type DayDeficitMark } from '../../game/deficitView';
 import { useGameText } from '../../game/strings';
 import { logDayLabel } from '../../game/useLogDate';
-import { useNow } from '../../game/useGameState';
+import { useDayEvaluator, useNow, useTdeeKcal } from '../../game/useGameState';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import { useSettingsStore } from '../../store/useSettingsStore';
 import { useSelectedDayStore, workingDayKey } from '../../store/useSelectedDayStore';
 import { quest } from '../../theme/quest';
 import { toDateKey } from '../../utils/date';
+import { oldestPickableKey } from '../../utils/logDate';
 import { DatePickerSheet } from './DatePickerSheet';
 import { HudText } from './HudText';
 import { QuestIcon } from './QuestIcon';
@@ -17,8 +20,12 @@ export interface DateChipProps {
   /** Called with the day picked. Leave out to set the app-wide selected day. */
   onChange?: (dateKey: string) => void;
   now?: Date;
-  /** Days with something logged (green dot in the calendar). Default: days with a nutrition log. */
+  /** Days with something logged (a dot in the calendar when the day has no deficit colour). Default: days with a nutrition log. */
   isMarked?: (dateKey: string) => boolean;
+  /** Each day's deficit colour in the calendar. Default: the signed-in user's own days (`useDayEvaluator` + `dayDeficitMark`). */
+  markOf?: (dateKey: string) => DayDeficitMark;
+  /** The oldest day that can be picked. Default: the plan's start date, a year back at least (`oldestPickableKey`). */
+  minKey?: string;
   /** One line under the sheet title. */
   hint?: string;
   /** `small` (36 pt) sits in a sheet header; the default 44 pt sits in a screen header. */
@@ -26,19 +33,24 @@ export interface DateChipProps {
 }
 
 /** "📅 Hôm nay ▾": the day the logging screens write to. Gold when another day than today is picked. Opens `DatePickerSheet`. */
-export function DateChip({ value, onChange, now: nowProp, isMarked, hint, size = 'default' }: DateChipProps) {
+export function DateChip({ value, onChange, now: nowProp, isMarked, markOf, minKey, hint, size = 'default' }: DateChipProps) {
   const g = useGameText();
   const ticking = useNow();
   const now = nowProp ?? ticking;
   const selectedKey = useSelectedDayStore((s) => s.selectedKey);
   const select = useSelectedDayStore((s) => s.select);
   const logs = useNutritionStore((s) => s.logs);
+  const startDateISO = useSettingsStore((s) => s.startDateISO);
+  const targetKcal = useSettingsStore((s) => s.targetDailyDeficitKcal);
+  const tdeeKcal = useTdeeKcal();
+  const evaluate = useDayEvaluator(now);
   const [open, setOpen] = useState(false);
 
   const dateKey = value ?? workingDayKey(selectedKey, now);
   const picked = dateKey !== toDateKey(now);
   const label = logDayLabel(dateKey, now, g);
   const marked = isMarked ?? ((key: string) => logs[key] != null);
+  const ownMark = (key: string) => dayDeficitMark(evaluate(key), { targetKcal, tdeeKcal });
   const color = picked ? quest.onGold : quest.text;
 
   return (
@@ -62,6 +74,8 @@ export function DateChip({ value, onChange, now: nowProp, isMarked, hint, size =
         value={dateKey}
         now={now}
         isMarked={marked}
+        markOf={markOf ?? ownMark}
+        minKey={minKey ?? oldestPickableKey(now, startDateISO)}
         hint={hint}
         onPick={(key) => (onChange ? onChange(key) : select(key, now))}
       />

@@ -6,6 +6,7 @@ import { DateChip } from '../../components/quest/DateChip';
 import { QuestSegment } from '../../components/quest/QuestSegment';
 import { ScreenTemplate } from '../../components/quest/ScreenTemplate';
 import { MISSION_ORDER, type MissionId } from '../../game/constants';
+import { dayDeficitMark } from '../../game/deficitView';
 import { useGameText } from '../../game/strings';
 import { useNow } from '../../game/useGameState';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -14,6 +15,7 @@ import { screenMaxWidthStyle } from '../../theme/responsive';
 import { useLightStatusBar } from '../../theme/useLightStatusBar';
 import { toDateKey } from '../../utils/date';
 import { isoWeekNumber } from '../../utils/isoWeek';
+import { oldestPickableKey } from '../../utils/logDate';
 import { addDays } from '../../utils/milestones';
 import { weekStartKey } from '../../utils/weekKey';
 import { JournalView } from '../JournalView';
@@ -109,7 +111,15 @@ export function JournalScreen({ client, initialTab = 'day', focus }: JournalScre
       onBack={goBack}
       right={
         tab === 'day' ? (
-          <DateChip value={selectedKey} onChange={select} now={now} size="small" isMarked={(k) => subject.logs[k] != null} />
+          <DateChip
+            value={selectedKey}
+            onChange={select}
+            now={now}
+            size="small"
+            isMarked={(k) => subject.logs[k] != null}
+            markOf={(k) => dayDeficitMark(subject.evaluate(k), { targetKcal: subject.deficitTarget, tdeeKcal: subject.tdeeKcal, cheat: subject.cheatDays.includes(k) })}
+            minKey={oldestPickableKey(now, subject.settings.startDateISO)}
+          />
         ) : undefined
       }
       scroll={false}

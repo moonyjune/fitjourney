@@ -10,6 +10,7 @@ import { QuestButton } from '../../components/quest/QuestButton';
 import { QuestIcon } from '../../components/quest/QuestIcon';
 import { DefaultBossArt } from '../../components/quest/StageBossArt';
 import { WeeklyBossHistory } from '../../components/quest/WeeklyBossHistory';
+import { BossHpBar } from '../../components/quest/WeeklyBossSheet';
 import { BOSS_DEFEAT_XP } from '../../game/constants';
 import { bossNum } from '../../game/bossView';
 import { deficitColor } from '../../game/deficitLevel';
@@ -300,6 +301,9 @@ export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }
                 {bossNum(boss.hpLeft)} / {bossNum(boss.maxHp)} HP
               </HudText>
             </View>
+            <View style={styles.bossBar}>
+              <BossHpBar boss={boss} height={6} trackColor={quest.bg} />
+            </View>
             <View style={styles.bossHead}>
               <View style={[styles.pill, { borderColor: boss.defeated ? quest.xp : quest.border }]}>
                 <HudText size={12} color={boss.defeated ? quest.xp : isThisWeek ? quest.gold : quest.textSecondary}>
@@ -539,6 +543,7 @@ const styles = StyleSheet.create({
   levelBar: { width: '60%', height: 3, borderRadius: 2, marginTop: 2 },
   bossCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel },
   bossHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bossBar: { marginVertical: 4 },
   pill: { paddingHorizontal: 8, minHeight: 24, justifyContent: 'center', borderRadius: 12, borderWidth: 1.5, marginTop: 4 },
   pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, borderTopWidth: 1, borderTopColor: quest.border, paddingTop: 4 },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 20, marginBottom: 8 },

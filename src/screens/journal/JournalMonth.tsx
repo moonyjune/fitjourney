@@ -9,8 +9,9 @@ import { PhotoViewer } from '../../components/quest/PhotoViewer';
 import { QuestIcon } from '../../components/quest/QuestIcon';
 import { WorkoutEntries, workoutRange } from '../../components/quest/WorkoutDetailDialog';
 import { getDayType } from '../../constants/plan';
-import { DEFICIT_LEVEL_COLOR, deficitColor, type DeficitLevel } from '../../game/deficitLevel';
-import { mealNames } from '../../game/deficitView';
+import { DeficitLegend, deficitCellLook } from '../../components/quest/DeficitLegend';
+import { DEFICIT_LEVEL_COLOR, deficitColor } from '../../game/deficitLevel';
+import { dayDeficitMark, mealNames, type DayDeficitMark } from '../../game/deficitView';
 import { useGameText, type GameKey } from '../../game/strings';
 import type { StringKey } from '../../i18n/strings';
 import { useTranslation } from '../../i18n/useTranslation';
@@ -52,15 +53,8 @@ const chartConfig = {
   propsForLabels: { fontFamily: questFonts.medium },
   propsForDots: { r: '3' },
 };
-/** The colour key under the calendar (the full rules are behind ⓘ). */
-const LEGEND: { level: DeficitLevel; key: GameKey }[] = [
-  { level: 'met', key: 'journal2.month.legend.met' },
-  { level: 'ok', key: 'journal2.month.legend.ok' },
-  { level: 'low', key: 'journal2.month.legend.low' },
-  { level: 'over', key: 'journal2.month.legend.over' },
-  { level: 'cheat', key: 'journal2.month.legend.cheat' },
-  { level: 'excess', key: 'journal2.month.legend.warn' },
-];
+/** A future day: no mark. */
+const NO_MARK: DayDeficitMark = { kind: 'none', level: null, kcal: null, color: null };
 
 function Section({ children, right }: { children: string; right?: ReactNode }) {
   return (
@@ -98,7 +92,7 @@ export function JournalMonth({ subject, days, byKey, selectedKey, onOpenDay }: J
   const { t, language } = useTranslation();
   const chartWidth = chartWidthFor(useWindowDimensions().width);
   const lineChartWidth = chartWidth - 31; // inside a panel: 14 padding + 1.5 border each side
-  const { todayKey, levelOf, readOnly, settings, weights, workouts, logs, mealTemplates, tdeeKcal, cheatDays, deficitTarget, subjectId, streak } = subject;
+  const { todayKey, levelOf, evaluate, readOnly, settings, weights, workouts, logs, mealTemplates, tdeeKcal, cheatDays, deficitTarget, subjectId, streak } = subject;
   const saveDayLog = useNutritionStore((s) => s.saveDayLog);
 
   const [calMonth, setCalMonth] = useState<YearMonth>(() => parseMonthKey(monthKeyOf(selectedKey)));
@@ -365,21 +359,23 @@ export function JournalMonth({ subject, days, byKey, selectedKey, onOpenDay }: J
             {week.map((dateKey, j) => {
               if (!dateKey) return <View key={j} style={styles.calCell} />;
               const day = byKey.get(dateKey);
-              const deficit = day?.shown.kcal ?? null;
-              const projected = !!day?.shown.projected;
-              const incomplete = !!day?.shown.incomplete;
-              const cheat = !!day?.cheat;
               const future = dateKey > todayKey;
-              const level = incomplete || deficit == null ? (cheat ? 'cheat' : null) : levelOf(dateKey, deficit);
+              // The same reading of the day as the date sheet and the Day tab: the evaluator's figure, its level, today's estimate.
+              const mark = future ? NO_MARK : dayDeficitMark(evaluate(dateKey), { targetKcal: deficitTarget, tdeeKcal, cheat: cheatDays.includes(dateKey) });
+              const look = deficitCellLook(mark, !!day);
+              const deficit = mark.kcal;
+              const projected = mark.kind === 'pending';
+              const incomplete = mark.kind === 'incomplete';
+              const cheat = mark.kind === 'cheat';
               const deficitText = cheat ? g('deficit.cheatShort') : deficit == null ? '' : `${projected ? '~' : ''}${formatDeficitShort(deficit)}${incomplete ? '⚠' : ''}`;
               const deficitLabel = cheat
                 ? `. ${g('deficit.level.cheat')}`
                 : deficit == null
                   ? ''
                   : `. ${t(deficit >= 0 ? 'history.deficitShort' : 'history.surplusShort')}: ${projected ? '~' : ''}${Math.round(Math.abs(deficit))} kcal` +
+                    (mark.level && !cheat ? `, ${g(`deficit.level.${mark.level}` as GameKey)}` : '') +
                     (projected ? ` (${g('deficit.projectedShort')})` : '') +
-                    (incomplete && day ? `. ${g('deficit.missingLine', { meals: mealNames(day.missingMeals, g) })}` : '');
-              const fill = level && !projected ? deficitColor(level, 'transparent') : 'transparent';
+                    (incomplete ? `. ${g('deficit.missingLine', { meals: mealNames(evaluate(dateKey).missingMeals, g) })}` : '');
               return (
                 <Pressable
                   key={dateKey}
@@ -391,16 +387,16 @@ export function JournalMonth({ subject, days, byKey, selectedKey, onOpenDay }: J
                   style={[
                     styles.calCell,
                     styles.calDay,
-                    { backgroundColor: fill === 'transparent' ? (day ? quest.raised : 'transparent') : fill },
+                    { backgroundColor: look.backgroundColor },
+                    look.dashed && styles.calIncomplete,
                     dateKey === todayKey && { borderColor: quest.gold },
-                    incomplete && styles.calIncomplete,
                     future && { opacity: 0.45 },
                   ]}
                 >
-                  <HudText size={13} color={fill !== 'transparent' ? quest.onGold : day ? quest.text : quest.textSecondary}>
+                  <HudText size={13} color={mark.kind !== 'none' ? look.textColor : day ? quest.text : quest.textSecondary}>
                     {Number(dateKey.slice(8))}
                   </HudText>
-                  <HudText size={10} weight="medium" color={fill !== 'transparent' ? quest.onGold : quest.textSecondary} numberOfLines={1}>
+                  <HudText size={10} weight="medium" color={mark.kind === 'settled' || mark.kind === 'cheat' ? look.textColor : mark.kind === 'pending' ? quest.text : quest.textSecondary} numberOfLines={1}>
                     {deficitText || ' '}
                   </HudText>
                 </Pressable>
@@ -408,18 +404,9 @@ export function JournalMonth({ subject, days, byKey, selectedKey, onOpenDay }: J
             })}
           </View>
         ))}
-        <View style={styles.legend}>
-          {LEGEND.map((l) => (
-            <View key={l.level} style={styles.legendItem}>
-              <View style={[styles.swatch, { backgroundColor: DEFICIT_LEVEL_COLOR[l.level] }]} />
-              <HudText size={12} weight="medium" color={quest.textSecondary}>
-                {g(l.key)}
-              </HudText>
-            </View>
-          ))}
+        <DeficitLegend>
           <InfoButton label={g('journal2.legendInfo')} title={g('journal2.legendTitle')} text={g('journal2.legendFull', { target: deficitTarget })} />
-        </View>
-        <Meta>{g('journal2.month.legend.missing')}</Meta>
+        </DeficitLegend>
         <Meta>{g('journal2.month.tapHint')}</Meta>
       </View>
 
@@ -586,7 +573,6 @@ const styles = StyleSheet.create({
   calCell: { flex: 1, minWidth: 0, alignItems: 'center', paddingVertical: 4 },
   calDay: { minHeight: 44, borderRadius: 8, borderWidth: 1.5, borderColor: 'transparent', margin: 1.5, justifyContent: 'center' },
   calIncomplete: { borderStyle: 'dashed', borderColor: quest.textSecondary },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 10, rowGap: 2, marginTop: 8 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   swatch: { width: 10, height: 10, borderRadius: 3 },
 });
