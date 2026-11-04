@@ -10,7 +10,10 @@ import type {
   WorkoutLogEntry,
 } from '../types';
 import { partsMatchTotals } from '../food/mealParts';
+import { PLAN_SLOT_MEAL, type MainMeal } from '../insights/days';
+import { SKIPPED_MEAL_NAME } from '../insights/missing';
 import { toDateKey } from '../utils/date';
+import { periodOfItem } from './mealSlots';
 
 export type TimelineItem =
   | { kind: 'water'; id: string; minutes: number; incrementMl: number; cumulativeMl: number; reached: boolean; past: boolean }
@@ -33,6 +36,10 @@ export type TimelineItem =
   /** One or more workouts close together, shown as one row from the first start to the last end. */
   | { kind: 'workout'; id: string; minutes: number; endMinutes: number; label: string; durationMin: number; kcal: number; entryIds: string[] }
   | { kind: 'feeling'; id: string; minutes: number; mood: Mood; cravingLevel: number; hungerLevel: number }
+  /** A main meal marked as not eaten, one row per meal: by "Bỏ bữa" (the day's skip list, `dayMealId`) and / or by the diary's
+   *  "Không ăn" 0 kcal food (`itemId`). Stands in for the plan meal's own row and the "Không ăn" food's row; never shown for a meal that
+   *  has real food logged. `label`: the plan meal's (or fasting plan's) name, else null (the main meal's name). */
+  | { kind: 'skipped'; id: string; minutes: number; meal: MainMeal; label: string | null; dayMealId: string | null; itemId: string | null; past: boolean }
   | { kind: 'now'; id: string; minutes: number };
 
 export interface TimelineInput {
@@ -46,10 +53,13 @@ export interface TimelineInput {
   feelings: FeelingRecord[];
   /** Plan meal slots that have a proof photo for this date. */
   photoSlots: ReadonlySet<string>;
+  /** Meals skipped on purpose that day ("Bỏ bữa", useSkippedMealStore): the evaluation's ids (`breakfast` / `lunch` / `dinner`, or a
+   *  fasting plan's `meal1`…), each with its usual start (minutes) and its name when the plan gives one. */
+  skippedDayMeals?: readonly { id: string; minutes: number; label?: string | null }[];
 }
 
 // Entries at the same minute list meals first, then food, workouts, check-ins, then water.
-const PRIORITY: Record<TimelineItem['kind'], number> = { meal: 0, extra: 1, workout: 2, feeling: 3, water: 4, now: 5 };
+const PRIORITY: Record<TimelineItem['kind'], number> = { meal: 0, skipped: 0, extra: 1, workout: 2, feeling: 3, water: 4, now: 5 };
 
 /** Workouts that start within this long after the previous one ended belong to the same row. */
 export const WORKOUT_GROUP_GAP_MIN = 60;
@@ -77,6 +87,15 @@ export function groupWorkouts(workouts: WorkoutLogEntry[]): WorkoutLogEntry[][] 
 function minutesOfDay(iso: string): number {
   const d = new Date(iso);
   return d.getHours() * 60 + d.getMinutes();
+}
+
+/** The diary's "Không ăn" mark: a 0 kcal food named "Không ăn". */
+const isSkipMark = (e: { name: string; calories: number }) => e.calories === 0 && e.name.trim() === SKIPPED_MEAL_NAME;
+
+/** The main meal a skip id of the day's evaluation stands for (a fasting plan's slot is its plan meal's main meal). */
+function mainMealOfSkipId(id: string): MainMeal | null {
+  if (Object.prototype.hasOwnProperty.call(PLAN_SLOT_MEAL, id)) return PLAN_SLOT_MEAL[id as MealSlot];
+  return id === 'breakfast' || id === 'lunch' || id === 'dinner' ? id : null;
 }
 
 /**
@@ -178,6 +197,47 @@ export function buildTimeline(input: TimelineInput): TimelineItem[] {
   for (const f of dayFeelings) {
     items.push({ kind: 'feeling', id: `feeling-${f.id}`, minutes: minutesOfDay(f.loggedAtISO), mood: f.mood, cravingLevel: f.cravingLevel, hungerLevel: f.hungerLevel });
   }
+
+  // Meals marked as not eaten: one "Không ăn" row per main meal, in place of the plan meal's row and the "Không ăn" food's row, unless
+  // the meal has real food logged after all (then the mark is stale and only the food shows).
+  const realFood = new Set<MainMeal>();
+  for (const e of extras) if (!isSkipMark(e) && e.calories > 0) realFood.add(periodOfItem(e));
+  for (const m of meals) if (log?.mealsEaten[m.slot]) realFood.add(PLAN_SLOT_MEAL[m.slot]);
+  const marks = new Map<MainMeal, { minutes: number; label: string | null; dayMealId: string | null; itemId: string | null }>();
+  for (const d of input.skippedDayMeals ?? []) {
+    const meal = mainMealOfSkipId(d.id);
+    if (!meal || marks.has(meal)) continue;
+    marks.set(meal, { minutes: d.minutes, label: d.label ?? null, dayMealId: d.id, itemId: null });
+  }
+  for (const e of extras) {
+    if (!isSkipMark(e)) continue;
+    const meal = periodOfItem(e);
+    const mark = marks.get(meal);
+    if (mark) mark.itemId ??= e.id;
+    else marks.set(meal, { minutes: minutesOfDay(e.loggedAtISO), label: null, dayMealId: null, itemId: e.id });
+  }
+  const skipItemIds = new Set(extras.filter(isSkipMark).map((e) => `extra-${e.id}`));
+  const shownMarks = [...marks].filter(([meal]) => !realFood.has(meal));
+  const replacedSlots = new Set<string>();
+  for (const [meal, mark] of shownMarks) {
+    const planRow = items.find((i): i is Extract<TimelineItem, { kind: 'meal' }> => i.kind === 'meal' && PLAN_SLOT_MEAL[i.slot] === meal);
+    if (planRow) replacedSlots.add(planRow.id);
+    const minutes = planRow ? planRow.minutes : mark.minutes;
+    items.push({
+      kind: 'skipped',
+      // A row standing for the "Không ăn" food alone keeps that food's id, so it opens (and deletes) like the food would.
+      id: mark.dayMealId == null && mark.itemId != null ? `extra-${mark.itemId}` : `skipped-${meal}`,
+      minutes,
+      meal,
+      label: planRow?.label ?? mark.label,
+      dayMealId: mark.dayMealId,
+      itemId: mark.itemId,
+      past: isPast(minutes),
+    });
+  }
+  const shown = items.filter((i) => !(i.kind === 'extra' && skipItemIds.has(i.id)) && !(i.kind === 'meal' && replacedSlots.has(i.id)));
+  items.length = 0;
+  items.push(...shown);
 
   items.sort((a, b) => a.minutes - b.minutes || PRIORITY[a.kind] - PRIORITY[b.kind]);
 

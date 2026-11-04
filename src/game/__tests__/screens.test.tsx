@@ -82,6 +82,7 @@ import { useWorkoutStore } from '../../store/useWorkoutStore';
 import { useCheatDayStore } from '../../store/useCheatDayStore';
 import { useEatAgainStore } from '../../store/useEatAgainStore';
 import { useSkippedMealStore } from '../../store/useSkippedMealStore';
+import { useMealModeStore } from '../../store/useMealModeStore';
 import { deleteFeelingRecord, pushFeelingRecord, pushNutritionLog } from '../../sync/cloudSync';
 
 const DATE = '2026-10-23';
@@ -373,6 +374,52 @@ describe('FitJourney logging screens', () => {
       act(() => pressable(r, (l) => l === 'Tập khác').props.onPress());
       // "Tập khác" is a sheet on the Train tab now (dialogs.md row 13): the tab opens with it up.
       expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/(tabs)/workout', params: { other: expect.any(String) } });
+    });
+
+    it('"Bỏ bữa / Không ăn": lists the day\'s meals with their state; skips one with "Hoàn tác", and an already-skipped one is undone', () => {
+      useSkippedMealStore.setState({ days: {}, entries: {} });
+      const r = render(<QuickAddScreen />);
+      act(() => pressable(r, (l) => l === 'Bỏ bữa / Không ăn').props.onPress());
+      let text = allText(r);
+      expect(text).toContain('Bữa 3 - Tối (Chốt cửa sổ ăn)');
+      expect(text).toContain('Đã ghi'); // meals 1 and 2 are eaten
+      // An eaten meal is shown, not tappable.
+      expect(r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('Đánh dấu đã bỏ Bữa 1'))).toHaveLength(0);
+      act(() => pressable(r, (l) => l.startsWith('Đánh dấu đã bỏ Bữa 3') && l.includes('(T6 23/10)')).props.onPress());
+      expect(useSkippedMealStore.getState().days[DATE]).toEqual(['meal3']);
+      expect(useToastStore.getState().toast?.text).toContain('Đã bỏ Bữa 3');
+      act(() => useToastStore.getState().undo());
+      expect(useSkippedMealStore.getState().days[DATE]).toBeUndefined();
+
+      act(() => useSkippedMealStore.getState().toggle(DATE, 'meal3'));
+      act(() => pressable(r, (l) => l === 'Bỏ bữa / Không ăn').props.onPress());
+      text = allText(r);
+      expect(text).toContain('Đã bỏ · Hoàn tác');
+      act(() => pressable(r, (l) => l.startsWith('Hoàn tác bỏ Bữa 3')).props.onPress());
+      expect(useSkippedMealStore.getState().days[DATE]).toBeUndefined();
+      expect(useToastStore.getState().toast?.text).toContain('Đã bỏ đánh dấu không ăn');
+    });
+
+    it('"Bỏ bữa / Không ăn" on a normal day with "Tôi không ăn sáng": breakfast is not offered, and a "Không ăn" mark reads as such', () => {
+      const before = useMealModeStore.getState();
+      useMealModeStore.setState({ fasting: false, skipBreakfast: true });
+      try {
+        useSkippedMealStore.setState({ days: {}, entries: {} });
+        useNutritionStore.setState({
+          logs: { [DATE]: { dateISO: DATE, mealsEaten: {}, extraCalories: 0, extraProteinG: 0, waterMl: 0, extraItems: [{ id: 'k', name: 'Không ăn', calories: 0, proteinG: 0, mealTime: 'lunch', loggedAtISO: `${DATE}T12:00:00` }] } },
+        });
+        const r = render(<QuickAddScreen />);
+        act(() => pressable(r, (l) => l === 'Bỏ bữa / Không ăn').props.onPress());
+        const text = allText(r);
+        expect(text).toContain('không ăn sáng (cài đặt)');
+        expect(text).toContain('Đã ghi “Không ăn”'); // lunch
+        expect(r.root.findAll((n) => typeof n.props.onPress === 'function' && String(n.props.accessibilityLabel ?? '').startsWith('Đánh dấu đã bỏ Bữa sáng'))).toHaveLength(0);
+        act(() => pressable(r, (l) => l.startsWith('Đánh dấu đã bỏ Bữa tối')).props.onPress());
+        expect(useSkippedMealStore.getState().days[DATE]).toEqual(['dinner']);
+      } finally {
+        useMealModeStore.setState({ fasting: before.fasting, skipBreakfast: before.skipBreakfast });
+        useSkippedMealStore.setState({ days: {}, entries: {} });
+      }
     });
 
     it('closes from the backdrop, falling back to home when there is nothing to go back to', () => {
@@ -741,7 +788,7 @@ describe('FitJourney logging screens', () => {
       expect(text).toContain('Chờ ăn'); // meal 3 is still ahead of 16:10
     });
 
-    it('a plan meal with nothing logged can be marked "Không ăn" on the timeline, shown as its status, and undone', () => {
+    it('a plan meal with nothing logged can be marked "Không ăn" on the timeline: a "Không ăn" row in its place, deleted with undo', () => {
       const r = render(<JournalScreen />);
       const offers = r.root.findAll((n) => typeof n.props.onPress === 'function' && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Đánh dấu không ăn'));
       expect(offers).toHaveLength(1); // meals 1 and 2 are eaten: only meal 3 (dinner) is offered
@@ -751,16 +798,37 @@ describe('FitJourney logging screens', () => {
       const items = useNutritionStore.getState().logs[DATE].extraItems;
       expect(items).toEqual([expect.objectContaining({ name: 'Không ăn', calories: 0, mealTime: 'dinner' })]);
       const text = allText(r);
-      expect(text).toContain('Không ăn'); // the plan meal's status
-      expect(text).toContain('Bỏ "Không ăn"');
+      expect(text).toContain('🚫 Bữa 3 - Tối (Chốt cửa sổ ăn) · Không ăn');
       expect(text).not.toContain('Không ăn bữa này');
-      expect(r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.includes('Không ăn. 0 kcal'))).toHaveLength(0); // no separate row
-      const undo = r.root.findAll((n) => typeof n.props.onPress === 'function' && typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Bỏ đánh dấu không ăn'))[0];
-      act(() => {
-        undo.props.onPress(); // block body: the store's set returns a promise that act must not wait on
-      });
+      expect(r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.includes('Không ăn. 0 kcal'))).toHaveLength(0); // no food row
+      expect(text).not.toContain('Chờ ăn'); // nor the plan meal's own row (meal 3 was the one still to come)
+      // Tapped, the row opens the "Không ăn" food, which is deleted with "Hoàn tác".
+      act(() => pressable(r, (l) => l.includes(': không ăn. Mở')).props.onPress());
+      act(() => pressable(r, (l) => l === 'Xoá bữa: Không ăn').props.onPress());
       expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0);
+      expect(useToastStore.getState().toast?.text).toBe('Đã xoá Không ăn');
       expect(allText(r)).toContain('Không ăn bữa này');
+      act(() => useToastStore.getState().undo());
+      expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(1);
+    });
+
+    it('a meal skipped with "Bỏ bữa" is a "Không ăn" row in place of the plan meal, undone from the row with "Hoàn tác"', () => {
+      useSkippedMealStore.setState({ days: {}, entries: {} });
+      act(() => useSkippedMealStore.getState().toggle(DATE, 'meal3'));
+      try {
+        const r = render(<JournalScreen />);
+        expect(allText(r)).toContain('🚫 Bữa 3 - Tối (Chốt cửa sổ ăn) · Không ăn');
+        expect(allText(r)).not.toContain('Chờ ăn');
+        act(() => pressable(r, (l) => l === 'Hoàn tác bỏ Bữa 3 - Tối (Chốt cửa sổ ăn)').props.onPress());
+        expect(useSkippedMealStore.getState().days[DATE]).toBeUndefined();
+        expect(useToastStore.getState().toast?.text).toBe('Đã bỏ đánh dấu không ăn: Bữa 3 - Tối (Chốt cửa sổ ăn).');
+        expect(allText(r)).toContain('Chờ ăn');
+        act(() => useToastStore.getState().undo());
+        expect(useSkippedMealStore.getState().days[DATE]).toEqual(['meal3']);
+        expect(allText(r)).toContain('🚫 Bữa 3 - Tối (Chốt cửa sổ ăn) · Không ăn');
+      } finally {
+        useSkippedMealStore.setState({ days: {}, entries: {} });
+      }
     });
 
     it('offers no "Không ăn" for a meal that already has food logged at that time', () => {
@@ -968,7 +1036,7 @@ describe('FitJourney logging screens', () => {
     it('a "Không ăn" record opens with no part list', () => {
       useNutritionStore.getState().addExtra(DATE, 'Không ăn', 0, 0, 'dinner', { fromFoodDb: true });
       const r = render(<JournalScreen />);
-      act(() => pressable(r, (l) => l.includes('Không ăn')).props.onPress());
+      act(() => pressable(r, (l) => l.includes(': không ăn. Mở')).props.onPress());
       expect(allText(r)).not.toContain('Thành phần'.toUpperCase());
       expect(r.root.findAll((n) => typeof n.props.accessibilityLabel === 'string' && n.props.accessibilityLabel.startsWith('Sửa lượng'))).toHaveLength(0);
     });

@@ -103,4 +103,44 @@ describe('isoWeekNumber', () => {
     expect(isoWeekNumber(new Date('2021-01-01T12:00:00'))).toBe(53); // belongs to the previous ISO year
     expect(isoWeekNumber(new Date('2026-12-31T12:00:00'))).toBe(53);
   });
+
+  describe('meals marked as not eaten', () => {
+    const skipItem = (id: string, meal: 'breakfast' | 'lunch' | 'dinner', at: string): ExtraFoodItem => ({ id, name: 'Không ăn', calories: 0, proteinG: 0, mealTime: meal, loggedAtISO: `${DATE}T${at}:00` });
+    const noPlan = { mealsEaten: {}, extraItems: [] as ExtraFoodItem[] };
+
+    it('a "Không ăn" food is one "Không ăn" row in place of the plan meal (no food row, no plan row)', () => {
+      const log = { ...baseLog, ...noPlan, mealsEaten: { meal1: true }, extraItems: [skipItem('s', 'lunch', '12:30')] };
+      const items = buildTimeline(input({ log }));
+      expect(items.filter((i) => i.kind === 'extra')).toHaveLength(0);
+      expect(items.find((i) => i.kind === 'meal' && i.slot === 'meal2')).toBeUndefined();
+      const rows = items.filter((i) => i.kind === 'skipped');
+      expect(rows).toEqual([expect.objectContaining({ id: 'extra-s', meal: 'lunch', itemId: 's', dayMealId: null, label: meals[1].label, minutes: meals[1].startHour * 60 + meals[1].startMinute })]);
+    });
+
+    it('a meal skipped with "Bỏ bữa" is a "Không ăn" row at its time; with a "Không ăn" food too, still one row', () => {
+      const log = { ...baseLog, ...noPlan, extraItems: [skipItem('s', 'dinner', '19:00')] };
+      const items = buildTimeline(input({ log, meals: [], skippedDayMeals: [{ id: 'dinner', minutes: 18 * 60 + 30 }, { id: 'lunch', minutes: 12 * 60 }] }));
+      const rows = items.filter((i) => i.kind === 'skipped');
+      expect(rows).toEqual([
+        expect.objectContaining({ id: 'skipped-lunch', meal: 'lunch', minutes: 720, dayMealId: 'lunch', itemId: null, label: null }),
+        expect.objectContaining({ id: 'skipped-dinner', meal: 'dinner', minutes: 1110, dayMealId: 'dinner', itemId: 's' }),
+      ]);
+      expect(items.filter((i) => i.kind === 'extra')).toHaveLength(0);
+    });
+
+    it("a fasting plan's skipped slot stands for its plan meal and keeps the plan's place and name", () => {
+      const log = { ...baseLog, ...noPlan };
+      const items = buildTimeline(input({ log, skippedDayMeals: [{ id: 'meal3', minutes: 0, label: 'X' }] }));
+      expect(items.find((i) => i.kind === 'meal' && i.slot === 'meal3')).toBeUndefined();
+      expect(items.find((i) => i.kind === 'skipped')).toMatchObject({ meal: 'dinner', label: meals[2].label, minutes: meals[2].startHour * 60 + meals[2].startMinute });
+    });
+
+    it('no "Không ăn" row for a meal with real food logged (the plan meal ticked, or food at that meal)', () => {
+      const phở: ExtraFoodItem = { id: 'p', name: 'Phở', calories: 450, proteinG: 25, mealTime: 'dinner', loggedAtISO: `${DATE}T19:00:00` };
+      const log = { ...baseLog, extraItems: [skipItem('a', 'lunch', '12:30'), skipItem('b', 'dinner', '19:05'), phở] };
+      const items = buildTimeline(input({ log, skippedDayMeals: [{ id: 'breakfast', minutes: 420 }] }));
+      expect(items.filter((i) => i.kind === 'skipped')).toHaveLength(0); // meal1 and meal2 ticked, dinner has Phở
+      expect(items.filter((i) => i.kind === 'extra').map((i) => i.id)).toEqual(['extra-p']); // the stale marks are not food rows either
+    });
+  });
 });

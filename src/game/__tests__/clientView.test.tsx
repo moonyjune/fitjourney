@@ -106,6 +106,22 @@ describe('coach view of a client', () => {
     expect(renderer!.root.findAll((n) => n.props.accessibilityLabel === 'Phân tích sâu')).toHaveLength(0);
   });
 
+  it('a meal the client marked "Không ăn" shows as a "Không ăn" row on the timeline, with no action', async () => {
+    useNutritionStore.setState({ logs: {} });
+    const client = snapshot();
+    client.logs[today].extraItems = [
+      ...(client.logs[today].extraItems ?? []),
+      { id: 'skip', name: 'Không ăn', calories: 0, proteinG: 0, loggedAtISO: `${today}T19:00:00`, mealTime: 'dinner' },
+    ];
+    await act(async () => {
+      renderer = create(<JournalScreen client={client} initialTab="day" />);
+    });
+    const row = renderer!.root.findAll((n) => n.props.testID === 'timeline-extra-skip');
+    expect(row.length).toBeGreaterThan(0);
+    expect(text(renderer!)).toMatch(/🚫 .* · Không ăn/);
+    expect(renderer!.root.findAll((n) => typeof n.props.onPress === 'function' && /không ăn/i.test(String(n.props.accessibilityLabel ?? '')))).toHaveLength(0);
+  });
+
   it("Tuần shows the client's week with its boss, read-only", async () => {
     await act(async () => {
       renderer = create(<JournalScreen client={snapshot()} initialTab="week" />);

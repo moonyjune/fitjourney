@@ -7,6 +7,7 @@ import { HudText } from '../src/components/quest/HudText';
 import { QuestIcon, type QuestIconName } from '../src/components/quest/QuestIcon';
 import { QuestSheet } from '../src/components/quest/QuestSheet';
 import { SavedFoodsSheet } from '../src/components/quest/SavedFoodsSheet';
+import { SkipMealSheet } from '../src/components/quest/SkipMealSheet';
 import { changeWater, WaterAmountSheet } from '../src/components/quest/WaterAmountSheet';
 import { WeightSheet } from '../src/components/quest/WeightSheet';
 import { WATER_QUICK_ADD_ML } from '../src/constants/plan';
@@ -60,11 +61,12 @@ function SmallChip({ icon, tint, label, accessibilityLabel, onPress }: SmallChip
   );
 }
 
-type Sheet = 'water' | 'weight' | 'saved' | null;
+type Sheet = 'water' | 'weight' | 'saved' | 'skip' | null;
 
 /** "Ghi nhanh" (+) (Design/uiux-proposal/html/02-quickadd-after.html): the date chip, "Chụp món ăn" first (the camera opens at once,
  *  then the photo goes to the AI in Add food), "Nói / gõ món" and "Món đã lưu", "Ăn lại" (1 tap logs a recent dish, with undo), water
- *  (+250 / +500, long press for another amount or to fix the total), and small chips for weight, feeling and another workout.
+ *  (+250 / +500, long press for another amount or to fix the total), and small chips for weight, feeling, another workout and
+ *  "Bỏ bữa" (1.0.2: a meal of the day marked not eaten, SkipMealSheet).
  *  Everything is logged on the shared selected day (README §2.1). */
 export default function QuickAddScreen() {
   const g = useGameText();
@@ -229,9 +231,11 @@ export default function QuickAddScreen() {
           <SmallChip icon="scale" tint={quest.textSecondary} label={`${lastKg} kg`} accessibilityLabel={g('quick.weightChipA11y', { kg: lastKg })} onPress={() => setSheet('weight')} />
           <SmallChip icon="smile" tint={quest.gold} label={g('quick.tileCheckin')} onPress={() => router.replace('/checkin')} />
           <SmallChip icon="dumbbell" tint={quest.xp} label={g('quick.otherWorkout')} onPress={() => router.replace({ pathname: '/(tabs)/workout', params: { other: String(Date.now()) } })} />
+          <SmallChip icon="x" tint={quest.hpText} label={g('quick.skipChip')} accessibilityLabel={g('quick.skipTitle')} onPress={() => setSheet('skip')} />
         </View>
       </ScrollView>
 
+      <SkipMealSheet visible={sheet === 'skip'} onClose={() => setSheet(null)} dateKey={dateKey} />
       <WaterAmountSheet visible={sheet === 'water'} onClose={() => setSheet(null)} dateKey={dateKey} now={now} />
       <WeightSheet
         visible={sheet === 'weight'}
@@ -329,9 +333,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 12,
   },
-  smallRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  // Two chips a line (four of them since 1.0.2), so none is cut on a phone.
+  smallRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   smallChip: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '40%',
     minHeight: 48,
     flexDirection: 'row',
     alignItems: 'center',

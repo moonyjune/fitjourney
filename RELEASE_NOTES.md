@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.0.2 | no | — |
 | 1.0.1 | no | boss-banter, dish-photo, tempt-me, suggest-cheat-places |
 | 1.0.0 | no | — |
 | 0.34.0 | no | — |
@@ -91,6 +92,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.0.2
+- Skipped meals show in the timeline ("Dòng thời gian", Camp and Journal › Ngày): a meal marked not eaten — skipped with "Bỏ bữa", or recorded with the diary's "Không ăn" 0 kcal food — is one muted row at that meal's time, "🚫 Bữa 3 - Tối · Không ăn", in place of the plan meal's card and of the "Không ăn" food card. A "Bỏ bữa" row has "Hoàn tác" (un-skips, with a "Hoàn tác" toast to skip again); a "Không ăn" food row opens its detail sheet, where "Xoá bữa" deletes it with "Hoàn tác". No row when the meal has real food logged after all. A coach sees the row without actions (`src/game/timeline.ts`, `src/screens/JournalView.tsx`).
+- Quick add (+) has a "Bỏ bữa" chip (the small chips are now two a line): a sheet "Bỏ bữa / Không ăn" lists the picked day's meals (breakfast / lunch / dinner, or the fasting plan's meals) with their state — "Bỏ bữa" to skip one (with "Hoàn tác"), "Đã bỏ · Hoàn tác" for one already skipped, "Đã ghi" / "Đã ghi “Không ăn”" (not tappable) for one already logged; with "Tôi không ăn sáng" on, breakfast reads "không ăn sáng (cài đặt)" (`src/components/quest/SkipMealSheet.tsx`).
 
 ## 1.0.1
 - The app is called "FitJourney" everywhere: the version line in Profile ("FitJourney 1.0.1"), the AI prompts of the boss banter and the temptation pool, the user agent of the photo and place lookups, code comments, test names and the design docs (the proposal PDF is now `Design/uiux-proposal/FitJourney-UIUX-proposal.pdf`). Folder names such as `Design/v4-fitquest` are unchanged.

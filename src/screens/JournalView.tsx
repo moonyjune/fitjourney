@@ -14,6 +14,11 @@ import { getDayType } from '../constants/plan';
 import { useGameText, type GameKey } from '../game/strings';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
+import { mealDefs } from '../game/mealSlots';
+import { mealNames } from '../game/deficitView';
+import { isFasting } from '../utils/mealMode';
+import { useSkippedMealStore } from '../store/useSkippedMealStore';
+import { showToast } from '../store/useToastStore';
 import { editListedPartPatch, partsOrSelf } from '../food/singlePart';
 import { useDayEvaluator, useLimits, useNow, useTdeeKcal } from '../game/useGameState';
 import type { ClientSnapshot } from '../coach/clientSnapshot';
@@ -25,7 +30,8 @@ import { usePlanStore } from '../store/usePlanStore';
 import type { MealPart, MealSlot } from '../types';
 import type { MissionId } from '../game/constants';
 import { PLAN_SLOT_MEAL } from '../insights/days';
-import { isSkippedMealItem, logSkippedMeal } from '../food/skipMeal';
+import { logSkippedMeal } from '../food/skipMeal';
+import type { MainMeal } from '../insights/days';
 import { deleteExtraWithUndo, logExtraAgain, unmarkPlanMealWithUndo } from '../food/mealActions';
 import { mealTimeAt } from '../food/eatAgain';
 import { mealCaption } from '../utils/mealCaption';
@@ -92,6 +98,10 @@ function Marker({ item }: { item: TimelineItem }) {
   } else if (item.kind === 'workout') color = quest.hp;
   else if (item.kind === 'feeling') color = quest.xp;
   else if (item.kind === 'meal') hollow = !item.eaten;
+  else if (item.kind === 'skipped') {
+    color = quest.textSecondary;
+    hollow = true;
+  }
   return (
     <View
       style={[
@@ -115,9 +125,69 @@ interface RowProps {
   thumbs: string[];
   /** A plan meal with nothing logged can be marked "Không ăn" (offer), or already is (skipped, can be undone). Off for a coach. */
   skip?: { state: 'offer' | 'skipped'; onSkip: () => void; onUndo: () => void };
+  /** A meal skipped with "Bỏ bữa": un-skips it (with "Hoàn tác"). Absent for a coach. */
+  onUnskip?: () => void;
+  /** A coach's read-only view: a "Không ăn" row has no action. */
+  readOnly?: boolean;
 }
 
-function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen, thumbs, skip }: RowProps) {
+const MAIN_MEAL_KEY: Record<MainMeal, GameKey> = { breakfast: 'meals.kind.breakfast', lunch: 'meals.kind.lunch', dinner: 'meals.kind.dinner' };
+
+/** A "Không ăn" row: a muted line at the meal's time. "Bỏ bữa" has its "Hoàn tác"; a "Không ăn" food alone opens its detail sheet
+ *  (where it can be deleted, with undo); a coach only reads it. */
+function SkippedRow({ item, g, onOpen, onUnskip, readOnly }: { item: Extract<TimelineItem, { kind: 'skipped' }>; g: Translate; onOpen: (item: TimelineItem) => void; onUnskip?: () => void; readOnly?: boolean }) {
+  const meal = item.label ?? g(MAIN_MEAL_KEY[item.meal]);
+  const text = g('journal.skippedRow', { meal });
+  const opens = !readOnly && !onUnskip && item.itemId != null;
+  const content = (trailing: React.ReactNode) => (
+    <View style={styles.row}>
+      <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.time}>
+        {clock(item.minutes)}
+      </HudText>
+      <View style={styles.markerCol}>
+        <View style={styles.rail} />
+        <Marker item={item} />
+      </View>
+      <View style={[styles.flex, styles.skippedBody]}>
+        <HudText size={13} weight="medium" color={quest.textSecondary} style={styles.flex} numberOfLines={2}>
+          {text}
+        </HudText>
+        {trailing}
+      </View>
+    </View>
+  );
+  if (!readOnly && onUnskip) {
+    return (
+      <View testID={`timeline-${item.id}`}>
+        {content(
+          <Pressable accessibilityRole="button" accessibilityLabel={g('journal.skippedUndoLabel', { meal })} onPress={onUnskip} style={({ pressed }) => [styles.skippedAction, pressed && { opacity: 0.8 }]}>
+            <View style={[styles.skipChip, styles.skipUndo]}>
+              <QuestIcon name="back" size={12} color={quest.textSecondary} strokeWidth={2.4} />
+              <HudText size={11} color={quest.textSecondary}>
+                {g('ui.undo')}
+              </HudText>
+            </View>
+          </Pressable>
+        )}
+      </View>
+    );
+  }
+  if (opens) {
+    return (
+      <Pressable testID={`timeline-${item.id}`} accessibilityRole="button" accessibilityLabel={`${clock(item.minutes)} ${g('journal.skippedOpenLabel', { meal })}`} onPress={() => onOpen(item)}>
+        {content(<QuestIcon name="chevron" size={14} color={quest.textSecondary} />)}
+      </Pressable>
+    );
+  }
+  return (
+    <View testID={`timeline-${item.id}`} accessible accessibilityLabel={`${clock(item.minutes)} ${text}`}>
+      {content(null)}
+    </View>
+  );
+}
+
+function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen, thumbs, skip, onUnskip, readOnly }: RowProps) {
+  if (item.kind === 'skipped') return <SkippedRow item={item} g={g} onOpen={onOpen} onUnskip={onUnskip} readOnly={readOnly} />;
   let body: React.ReactNode = null;
   let label = '';
   let onPress: (() => void) | undefined;
@@ -420,6 +490,18 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
   );
   const { targetMl: waterTargetMl, schedule: waterSchedule } = clientWater ?? ownWater;
 
+  // Meals skipped with "Bỏ bữa" (the user's own marks; a coach's view has none), at their usual time and with the plan's names.
+  const dayMeals = mealTemplates[getDayType(selectedDate)];
+  const skippedKey = client ? '' : day.skippedMeals.map((m) => `${m.id}:${m.label ?? ''}:${m.kind}`).join('|');
+  const skippedDayMeals = useMemo(() => {
+    if (!skippedKey) return [];
+    const defs = mealDefs(isFasting(), dayMeals);
+    return day.skippedMeals.map((m) => {
+      const def = defs.find((d) => d.id === m.id);
+      return { id: m.id, minutes: def ? def.startHour * 60 + def.startMinute : 12 * 60, label: m.label ? mealNames([m], g) : null };
+    });
+  }, [skippedKey, dayMeals]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const timeline = useMemo(() => {
     const photoSlots = new Set(
       photos.filter((p) => p.taskType === 'meal' && toDateKey(new Date(p.dateISO)) === selectedKey).map((p) => p.taskRefId)
@@ -433,23 +515,34 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
       workouts: workoutEntries.filter((w) => toDateKey(new Date(w.dateISO)) === selectedKey),
       feelings,
       photoSlots,
+      skippedDayMeals,
     });
-  }, [selectedKey, now, logs, mealTemplates, waterSchedule, workoutEntries, feelings, photos, selectedDate]);
+  }, [selectedKey, now, logs, mealTemplates, waterSchedule, workoutEntries, feelings, photos, selectedDate, skippedDayMeals]);
 
-  // A plan meal with nothing logged for its main meal can be marked "Không ăn" right on the timeline (own diary, not a future day). The
-  // "Không ăn" item then shows as the plan meal's status instead of a row of its own.
+  // A plan meal with nothing logged for its main meal can be marked "Không ăn" right on the timeline (own diary, not a future day). A
+  // meal marked not eaten ("Không ăn" food or "Bỏ bữa") then shows as a "Không ăn" row of its own in place of the plan meal (timeline.ts).
   const dayExtras = logs[selectedKey]?.extraItems ?? [];
-  const removeExtraItem = useNutritionStore((s) => s.removeExtraItem);
-  const planMeals = new Set(timeline.flatMap((i) => (i.kind === 'meal' ? [PLAN_SLOT_MEAL[i.slot]] : [])));
-  const skippedIds = new Set(dayExtras.filter((i) => isSkippedMealItem(i) && i.mealTime && planMeals.has(i.mealTime as never)).map((i) => i.id));
-  const visibleTimeline = timeline.filter((i) => !(i.kind === 'extra' && skippedIds.has(i.id.slice('extra-'.length))));
   function skipFor(slot: MealSlot, eaten: boolean): RowProps['skip'] {
     if (client || eaten || selectedKey > todayKey) return undefined;
     const meal = PLAN_SLOT_MEAL[slot];
-    const skipped = dayExtras.find((i) => i.mealTime === meal && isSkippedMealItem(i));
-    if (skipped) return { state: 'skipped', onSkip: () => {}, onUndo: () => removeExtraItem(selectedKey, skipped.id) };
-    if (dayExtras.some((i) => i.mealTime === meal)) return undefined; // something was eaten at that meal
+    if (dayExtras.some((i) => i.mealTime === meal)) return undefined; // something was eaten (or marked "Không ăn") at that meal
     return { state: 'offer', onSkip: () => logSkippedMeal(selectedKey, meal), onUndo: () => {} };
+  }
+  /** "Hoàn tác" on a "Bỏ bữa" row: the meal is no longer skipped, with "Hoàn tác" to skip it again. */
+  function unskip(item: Extract<TimelineItem, { kind: 'skipped' }>) {
+    const id = item.dayMealId;
+    if (client || !id) return;
+    const dateKey = selectedKey;
+    const store = useSkippedMealStore.getState();
+    if (!store.isSkipped(dateKey, id)) return;
+    store.toggle(dateKey, id);
+    showToast({
+      text: g('journal.skippedUndone', { meal: item.label ?? g(MAIN_MEAL_KEY[item.meal]) }),
+      tone: 'neutral',
+      undo: () => {
+        if (!useSkippedMealStore.getState().isSkipped(dateKey, id)) useSkippedMealStore.getState().toggle(dateKey, id);
+      },
+    });
   }
 
   // The "+60 XP" chip goes on the first workout of the day, and only when that mission was earned.
@@ -470,7 +563,7 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
     return [];
   }
   function openDetail(item: TimelineItem) {
-    if (item.kind === 'extra' || item.kind === 'meal') setOpenId(item.id);
+    if (item.kind === 'extra' || item.kind === 'meal' || (item.kind === 'skipped' && item.itemId != null)) setOpenId(item.id);
     if (item.kind === 'workout') setOpenWorkout(item.entryIds);
   }
   const [openWorkout, setOpenWorkout] = useState<string[] | null>(null);
@@ -493,6 +586,9 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
       parts: stored ? partsOrSelf(stored) : openItem.parts,
       photos: photosOf(openItem),
     };
+  } else if (openItem?.kind === 'skipped') {
+    // The "Không ăn" food behind a "Không ăn" row: nothing in it, but it can be deleted from here (with "Hoàn tác").
+    detail = { title: g('journal.mealSkipped'), time: clock(openItem.minutes), meal: openItem.label ?? g(MAIN_MEAL_KEY[openItem.meal]), kcal: 0, proteinG: 0, purineMg: null, sugarG: null, saltG: null, photos: [] };
   } else if (openItem?.kind === 'meal') {
     detail = { title: openItem.label, time: clock(openItem.minutes), meal: t(`extraMealTime.${PLAN_SLOT_MEAL[openItem.slot]}` as StringKey), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photos: photosOf(openItem) };
   }
@@ -510,11 +606,13 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
     return false;
   }
   // "Xoá bữa" in the sheet: a logged food is deleted, a ticked plan meal un-ticked; both with "Hoàn tác" instead of a confirm.
-  const openStored = openItem?.kind === 'extra' ? logs[selectedKey]?.extraItems?.find((i) => i.id === rawExtraId(openItem)) : undefined;
-  const canDeleteOpen = !client && (openItem?.kind === 'extra' ? !!openStored : openItem?.kind === 'meal' && openItem.eaten);
+  const openStoredId = openItem?.kind === 'extra' ? rawExtraId(openItem) : openItem?.kind === 'skipped' ? openItem.itemId : null;
+  const openStored = openStoredId != null ? logs[selectedKey]?.extraItems?.find((i) => i.id === openStoredId) : undefined;
+  const canDeleteOpen = !client && (openItem?.kind === 'extra' || openItem?.kind === 'skipped' ? !!openStored : openItem?.kind === 'meal' && openItem.eaten);
   function deleteOpen() {
     if (client || !openItem) return;
-    if (openItem.kind === 'extra') deleteExtraWithUndo(selectedKey, rawExtraId(openItem), g('journal.mealDeleted', { name: openItem.name || g('journal.extra') }));
+    if (openItem.kind === 'skipped' && openStored) deleteExtraWithUndo(selectedKey, openStored.id, g('journal.mealDeleted', { name: g('journal.mealSkipped') }));
+    else if (openItem.kind === 'extra') deleteExtraWithUndo(selectedKey, rawExtraId(openItem), g('journal.mealDeleted', { name: openItem.name || g('journal.extra') }));
     else if (openItem.kind === 'meal') unmarkPlanMealWithUndo(selectedKey, openItem.slot, g('journal.planUnmarked', { name: openItem.label }));
   }
   /** "Ăn lại món này": the same food logged again for today, at the meal of the moment, with "Hoàn tác". */
@@ -563,7 +661,7 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
   const [mealTableOpen, setMealTableOpen] = useState(false);
   const dayLog = logs[selectedKey];
 
-  const timelineRows = (embedded ? visibleTimeline.filter((i) => i.kind !== 'water') : visibleTimeline).map((item) => (
+  const timelineRows = (embedded ? timeline.filter((i) => i.kind !== 'water') : timeline).map((item) => (
     <TimelineRow
       key={item.id}
       item={item}
@@ -575,6 +673,8 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
       onOpen={openDetail}
       thumbs={photosOf(item).map((p) => p.uri)}
       skip={item.kind === 'meal' ? skipFor(item.slot, item.eaten) : undefined}
+      onUnskip={!client && item.kind === 'skipped' && item.dayMealId ? () => unskip(item) : undefined}
+      readOnly={!!client}
     />
   ));
 
@@ -737,6 +837,8 @@ const styles = StyleSheet.create({
   skipTarget: { alignSelf: 'flex-start', justifyContent: 'center', minHeight: 44, marginLeft: 76, marginTop: -10, marginBottom: -4 },
   skipChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, minHeight: 28, borderRadius: 6, borderWidth: 1.5, borderColor: quest.bossBorder },
   skipUndo: { borderColor: quest.border },
+  skippedBody: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 28 },
+  skippedAction: { minHeight: 44, minWidth: 44, justifyContent: 'center', alignItems: 'flex-end', marginVertical: -8 },
   chip: { paddingHorizontal: 8, minHeight: 22, borderRadius: 6, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
   nowLine: { borderTopWidth: 1.5, borderTopColor: quest.gold, borderStyle: 'dashed', paddingTop: 4, marginTop: 4 },
   nowText: { letterSpacing: 1.6 },
