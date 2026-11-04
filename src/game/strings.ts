@@ -1951,6 +1951,20 @@ const vi = {
   'journal2.month.streakNow': 'chuỗi {n} ngày',
   'journal2.month.charts': 'Biểu đồ theo ngày',
   'journal2.month.days': 'Các ngày trong tháng',
+  // 1.0.3: the date calendar by month with deficit colours, the shared colour key, the boss HP colour.
+  'date.month': 'Tháng {month} / {year}',
+  'date.prevMonth': 'Tháng trước',
+  'date.nextMonth': 'Tháng sau',
+  'date.offNoteStart': 'xám = trước ngày bắt đầu hoặc tương lai',
+  'date.dayMarkA11y': '{day}, {mark}',
+  'deficitLegend.flat': 'Duy trì',
+  'deficitLegend.pending': '~ Ước tính hôm nay',
+  'deficitLegend.missing': '⚠ Thiếu bữa',
+  'boss.hpLevel.full': 'máu gần đầy',
+  'boss.hpLevel.high': 'máu còn nhiều',
+  'boss.hpLevel.mid': 'máu còn một nửa',
+  'boss.hpLevel.low': 'máu thấp',
+  'boss.hpLevel.critical': 'sắp gục',
 } as const;
 
 export type GameKey = keyof typeof vi;
@@ -3902,6 +3916,20 @@ const en: Record<GameKey, string> = {
   'journal2.month.streakNow': '{n}-day streak',
   'journal2.month.charts': 'Charts by day',
   'journal2.month.days': 'Days of the month',
+  // 1.0.3: the date calendar by month with deficit colours, the shared colour key, the boss HP colour.
+  'date.month': '{month} / {year}',
+  'date.prevMonth': 'Previous month',
+  'date.nextMonth': 'Next month',
+  'date.offNoteStart': 'grey = before the start date or in the future',
+  'date.dayMarkA11y': '{day}, {mark}',
+  'deficitLegend.flat': 'Maintenance',
+  'deficitLegend.pending': '~ Today\'s estimate',
+  'deficitLegend.missing': '⚠ Meal missing',
+  'boss.hpLevel.full': 'HP nearly full',
+  'boss.hpLevel.high': 'HP high',
+  'boss.hpLevel.mid': 'HP at half',
+  'boss.hpLevel.low': 'HP low',
+  'boss.hpLevel.critical': 'about to fall',
 };
 
 export function formatGameText(language: 'vi' | 'en', key: GameKey, params?: Record<string, string | number>): string {

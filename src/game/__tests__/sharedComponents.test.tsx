@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { Image, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 jest.mock('expo-router', () => ({
@@ -13,13 +13,17 @@ jest.mock('../../sync/cloudSync', () => ({ pushUserData: jest.fn(), pushNutritio
 
 import { BottomSheet } from '../../components/quest/BottomSheet';
 import { DateChip } from '../../components/quest/DateChip';
-import { calendarDays, DatePickerSheet } from '../../components/quest/DatePickerSheet';
+import { clampMonth, DatePickerSheet } from '../../components/quest/DatePickerSheet';
+import { DEFICIT_LEVEL_COLOR } from '../deficitLevel';
+import type { DayDeficitMark } from '../deficitView';
+import { quest } from '../../theme/quest';
+import { oldestPickableKey } from '../../utils/logDate';
 import { DishThumb, dishLook } from '../../components/quest/DishThumb';
 import { ScreenTemplate } from '../../components/quest/ScreenTemplate';
 import { parseStepperText, Stepper, STEPPER_HOLD_MS, STEPPER_REPEAT_MS } from '../../components/quest/Stepper';
 import { ToastHost } from '../../components/quest/Toast';
 import { useNutritionStore } from '../../store/useNutritionStore';
-import { useSelectedDayStore } from '../../store/useSelectedDayStore';
+import { useSelectedDayStore, workingDayKey } from '../../store/useSelectedDayStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { hideToast, showToast, useToastStore } from '../../store/useToastStore';
 
@@ -262,30 +266,66 @@ describe('shared redesign components', () => {
   });
 
   describe('DatePickerSheet and DateChip', () => {
-    it('lays the last 30 days out in whole Monday-to-Sunday weeks', () => {
-      const days = calendarDays(NOW);
-      expect(days.length % 7).toBe(0);
-      expect(days[0]).toBe('2026-09-21'); // Monday on or before 23/9 (30 days back)
-      expect(days[days.length - 1]).toBe('2026-10-25'); // Sunday after Friday 23/10
+    it('keeps the shown month between the oldest pickable day and today', () => {
+      expect(clampMonth({ year: 2026, month: 11 }, '2025-10-23', '2026-10-23')).toEqual({ year: 2026, month: 10 });
+      expect(clampMonth({ year: 2025, month: 1 }, '2025-10-23', '2026-10-23')).toEqual({ year: 2025, month: 10 });
+      expect(clampMonth({ year: 2026, month: 3 }, '2025-10-23', '2026-10-23')).toEqual({ year: 2026, month: 3 });
+      // The plan's start date when it is older than a year, else a year back (a start date of today still leaves the past year).
+      expect(oldestPickableKey(NOW)).toBe('2025-10-23');
+      expect(oldestPickableKey(NOW, '2026-10-20T08:00:00')).toBe('2025-10-23');
+      expect(oldestPickableKey(NOW, '2024-03-02T08:00:00')).toBe('2024-03-02');
+      expect(oldestPickableKey(NOW, 'not a date')).toBe('2025-10-23');
     });
 
-    it('picks a day with the quick chips or the calendar, never one in the future or too old', () => {
+    it('a day picked weeks ago stays the working day (no 30-day cut-off)', () => {
+      expect(workingDayKey('2026-08-02', NOW)).toBe('2026-08-02');
+      expect(workingDayKey('2026-10-30', NOW)).toBe('2026-10-23');
+    });
+
+    it('shows a month with ‹ › to earlier months, never the future or before the oldest day', () => {
       const onPick = jest.fn();
       const onClose = jest.fn();
-      const r = render(<DatePickerSheet visible value="2026-10-23" now={NOW} onPick={onPick} onClose={onClose} isMarked={(k) => k === '2026-10-20'} />);
+      const r = render(<DatePickerSheet visible value="2026-10-23" now={NOW} minKey="2026-09-10" onPick={onPick} onClose={onClose} isMarked={(k) => k === '2026-10-20'} />);
       const text = allText(r);
       expect(text).toContain('Ghi cho ngày');
-      expect(text).toContain('Tháng 9 – 10 / 2026');
+      expect(text).toContain('Tháng 10 / 2026');
       expect(pressable(r, (l) => l.startsWith('T7 24/10')).props.disabled).toBe(true); // tomorrow
-      expect(pressable(r, (l) => l.startsWith('T2 21/09')).props.disabled).toBe(true); // over 30 days back
+      expect(pressable(r, 'Tháng sau').props.disabled).toBe(true);
       expect(pressable(r, 'T3 20/10, đã ghi')).toBeDefined();
+      act(() => pressable(r, 'Tháng trước').props.onPress());
+      expect(allText(r)).toContain('Tháng 9 / 2026');
+      expect(pressable(r, 'Tháng trước').props.disabled).toBe(true); // 10/9 is the oldest day
+      expect(pressable(r, (l) => l.startsWith('T4 09/09')).props.disabled).toBe(true);
+      act(() => pressable(r, (l) => l.startsWith('T3 15/09')).props.onPress());
+      act(() => pressable(r, 'Ghi cho T3 15/09').props.onPress());
+      expect(onPick).toHaveBeenLastCalledWith('2026-09-15');
+      expect(onClose).toHaveBeenCalled();
+      // A quick chip jumps back to its month.
       act(() => pressable(r, 'Hôm qua').props.onPress());
+      expect(allText(r)).toContain('Tháng 10 / 2026');
       act(() => pressable(r, 'Ghi cho Hôm qua · T5 22/10').props.onPress());
       expect(onPick).toHaveBeenLastCalledWith('2026-10-22');
-      expect(onClose).toHaveBeenCalled();
-      act(() => pressable(r, (l) => l.startsWith('T4 21/10')).props.onPress());
-      act(() => pressable(r, 'Ghi cho T4 21/10').props.onPress());
-      expect(onPick).toHaveBeenLastCalledWith('2026-10-21');
+    });
+
+    it('colours each day by its deficit level, like Journal › Tháng', () => {
+      const marks: Record<string, DayDeficitMark> = {
+        '2026-10-19': { kind: 'settled', level: 'met', kcal: 950, color: DEFICIT_LEVEL_COLOR.met },
+        '2026-10-20': { kind: 'settled', level: 'flat', kcal: 50, color: DEFICIT_LEVEL_COLOR.flat },
+        '2026-10-21': { kind: 'incomplete', level: null, kcal: 1400, color: null },
+        '2026-10-22': { kind: 'cheat', level: 'cheat', kcal: null, color: DEFICIT_LEVEL_COLOR.cheat },
+        '2026-10-23': { kind: 'pending', level: 'ok', kcal: 600, color: DEFICIT_LEVEL_COLOR.ok },
+      };
+      const none: DayDeficitMark = { kind: 'none', level: null, kcal: null, color: null };
+      const r = render(<DatePickerSheet visible value="2026-10-23" now={NOW} onPick={jest.fn()} onClose={jest.fn()} markOf={(k) => marks[k] ?? none} />);
+      const bg = (n: ReactTestInstance) => StyleSheet.flatten(n.props.style).backgroundColor;
+      expect(bg(pressable(r, 'T2 19/10, Đạt'))).toBe(DEFICIT_LEVEL_COLOR.met);
+      expect(bg(pressable(r, 'T3 20/10, Duy trì'))).toBe(DEFICIT_LEVEL_COLOR.flat);
+      expect(bg(pressable(r, 'T4 21/10, ⚠ Thiếu bữa'))).toBe(quest.raised);
+      expect(bg(pressable(r, (l) => l.startsWith('Hôm qua, T5 22/10, Cheat day')))).toBe(DEFICIT_LEVEL_COLOR.cheat);
+      expect(bg(pressable(r, (l) => l.startsWith('Hôm nay, T6 23/10, Tạm chấp nhận')))).toBe(`${DEFICIT_LEVEL_COLOR.ok}55`);
+      const text = allText(r);
+      expect(text).toContain('Duy trì');
+      expect(text).toContain('~ Ước tính hôm nay');
     });
 
     it('the chip shows and sets the app-wide selected day', () => {

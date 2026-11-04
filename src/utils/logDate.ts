@@ -1,7 +1,10 @@
 import { toDateKey } from './date';
 
-/** How far back a meal or water can be logged from the quick-add sheet. */
-export const MAX_LOG_DAYS_BACK = 30;
+/** The hard limit on how far back a day can be logged on (a sanity bound for route params and the shared selected day); the date
+ *  calendar itself goes back to the plan's start date, at least DEFAULT_PICK_DAYS_BACK days (see `oldestPickableKey`). */
+export const MAX_LOG_DAYS_BACK = 5 * 366;
+/** How far back the date calendar goes at least, whatever the plan's start date. */
+export const DEFAULT_PICK_DAYS_BACK = 365;
 
 const KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -17,9 +20,20 @@ export function shiftDateKey(dateKey: string, days: number): string {
   return toDateKey(date);
 }
 
-/** The oldest day that can be picked, counted from today. */
+/** The oldest day that can be logged on at all, counted from today. */
 export function oldestLogDateKey(now: Date): string {
   return shiftDateKey(toDateKey(now), -MAX_LOG_DAYS_BACK);
+}
+
+/** The oldest day the date calendar offers: the plan's start date when it is earlier than DEFAULT_PICK_DAYS_BACK days ago, else that
+ *  (a start date of today, or none, still leaves the past year), never before `oldestLogDateKey`. */
+export function oldestPickableKey(now: Date, startDateISO?: string | null): string {
+  const yearBack = shiftDateKey(toDateKey(now), -DEFAULT_PICK_DAYS_BACK);
+  const start = startDateISO ? new Date(startDateISO) : null;
+  const startKey = start && !Number.isNaN(start.getTime()) ? toDateKey(start) : null;
+  const floor = oldestLogDateKey(now);
+  const key = startKey && startKey < yearBack ? startKey : yearBack;
+  return key < floor ? floor : key;
 }
 
 /** A `date` route param to the day to log on: a real calendar day between MAX_LOG_DAYS_BACK days ago and today.

@@ -58,6 +58,8 @@ import { useSelectedDayStore } from '../../store/useSelectedDayStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
 import { useSkippedMealStore } from '../../store/useSkippedMealStore';
 import { DEFAULT_MEAL_TEMPLATES, getDayType } from '../../constants/plan';
+import { StyleSheet } from 'react-native';
+import { DEFICIT_LEVEL_COLOR } from '../deficitLevel';
 import { quest } from '../../theme/quest';
 import { formatDateVi, toDateKey } from '../../utils/date';
 import { monthKeyOf } from '../../utils/historyCalendar';
@@ -163,6 +165,22 @@ describe('Journal › Tháng (the old History screen)', () => {
       useSkippedMealStore.setState({ days: { [k]: slots } });
     });
     expect(flagged()).toHaveLength(0);
+    useSkippedMealStore.setState({ days: {} });
+  });
+
+  it('paints a calendar day in its deficit level colour (the same level the day line reads), with every level in the key', async () => {
+    useMealModeStore.setState({ fasting: true, skipBreakfast: false });
+    const k = dayKey(1);
+    const slots = DEFAULT_MEAL_TEMPLATES[getDayType(new Date(`${k}T12:00:00`))].map((m) => m.slot).filter((s) => s !== 'meal1');
+    useSkippedMealStore.setState({ days: { [k]: slots } }); // a complete day: meal 1 eaten, the rest skipped
+    useNutritionStore.setState({ logs: { [k]: { ...log(k), extraCalories: 6000 } } }); // far over the TDEE: a surplus
+    const r = await render();
+    await showMonthOf(r, k);
+    const cell = byLabel(r, new RegExp(`^${formatDateVi(k)}\\. Ăn dư: \\d+ kcal, Ăn dư$`));
+    expect(cell).toBeDefined();
+    expect(StyleSheet.flatten(cell.props.style).backgroundColor).toBe(DEFICIT_LEVEL_COLOR.over);
+    expect(text(r)).toMatch(/: \d+ kcal · Ăn dư/); // the day line names the same level
+    for (const key of ['Đạt', 'Tạm', 'Không đạt', 'Duy trì', 'Dư', 'Quá nhiều', 'Cheat', '~ Ước tính hôm nay', '⚠ Thiếu bữa']) expect(text(r)).toContain(key);
     useSkippedMealStore.setState({ days: {} });
   });
 
@@ -303,7 +321,7 @@ describe('Journal › Tháng (the old History screen)', () => {
       expect(text(r)).toContain('T2 | T3 | T4 | T5 | T6 | T7 | CN');
       expect(labels(r)).toContain(`Chọn tháng và năm: ${viMonth(today)}`);
       // Today may still have meals to come (then its estimate, "~"), or be settled with a meal not logged (⚠).
-      const cell = byLabel(r, new RegExp(`^${formatDateVi(today)}\\. (Thâm hụt|Ăn dư): ~?\\d+ kcal( \\(dự kiến\\))?(\\. ⚠ Chưa ghi .*)?$`));
+      const cell = byLabel(r, new RegExp(`^${formatDateVi(today)}\\. (Thâm hụt|Ăn dư): ~?\\d+ kcal(, [^.(]+)?( \\(dự kiến\\))?(\\. ⚠ Chưa ghi .*)?$`));
       expect(cell).toBeDefined();
       const cellText = cell.findAll((n) => (n.type as unknown) === 'Text').map((n) => [n.props.children].flat().join(''));
       expect(cellText[0]).toBe(String(Number(today.slice(8))));

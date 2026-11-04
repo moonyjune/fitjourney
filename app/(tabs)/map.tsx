@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HudText } from '../../src/components/quest/HudText';
 import { QuestIcon } from '../../src/components/quest/QuestIcon';
 import { TrailMap } from '../../src/components/quest/TrailMap';
-import { XpBar } from '../../src/components/quest/XpBar';
+import { HpBar } from '../../src/components/quest/HpBar';
 import { buildStageJourney, stageAsRegion, type StageBoss, type Zone } from '../../src/game/stageBosses';
 import { BossDamageLog, BossDamagePanel } from '../../src/components/quest/BossDamageLog';
 import { StageBossArt } from '../../src/components/quest/StageBossArt';
@@ -249,7 +249,7 @@ export default function MapScreen() {
                 </HudText>
               </View>
             </View>
-            <XpBar ratio={current.hpKg > 0 ? current.hpLeftKg / current.hpKg : 0} color={quest.hp} trackColor={quest.bg} height={12} from={1} delay={300} />
+            <HpBar left={current.hpLeftKg} max={current.hpKg} trackColor={quest.bg} height={12} delay={300} />
             <View style={styles.heroNameRow}>
               <HudText size={13} color={quest.hpText} style={styles.flex}>
                 {g('journey.toDefeat', { kg: Math.max(0, currentKg - current.toKg).toFixed(1) })}

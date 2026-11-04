@@ -7,7 +7,7 @@ import { HudText } from '../src/components/quest/HudText';
 import { QuestButton } from '../src/components/quest/QuestButton';
 import { QuestHeader } from '../src/components/quest/QuestHeader';
 import { InfoButton } from '../src/components/quest/InfoButton';
-import { XpBar } from '../src/components/quest/XpBar';
+import { BossHpBar } from '../src/components/quest/WeeklyBossSheet';
 import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../src/game/constants';
 import { useGameText } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
@@ -63,7 +63,7 @@ export default function BossScreen() {
           {num(boss.hpLeft)} <HudText size={14} weight="medium" color={quest.textSecondary}>/ {num(boss.maxHp)}</HudText>
         </HudText>
       </View>
-      <XpBar ratio={boss.maxHp > 0 ? boss.hpLeft / boss.maxHp : 0} color={quest.hp} trackColor={quest.bossPanel} height={14} from={1} delay={300} />
+      <BossHpBar boss={boss} height={14} trackColor={quest.bossPanel} delay={300} />
       <HudText size={13} weight="medium" color={quest.textSecondary}>
         {bossStatusText(boss, g)}
       </HudText>
