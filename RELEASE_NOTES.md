@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.0.3 | no | — |
 | 1.0.2 | no | — |
 | 1.0.1 | no | boss-banter, dish-photo, tempt-me, suggest-cheat-places |
 | 1.0.0 | no | — |
@@ -92,6 +93,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.0.3
+- Meal suggestions from your food database: a food saved by the portion (e.g. "100g xúc xích nhà làm", 220 kcal) is offered at most 2 portions, not scaled up to fill the whole meal (it had shown 660 kcal = 3 portions under a "100g" name). The card shows the amount ("2 phần · 440 kcal · 28 g đạm"), and "Ghi món này" puts the amount in the logged name.
+- Profile: tapping "Boss đã hạ" opens the weekly boss page.
 
 ## 1.0.2
 - Skipped meals show in the timeline ("Dòng thời gian", Camp and Journal › Ngày): a meal marked not eaten — skipped with "Bỏ bữa", or recorded with the diary's "Không ăn" 0 kcal food — is one muted row at that meal's time, "🚫 Bữa 3 - Tối · Không ăn", in place of the plan meal's card and of the "Không ăn" food card. A "Bỏ bữa" row has "Hoàn tác" (un-skips, with a "Hoàn tác" toast to skip again); a "Không ăn" food row opens its detail sheet, where "Xoá bữa" deletes it with "Hoàn tác". No row when the meal has real food logged after all. A coach sees the row without actions (`src/game/timeline.ts`, `src/screens/JournalView.tsx`).

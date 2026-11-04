@@ -45,7 +45,8 @@ export function openInAddFood(idea: DinnerIdea, kind: MealKind) {
   router.push({
     pathname: '/add-food',
     params: {
-      name: idea.name,
+      // A database food comes scaled ("2 phần", "250 g"): the amount goes into the name so the diary says what the kcal are for.
+      name: idea.source === 'db' && idea.amount ? `${idea.amount} ${idea.name}` : idea.name,
       calories: String(idea.calories),
       protein: String(idea.proteinG),
       purine: String(idea.purineMg),

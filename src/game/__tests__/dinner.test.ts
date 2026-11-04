@@ -111,6 +111,12 @@ describe('dinnerIdeasFromFoods', () => {
     expect(out[0].calories).toBeGreaterThan(100);
   });
 
+  it('offers a food saved by the portion at most 2 portions, however much of the meal is left', () => {
+    // "100g xúc xích" saved from the diary: 220 kcal a portion. A 600 kcal budget would have asked for 3 portions (660 kcal).
+    const out = dinnerIdeasFromFoods({ ...BRIEF, proteinLeftG: 20 }, [food('100g Xúc xích nhà làm', { group: 'processed', unit: 'phần', unitG: 100, kcal: 220, proteinG: 14, purineMg: 60 })]);
+    expect(out[0]).toMatchObject({ amount: '2 phần', calories: 440 });
+  });
+
   it('gives nothing for an empty database', () => {
     expect(dinnerIdeasFromFoods(BRIEF, [])).toEqual([]);
   });

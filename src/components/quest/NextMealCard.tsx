@@ -76,7 +76,9 @@ export function NextMealCard({ now }: { now: Date }) {
                 {idea.name}
               </HudText>
               <HudText size={13} weight="medium" color={quest.textSecondary}>
-                {g('camp.dishFigures', { kcal: idea.calories, p: idea.proteinG })}
+                {idea.amount
+                  ? g('camp.dishFiguresAmount', { amount: idea.amount, kcal: idea.calories, p: idea.proteinG })
+                  : g('camp.dishFigures', { kcal: idea.calories, p: idea.proteinG })}
               </HudText>
               <View style={styles.buttons}>
                 <Pressable

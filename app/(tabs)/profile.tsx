@@ -112,9 +112,9 @@ export default function ProfileScreen() {
   const habitsDone = tracked.filter((h) => todayChecks?.[h.id] === 'done').length;
   const onOff = (on: boolean) => g(on ? 'rd6.set.on' : 'rd6.set.off');
 
-  const stats = [
+  const stats: { value: string; label: string; route?: string; hint?: string }[] = [
     { value: `−${lostKg.toFixed(1)} kg`, label: g('profile.statWeight') },
-    { value: String(game.bossesDefeated), label: g('profile.statBosses') },
+    { value: String(game.bossesDefeated), label: g('profile.statBosses'), route: '/boss', hint: g('profile.statBossesHint') },
     { value: String(game.perfectDays), label: g('profile.statPerfect') },
   ];
 
@@ -212,16 +212,35 @@ export default function ProfileScreen() {
       )}
 
       <View style={styles.stats}>
-        {stats.map((s) => (
-          <View key={s.label} accessible accessibilityLabel={`${s.label} ${s.value}`} style={styles.stat}>
-            <HudText size={18} color={quest.gold} numberOfLines={1}>
-              {s.value}
-            </HudText>
-            <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={2} style={styles.center}>
-              {s.label}
-            </HudText>
-          </View>
-        ))}
+        {stats.map((s) => {
+          const body = (
+            <>
+              <HudText size={18} color={quest.gold} numberOfLines={1}>
+                {s.value}
+              </HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={2} style={styles.center}>
+                {s.label}
+              </HudText>
+            </>
+          );
+          const route = s.route;
+          return route ? (
+            <Pressable
+              key={s.label}
+              accessibilityRole="button"
+              accessibilityLabel={`${s.label} ${s.value}`}
+              accessibilityHint={s.hint}
+              onPress={() => router.push(route as never)}
+              style={({ pressed }) => [styles.stat, pressed && { opacity: 0.7 }]}
+            >
+              {body}
+            </Pressable>
+          ) : (
+            <View key={s.label} accessible accessibilityLabel={`${s.label} ${s.value}`} style={styles.stat}>
+              {body}
+            </View>
+          );
+        })}
       </View>
 
       <View style={styles.shortcuts}>

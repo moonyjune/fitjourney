@@ -212,9 +212,10 @@ describe('Meal suggestions card (Camp)', () => {
     const logButton = r.root.findAll((n) => typeof n.props.onPress === 'function' && /^Ghi món cho .+: /.test(n.props.accessibilityLabel ?? '') && n.props.accessibilityLabel.endsWith(`: ${first.name}`))[0];
     expect(logButton.props.accessibilityLabel).not.toContain('bữa tối: '); // named after the meal it is for, not always "dinner"
     await act(async () => logButton.props.onPress());
+    // A database food goes to Add food with its scaled amount in the name.
     expect(mockRouter.push).toHaveBeenCalledWith({
       pathname: '/add-food',
-      params: { name: first.name, calories: String(first.calories), protein: String(first.proteinG), purine: String(first.purineMg), salt: String(first.saltG), sugar: String(first.sugarG), mealTime: 'dinner', from: 'db' },
+      params: { name: `${first.amount} ${first.name}`, calories: String(first.calories), protein: String(first.proteinG), purine: String(first.purineMg), salt: String(first.saltG), sugar: String(first.sugarG), mealTime: 'dinner', from: 'db' },
     });
   });
 

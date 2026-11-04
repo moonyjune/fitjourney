@@ -1,10 +1,13 @@
-import { foodKey } from '../food/remember';
+import { foodKey, portionOf } from '../food/remember';
 import { NEVER_AS_MEAL, scaleFood } from '../food/swaps';
 import type { FoodEntry } from '../food/types';
 import { cleanRecipeDetails, type RecipeDetails } from '../cookbook/recipes';
 
 /** Below this many kcal left, dinner is a light one (vegetables, lean protein), not a meal. */
 export const LIGHT_BUDGET_KCAL = 150;
+/** A food saved by the portion ("phần", "bát"…) is offered at most this many portions as a meal: 3 portions of a side dish saved from
+ *  the diary (e.g. "100g xúc xích", 220 kcal) is not a meal anyone would eat, however much of the meal's budget is left. */
+export const MAX_IDEA_SERVINGS = 2;
 export const MAX_DINNER_IDEAS = 3;
 
 export type Room = { purine: number; salt: number; sugar: number };
@@ -108,7 +111,8 @@ export function dinnerIdeasFromFoods(brief: DinnerBrief, foods: FoodEntry[]): Di
   const scored: { idea: DinnerIdea; score: number }[] = [];
   for (const food of foods) {
     if (NEVER_AS_MEAL.includes(food.group)) continue;
-    const scaled = scaleFood(food, target);
+    const byWeight = food.unit === 'g' || food.unit === 'ml';
+    const scaled = scaleFood(food, byWeight ? target : Math.min(target, MAX_IDEA_SERVINGS * Math.max(portionOf(food).calories, 1)));
     if (!scaled) continue;
     const idea: DinnerIdea = { name: food.name, ...scaled.figures, source: 'db', amount: scaled.amount };
     if (!acceptDinner(brief, idea)) continue;
