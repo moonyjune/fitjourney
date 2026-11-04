@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.0.4 | no | — |
 | 1.0.3 | no | — |
 | 1.0.2 | no | — |
 | 1.0.1 | no | boss-banter, dish-photo, tempt-me, suggest-cheat-places |
@@ -93,6 +94,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.0.4
+- The date calendar (Camp, Quick add, Ghi bữa, weight, check-in, Journal) shows a whole month with ‹ › to go back to earlier months, as far as the plan's start date (at least one year back); future days stay locked.
+- Each day in the date calendar takes its deficit-level colour, exactly as in Journal › Tháng (Đạt, Tạm, Không đạt, Duy trì, Ăn dư, ⚠, Cheat): today's estimate is faded with "~", a day with a missing meal is grey with ⚠. The old green "đã ghi" dot (which looked like "Đạt" for every logged day) is gone. Journal › Tháng's key lists every colour, and today's cell shows its estimate's colour.
+- Boss HP bars change colour as HP drops: green when full, then yellow-green, gold, orange, and red below 10 % (weekly boss on Camp and its sheet, the boss page, Journal › Tuần — which now has an HP bar — and the Journey stage bosses).
+- Journal › Tuần › "Boss theo tuần": a line shows the weekly bosses beaten in total ("Đã hạ n / tổng tuần"); weeks older than the 6 shown sit behind "Xem thêm … tuần", so an old beaten week no longer disappears. Profile says "Boss tuần đã hạ", not to be confused with the stage bosses on Journey (one per 5 kg).
 
 ## 1.0.3
 - Meal suggestions from your food database: a food saved by the portion (e.g. "100g xúc xích nhà làm", 220 kcal) is offered at most 2 portions, not scaled up to fill the whole meal (it had shown 660 kcal = 3 portions under a "100g" name). The card shows the amount ("2 phần · 440 kcal · 28 g đạm"), and "Ghi món này" puts the amount in the logged name.
