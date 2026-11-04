@@ -1,18 +1,24 @@
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { BossState } from '../../game/boss';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import { isoWeekNumber } from '../../utils/isoWeek';
 import { HudText } from './HudText';
+import { QuestButton } from './QuestButton';
 import { DefaultBossArt } from './StageBossArt';
 import { XpBar } from './XpBar';
 
 /** "Boss theo tuần": the weekly bosses newest first (this week's live one, then each earlier week, defeated or not) with the damage
  *  that counted toward each (capped at its HP, so a week never shows more than the boss has). Moved from the Map's chart view to the
- *  weekly boss page (Design/uiux-proposal dialogs.md row 31: the weekly bosses belong with the weekly boss, not on Journey). */
+ *  weekly boss page (Design/uiux-proposal dialogs.md row 31: the weekly bosses belong with the weekly boss, not on Journey).
+ *  The first `limit` weeks show, the rest behind "Xem thêm"; the defeated count above the list covers every week, so it always
+ *  matches Profile's "Boss tuần đã hạ" even when a defeated week is folded away (1.0.3 report: 2 counted, 1 visible). */
 export function WeeklyBossHistory({ history, limit = 6 }: { history: BossState[]; limit?: number }) {
   const g = useGameText();
+  const [shown, setShown] = useState(limit);
   if (history.length === 0) return null;
+  const defeated = history.filter((b) => b.defeated).length;
   return (
     <View style={styles.wrap}>
       <HudText size={15} accessibilityRole="header">
@@ -21,8 +27,11 @@ export function WeeklyBossHistory({ history, limit = 6 }: { history: BossState[]
       <HudText size={11} weight="medium" color={quest.textSecondary}>
         {g('chart.bossHp', { max: history[0].maxHp.toLocaleString('en-US') })}
       </HudText>
+      <HudText size={12} weight="medium" color={quest.textSecondary} testID="weekly-boss-tally">
+        {g('chart.bossTally', { n: defeated, total: history.length })}
+      </HudText>
       <View style={styles.list}>
-        {history.slice(0, limit).map((b, i) => {
+        {history.slice(0, shown).map((b, i) => {
           const live = i === 0;
           const week = isoWeekNumber(new Date(`${b.weekKey}T12:00:00`));
           const status = live ? g('chart.bossLive') : b.defeated ? g('chart.bossDown') : g('chart.bossAlive');
@@ -47,6 +56,9 @@ export function WeeklyBossHistory({ history, limit = 6 }: { history: BossState[]
           );
         })}
       </View>
+      {shown < history.length && (
+        <QuestButton title={g('chart.bossMore', { n: history.length - shown })} variant="ghost" onPress={() => setShown(history.length)} />
+      )}
     </View>
   );
 }

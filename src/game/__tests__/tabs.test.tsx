@@ -311,7 +311,7 @@ describe('FitJourney tabs', () => {
       expect(text).not.toContain('example.com');
       expect(text).toMatch(/\d+ \/ \d+ XP/);
       expect(text).toContain('−3.8 kg'); // weight lost
-      expect(text).toContain('Boss đã hạ');
+      expect(text).toContain('Boss tuần đã hạ');
       expect(text).toContain('Ngày hoàn hảo');
     });
 
