@@ -14,6 +14,7 @@ import { PLAN_SLOT_MEAL, type MainMeal } from '../insights/days';
 import { SKIPPED_MEAL_NAME } from '../insights/missing';
 import { toDateKey } from '../utils/date';
 import { periodOfItem } from './mealSlots';
+import { dayWaterMl } from '../water/drinks';
 
 export type TimelineItem =
   | { kind: 'water'; id: string; minutes: number; incrementMl: number; cumulativeMl: number; reached: boolean; past: boolean }
@@ -146,7 +147,7 @@ export function buildTimeline(input: TimelineInput): TimelineItem[] {
     });
   }
 
-  const waterMl = log?.waterMl ?? 0;
+  const waterMl = dayWaterMl(log);
   waterSchedule.forEach((c, i) => {
     const minutes = c.hour * 60 + c.minute;
     const previous = i > 0 ? waterSchedule[i - 1].cumulativeTargetMl : 0;

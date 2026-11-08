@@ -10,6 +10,7 @@ import { actualDailyDeficitKcal } from '../../utils/tdee';
 import { weekStartKey } from '../../utils/weekKey';
 import { dayWaterTargetMl } from '../../water/schedule';
 import type { JournalSubject } from './useJournalSubject';
+import { dayWaterMl } from '../../water/drinks';
 
 /** One logged day as the Month tab's day list and calendar show it (moved from the old History screen). */
 export interface DaySummary {
@@ -81,7 +82,7 @@ export function useDaySummaries(subject: JournalSubject): { days: DaySummary[]; 
           dateKey,
           calories,
           proteinG,
-          waterMl: log?.waterMl ?? 0,
+          waterMl: dayWaterMl(log),
           waterTargetMl: dayWaterTargetMl(log, settings.waterTargetMl),
           mealsEatenCount: mealsLogged(log),
           workoutsCount: dayWorkouts.length,

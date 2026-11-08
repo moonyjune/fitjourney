@@ -14,7 +14,7 @@
 // (404 / 410) are deleted.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { duePushes, latestPlan, localClock, type DuePush } from '../_shared/pushPlan.ts';
+import { duePushes, latestPlan, localClock, rowWaterMl, type DuePush } from '../_shared/pushPlan.ts';
 import { sendWebPush, type VapidKeys } from '../_shared/webpush.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -80,10 +80,10 @@ Deno.serve(async (req) => {
 
     const [{ data: sentRows }, { data: log }] = await Promise.all([
       admin.from('push_sent').select('key').eq('user_id', userId).gte('sent_at', since),
-      admin.from('nutrition_logs').select('water_ml').eq('user_id', userId).eq('entry_date', clock.dateKey).maybeSingle(),
+      admin.from('nutrition_logs').select('water_ml, extra_items').eq('user_id', userId).eq('entry_date', clock.dateKey).maybeSingle(),
     ]);
     const sent = new Set((sentRows ?? []).map((r) => r.key as string));
-    const due: DuePush[] = duePushes(picked.plan, clock, sent, log ? Number(log.water_ml) : null);
+    const due: DuePush[] = duePushes(picked.plan, clock, sent, rowWaterMl(log));
     if (due.length === 0) continue;
 
     let alive = rows;

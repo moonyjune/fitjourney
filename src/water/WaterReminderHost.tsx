@@ -11,6 +11,7 @@ import { useWaterReminderStore } from '../store/useWaterReminderStore';
 import { toDateKey } from '../utils/date';
 import { dueWaterReminder, waterCheerIndex, type WaterReminder } from './reminder';
 import { currentWaterPlan } from './useWaterPlan';
+import { dayWaterMl } from './drinks';
 
 /** How often the water plan is checked while the app is open. */
 export const WATER_CHECK_EVERY_MS = 30_000;
@@ -46,7 +47,7 @@ export function drinkFromPopup(reachMl: number): void {
   useWaterReminderStore.getState().close();
   if (!reminder) return;
   const nutrition = useNutritionStore.getState();
-  const before = nutrition.logs[reminder.dateKey]?.waterMl ?? 0;
+  const before = dayWaterMl(nutrition.logs[reminder.dateKey]);
   const added = Math.max(0, reachMl - before);
   if (added > 0) nutrition.addWater(reminder.dateKey, added);
   const language = useSettingsStore.getState().language;
@@ -86,7 +87,7 @@ export function WaterReminderHost({ enabled }: { enabled: boolean }) {
       const now = new Date();
       const dateKey = toDateKey(now);
       const { targetMl, schedule } = currentWaterPlan(now);
-      const waterMl = useNutritionStore.getState().logs[dateKey]?.waterMl ?? 0;
+      const waterMl = dayWaterMl(useNutritionStore.getState().logs[dateKey]);
       const due = dueWaterReminder(schedule, waterMl, targetMl, now, dateKey, store.shown);
       if (!due) return;
       store.show(due.reminder, due.dueKeys);

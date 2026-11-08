@@ -1,7 +1,8 @@
 import { useTranslation } from '../../i18n/useTranslation';
 import type { StringKey } from '../../i18n/strings';
 import { mealTimeAt } from '../../food/eatAgain';
-import { deleteExtraWithUndo, logExtraAgain } from '../../food/mealActions';
+import { deleteExtraWithUndo, editExtraWhen, logExtraAgain } from '../../food/mealActions';
+import { suggestedDrinkMl } from '../../water/drinks';
 import { editListedPartPatch, partsOrSelf } from '../../food/singlePart';
 import { useGameText } from '../../game/strings';
 import { useNutritionStore } from '../../store/useNutritionStore';
@@ -32,6 +33,9 @@ export function LoggedFoodSheet({ dateKey, itemId, now, onClose }: { dateKey: st
     saltG: item.saltG ?? 0,
     parts: partsOrSelf(item),
     photos: extraPhotoRefs(proofs, { id: item.id, photoUri: item.photoUri }),
+    mealTime: item.mealTime,
+    waterMl: item.waterMl,
+    suggestedWaterMl: suggestedDrinkMl(partsOrSelf(item)),
   };
 
   function eatAgain() {
@@ -52,6 +56,8 @@ export function LoggedFoodSheet({ dateKey, itemId, now, onClose }: { dateKey: st
       onAddPhoto={(uri) => addExtraPhoto(dateKey, item.id, uri)}
       onRemovePhoto={async (photo) => removeExtraPhoto(dateKey, item.id, photo)}
       onEatAgain={item.calories > 0 ? eatAgain : undefined}
+      onEditWhen={(next) => editExtraWhen(dateKey, item.id, next, now)}
+      withWater
       onDelete={() => deleteExtraWithUndo(dateKey, item.id, g('journal.mealDeleted', { name: detail.title }))}
     />
   );

@@ -30,6 +30,7 @@ import { weekStartKey } from '../../utils/weekKey';
 import { dayWaterTargetMl } from '../../water/schedule';
 import type { WeekSummary } from './useDaySummaries';
 import type { JournalSubject } from './useJournalSubject';
+import { dayWaterMl } from '../../water/drinks';
 
 const MOOD_COLORS: Record<Mood, string> = {
   great: quest.xp,
@@ -148,8 +149,8 @@ export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }
   // Water: average of the days so far, and the days the day's own target was reached.
   const pastDays = days.filter((d) => !d.future);
   const waterDays = pastDays.filter((d) => logs[d.key] != null);
-  const waterAvg = waterDays.length > 0 ? waterDays.reduce((s, d) => s + (logs[d.key]?.waterMl ?? 0), 0) / waterDays.length : null;
-  const waterMet = waterDays.filter((d) => (logs[d.key]?.waterMl ?? 0) >= dayWaterTargetMl(logs[d.key], settings.waterTargetMl)).length;
+  const waterAvg = waterDays.length > 0 ? waterDays.reduce((s, d) => s + dayWaterMl(logs[d.key]), 0) / waterDays.length : null;
+  const waterMet = waterDays.filter((d) => dayWaterMl(logs[d.key]) >= dayWaterTargetMl(logs[d.key], settings.waterTargetMl)).length;
 
   // Mood: the week's check-ins, the most frequent mood and the average craving.
   const weekFeelings = useMemo(() => [...feelings].filter((r) => weekStartKey(new Date(r.loggedAtISO)) === weekKey).reverse(), [feelings, weekKey]);

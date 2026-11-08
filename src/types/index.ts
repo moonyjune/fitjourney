@@ -114,6 +114,9 @@ export interface ExtraFoodItem {
   /** The food broken down into its parts ("Yến mạch 30g", "Sữa chua 100g"...), when it was entered or detected as several. The item
    *  itself is the one description of the meal and holds the totals; the parts are detail, shown only in Profile > Nutrition. */
   parts?: MealPart[];
+  /** Millilitres of this food that count as water drunk (a soy milk, a coffee): added to the day's water on top of `waterMl` of the
+   *  day. Absent for food and for drinks the user did not count. */
+  waterMl?: number;
 }
 
 /** One part of a meal: a name that carries its amount (g / ml / pieces) and its own figures. */

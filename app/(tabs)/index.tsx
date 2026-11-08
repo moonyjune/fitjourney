@@ -41,6 +41,7 @@ import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { useWaterPlan } from '../../src/water/useWaterPlan';
 import { setPendingMealPhoto } from '../../src/food/pendingPhoto';
 import { pickPhoto } from '../../src/utils/pickPhoto';
+import { dayWaterMl } from '../../src/water/drinks';
 
 /** Water added by Camp's tile, like the quick-add chip. */
 const WATER_STEP_ML = 250;
@@ -149,12 +150,12 @@ export default function CampScreen() {
   }, [level.level, seenLevel, markSeen]);
 
   // +250 ml tile: logged at once on the picked day, undone from the toast.
-  const waterMl = useNutritionStore((s) => s.logs[dayKey]?.waterMl ?? 0);
+  const waterMl = useNutritionStore((s) => dayWaterMl(s.logs[dayKey]));
   const { targetMl: waterTargetMl } = useWaterPlan(dayKey);
   function addWater() {
     const store = useNutritionStore.getState();
     store.addWater(dayKey, WATER_STEP_ML);
-    const total = store.logs[dayKey]?.waterMl ?? waterMl + WATER_STEP_ML;
+    const total = dayWaterMl(useNutritionStore.getState().logs[dayKey]);
     showToast({
       text: g('quick.waterAdded', { ml: WATER_STEP_ML, total: total.toLocaleString('en-US') }),
       tone: 'mana',

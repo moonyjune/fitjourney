@@ -15,6 +15,7 @@ import { toDateKey } from '../utils/date';
 import { addDays } from '../utils/milestones';
 import { resolveTdeeKcal } from '../utils/tdee';
 import type { DailyNutritionLog, PlanData, WorkoutLogEntry } from '../types';
+import { dayWaterMl } from '../water/drinks';
 
 /** How many days back the AI sees (today not included). The server enforces the same cap. */
 export const COACH_HISTORY_DAYS = 7;
@@ -171,7 +172,7 @@ export function makeDayEvaluator(now: Date) {
  *  today so far, the daily/weekly targets and the state of this week's boss. */
 export function buildCoachContext(now: Date = new Date()): CoachContext {
   const { evaluate, byDay, isCheatDay, logs, weights, plan, settings, limits, tdeeKcal } = makeDayEvaluator(now);
-  const dayOf = (dateKey: string) => toCoachDay(evaluate(dateKey), logs[dateKey]?.waterMl ?? 0, byDay.get(dateKey)?.length ?? 0);
+  const dayOf = (dateKey: string) => toCoachDay(evaluate(dateKey), dayWaterMl(logs[dateKey]), byDay.get(dateKey)?.length ?? 0);
 
   const todayKey = toDateKey(now);
   const todayEval = evaluate(todayKey);
@@ -205,7 +206,7 @@ export function buildCoachContext(now: Date = new Date()): CoachContext {
       sugarLimitG: r1(limits.sugarG),
       goalWeightKg: r1(settings.goalWeightKg),
     },
-    today: { ...toCoachDay(todayEval, todayLog?.waterMl ?? 0, byDay.get(todayKey)?.length ?? 0), plannedMealsLeft },
+    today: { ...toCoachDay(todayEval, dayWaterMl(todayLog), byDay.get(todayKey)?.length ?? 0), plannedMealsLeft },
     week: {
       bossMaxHp: Math.round(boss.maxHp),
       bossHpLeft: Math.round(boss.hpLeft),

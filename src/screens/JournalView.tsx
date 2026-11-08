@@ -32,7 +32,7 @@ import type { MissionId } from '../game/constants';
 import { PLAN_SLOT_MEAL } from '../insights/days';
 import { logSkippedMeal } from '../food/skipMeal';
 import type { MainMeal } from '../insights/days';
-import { deleteExtraWithUndo, logExtraAgain, unmarkPlanMealWithUndo } from '../food/mealActions';
+import { deleteExtraWithUndo, editExtraWhen, logExtraAgain, unmarkPlanMealWithUndo } from '../food/mealActions';
 import { mealTimeAt } from '../food/eatAgain';
 import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
@@ -50,6 +50,7 @@ import { addExtraPhoto, addSlotPhoto, removeExtraPhoto } from '../utils/mealPhot
 import { extraPhotoRefs, slotPhotoRefs, type MealPhotoRef } from '../utils/photoOrder';
 import { DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN, dayWaterTargetMl } from '../water/schedule';
 import { useWaterPlan, waterPlanFor } from '../water/useWaterPlan';
+import { dayWaterMl, suggestedDrinkMl } from '../water/drinks';
 
 const MOOD_LABEL: Record<string, StringKey> = {
   great: 'feeling.moodGreat',
@@ -469,7 +470,7 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
   const selectedDate = useMemo(() => dateOf(selectedKey), [selectedKey]);
   const isToday = selectedKey === todayKey;
   const day = evaluate(selectedKey);
-  const waterMl = logs[selectedKey]?.waterMl ?? 0;
+  const waterMl = dayWaterMl(logs[selectedKey]);
   // The water plan of the selected day, from that day's own target (a past day keeps the one it was lived under). A client's
   // drinking window is not shared, so a coach sees the client's target spread over the default window.
   const ownWater = useWaterPlan(selectedKey);
@@ -585,10 +586,14 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
       saltG: openItem.saltG,
       parts: stored ? partsOrSelf(stored) : openItem.parts,
       photos: photosOf(openItem),
+      mealTime: stored?.mealTime ?? openItem.mealTime ?? null,
+      waterMl: stored?.waterMl,
+      suggestedWaterMl: stored ? suggestedDrinkMl(partsOrSelf(stored)) : 0,
     };
   } else if (openItem?.kind === 'skipped') {
     // The "Không ăn" food behind a "Không ăn" row: nothing in it, but it can be deleted from here (with "Hoàn tác").
-    detail = { title: g('journal.mealSkipped'), time: clock(openItem.minutes), meal: openItem.label ?? g(MAIN_MEAL_KEY[openItem.meal]), kcal: 0, proteinG: 0, purineMg: null, sugarG: null, saltG: null, photos: [] };
+    const skippedStored = logs[selectedKey]?.extraItems?.find((i) => i.id === openItem.itemId);
+    detail = { mealTime: skippedStored?.mealTime ?? null, title: g('journal.mealSkipped'), time: clock(openItem.minutes), meal: openItem.label ?? g(MAIN_MEAL_KEY[openItem.meal]), kcal: 0, proteinG: 0, purineMg: null, sugarG: null, saltG: null, photos: [] };
   } else if (openItem?.kind === 'meal') {
     detail = { title: openItem.label, time: clock(openItem.minutes), meal: t(`extraMealTime.${PLAN_SLOT_MEAL[openItem.slot]}` as StringKey), kcal: openItem.kcal, proteinG: openItem.proteinG, purineMg: null, sugarG: null, saltG: null, photos: photosOf(openItem) };
   }
@@ -800,6 +805,8 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
         onRemovePhoto={client ? undefined : removePhoto}
         onEatAgain={!client && openStored && openStored.calories > 0 ? eatOpenAgain : undefined}
         onDelete={canDeleteOpen ? deleteOpen : undefined}
+        onEditWhen={!client && openStored ? (next) => editExtraWhen(selectedKey, openStored.id, next, now) : undefined}
+        withWater={openItem?.kind === 'extra'}
       />
     </View>
   );

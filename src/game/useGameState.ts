@@ -31,6 +31,7 @@ import type { WorkoutLogEntry } from '../types';
 import { computeGameState, type GameState } from './state';
 import { useTemptationStore } from '../store/useTemptationStore';
 import { temptationXp } from '../temptation/stats';
+import { dayWaterMl } from '../water/drinks';
 
 /** A `Date` that refreshes every `intervalMs` so countdowns and the eating-window cut-off stay live. */
 export function useNow(intervalMs = 30_000): Date {
@@ -185,7 +186,7 @@ export function useAchievements(now: Date): {
     const waterByDay: Record<string, number> = {};
     const waterGoalByDay: Record<string, number> = {};
     for (const [key, log] of Object.entries(logs)) {
-      waterByDay[key] = log.waterMl ?? 0;
+      waterByDay[key] = dayWaterMl(log);
       waterGoalByDay[key] = dayWaterTargetMl(log, waterGoalMl);
     }
     const stats = computeAchievementStats({

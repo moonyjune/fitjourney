@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
-import type { MealPart } from '../../types';
+import type { ExtraMealTime, MealPart } from '../../types';
 import { MAX_MEAL_PHOTOS, type MealPhotoRef } from '../../utils/photoOrder';
 import { pickPhoto } from '../../utils/pickPhoto';
 import { BottomSheet } from './BottomSheet';
 import { DishThumb } from './DishThumb';
 import { HudText } from './HudText';
+import { MealWhenForm, type MealWhen } from './MealWhenForm';
 import { PartEditForm } from './PartEditForm';
 import { PhotoStrip } from './PhotoStrip';
 import { PhotoViewer } from './PhotoViewer';
@@ -29,6 +30,12 @@ export interface MealDetail {
   parts?: MealPart[];
   /** Every photo of the meal, first one first (up to MAX_MEAL_PHOTOS). */
   photos: MealPhotoRef[];
+  /** The meal it is filed under, for "Sửa bữa & giờ" (null: none picked). */
+  mealTime?: ExtraMealTime | null;
+  /** Millilitres of it counted as the day's water (a drink); 0 or absent: none. */
+  waterMl?: number;
+  /** What its name says it holds as a drink, offered in "Sửa bữa & giờ" when nothing is counted. */
+  suggestedWaterMl?: number;
 }
 
 interface Props {
@@ -44,18 +51,22 @@ interface Props {
   onEatAgain?: () => void;
   /** "Xoá bữa": deletes it at once (the caller shows the toast with "Hoàn tác"); the sheet then closes. Left out for a coach. */
   onDelete?: () => void;
+  /** "Sửa bữa & giờ": moves the logged food to another meal and/or time; `withWater` also lets it count (or stop counting) as water. */
+  onEditWhen?: (next: MealWhen) => void;
+  withWater?: boolean;
 }
 
 /** A logged meal in full, as a bottom sheet (dialog 10): its photos side by side with ‹ › (tap one to see it full screen; add up to
  *  MAX_MEAL_PHOTOS, remove the one in view), the totals and, when it was entered as several foods, each of them with a pencil that opens
  *  a small sheet to change its amount (the calories are worked out again on the spot); then "Ăn lại món này" and "Xoá bữa", both undoable. */
-export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto, onEatAgain, onDelete }: Props) {
+export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto, onEatAgain, onDelete, onEditWhen, withWater }: Props) {
   const g = useGameText();
   const [inView, setInView] = useState(0);
   const [editing, setEditing] = useState<number | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [editingWhen, setEditingWhen] = useState(false);
   if (!detail) return null;
   const photos = detail.photos;
   const current = photos[Math.min(inView, photos.length - 1)];
@@ -89,6 +100,7 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
 
   const close = () => {
     setEditing(null);
+    setEditingWhen(false);
     setZoom(null);
     setInView(0);
     setPhotoError(null);
@@ -162,6 +174,29 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
           </HudText>
         )}
 
+        {onEditWhen && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={g('journal.whenEditA11y', { name: detail.title })}
+            onPress={() => setEditingWhen(true)}
+            style={({ pressed }) => [styles.photoButton, styles.whenButton, pressed && { opacity: 0.7 }]}
+            testID="meal-detail-edit-when"
+          >
+            <QuestIcon name="clock" size={16} color={quest.gold} strokeWidth={2.2} />
+            <HudText size={12} color={quest.text} style={styles.flex}>
+              {caption || g('journal.whenNone')}
+            </HudText>
+            <HudText size={12} color={quest.gold}>
+              {g('journal.whenEdit')}
+            </HudText>
+          </Pressable>
+        )}
+        {detail.waterMl && detail.waterMl > 0 ? (
+          <HudText size={12} weight="medium" color={quest.manaText}>
+            {g('journal.countsAsWater', { ml: Math.round(detail.waterMl).toLocaleString('en-US') })}
+          </HudText>
+        ) : null}
+
         <HudText size={16} color={quest.goldLight}>
           {g('journal.kcalProtein', { kcal: detail.kcal, protein: round1(detail.proteinG) })}
         </HudText>
@@ -219,6 +254,23 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
         )}
       </BottomSheet>
 
+      <BottomSheet visible={editingWhen} onClose={() => setEditingWhen(false)} title={g('journal.whenTitle', { name: detail.title })}>
+        {editingWhen && (
+          <MealWhenForm
+            mealTime={detail.mealTime ?? null}
+            time={detail.time}
+            withWater={withWater}
+            waterMl={detail.waterMl}
+            suggestedWaterMl={detail.suggestedWaterMl}
+            onCancel={() => setEditingWhen(false)}
+            onSave={(next) => {
+              onEditWhen?.(next);
+              setEditingWhen(false);
+            }}
+          />
+        )}
+      </BottomSheet>
+
       <PhotoViewer
         photos={zoom != null ? photos.map((p) => ({ uri: p.uri, label: detail.title, caption: caption || undefined })) : null}
         initialIndex={zoom ?? 0}
@@ -259,4 +311,5 @@ const styles = StyleSheet.create({
   partDivider: { borderTopWidth: 1, borderTopColor: quest.raised2 },
   iconButton: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   actions: { flexDirection: 'row', gap: 10 },
+  whenButton: { alignSelf: 'stretch' },
 });

@@ -10,6 +10,7 @@ import { KCAL_PER_KG_FAT } from '../utils/tdee';
 import { weekStartKey } from '../utils/weekKey';
 import { evaluatorFor, makeDayEvaluator, type DaySource } from './coachContext';
 import { fingerprint } from '../insights/snapshot';
+import { dayWaterMl } from '../water/drinks';
 
 /** Where the week stands against the boss, decided here in code (the AI is told it, never asked to guess it). */
 export type BossStatus = 'defeated' | 'on_track' | 'behind' | 'far';
@@ -135,7 +136,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
       eatenKcal: Math.round(e.eatenKcal),
       proteinG: Math.round(e.proteinG),
       burnedKcal: Math.round(e.burnedKcal),
-      waterMl: Math.round(log?.waterMl ?? 0),
+      waterMl: Math.round(dayWaterMl(log)),
       purineMg: Math.round(e.nutrients.purineMg),
       saltG: r1(e.nutrients.saltG),
       sugarG: r1(e.nutrients.sugarG),

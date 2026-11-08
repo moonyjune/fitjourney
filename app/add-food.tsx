@@ -31,6 +31,7 @@ import { lookupDescribedFood } from '../src/food/describeLookup';
 import { joinTitle, sumParts } from '../src/food/mealParts';
 import { emptyRow, num, rowAmount, rowFromFigures, rowHasNoFigures, rowIsEmpty, rowIsSavable, rowPart, scaleRow, type MealRow } from '../src/food/mealRows';
 import { formatQty } from '../src/food/partScale';
+import { MAX_DRINK_ML, suggestedDrinkMl } from '../src/water/drinks';
 import { takePendingMealPhoto } from '../src/food/pendingPhoto';
 import { photoResultToMealText } from '../src/food/photoResult';
 import { parsePrefill } from '../src/food/prefill';
@@ -134,6 +135,8 @@ export default function AddFoodScreen() {
   const [title, setTitle] = useState('');
   const [titleTouched, setTitleTouched] = useState(false);
   const [junk, setJunk] = useState(false);
+  /** Millilitres typed for "Tính vào nước"; null follows what the foods' names say (a soy milk 250 ml → 250). */
+  const [waterText, setWaterText] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: 'saved' | 'ai'; reasoning: string; accuracy: number | null } | null>(null);
   const [advice, setAdvice] = useState<PhotoAdvice | null>(null);
   const [hint, setHint] = useState<'text' | 'foods' | 'value' | null>(null);
@@ -141,7 +144,7 @@ export default function AddFoodScreen() {
   const [saveFailed, setSaveFailed] = useState(false);
   const [lastRun, setLastRun] = useState<Run | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<'slot' | 'saved' | 'info' | null>(null);
+  const [sheet, setSheet] = useState<'slot' | 'saved' | 'info' | 'water' | null>(null);
   const [detailsOpen, setDetailsOpen] = useState<boolean | null>(null);
   /** The outcome of looking a name-only entry up in the food database: what was added from it, or why nothing was. */
   const [dbOutcome, setDbOutcome] = useState<
@@ -352,6 +355,11 @@ export default function AddFoodScreen() {
   const savable = useMemo(() => rows.filter(rowIsSavable), [rows]);
   const partsOf = useMemo(() => savable.map(rowPart), [savable]);
   const totals = useMemo(() => sumParts(partsOf), [partsOf]);
+  // A drink logged as food (soy milk, coffee...) also counts toward the day's water, as its name says unless the user typed another amount.
+  const suggestedWater = useMemo(() => suggestedDrinkMl(partsOf), [partsOf]);
+  const typedWater = waterText == null ? suggestedWater : Math.round(num(waterText));
+  const waterInvalid = typedWater > MAX_DRINK_ML;
+  const drinkMl = waterInvalid ? 0 : typedWater;
   const derivedTitle = useMemo(() => joinTitle(partsOf.map((p) => p.name)), [partsOf]);
   const single = savable.length === 1 ? savable[0] : null;
   const mealTitle = (savable.length >= 2 ? (titleTouched && title.trim() ? title.trim() : derivedTitle) : single ? single.name.trim() : '').slice(0, 300);
@@ -428,6 +436,10 @@ export default function AddFoodScreen() {
       setSheet('slot');
       return;
     }
+    if (waterInvalid) {
+      setSheet('water');
+      return;
+    }
     setSaving(true);
     setSaveFailed(false);
     let kept: { main?: string; more: string[] } = { more: [] };
@@ -439,6 +451,7 @@ export default function AddFoodScreen() {
         saltG: totals.saltG || undefined,
         sugarG: totals.sugarG || undefined,
         junk: junk || undefined,
+        waterMl: drinkMl || undefined,
         photoUri: kept.main,
         morePhotoUris: kept.more,
         // Nothing new to remember only when the entry is exactly one food taken unchanged from the user's own database.
@@ -703,7 +716,30 @@ export default function AddFoodScreen() {
           {aiEnabled && <QuestButton variant="ghost" icon="edit" title={g('meal.manual')} onPress={manual} disabled={busy} />}
         </View>
 
-        <SavedFoodsSheet
+        <BottomSheet
+        visible={sheet === 'water'}
+        onClose={() => setSheet(null)}
+        title={g('meal.water.title')}
+        footer={<QuestButton title={g('meal.slotSheet.done')} onPress={() => setSheet(null)} disabled={waterInvalid} />}
+      >
+        <View style={styles.form}>
+          <QuestField
+            label={g('meal.water.field')}
+            unit="ml"
+            keyboardType="number-pad"
+            placeholder="0"
+            value={waterText ?? (suggestedWater > 0 ? String(suggestedWater) : '')}
+            onChangeText={setWaterText}
+            maxLength={4}
+          />
+          <HudText size={11} weight="medium" color={waterInvalid ? quest.hpText : quest.textSecondary} accessibilityRole={waterInvalid ? 'alert' : undefined}>
+            {waterInvalid ? g('meal.water.invalid', { max: MAX_DRINK_ML.toLocaleString('en-US') }) : g('meal.water.hint')}
+          </HudText>
+          {drinkMl > 0 && <QuestButton variant="ghost" icon="x" title={g('meal.water.off')} onPress={() => setWaterText('0')} />}
+        </View>
+      </BottomSheet>
+
+      <SavedFoodsSheet
           visible={sheet === 'saved'}
           onClose={() => setSheet(null)}
           onUse={applyLookup}
@@ -774,6 +810,14 @@ export default function AddFoodScreen() {
         <View style={styles.chips}>
           <Pill icon="bowl" text={mealLabel} on={!!mealTime} label={g('meal.slotA11y', { meal: mealTime ? mealLabel : g('meal.slotUnset') })} onPress={() => setSheet('slot')} />
           <Pill icon="clock" text={shownClock} on={!!clock} danger={timeInvalid} label={g('meal.timeA11y', { time: shownClock })} onPress={() => setSheet('slot')} />
+          <Pill
+            icon="drop"
+            text={drinkMl > 0 ? g('meal.water.pillOn', { ml: drinkMl.toLocaleString('en-US') }) : g('meal.water.pill')}
+            on={drinkMl > 0}
+            danger={waterInvalid}
+            label={drinkMl > 0 ? g('meal.water.pillA11yOn', { ml: drinkMl }) : g('meal.water.pillA11yOff')}
+            onPress={() => setSheet('water')}
+          />
           <Pill icon="flame" text={g('meal.snack')} on={junk} label={g('food.junk')} selected={junk} onPress={() => setJunk((v) => !v)} />
         </View>
 
@@ -1079,7 +1123,7 @@ function AddPhotoChip({ n, onPress, disabled }: { n: number; onPress: () => void
 }
 
 interface PillProps {
-  icon: 'bowl' | 'clock' | 'flame';
+  icon: 'bowl' | 'clock' | 'flame' | 'drop';
   text: string;
   label: string;
   on: boolean;

@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.1.0 | no | send-push |
 | 1.0.4 | no | — |
 | 1.0.3 | no | — |
 | 1.0.2 | no | — |
@@ -94,6 +95,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.1.0
+- Drinks logged as food count toward the day's water: a soy milk, coffee, tea, juice or milk tea logged in Ghi bữa adds its millilitres to the water total (Camp water tile, the "Nước" sheet, Journal, the water missions and habit, the water reminders and the Web Push water messages). Ghi bữa has a 💧 chip: it is filled from the names ("Sữa đậu nành 250ml" → 250 ml, "2 ly cà phê" → 500 ml, one glass = 250 ml when no amount is written; yoghurt, broth, fish sauce and beer never count) and can be changed or set to 0. The "Nước" sheet says how much came from drinks; −250 ml and reset only change the water logged as water (`src/water/drinks.ts`).
+- A logged food can be moved to another meal and/or time after it was saved: the meal detail sheet (Journal › Ngày and Camp) has "Sửa bữa & giờ" — pick the meal (the time follows that meal's usual time unless a time is typed), type the time, and set how many ml of it count as water (offered from the name for an older drink). A "Không ăn" row can change its meal and time too. The timeline, the late-meal check and the day's order follow at once (`src/components/quest/MealWhenForm.tsx`).
 
 ## 1.0.4
 - The date calendar (Camp, Quick add, Ghi bữa, weight, check-in, Journal) shows a whole month with ‹ › to go back to earlier months, as far as the plan's start date (at least one year back); future days stay locked.

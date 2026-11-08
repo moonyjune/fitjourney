@@ -26,6 +26,7 @@ import type { ExtraMealTime } from '../src/types';
 import { toDateKey } from '../src/utils/date';
 import { pickPhoto } from '../src/utils/pickPhoto';
 import { useWaterPlan } from '../src/water/useWaterPlan';
+import { dayWaterMl } from '../src/water/drinks';
 
 /** The two water chips of the sheet (README §3.2); other amounts with a long press. */
 const WATER_CHIPS_ML = WATER_QUICK_ADD_ML.slice(0, 2);
@@ -78,7 +79,7 @@ export default function QuickAddScreen() {
   const isToday = dateKey === todayKey;
   const aiEnabled = useAiPhotoStore((s) => s.aiEnabled);
   const water = useWaterPlan(dateKey);
-  const waterMl = useNutritionStore((s) => s.logs[dateKey]?.waterMl ?? 0);
+  const waterMl = useNutritionStore((s) => dayWaterMl(s.logs[dateKey]));
   const startWeightKg = useSettingsStore((s) => s.startWeightKg);
   const latest = useWeightStore((s) => s.latest());
   const [sheet, setSheet] = useState<Sheet>(null);

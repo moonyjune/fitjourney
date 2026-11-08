@@ -13,6 +13,7 @@ import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { QuestField } from './QuestField';
 import { WaterNextDrink } from './WaterNextDrink';
+import { dayWaterMl } from '../../water/drinks';
 
 /** Most water one entry adds (a typo like 25000 is refused). */
 export const WATER_ENTRY_MAX_ML = 3000;
@@ -22,11 +23,13 @@ const fmt = (ml: number) => ml.toLocaleString('en-US');
 /** Adds (or, negative, takes off) water on a day, never below 0, and shows the toast whose "Hoàn tác" puts the day back exactly. */
 export function changeWater(dateKey: string, ml: number, texts: { added: (ml: number, total: string) => string; removed: (ml: number, total: string) => string }): void {
   const store = useNutritionStore.getState();
+  // Only the water logged as water can be taken off; the drinks logged as food stay in the total.
   const before = store.logs[dateKey]?.waterMl ?? 0;
+  const drinks = dayWaterMl(store.logs[dateKey]) - before;
   const change = Math.max(-before, ml);
   if (change === 0) return;
   store.addWater(dateKey, change);
-  const total = fmt(before + change);
+  const total = fmt(before + change + drinks);
   showToast({
     text: change > 0 ? texts.added(change, total) : texts.removed(-change, total),
     tone: 'mana',
@@ -47,7 +50,8 @@ interface Props {
 export function WaterAmountSheet({ visible, onClose, dateKey, now }: Props) {
   const g = useGameText();
   const water = useWaterPlan(dateKey);
-  const waterMl = useNutritionStore((s) => s.logs[dateKey]?.waterMl ?? 0);
+  const waterMl = useNutritionStore((s) => dayWaterMl(s.logs[dateKey]));
+  const loggedAsWaterMl = useNutritionStore((s) => s.logs[dateKey]?.waterMl ?? 0);
   const [text, setText] = useState('');
   const [invalid, setInvalid] = useState(false);
   useEffect(() => {
@@ -81,7 +85,7 @@ export function WaterAmountSheet({ visible, onClose, dateKey, now }: Props) {
   }
 
   function reset() {
-    const before = waterMl;
+    const before = loggedAsWaterMl;
     if (before <= 0) return;
     useNutritionStore.getState().resetWater(dateKey);
     onClose();
@@ -104,6 +108,11 @@ export function WaterAmountSheet({ visible, onClose, dateKey, now }: Props) {
       <View style={styles.track} accessibilityLabel={g('quick.waterTotalMl', { cur: fmt(waterMl), target: fmt(water.targetMl) })}>
         <View style={[styles.fill, { width: `${pct}%` }]} />
       </View>
+      {waterMl > loggedAsWaterMl ? (
+        <HudText size={12} weight="medium" color={quest.manaText}>
+          {g('water.sheet.fromDrinks', { ml: fmt(waterMl - loggedAsWaterMl) })}
+        </HudText>
+      ) : null}
       {isToday ? <WaterNextDrink schedule={water.schedule} waterMl={waterMl} now={now} /> : null}
 
       <HudText size={13} color={quest.textSecondary} style={styles.label}>
@@ -156,10 +165,10 @@ export function WaterAmountSheet({ visible, onClose, dateKey, now }: Props) {
             key={ml}
             accessibilityRole="button"
             accessibilityLabel={g('quick.waterRemove', { ml })}
-            accessibilityState={{ disabled: waterMl <= 0 }}
-            disabled={waterMl <= 0}
+            accessibilityState={{ disabled: loggedAsWaterMl <= 0 }}
+            disabled={loggedAsWaterMl <= 0}
             onPress={() => add(-ml)}
-            style={({ pressed }) => [styles.chip, pressed && styles.pressed, waterMl <= 0 && styles.off]}
+            style={({ pressed }) => [styles.chip, pressed && styles.pressed, loggedAsWaterMl <= 0 && styles.off]}
           >
             <HudText size={14}>{`−${ml} ml`}</HudText>
           </Pressable>
@@ -167,10 +176,10 @@ export function WaterAmountSheet({ visible, onClose, dateKey, now }: Props) {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={g('water.sheet.reset')}
-          accessibilityState={{ disabled: waterMl <= 0 }}
-          disabled={waterMl <= 0}
+          accessibilityState={{ disabled: loggedAsWaterMl <= 0 }}
+          disabled={loggedAsWaterMl <= 0}
           onPress={reset}
-          style={({ pressed }) => [styles.chip, pressed && styles.pressed, waterMl <= 0 && styles.off]}
+          style={({ pressed }) => [styles.chip, pressed && styles.pressed, loggedAsWaterMl <= 0 && styles.off]}
         >
           <HudText size={14}>{g('water.sheet.reset')}</HudText>
         </Pressable>

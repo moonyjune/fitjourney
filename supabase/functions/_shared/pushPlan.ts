@@ -146,6 +146,19 @@ export interface DuePush {
   url: string;
 }
 
+/** The day's water from its `nutrition_logs` row: `water_ml` plus the drinks logged as food that count as water (`waterMl` of each
+ *  of `extra_items`), as the app adds them (src/water/drinks.ts). Null when the day has no row. */
+export function rowWaterMl(row: { water_ml?: unknown; extra_items?: unknown } | null | undefined): number | null {
+  if (!row) return null;
+  const items = Array.isArray(row.extra_items) ? (row.extra_items as { waterMl?: unknown }[]) : [];
+  const drinks = items.reduce((sum, i) => {
+    const ml = Number(i?.waterMl);
+    return sum + (Number.isFinite(ml) && ml > 0 ? ml : 0);
+  }, 0);
+  const water = Number(row.water_ml);
+  return Math.max(0, Number.isFinite(water) ? water : 0) + drinks;
+}
+
 /** The messages due for one user now. `waterMl` is the day's water so far (null when unknown: treated as 0). */
 export function duePushes(plan: PushPlan, clock: LocalClock, sent: ReadonlySet<string>, waterMl: number | null): DuePush[] {
   const out: DuePush[] = [];

@@ -18,6 +18,7 @@ import { useNutritionStore } from '../src/store/useNutritionStore';
 import { useSettingsStore } from '../src/store/useSettingsStore';
 import { quest, questRadius } from '../src/theme/quest';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
+import { dayWaterMl } from '../src/water/drinks';
 
 type Tab = 'theory' | 'snack';
 
@@ -105,7 +106,7 @@ export default function LearnScreen() {
   const topics = useMemo(() => searchTopics(query, section), [query, section]);
   const snacks = useMemo(() => searchSnacks(SNACK_SWAPS, query), [query]);
   const facts = useMemo(() => {
-    const waterByDay = Object.fromEntries(Object.entries(logs).map(([d, l]) => [d, l.waterMl ?? 0]));
+    const waterByDay = Object.fromEntries(Object.entries(logs).map(([d, l]) => [d, dayWaterMl(l)]));
     const raw = buildLiveFacts({ insights, thresholds, waterByDay, waterTargetMl, language: lang });
     return Object.fromEntries(Object.entries(raw).map(([id, f]) => [id, formatLearnText(lang, f.key, f.params)]));
   }, [insights, thresholds, logs, waterTargetMl, lang]);

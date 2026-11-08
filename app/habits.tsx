@@ -26,6 +26,7 @@ import { HitSwitch } from '../src/components/quest/HitSwitch';
 import { useGameText } from '../src/game/strings';
 import { showToast } from '../src/store/useToastStore';
 import { toDateKey } from '../src/utils/date';
+import { dayWaterMl } from '../src/water/drinks';
 
 const STATUS_KEY: Record<HabitStatus, HabitKey> = { formed: 'hb.s.formed', building: 'hb.s.building', todo: 'hb.s.todo' };
 const LEVEL_COLOR: Record<FormationLevel, string> = { formed: quest.xp, building: quest.gold, unstable: quest.hpText, new: quest.manaText, untracked: quest.textSecondary };
@@ -169,9 +170,9 @@ export default function HabitsScreen() {
   const tracked = useMemo(() => trackedHabits(habits), [habits]);
   const days = useMemo(() => Array.from({ length: DAYS_BACK }, (_, i) => addDaysToKey(todayKey, -i)), [todayKey]);
   const weeks = useMemo(() => buildHabitWeeks(checks, habits, todayKey), [checks, habits, todayKey]);
-  const signals = useMemo(() => autoSignals(day, { waterMl: nutritionLogs[day]?.waterMl ?? 0, weights, workouts }), [day, nutritionLogs, weights, workouts]);
+  const signals = useMemo(() => autoSignals(day, { waterMl: dayWaterMl(nutritionLogs[day]), weights, workouts }), [day, nutritionLogs, weights, workouts]);
   const overview = useMemo(
-    () => analyzeHabits(checks, habits, todayKey, (d) => autoSignals(d, { waterMl: nutritionLogs[d]?.waterMl ?? 0, weights, workouts })),
+    () => analyzeHabits(checks, habits, todayKey, (d) => autoSignals(d, { waterMl: dayWaterMl(nutritionLogs[d]), weights, workouts })),
     [checks, habits, todayKey, nutritionLogs, weights, workouts]
   );
   const statsById = useMemo(() => new Map(overview.stats.map((x) => [x.habit.id, x])), [overview]);

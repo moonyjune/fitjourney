@@ -17,7 +17,7 @@ import { healLog, newExtraId } from '../utils/extraIds';
 import { setDayReader } from '../sync/syncQueue';
 import { useSettingsStore } from './useSettingsStore';
 
-export type ExtraPatch = Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG' | 'parts'>> & {
+export type ExtraPatch = Partial<Pick<ExtraFoodItem, 'name' | 'calories' | 'proteinG' | 'purineMg' | 'saltG' | 'sugarG' | 'parts' | 'mealTime' | 'loggedAtISO' | 'waterMl'>> & {
   photoUri?: string | null;
 };
 
@@ -38,7 +38,7 @@ interface NutritionState {
     proteinG: number,
     mealTime: ExtraMealTime | null,
     /** Optional FitJourney fields; omitted ones are simply not stored on the item. */
-    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri'> & {
+    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'photoUri' | 'waterMl'> & {
       /** More photos of the same meal (after `photoUri`, which is the one shown first); kept as its proof photos. */
       morePhotoUris?: string[];
       /** The figures came straight from a food in the database, so there is nothing new to remember. */
@@ -54,7 +54,7 @@ interface NutritionState {
   removeExtraItem: (dateKey: string, itemId: string, opts?: { keepPhotos?: boolean }) => void;
   /** Puts a removed food back as it was (same id, so its kept photos belong to it again), at `index` in the day's list (default: last). */
   restoreExtraItem: (dateKey: string, item: ExtraFoodItem, index?: number) => void;
-  /** Changes a logged off-plan food in place (amounts, totals, breakdown, photo) and saves it, with no AI call. `photoUri: null` removes
+  /** Changes a logged off-plan food in place (amounts, totals, breakdown, meal and time, water, photo) and saves it, with no AI call. `photoUri: null` removes
    *  the photo; a new one replaces the old (its proof and file go) and is saved as a meal proof. */
   updateExtra: (dateKey: string, itemId: string, patch: ExtraPatch) => void;
   /** Commits a whole diary-table edit session (meal toggles, deleted default meals, edited/removed
@@ -169,6 +169,7 @@ export const useNutritionStore = create<NutritionState>()(
         if (extras?.saltG) item.saltG = extras.saltG;
         if (extras?.sugarG) item.sugarG = extras.sugarG;
         if (extras?.junk) item.junk = true;
+        if (extras?.waterMl && extras.waterMl > 0) item.waterMl = Math.round(extras.waterMl);
         // A photo kept inline (web) lives only in the proof store; a second copy here would fill the browser's storage and stop the day from saving.
         if (extras?.photoUri && !isInlinePhoto(extras.photoUri)) item.photoUri = extras.photoUri;
         const parts = cleanParts(extras?.parts);
@@ -198,7 +199,8 @@ export const useNutritionStore = create<NutritionState>()(
         if (!old) return;
         const { photoUri, ...fields } = patch;
         const next: ExtraFoodItem = { ...old, ...fields };
-        for (const key of ['purineMg', 'saltG', 'sugarG'] as const) if (!next[key]) delete next[key];
+        for (const key of ['purineMg', 'saltG', 'sugarG', 'waterMl'] as const) if (!next[key]) delete next[key];
+        if (next.waterMl) next.waterMl = Math.round(next.waterMl);
         const parts = cleanParts(next.parts);
         if (parts.length > 0) next.parts = parts;
         else delete next.parts;
