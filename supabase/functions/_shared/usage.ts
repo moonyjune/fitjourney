@@ -1,6 +1,6 @@
 // Pure helpers for the per-user AI quota and the cost estimate (no Deno or network use, so they are unit-tested in jest).
 
-export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter' | 'workout' | 'dishphoto' | 'feelings' | 'planchat';
+export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter' | 'workout' | 'dishphoto' | 'feelings' | 'planchat' | 'temptchat';
 
 /** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
@@ -29,6 +29,9 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   /** Plan chat (Plan > chat with the AI, also a coach editing a client's plan): one call per message sent; each carries the whole
    *  plan and may answer with a whole new one, so it is the dearest text call. */
   planchat: 10,
+  /** The temptation chat ("AI tương tác", tempt-chat): an opening is 2 short calls (the pick, then the lines over the photo), each
+   *  reply to the player 1. A few pop-ups a day with a chat of up to 5 turns each. */
+  temptchat: 60,
 };
 
 export interface TokenUsage {
@@ -102,7 +105,7 @@ export const modelKey = (group: ModelGroup): string => `model.${group}`;
 /** The group whose model a feature's calls use, or null (the global model). */
 export function modelGroupOf(feature: AiFeature): ModelGroup | null {
   if (feature === 'places') return 'places';
-  if (feature === 'tempt') return 'tempt';
+  if (feature === 'tempt' || feature === 'temptchat') return 'tempt';
   if (feature === 'dishphoto') return 'photo';
   if (feature === 'banter' || feature === 'digest') return 'short';
   return null;

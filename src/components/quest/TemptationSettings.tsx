@@ -82,6 +82,16 @@ export function TemptationSettings() {
             {settings.level === 'easy' ? g('tempt.levelHintEasy') : g('tempt.levelHintHard')}
           </HudText>
 
+          <View style={styles.head}>
+            <View style={styles.flex}>
+              <HudText size={13}>{g('tempt.aiChat')}</HudText>
+              <HudText size={12} weight="medium" color={quest.textSecondary}>
+                {g('tempt.aiChatHint')}
+              </HudText>
+            </View>
+            <HitSwitch accessibilityLabel={g('tempt.aiChat')} value={settings.aiChat} onValueChange={(aiChat) => setSettings({ aiChat })} />
+          </View>
+
           <HudText size={13}>{g('tempt.freq')}</HudText>
           <QuestSegment<TemptFrequency>
             accessibilityLabel={g('tempt.freq')}
@@ -105,7 +115,7 @@ export function TemptationSettings() {
             </HudText>
           )}
 
-          {settings.level === 'hard' && (
+          {(settings.level === 'hard' || settings.aiChat) && (
             <>
               <TextInput
                 accessibilityLabel={g('tempt.city')}

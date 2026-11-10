@@ -5,7 +5,7 @@ import { TemptationDialog } from '../components/quest/TemptationDialog';
 import { useMealModeStore } from '../store/useMealModeStore';
 import { useTemptationStore } from '../store/useTemptationStore';
 import { isTemptationDue } from './schedule';
-import { summonTemptation } from './summon';
+import { bossReply, summonTemptation } from './summon';
 
 /** How often the schedule is checked while the app is open. */
 export const CHECK_EVERY_MS = 60_000;
@@ -54,7 +54,9 @@ export function TemptationHost({ enabled }: { enabled: boolean }) {
     <TemptationDialog
       open={enabled ? open : null}
       streak={streak}
-      onAnswer={(outcome) => store.answer(outcome)}
+      // A chat may have moved on to another item: the answer is recorded for the one on the table at the end.
+      onAnswer={(outcome, bonusXp, item) => useTemptationStore.getState().answer(outcome, undefined, bonusXp, item)}
+      onTalk={(talk) => bossReply(talk)}
       onClose={() => useTemptationStore.getState().close()}
       onLog={(item) => {
         useTemptationStore.getState().close();

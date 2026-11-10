@@ -185,7 +185,7 @@ describe('resist / give-in record and XP', () => {
       stats: { resisted: 5, gaveIn: 2, streak: 9, bestStreak: 3 },
       history: [{ at: '2026-10-27T10:00:00.000Z', name: 'Bia', emoji: '🍺', kcal: 300, outcome: 'gaveIn', level: 'hard' }, { at: 'bad', outcome: 'resisted' }, { at: '2026-10-26T10:00:00.000Z', outcome: 'maybe' }],
     });
-    expect(remote.settings).toEqual({ enabled: true, level: 'hard', frequency: 'mid', quietStartHour: 23, quietEndHour: 6, city: 'Hà  b Nội' });
+    expect(remote.settings).toEqual({ enabled: true, level: 'hard', frequency: 'mid', quietStartHour: 23, quietEndHour: 6, city: 'Hà  b Nội', aiChat: false });
     expect(remote.settings.city).not.toMatch(/[<>]/);
     expect(remote.stats).toEqual({ resisted: 5, gaveIn: 2, streak: 5, bestStreak: 5 });
     expect(remote.history).toHaveLength(1);

@@ -22,6 +22,7 @@ const FEATURE_LABEL: Record<AiFeature, GameKey> = {
   dishphoto: 'aiUsage.dishphoto',
   feelings: 'aiUsage.feelings',
   planchat: 'aiUsage.planchat',
+  temptchat: 'aiUsage.temptchat',
 };
 
 /** Tokens as "950" or "12.4k". */

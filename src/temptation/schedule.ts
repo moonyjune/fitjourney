@@ -18,9 +18,12 @@ export interface TemptSettings {
   quietEndHour: number;
   /** Optional city for the Hard level (weather and local trends). */
   city: string;
+  /** "AI tương tác": the boss is the AI. It picks the item for the player now (weather, recent foods, weak spots, kcal left) and, after a
+   *  "no", the player can chat with it; it insists, switches or gives up. Needs the AI (signed in). */
+  aiChat: boolean;
 }
 
-export const DEFAULT_TEMPT_SETTINGS: TemptSettings = { enabled: false, level: 'easy', frequency: 'mid', quietStartHour: 22, quietEndHour: 7, city: '' };
+export const DEFAULT_TEMPT_SETTINGS: TemptSettings = { enabled: false, level: 'easy', frequency: 'mid', quietStartHour: 22, quietEndHour: 7, city: '', aiChat: false };
 
 /** Ít / Vừa / Nhiều. */
 export const MAX_PER_DAY: Record<TemptFrequency, number> = { low: 1, mid: 3, high: 5 };

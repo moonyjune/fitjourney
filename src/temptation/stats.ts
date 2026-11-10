@@ -12,6 +12,8 @@ export interface TemptStats {
   /** Resisted in a row (giving in sets it back to 0). */
   streak: number;
   bestStreak: number;
+  /** XP won on top of TEMPTATION_RESIST_XP in chats with the AI boss ("AI tương tác"): holding out turn after turn, making it give up. */
+  bonusXp?: number;
 }
 
 export interface TemptHistoryEntry {
@@ -27,18 +29,29 @@ export interface TemptHistoryEntry {
 export const NO_TEMPT_STATS: TemptStats = { resisted: 0, gaveIn: 0, streak: 0, bestStreak: 0 };
 export const HISTORY_KEEP = 30;
 
-/** The record after one answer. Resisting adds to the streak; giving in only breaks it (no other penalty). */
-export function applyOutcome(stats: TemptStats, outcome: TemptOutcome): TemptStats {
+/** XP per boss turn held out in a chat with the AI boss, at most CHAT_TURN_XP_MAX in all, and for making it give up. */
+export const CHAT_TURN_XP = 5;
+export const CHAT_TURN_XP_MAX = 20;
+export const CHAT_WIN_XP = 15;
+
+/** Bonus XP of a chat with the AI boss that the player won: `turns` boss turns held out, `conceded` when the boss gave up. */
+export function chatBonusXp(turns: number, conceded: boolean): number {
+  return Math.min(CHAT_TURN_XP_MAX, Math.max(0, turns) * CHAT_TURN_XP) + (conceded ? CHAT_WIN_XP : 0);
+}
+
+/** The record after one answer. Resisting adds to the streak (and any chat bonus); giving in only breaks it (no other penalty). */
+export function applyOutcome(stats: TemptStats, outcome: TemptOutcome, bonusXp = 0): TemptStats {
   if (outcome === 'resisted') {
     const streak = stats.streak + 1;
-    return { ...stats, resisted: stats.resisted + 1, streak, bestStreak: Math.max(stats.bestStreak, streak) };
+    const bonus = (stats.bonusXp ?? 0) + Math.max(0, Math.round(bonusXp));
+    return { ...stats, resisted: stats.resisted + 1, streak, bestStreak: Math.max(stats.bestStreak, streak), ...(bonus > 0 ? { bonusXp: bonus } : {}) };
   }
   return { ...stats, gaveIn: stats.gaveIn + 1, streak: 0 };
 }
 
 /** XP the challenge has earned: a modest bonus per temptation resisted (at most 5 a day by the schedule). */
 export function temptationXp(stats: TemptStats): number {
-  return Math.max(0, stats.resisted) * TEMPTATION_RESIST_XP;
+  return Math.max(0, stats.resisted) * TEMPTATION_RESIST_XP + Math.max(0, stats.bonusXp ?? 0);
 }
 
 /** What is saved to the cloud. */
@@ -61,12 +74,15 @@ export function cleanTemptSettings(raw: unknown): TemptSettings {
     quietStartHour: hour(r.quietStartHour, d.quietStartHour),
     quietEndHour: hour(r.quietEndHour, d.quietEndHour),
     city: typeof r.city === 'string' ? r.city.replace(/[<>\n\r]/g, ' ').trim().slice(0, 40) : '',
+    aiChat: r.aiChat === true,
   };
 }
 
 export function cleanTemptStats(raw: unknown): TemptStats {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-  const stats = { resisted: count(r.resisted), gaveIn: count(r.gaveIn), streak: count(r.streak), bestStreak: count(r.bestStreak) };
+  const stats: TemptStats = { resisted: count(r.resisted), gaveIn: count(r.gaveIn), streak: count(r.streak), bestStreak: count(r.bestStreak) };
+  const bonus = count(r.bonusXp);
+  if (bonus > 0) stats.bonusXp = bonus;
   stats.streak = Math.min(stats.streak, stats.resisted);
   stats.bestStreak = Math.max(stats.bestStreak, stats.streak);
   return stats;

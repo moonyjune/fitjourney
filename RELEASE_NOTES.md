@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.2.0 | no | tempt-chat, tempt-me |
 | 1.1.0 | no | send-push |
 | 1.0.4 | no | — |
 | 1.0.3 | no | — |
@@ -95,6 +96,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.2.0
+- Temptation challenge › "AI tương tác 🤖" (Profile, off by default): the Temptation Boss is played by the AI (new function `tempt-chat`, Haiku by default — the `tempt` model). It picks the dish from the shared pool for you right now: the time and weather, what you ate in the last 3 days, how many kcal are left today, and your weak spots (the temptations you gave in to, then the junk / sweet / rich foods you logged most in the last 14 days); real treats are preferred over light drinks. It writes its opening lines looking at the dish's photo, and a photo it finds wrong for the dish is taken off that pool item (another is looked for later) and not shown.
+- After "Kiên quyết từ chối" the chat goes on: answer the boss in your own words or with quick teases ("Ta no rồi, mơ đi 😎", "Đổi món khác xem nào"…). It answers each line and insists, tries another angle, switches to another dish (a new card) or gives up; at the 5th round it always gives up. "Thắng rồi, đi đây 👋" ends the chat as a win; "Thôi, ăn 😅" gives in (the dish can be logged). A win earns the usual +15 XP plus a banter bonus: +5 XP per round held (at most +20) and +15 when the boss surrenders, with a bigger sparkle burst; the bonus counts in Profile's temptation XP. The AI unavailable (offline, quota): the chosen level's pop-up as before. Quota `ai_quota.temptchat` (default 60 calls a day: an opening is 2, each reply 1).
 
 ## 1.1.0
 - Drinks logged as food count toward the day's water: a soy milk, coffee, tea, juice or milk tea logged in Ghi bữa adds its millilitres to the water total (Camp water tile, the "Nước" sheet, Journal, the water missions and habit, the water reminders and the Web Push water messages). Ghi bữa has a 💧 chip: it is filled from the names ("Sữa đậu nành 250ml" → 250 ml, "2 ly cà phê" → 500 ml, one glass = 250 ml when no amount is written; yoghurt, broth, fish sauce and beer never count) and can be changed or set to 0. The "Nước" sheet says how much came from drinks; −250 ml and reset only change the water logged as water (`src/water/drinks.ts`).

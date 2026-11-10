@@ -22,6 +22,8 @@ export interface TemptItem {
   photo?: PlacePhoto;
   /** Where it came from: the bundled list, the AI, or the dev account's sample. */
   source: 'easy' | 'ai' | 'sample';
+  /** Picked by the AI boss of "AI tương tác" (its pool id): the player can chat with the boss after saying no. */
+  chat?: { poolId: string };
   /** AI answered without web search (the key may not use it), or Hard fell back to Easy (AI unavailable). */
   note?: 'noWeb' | 'fallback';
 }
@@ -84,13 +86,15 @@ function httpsUrl(v: unknown): string | undefined {
 
 /** The `tempt-me` answer as an item, or null when it has no name. The server already dropped URLs it did not see; here only the
  *  shape is checked again (https, bounded numbers, short texts). */
-export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai'): TemptItem | null {
+export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai', chat = false): TemptItem | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Record<string, unknown>;
   const name = text(r.name, 80);
   if (!name) return null;
   const boss = bossForName(name);
   const pitch = text(r.pitch, 400);
+  // The AI boss's own lines (tempt-chat) instead of the pool's why-now and pitch.
+  const ownLines = Array.isArray(r.lines) ? r.lines.map((l) => text(l, 220)).filter(Boolean).slice(0, 3) : [];
   const whyNow = text(r.whyNow, 200);
   const description = text(r.description, 300);
   const imageUrl = httpsUrl(r.imageUrl);
@@ -104,7 +108,7 @@ export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai'): TemptI
     kcal: figure(r.kcal, 5000),
     sugarG: figure(r.sugarG, 500),
     purineMg: figure(r.purineMg, 5000),
-    lines: [whyNow, pitch].filter(Boolean),
+    lines: ownLines.length > 0 ? ownLines : [whyNow, pitch].filter(Boolean),
     boss,
     ...(whyNow ? { whyNow } : {}),
     ...(description ? { description } : {}),
@@ -113,5 +117,6 @@ export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai'): TemptI
     ...(domain && /^[a-z0-9.-]+$/i.test(domain) ? { sourceDomain: domain } : {}),
     source,
     ...(r.web === 'unavailable' ? { note: 'noWeb' as const } : {}),
+    ...(chat ? { chat: { poolId: text(r.poolId, 64) } } : {}),
   };
 }

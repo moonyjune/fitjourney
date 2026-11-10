@@ -32,8 +32,10 @@ interface TemptationState {
   markShown: (at: number) => void;
   show: (item: TemptItem, practice?: boolean) => void;
   setBusy: (busy: boolean) => void;
-  /** Records the player's answer to the open pop-up (nothing for a practice round). */
-  answer: (outcome: TemptOutcome, at?: Date) => void;
+
+  /** Records the player's answer to the open pop-up (nothing for a practice round); `bonusXp` from a chat won against the AI boss, and
+   *  `item` the one on the table at the end of that chat (the boss may have switched). */
+  answer: (outcome: TemptOutcome, at?: Date, bonusXp?: number, item?: TemptItem) => void;
   close: () => void;
 }
 
@@ -58,11 +60,13 @@ export const useTemptationStore = create<TemptationState>()(
       markShown: (at) => set({ shownAt: [...get().shownAt, at].slice(-SHOWN_KEEP) }),
       show: (item, practice = false) => set({ open: { item, practice }, busy: false }),
       setBusy: (busy) => set({ busy }),
-      answer: (outcome, at = new Date()) => {
+
+      answer: (outcome, at = new Date(), bonusXp = 0, item) => {
         const open = get().open;
         if (!open || open.practice) return;
-        const stats = applyOutcome(get().stats, outcome);
-        const entry: TemptHistoryEntry = { at: at.toISOString(), name: open.item.name, emoji: open.item.emoji, kcal: open.item.kcal, outcome, level: open.item.source === 'easy' ? 'easy' : 'hard' };
+        const stats = applyOutcome(get().stats, outcome, bonusXp);
+        const it = item ?? open.item;
+        const entry: TemptHistoryEntry = { at: at.toISOString(), name: it.name, emoji: it.emoji, kcal: it.kcal, outcome, level: it.source === 'easy' ? 'easy' : 'hard' };
         const history = cleanTemptHistory([entry, ...get().history]);
         set({ stats, history });
         syncUp({ settings: get().settings, stats, history });

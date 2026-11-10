@@ -18,7 +18,7 @@ import type { ClientRows } from '../ai/coachDigest';
 import type { SwapContext, SwapItem } from '../food/swaps';
 import { DEV_ANALYSIS_DELAY_MS, fakeCheatDinner, fakeCheatPlaces, fakeDigest, fakeDinner, fakeMealText, fakeNutritionLabel, fakePhotoAnalysis, fakeSwaps, fakeWeeklyReport, fakeWorkoutKcal, fakeDishPhotos } from '../ai/devPhotoAnalysis';
 import { DEFAULT_PLAN } from '../constants/plan';
-import { sampleTemptation } from '../temptation/sample';
+import { sampleTemptation, sampleTemptChat } from '../temptation/sample';
 import { cleanBanterAnswer, type BanterDaySummary, type BanterText } from '../../supabase/functions/_shared/banter';
 import { templateBanter } from '../banter/templates';
 import { cleanWorkoutKcalAnswer, type WorkoutKcalEstimate } from '../../supabase/functions/_shared/workoutKcal';
@@ -1522,6 +1522,28 @@ export async function requestTemptation(body: TemptationRequest): Promise<Tempta
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
     const { data, error } = await supabase.functions.invoke('tempt-me', { body });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
+    return { ok: true, result: data.result };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+/** Calls the tempt-chat edge function ("AI tương tác"): `open` gives the item the boss picked for this player with its opening lines;
+ *  `reply` the boss's answer to the player's line (its move, its lines, maybe another item). Same rules as the other AI requests. */
+export async function requestTemptChat(body: Record<string, unknown> & { action: 'open' | 'reply'; turn?: number }): Promise<TemptationOutcome> {
+  const off = aiTurnedOff();
+  if (off) return off;
+  if (useAuthStore.getState().devMode) {
+    await new Promise((resolve) => setTimeout(resolve, DEV_ANALYSIS_DELAY_MS));
+    return { ok: true, result: sampleTemptChat(body, new Date()), sample: true };
+  }
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('tempt-chat', { body });
     if (error) throw error;
     if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
     return { ok: true, result: data.result };
