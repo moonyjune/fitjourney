@@ -7,11 +7,13 @@ import { NutrientTable } from '../components/quest/NutrientTable';
 import { FoodThumb } from '../components/quest/FoodPhoto';
 import { HudText } from '../components/quest/HudText';
 import { MealDetailDialog, type MealDetail } from '../components/quest/MealDetailDialog';
+import type { MealWhen } from '../components/quest/MealWhenForm';
 import { WorkoutDetailDialog } from '../components/quest/WorkoutDetailDialog';
 import { MoodFace } from '../components/quest/MoodFace';
 import { QuestIcon } from '../components/quest/QuestIcon';
 import { getDayType } from '../constants/plan';
 import { useGameText, type GameKey } from '../game/strings';
+import { logDayLabel } from '../game/useLogDate';
 import { buildTimeline, type TimelineItem } from '../game/timeline';
 import { buildDayEvaluator } from '../game/dayEvaluator';
 import { mealDefs } from '../game/mealSlots';
@@ -33,7 +35,6 @@ import { PLAN_SLOT_MEAL } from '../insights/days';
 import { logSkippedMeal } from '../food/skipMeal';
 import type { MainMeal } from '../insights/days';
 import { deleteExtraWithUndo, editExtraWhen, logExtraAgain, unmarkPlanMealWithUndo } from '../food/mealActions';
-import { mealTimeAt } from '../food/eatAgain';
 import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
 import { selectedDayKey, useSelectedDayStore } from '../store/useSelectedDayStore';
@@ -620,11 +621,22 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
     else if (openItem.kind === 'extra') deleteExtraWithUndo(selectedKey, rawExtraId(openItem), g('journal.mealDeleted', { name: openItem.name || g('journal.extra') }));
     else if (openItem.kind === 'meal') unmarkPlanMealWithUndo(selectedKey, openItem.slot, g('journal.planUnmarked', { name: openItem.label }));
   }
-  /** "Ăn lại món này": the same food logged again for today, at the meal of the moment, with "Hoàn tác". */
-  function eatOpenAgain() {
+  /** "Ăn lại món này": the same food logged again on the day picked (today by default; another day copies it there), with "Hoàn tác". */
+  function eatOpenAgain(when: MealWhen) {
     if (client || !openStored || !(openStored.calories > 0)) return;
-    const mealTime = mealTimeAt(now);
-    logExtraAgain(todayKey, openStored, mealTime, g('quick.againLoggedMeal', { name: openStored.name, kcal: Math.round(openStored.calories).toLocaleString('en-US'), meal: t(`extraMealTime.${mealTime}` as StringKey) }));
+    const day = when.dateKey ?? todayKey;
+    const kcal = Math.round(openStored.calories).toLocaleString('en-US');
+    const meal = when.mealTime ? t(`extraMealTime.${when.mealTime}` as StringKey) : g('meal.slotNone');
+    const text = day === todayKey ? g('quick.againLoggedMeal', { name: openStored.name, kcal, meal }) : g('journal.copiedTo', { name: openStored.name, kcal, meal, day: logDayLabel(day, now, g) });
+    logExtraAgain(day, openStored, when.mealTime, text, { clock: when.clock, waterMl: when.waterMl });
+  }
+  /** "Sửa ngày, bữa & giờ": another day moves the food there (with "Hoàn tác") and closes the sheet, which showed it on this day. */
+  function editOpenWhen(next: MealWhen) {
+    if (client || !openStored) return;
+    const name = openStored.name || g('journal.extra');
+    const moved = next.dateKey && next.dateKey !== selectedKey ? g('journal.movedTo', { name, day: logDayLabel(next.dateKey, now, g) }) : undefined;
+    const on = editExtraWhen(selectedKey, openStored.id, next, now, moved);
+    if (on && on !== selectedKey) setOpenId(null);
   }
   async function removePhoto(photo: MealPhotoRef): Promise<boolean> {
     if (client || !openItem) return false;
@@ -805,8 +817,10 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
         onRemovePhoto={client ? undefined : removePhoto}
         onEatAgain={!client && openStored && openStored.calories > 0 ? eatOpenAgain : undefined}
         onDelete={canDeleteOpen ? deleteOpen : undefined}
-        onEditWhen={!client && openStored ? (next) => editExtraWhen(selectedKey, openStored.id, next, now) : undefined}
+        onEditWhen={!client && openStored ? editOpenWhen : undefined}
         withWater={openItem?.kind === 'extra'}
+        dateKey={selectedKey}
+        now={now}
       />
     </View>
   );

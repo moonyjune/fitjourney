@@ -1,16 +1,17 @@
 import { useTranslation } from '../../i18n/useTranslation';
 import type { StringKey } from '../../i18n/strings';
-import { mealTimeAt } from '../../food/eatAgain';
 import { deleteExtraWithUndo, editExtraWhen, logExtraAgain } from '../../food/mealActions';
 import { suggestedDrinkMl } from '../../water/drinks';
 import { editListedPartPatch, partsOrSelf } from '../../food/singlePart';
 import { useGameText } from '../../game/strings';
+import { logDayLabel } from '../../game/useLogDate';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useProofStore } from '../../store/useProofStore';
 import { toDateKey } from '../../utils/date';
 import { addExtraPhoto, removeExtraPhoto } from '../../utils/mealPhotos';
 import { extraPhotoRefs } from '../../utils/photoOrder';
 import { MealDetailDialog } from './MealDetailDialog';
+import type { MealWhen } from './MealWhenForm';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -38,10 +39,25 @@ export function LoggedFoodSheet({ dateKey, itemId, now, onClose }: { dateKey: st
     suggestedWaterMl: suggestedDrinkMl(partsOrSelf(item)),
   };
 
-  function eatAgain() {
+  const mealName = (mealTime: MealWhen['mealTime']) => (mealTime ? t(`extraMealTime.${mealTime}` as StringKey) : g('meal.slotNone'));
+
+  /** "Ăn lại": the same food on the day picked (today by default; another day copies it there), with "Hoàn tác". */
+  function eatAgain(when: MealWhen) {
     if (!item) return;
-    const mealTime = mealTimeAt(now);
-    logExtraAgain(toDateKey(now), item, mealTime, g('quick.againLoggedMeal', { name: item.name, kcal: Math.round(item.calories).toLocaleString('en-US'), meal: t(`extraMealTime.${mealTime}` as StringKey) }));
+    const day = when.dateKey ?? toDateKey(now);
+    const kcal = Math.round(item.calories).toLocaleString('en-US');
+    const text =
+      day === toDateKey(now)
+        ? g('quick.againLoggedMeal', { name: item.name, kcal, meal: mealName(when.mealTime) })
+        : g('journal.copiedTo', { name: item.name, kcal, meal: mealName(when.mealTime), day: logDayLabel(day, now, g) });
+    logExtraAgain(day, item, when.mealTime, text, { clock: when.clock, waterMl: when.waterMl });
+  }
+
+  function editWhen(next: MealWhen) {
+    if (!item) return;
+    const moved = next.dateKey && next.dateKey !== dateKey ? g('journal.movedTo', { name: detail.title, day: logDayLabel(next.dateKey, now, g) }) : undefined;
+    const on = editExtraWhen(dateKey, item.id, next, now, moved);
+    if (on && on !== dateKey) onClose();
   }
 
   return (
@@ -56,8 +72,10 @@ export function LoggedFoodSheet({ dateKey, itemId, now, onClose }: { dateKey: st
       onAddPhoto={(uri) => addExtraPhoto(dateKey, item.id, uri)}
       onRemovePhoto={async (photo) => removeExtraPhoto(dateKey, item.id, photo)}
       onEatAgain={item.calories > 0 ? eatAgain : undefined}
-      onEditWhen={(next) => editExtraWhen(dateKey, item.id, next, now)}
+      onEditWhen={editWhen}
       withWater
+      dateKey={dateKey}
+      now={now}
       onDelete={() => deleteExtraWithUndo(dateKey, item.id, g('journal.mealDeleted', { name: detail.title }))}
     />
   );

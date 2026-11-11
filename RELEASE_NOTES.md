@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.3.0 | no | — |
 | 1.2.0 | no | tempt-chat, tempt-me |
 | 1.1.0 | no | send-push |
 | 1.0.4 | no | — |
@@ -96,6 +97,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.3.0
+- "Sửa ngày, bữa & giờ" (meal detail sheet, Journal › Ngày and Camp) also changes the day a food was eaten: pick another day in the calendar and the food moves there whole — its figures, parts, water and photos — keeping its own time when the meal is unchanged, else that meal's usual time or the time typed. A toast says where it went, with "Hoàn tác" to put it back; the sheet closes, as the food is no longer on the day shown.
+- "Ăn lại món này" opens a small sheet before logging: today and the meal of the moment are picked already (one more tap, "Ghi vào nhật ký"), but another day, meal, time and water amount can be chosen, so a food can be copied to any earlier day, not only today. The original stays where it was; "Hoàn tác" removes the copy. Future days stay locked, as everywhere else.
 
 ## 1.2.0
 - Temptation challenge › "AI tương tác 🤖" (Profile, off by default): the Temptation Boss is played by the AI (new function `tempt-chat`, Haiku by default — the `tempt` model). It picks the dish from the shared pool for you right now: the time and weather, what you ate in the last 3 days, how many kcal are left today, and your weak spots (the temptations you gave in to, then the junk / sweet / rich foods you logged most in the last 14 days); real treats are preferred over light drinks. It writes its opening lines looking at the dish's photo, and a photo it finds wrong for the dish is taken off that pool item (another is looked for later) and not shown.

@@ -1001,6 +1001,8 @@ describe('FitJourney logging screens', () => {
       const r = render(<JournalScreen />);
       act(() => pressable(r, (l) => l.includes('Phở LẠI')).props.onPress());
       act(() => pressable(r, (l) => l === 'Ăn lại món này').props.onPress());
+      expect(allText(r)).toContain('Chọn ngày khác để chép món sang ngày đó.');
+      act(() => pressable(r, (l) => l.includes('Ghi vào nhật ký')).props.onPress());
       const items = useNutritionStore.getState().getLog(DATE).extraItems.filter((i) => i.name === 'Phở LẠI');
       expect(items).toHaveLength(2);
       expect(items[1].mealTime).toBe('late_afternoon_snack'); // 16:10

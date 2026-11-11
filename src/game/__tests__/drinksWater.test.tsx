@@ -15,6 +15,7 @@ jest.mock('../../sync/cloudSync', () => ({
 import { act, create, type ReactTestInstance } from 'react-test-renderer';
 import { editExtraWhen, logExtraAgain } from '../../food/mealActions';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import { useToastStore } from '../../store/useToastStore';
 import { dayWaterMl, drinkMlOf, suggestedDrinkMl } from '../../water/drinks';
 import { rowWaterMl } from '../../../supabase/functions/_shared/pushPlan';
 import { MealWhenForm } from '../../components/quest/MealWhenForm';
@@ -86,6 +87,44 @@ describe('Sửa bữa & giờ of a logged food', () => {
     expect([at().getHours(), at().getMinutes()]).toEqual([15, 40]);
     expect(item.waterMl).toBeUndefined();
     expect(at().toISOString().slice(0, 10) <= DAY).toBe(true);
+  });
+
+  it('moves it to another day whole (same id, own time kept), with Hoàn tác putting it back', () => {
+    const store = useNutritionStore.getState();
+    const id = store.addExtra(DAY, 'Bún chả', 550, 30, 'lunch', { fromFoodDb: true, clock: [12, 30] });
+    const other = '2026-10-10';
+    expect(editExtraWhen(DAY, id, { mealTime: 'lunch', clock: null, dateKey: other }, new Date(), 'moved')).toBe(other);
+    let logs = useNutritionStore.getState().logs;
+    expect(logs[DAY].extraItems).toHaveLength(0);
+    const moved = logs[other].extraItems[0];
+    expect(moved.id).toBe(id);
+    const at = new Date(moved.loggedAtISO);
+    expect([at.getFullYear(), at.getMonth() + 1, at.getDate(), at.getHours(), at.getMinutes()]).toEqual([2026, 10, 10, 12, 30]);
+    expect(useToastStore.getState().toast?.text).toBe('moved');
+    act(() => useToastStore.getState().undo());
+    logs = useNutritionStore.getState().logs;
+    expect(logs[other].extraItems).toHaveLength(0);
+    expect(logs[DAY].extraItems.map((i) => i.id)).toEqual([id]);
+
+    // Another meal on another day: that meal's usual time there.
+    editExtraWhen(DAY, id, { mealTime: 'dinner', clock: null, dateKey: other });
+    const d = new Date(useNutritionStore.getState().logs[other].extraItems[0].loggedAtISO);
+    expect([d.getDate(), d.getHours()]).toEqual([10, 19]);
+  });
+
+  it('"Ăn lại" copies a food to another day at the time picked, leaving the original', () => {
+    const store = useNutritionStore.getState();
+    const id = store.addExtra(DAY, 'Sữa đậu nành', 130, 7, 'breakfast', { fromFoodDb: true, waterMl: 250 });
+    const item = useNutritionStore.getState().logs[DAY].extraItems[0];
+    const other = '2026-10-11';
+    logExtraAgain(other, item, 'morning_snack', 'copied', { clock: [9, 45], waterMl: 300 });
+    const logs = useNutritionStore.getState().logs;
+    expect(logs[DAY].extraItems.map((i) => i.id)).toEqual([id]);
+    const copy = logs[other].extraItems[0];
+    expect(copy.mealTime).toBe('morning_snack');
+    expect(copy.waterMl).toBe(300);
+    const at = new Date(copy.loggedAtISO);
+    expect([at.getDate(), at.getHours(), at.getMinutes()]).toEqual([11, 9, 45]);
   });
 
   it('the form moves the time with the meal picked, offers the drink amount, and saves', () => {

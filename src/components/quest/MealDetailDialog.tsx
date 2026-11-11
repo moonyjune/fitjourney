@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
+import { mealTimeAt } from '../../food/eatAgain';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
 import type { ExtraMealTime, MealPart } from '../../types';
 import { MAX_MEAL_PHOTOS, type MealPhotoRef } from '../../utils/photoOrder';
+import { toDateKey } from '../../utils/date';
 import { pickPhoto } from '../../utils/pickPhoto';
 import { BottomSheet } from './BottomSheet';
 import { DishThumb } from './DishThumb';
@@ -47,19 +49,23 @@ interface Props {
   /** Give the photos their take / choose (add one more) and remove (the photo in view) buttons. Resolve false when it could not be done. */
   onAddPhoto?: (uri: string) => Promise<boolean>;
   onRemovePhoto?: (photo: MealPhotoRef) => Promise<boolean>;
-  /** "Ăn lại món này": logs the meal again (the caller shows the toast with "Hoàn tác"); the sheet then closes. Left out for a coach or a plan meal. */
-  onEatAgain?: () => void;
+  /** "Ăn lại món này": opens a small sheet to pick the day (today first; another day copies it there), meal and time, then logs the meal
+   *  again (the caller shows the toast with "Hoàn tác"); the sheet then closes. Left out for a coach or a plan meal. */
+  onEatAgain?: (when: MealWhen) => void;
   /** "Xoá bữa": deletes it at once (the caller shows the toast with "Hoàn tác"); the sheet then closes. Left out for a coach. */
   onDelete?: () => void;
-  /** "Sửa bữa & giờ": moves the logged food to another meal and/or time; `withWater` also lets it count (or stop counting) as water. */
+  /** "Sửa bữa & giờ": moves the logged food to another day, meal and/or time; `withWater` also lets it count (or stop counting) as water. */
   onEditWhen?: (next: MealWhen) => void;
   withWater?: boolean;
+  /** The day the food is on: gives "Sửa bữa & giờ" its day field. */
+  dateKey?: string;
+  now?: Date;
 }
 
 /** A logged meal in full, as a bottom sheet (dialog 10): its photos side by side with ‹ › (tap one to see it full screen; add up to
  *  MAX_MEAL_PHOTOS, remove the one in view), the totals and, when it was entered as several foods, each of them with a pencil that opens
  *  a small sheet to change its amount (the calories are worked out again on the spot); then "Ăn lại món này" and "Xoá bữa", both undoable. */
-export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto, onEatAgain, onDelete, onEditWhen, withWater }: Props) {
+export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto, onEatAgain, onDelete, onEditWhen, withWater, dateKey, now = new Date() }: Props) {
   const g = useGameText();
   const [inView, setInView] = useState(0);
   const [editing, setEditing] = useState<number | null>(null);
@@ -67,6 +73,7 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editingWhen, setEditingWhen] = useState(false);
+  const [again, setAgain] = useState(false);
   if (!detail) return null;
   const photos = detail.photos;
   const current = photos[Math.min(inView, photos.length - 1)];
@@ -101,6 +108,7 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
   const close = () => {
     setEditing(null);
     setEditingWhen(false);
+    setAgain(false);
     setZoom(null);
     setInView(0);
     setPhotoError(null);
@@ -116,10 +124,7 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
             <QuestButton
               icon="undo"
               title={g('journal.eatAgain')}
-              onPress={() => {
-                onEatAgain();
-                close(); // the toast with "Hoàn tác" shows on the screen below
-              }}
+              onPress={() => setAgain(true)}
             />
           </View>
         )}
@@ -262,10 +267,33 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
             withWater={withWater}
             waterMl={detail.waterMl}
             suggestedWaterMl={detail.suggestedWaterMl}
+            dateKey={dateKey}
+            now={now}
             onCancel={() => setEditingWhen(false)}
             onSave={(next) => {
               onEditWhen?.(next);
               setEditingWhen(false);
+            }}
+          />
+        )}
+      </BottomSheet>
+
+      <BottomSheet visible={again} onClose={() => setAgain(false)} title={g('journal.againTitle', { name: detail.title })}>
+        {again && (
+          <MealWhenForm
+            mealTime={mealTimeAt(now)}
+            time=""
+            withWater={withWater}
+            waterMl={detail.waterMl}
+            suggestedWaterMl={detail.suggestedWaterMl}
+            dateKey={toDateKey(now)}
+            now={now}
+            saveTitle={g('journal.againSave')}
+            hint={g('journal.againHint')}
+            onCancel={() => setAgain(false)}
+            onSave={(when) => {
+              onEatAgain?.(when);
+              close(); // the toast with "Hoàn tác" shows on the screen below
             }}
           />
         )}

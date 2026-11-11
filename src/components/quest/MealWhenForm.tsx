@@ -8,6 +8,7 @@ import { quest } from '../../theme/quest';
 import type { ExtraMealTime } from '../../types';
 import { clockText, MEAL_CLOCK, parseClock, timeTextInvalid, type Clock } from '../../utils/mealClock';
 import { MAX_DRINK_ML } from '../../water/drinks';
+import { DateChip } from './DateChip';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { QuestChip } from './QuestChip';
@@ -19,6 +20,8 @@ export interface MealWhen {
   clock: Clock | null;
   /** Millilitres counted as water; 0 = not counted. Absent when the form has no water field. */
   waterMl?: number;
+  /** The day it was eaten on; absent when the form has no day field. */
+  dateKey?: string;
 }
 
 interface Props {
@@ -30,15 +33,23 @@ interface Props {
   waterMl?: number;
   /** What the name says it holds as a drink, offered when nothing is counted yet. */
   suggestedWaterMl?: number;
+  /** Show the day field, starting on this day (moving the food, or the day "Ăn lại" logs it on). */
+  dateKey?: string;
+  now?: Date;
+  /** The save button's title and a line above the buttons (the "Ăn lại" sheet). Default "Lưu". */
+  saveTitle?: string;
+  hint?: string;
   onSave: (next: MealWhen) => void;
   onCancel: () => void;
 }
 
-/** Changes which meal a logged food belongs to, the time it was eaten and how much of it counts as water, after it was saved. Picking
- *  another meal moves the time to that meal's usual time unless a time was typed here; nothing is saved before "Lưu". */
-export function MealWhenForm({ mealTime: initialMeal, time, withWater, waterMl, suggestedWaterMl, onSave, onCancel }: Props) {
+/** Changes which day and meal a logged food belongs to, the time it was eaten and how much of it counts as water, after it was saved
+ *  (also the "Ăn lại" sheet: when and where the copy goes). Picking another meal moves the time to that meal's usual time unless a time
+ *  was typed here; nothing is saved before "Lưu". */
+export function MealWhenForm({ mealTime: initialMeal, time, withWater, waterMl, suggestedWaterMl, dateKey: initialDay, now, saveTitle, hint, onSave, onCancel }: Props) {
   const g = useGameText();
   const { t } = useTranslation();
+  const [day, setDay] = useState(initialDay);
   const [mealTime, setMealTime] = useState<ExtraMealTime | null>(initialMeal);
   const [timeText, setTimeText] = useState(time);
   const [timeTyped, setTimeTyped] = useState(false);
@@ -55,11 +66,19 @@ export function MealWhenForm({ mealTime: initialMeal, time, withWater, waterMl, 
 
   function save() {
     if (timeInvalid || waterInvalid) return;
-    onSave({ mealTime, clock: parseClock(timeText), ...(withWater ? { waterMl: water } : {}) });
+    onSave({ mealTime, clock: parseClock(timeText), ...(withWater ? { waterMl: water } : {}), ...(day ? { dateKey: day } : {}) });
   }
 
   return (
     <View style={styles.wrap}>
+      {day ? (
+        <View style={styles.dayRow}>
+          <HudText size={13} color={quest.textSecondary}>
+            {g('journal.whenDay')}
+          </HudText>
+          <DateChip size="small" value={day} now={now} onChange={setDay} />
+        </View>
+      ) : null}
       <HudText size={13} color={quest.textSecondary}>
         {g('meal.slotSheet.title')}
       </HudText>
@@ -93,12 +112,17 @@ export function MealWhenForm({ mealTime: initialMeal, time, withWater, waterMl, 
           </HudText>
         </>
       )}
+      {hint ? (
+        <HudText size={11} weight="medium" color={quest.textSecondary}>
+          {hint}
+        </HudText>
+      ) : null}
       <View style={styles.actions}>
         <View style={styles.flex}>
           <QuestButton variant="ghost" title={g('journal.partCancel')} onPress={onCancel} />
         </View>
         <View style={styles.flex}>
-          <QuestButton icon="check" title={g('journal.whenSave')} onPress={save} disabled={timeInvalid || waterInvalid} />
+          <QuestButton icon="check" title={saveTitle ?? g('journal.whenSave')} onPress={save} disabled={timeInvalid || waterInvalid} />
         </View>
       </View>
     </View>
@@ -107,6 +131,7 @@ export function MealWhenForm({ mealTime: initialMeal, time, withWater, waterMl, 
 
 const styles = StyleSheet.create({
   wrap: { gap: 10 },
+  dayRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
   flex: { flex: 1 },
