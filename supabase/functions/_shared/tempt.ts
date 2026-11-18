@@ -221,6 +221,9 @@ export interface TemptPoolItem extends TemptItemOut {
   tags?: Record<string, unknown>;
   /** A player reported its photo as wrong ("báo ảnh sai"): the next rephoto step looks for a new one first. Kept as stored. */
   photoFlag?: unknown;
+  /** The nightly photo review (photo-review, photoReview.ts ReviewMarker): when it last looked at the picture, when it searched the web,
+   *  and when an item it found no photo for is looked at again. Kept as stored. */
+  photoReview?: Record<string, unknown>;
 }
 
 /** A pool item's picture with its credit, as the app shows a web photo ("Ảnh: <credit>", opening `pageUrl`). */
@@ -349,6 +352,8 @@ export function cleanStoredPoolItem(raw: unknown): TemptPoolItem | null {
   // 1.5: the tags and a "wrong photo" report are kept as they are (a save must not drop them).
   if (r.tags && typeof r.tags === 'object' && !Array.isArray(r.tags)) item.tags = r.tags as Record<string, unknown>;
   if (r.photoFlag !== undefined && r.photoFlag !== null && r.photoFlag !== false) item.photoFlag = r.photoFlag;
+  // The nightly photo review's marker (photoReview.ts: when it last looked, searched the web, may look again) is kept too.
+  if (r.photoReview && typeof r.photoReview === 'object' && !Array.isArray(r.photoReview)) item.photoReview = r.photoReview as Record<string, unknown>;
   return item;
 }
 
@@ -684,6 +689,31 @@ export function withWebPhoto(item: TemptPoolItem, found: { pageUrl: string; imag
     return { ...rest, webPhotoTried: true, imageUrl: url, photo: { url, pageUrl, credit: host }, ...(found!.verified ? { photoVerified: true } : {}) };
   }
   return { ...item, webPhotoTried: true, noPhoto: true };
+}
+
+/** A photo found for an item (dishPhoto.ts DishPhotoInfo): a library photo or (source 'web') a page's picture. */
+export interface FoundAnyPhoto {
+  url: string;
+  sourceUrl: string;
+  author: string;
+  license: string;
+  source: 'wikimedia' | 'openverse' | 'web';
+}
+
+/** The item with a confirmed photo (a library one credited "author · licence · library", a web one credited to the site). Shared by
+ *  tempt-me and photo-review (moved here from tempt-me). */
+export function withFoundPhoto(item: TemptPoolItem, photo: FoundAnyPhoto): TemptPoolItem {
+  if (photo.source === 'web') return { ...withWebPhoto(item, { pageUrl: photo.sourceUrl, imageUrl: photo.url, verified: true }), libraryNone: true };
+  return withDishPhoto(item, { ...photo, source: photo.source });
+}
+
+/** The item when no photo shows it (libraries and web searched): served only when nothing with a photo fits. */
+export const withNoPhoto = (item: TemptPoolItem): TemptPoolItem => ({ ...item, imageUrl: null, noPhoto: true, libraryNone: true, webPhotoTried: true });
+
+/** The item without its "wrong photo" report. */
+export function unflagged(item: TemptPoolItem): TemptPoolItem {
+  const { photoFlag: _f, ...rest } = item;
+  return rest;
 }
 
 /** Items per web photo search call, and searches per call. */

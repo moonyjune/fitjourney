@@ -515,7 +515,7 @@ describe('temptation pool refills are system cost (0.26.7)', () => {
     expect(start).toMatch(/systemRecord\(admin\)/);
     // Every pool call is logged on the pool (the picture calls through poolRunner, which records on systemRecord, 1.3.x).
     expect(fn.match(/runAiCall\(/g)?.length).toBe((fn.match(/\{ record \}/g)?.length ?? 0) + (fn.match(/record: async \(usage, costUsd, model\)/g)?.length ?? 0));
-    expect(fn.slice(fn.indexOf('function poolRunner'), fn.indexOf('function withFoundPhoto'))).toMatch(/systemRecord\(admin, 'tempt-me'\)[\s\S]*await record\(usage, costUsd, model\)/);
+    expect(fn.slice(fn.indexOf('function poolRunner'), fn.indexOf('async function backfillPhotos'))).toMatch(/systemRecord\(admin, 'tempt-me'\)[\s\S]*await record\(usage, costUsd, model\)/);
   });
   it('counts the pool cost of the day in the global cap (ai_cost_on_day, defined last after tempt_pool_meta)', () => {
     const last = sql.lastIndexOf('create or replace function public.ai_cost_on_day');

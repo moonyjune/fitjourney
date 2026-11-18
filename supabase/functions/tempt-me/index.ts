@@ -51,7 +51,7 @@
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { jsonResponse, runAiCall, serveAi, systemAllowance, type AiContext } from '../_shared/ai.ts';
-import { cleanDishPhotoRequest, type DishPhotoInfo } from '../_shared/dishPhoto.ts';
+import { cleanDishPhotoRequest } from '../_shared/dishPhoto.ts';
 import { findVerifiedPhotos, verifyUrls, within, type Runner } from '../_shared/dishPhotoLookup.ts';
 import { genericPictureUrl, PHOTO_CHECK_VERSION, poolRepairQueue, REPAIR_MODEL, repairDecision, repairLimit, verdictAccepts } from '../_shared/photoMatch.ts';
 import { cronBody, inBackground, systemContext, systemRecord, type RecordFn } from '../_shared/systemJobs.ts';
@@ -76,7 +76,6 @@ import {
   photoStage,
   poolAnswerShape,
   poolItemsOf,
-  withWebPhoto,
   POPUP_PHOTOS,
   poolAnswer,
   poolNameKey,
@@ -96,7 +95,10 @@ import {
   type TemptPoolItem,
   type TemptRequest,
   withDishPhoto,
+  withFoundPhoto,
+  withNoPhoto,
   withOgImage,
+  unflagged,
 } from '../_shared/tempt.ts';
 import {
   cleanHabits,
@@ -300,15 +302,6 @@ function poolRunner(admin: SupabaseClient, spent?: { usd: number }): Runner {
   };
 }
 
-/** The item with a confirmed photo (a library one credited "author · licence · library", a web one credited to the site). */
-function withFoundPhoto(item: TemptPoolItem, photo: DishPhotoInfo): TemptPoolItem {
-  if (photo.source === 'web') return { ...withWebPhoto(item, { pageUrl: photo.sourceUrl, imageUrl: photo.url, verified: true }), libraryNone: true };
-  return withDishPhoto(item, { ...photo, source: photo.source });
-}
-
-/** The item when no photo shows it (libraries and web searched): served only when nothing with a photo fits. */
-const withNoPhoto = (item: TemptPoolItem): TemptPoolItem => ({ ...item, imageUrl: null, noPhoto: true, libraryNone: true, webPhotoTried: true });
-
 /** Real pictures for up to `max` rows without one (the newest first), each row saved as soon as it is decided (1.3.x): a web item's
  *  source page picture, when the model confirms it shows the dish; then the photo libraries (files named after the dish) and the web
  *  (pages about the dish), every candidate judged by the model alone, only an "exact" kept. A picture is taken only when it is not
@@ -365,12 +358,6 @@ const AUDIT_MAX_FAILS = 2;
 
 /** A player reported this item's photo as wrong (the "báo ảnh sai" button sets `photoFlag`; read defensively, any truthy value). */
 const photoFlagged = (item: TemptPoolItem): boolean => !!(item as { photoFlag?: unknown }).photoFlag;
-
-/** The item without its report. */
-function unflagged(item: TemptPoolItem): TemptPoolItem {
-  const { photoFlag: _f, ...rest } = item as TemptPoolItem & { photoFlag?: unknown };
-  return rest;
-}
 
 /** The rows a rephoto step looks at: reported ones first (whatever their audit), then the audit queue; `limit` in all. */
 function rephotoQueue(rows: PoolRow[], limit: number): PoolRow[] {

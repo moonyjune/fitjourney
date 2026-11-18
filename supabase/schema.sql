@@ -1194,3 +1194,79 @@ as $$
 $$;
 revoke all on function public.ai_cost_on_day(date) from public, anon, authenticated;
 grant execute on function public.ai_cost_on_day(date) to service_role;
+
+-- ===== Duyệt ảnh bị báo sai mỗi đêm (photo-review) =====
+-- Ảnh người chơi báo sai ("Ảnh sai?": photoFlag trong dish_photos.photo / tempt_pool.item) được tìm lại theo lô mỗi đêm: thư viện ảnh
+-- miễn phí trước, tìm web (tối đa 1 lần / món) cho món chưa có ứng viên, rồi kiểm tra ảnh bằng Message Batches API (giảm 50%): Haiku 5.5
+-- xem mọi ảnh, Sonnet 5.5 chỉ xem lại câu trả lời có độ tin cậy 50-80. Mỗi dòng là một lô (stage haiku / sonnet) của một đêm: id lô
+-- của Anthropic, bảng nhãn (custom_id -> nhãn D03-C2 -> món, ảnh ứng viên), trạng thái và chi phí. Chỉ service role (hàm photo-review).
+-- Chạy lại nhiều lần vẫn an toàn.
+create table if not exists public.photo_review_batches (
+  id uuid primary key default gen_random_uuid(),
+  night date not null,
+  stage text not null check (stage in ('haiku', 'sonnet')),
+  status text not null default 'gathering' check (status in ('gathering', 'submitted', 'applied', 'failed')),
+  model text not null,
+  batch_id text,
+  subjects jsonb not null default '[]'::jsonb,
+  labels jsonb not null default '{}'::jsonb,
+  first_verdicts jsonb,
+  options jsonb not null default '{}'::jsonb,
+  parent uuid references public.photo_review_batches (id) on delete set null,
+  web_cost_usd numeric not null default 0,
+  est_usd numeric not null default 0,
+  cost_usd numeric not null default 0,
+  summary jsonb,
+  error text,
+  locked_at timestamptz,
+  created_at timestamptz not null default now(),
+  submitted_at timestamptz,
+  ended_at timestamptz
+);
+create index if not exists photo_review_batches_status on public.photo_review_batches (status, created_at);
+create index if not exists photo_review_batches_night on public.photo_review_batches (night, stage);
+alter table public.photo_review_batches enable row level security;
+revoke all on public.photo_review_batches from public, anon, authenticated;
+
+-- Trần mỗi đêm (không đặt thì 100 món, 1 USD): đặt bằng SQL, ví dụ
+--   insert into public.ai_settings (key, value) values ('photo_review.max_dishes', '150') on conflict (key) do update set value = excluded.value;
+--   insert into public.ai_settings (key, value) values ('photo_review.max_usd', '1.5') on conflict (key) do update set value = excluded.value;
+alter table public.ai_settings drop constraint if exists ai_settings_key_check;
+alter table public.ai_settings add constraint ai_settings_key_check
+  check (key in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo', 'model.short', 'photo_review.max_dishes', 'photo_review.max_usd'));
+
+-- Lịch chạy (giờ UTC; 19:00 UTC = 02:00 giờ Việt Nam): gom + gửi lô mỗi 5 phút từ 02:00 đến 02:55, nhận kết quả mỗi giờ (phút 25).
+-- URL hàm lấy từ secret push_function_url của send-push (đổi /send-push thành /photo-review), cùng secret push_cron_secret.
+-- Hàm deploy với --no-verify-jwt (như send-push).
+select cron.schedule(
+  'photo-review-submit',
+  '*/5 19 * * *',
+  $cron$
+  select net.http_post(
+    url := replace((select decrypted_secret from vault.decrypted_secrets where name = 'push_function_url'), '/send-push', '/photo-review'),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'push_cron_secret')
+    ),
+    body := '{"action":"review-submit"}'::jsonb,
+    timeout_milliseconds := 150000
+  )
+  where exists (select 1 from vault.decrypted_secrets where name = 'push_function_url');
+  $cron$
+);
+select cron.schedule(
+  'photo-review-collect',
+  '25 * * * *',
+  $cron$
+  select net.http_post(
+    url := replace((select decrypted_secret from vault.decrypted_secrets where name = 'push_function_url'), '/send-push', '/photo-review'),
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'push_cron_secret')
+    ),
+    body := '{"action":"review-collect"}'::jsonb,
+    timeout_milliseconds := 150000
+  )
+  where exists (select 1 from vault.decrypted_secrets where name = 'push_function_url');
+  $cron$
+);
