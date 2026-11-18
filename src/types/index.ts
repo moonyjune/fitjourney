@@ -108,6 +108,12 @@ export interface ExtraFoodItem {
   sugarG?: number;
   /** User-flagged junk food; any flagged item fails that day's "no junk food" mission. */
   junk?: boolean;
+  /** "Ăn vặt" ticked on this one food (1.5, src/food/snackItems.ts): a snack entry of its own (also `junk`), listed as a snack and
+   *  never making a main meal "eaten"; its kcal count as usual. Absent on older entries (a whole meal marked `junk` before 1.5). */
+  snack?: boolean;
+  /** Logged as a cheat meal (1.5, src/game/cheatPlan.ts): its kcal were estimated with the restaurant buffer (×1.3) and it counts as the
+   *  80/20 rule's flexible meal. Counted in the day like any food. */
+  cheatMeal?: boolean;
   /** Photo of the food, as a file persisted on this device. The same photo is also saved as a meal proof
    *  (`taskRefId` = `extraProofRef(item.id)`) so it syncs and the coach can see it. Absent on older items. */
   photoUri?: string;

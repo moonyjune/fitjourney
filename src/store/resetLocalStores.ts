@@ -24,6 +24,7 @@ import { useCheatDayStore } from './useCheatDayStore';
 import { resetCheatPlacesStore } from './useCheatPlacesStore';
 import { resetTemptationStore } from './useTemptationStore';
 import { resetDishPhotoStore } from './useDishPhotoStore';
+import { useHiddenPhotoStore } from './useHiddenPhotoStore';
 import { useBossTalkStore } from './useBossTalkStore';
 import { useMealModeStore } from './useMealModeStore';
 import { useSkippedMealStore } from './useSkippedMealStore';
@@ -86,6 +87,7 @@ export function resetAllLocalStores() {
   useSelectedDayStore.setState({ selectedKey: null });
   resetTemptationStore();
   resetDishPhotoStore();
+  useHiddenPhotoStore.setState({ keys: [] });
   useBossTalkStore.setState({ talks: [], autoTried: null });
   useMealModeStore.setState({ fasting: true, skipBreakfast: false });
   useSkippedMealStore.setState({ days: {}, entries: {} });

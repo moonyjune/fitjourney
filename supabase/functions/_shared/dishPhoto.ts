@@ -431,23 +431,55 @@ export function cleanPicks(input: unknown, counts: number[]): (number | null)[] 
   return out;
 }
 
-/** A cache row (`dish_photos`) read: whether it is still good, its photo, and whether the web was searched for it already. The
- *  `photo` column holds a photo (with `v`, the check it passed), a "none" marker `{ none: true, web, v }`, or null (a "none" from
- *  before 1.3.x: only the libraries were searched). A photo is good when it passed the current check; a none for NONE_RETRY_DAYS. */
-export function cacheEntry(row: { photo: unknown; checked_at: string }, now: Date = new Date()): { fresh: boolean; photo: DishPhotoInfo | null; webTried: boolean } {
-  const p = row.photo as Record<string, unknown> | null;
-  const version = p && typeof p.v === 'number' ? p.v : 0;
-  if (p && p.none !== true) {
-    const photo = cleanDishPhoto(p);
-    return { fresh: photo !== null && version >= DISH_PHOTO_VERSION, photo, webTried: photo?.source === 'web' };
-  }
-  const at = Date.parse(row.checked_at);
-  return { fresh: Number.isFinite(at) && now.getTime() - at < NONE_RETRY_DAYS * 86_400_000, photo: null, webTried: !!p && p.web === true };
+/** Pictures remembered as wrong for one dish (`bad` in a cache value). */
+export const BAD_MAX = 10;
+
+/** A picture's identity (host and path, lower case, no query): the same rule as photoMatch.ts pictureKey (kept here so this file
+ *  needs no import). */
+function pictureId(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const m = /^https?:\/\/([^/?#\s]+)([^?#\s]*)/i.exec(raw.trim());
+  return m ? `${m[1].toLowerCase()}${m[2].replace(/\/+$/, '')}` : '';
 }
 
-/** A cache row's `photo` value: the photo marked with the check it passed, or the "none" marker (`web`: the web was searched too). */
-export function cachePhotoValue(photo: DishPhotoInfo | null, webTried: boolean): Record<string, unknown> {
-  return photo ? { ...photo, v: DISH_PHOTO_VERSION } : { none: true, web: webTried, v: DISH_PHOTO_VERSION };
+/** The pictures a cache value says are wrong for its dish: its `bad` list, and (1.5) a photo a player reported ("Ảnh sai?",
+ *  `photoFlag`, see photoReport.ts). Never taken again for that dish. */
+export function cacheBad(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return [];
+  const r = value as Record<string, unknown>;
+  const list = Array.isArray(r.bad) ? r.bad.filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length < 400) : [];
+  const flag = r.photoFlag && typeof r.photoFlag === 'object' ? (r.photoFlag as Record<string, unknown>) : null;
+  const flagged = flag ? [pictureId(typeof flag.url === 'string' && flag.url ? flag.url : r.url)] : [];
+  return [...new Set([...list, ...flagged].filter(Boolean))].slice(-BAD_MAX);
+}
+
+/** A cache row (`dish_photos`) read: whether it is still good, its photo, and whether the web was searched for it already. The
+ *  `photo` column holds a photo (with `v`, the check it passed), a "none" marker `{ none: true, web, v }`, or null (a "none" from
+ *  before 1.3.x: only the libraries were searched). A photo is good when it passed the current check; a none for NONE_RETRY_DAYS.
+ *  1.5: a photo a player reported (`photoFlag`) is never served: it reads as a good "none" the web was not searched for yet, so the
+ *  request that meets it answers the emoji and searches the web first (`flagged`); `bad` lists the pictures never to take again. */
+export function cacheEntry(
+  row: { photo: unknown; checked_at: string },
+  now: Date = new Date()
+): { fresh: boolean; photo: DishPhotoInfo | null; webTried: boolean; flagged: boolean; bad: string[] } {
+  const p = row.photo as Record<string, unknown> | null;
+  const version = p && typeof p.v === 'number' ? p.v : 0;
+  const bad = cacheBad(p);
+  if (p && p.none !== true) {
+    if (p.photoFlag && typeof p.photoFlag === 'object') return { fresh: true, photo: null, webTried: false, flagged: true, bad };
+    const photo = cleanDishPhoto(p);
+    return { fresh: photo !== null && version >= DISH_PHOTO_VERSION, photo, webTried: photo?.source === 'web', flagged: false, bad };
+  }
+  const at = Date.parse(row.checked_at);
+  return { fresh: Number.isFinite(at) && now.getTime() - at < NONE_RETRY_DAYS * 86_400_000, photo: null, webTried: !!p && p.web === true, flagged: false, bad };
+}
+
+/** A cache row's `photo` value: the photo marked with the check it passed, or the "none" marker (`web`: the web was searched too);
+ *  `bad`: pictures wrong for the dish, kept so they are never taken again. */
+export function cachePhotoValue(photo: DishPhotoInfo | null, webTried: boolean, bad: string[] = []): Record<string, unknown> {
+  const keep = [...new Set(bad.filter((x) => typeof x === 'string' && x !== ''))].slice(-BAD_MAX);
+  const base = photo ? { ...photo, v: DISH_PHOTO_VERSION } : { none: true, web: webTried, v: DISH_PHOTO_VERSION };
+  return keep.length > 0 ? { ...base, bad: keep } : base;
 }
 
 /** Whether a cache row is still good (see cacheEntry). */

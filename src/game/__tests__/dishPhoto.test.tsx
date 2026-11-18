@@ -199,8 +199,8 @@ describe('dish photos (server, pure)', () => {
     const now = new Date('2026-11-02T00:00:00Z');
     expect(cacheFresh({ photo: { ...PHOTO, v: DISH_PHOTO_VERSION }, checked_at: '2020-01-01T00:00:00Z' }, now)).toBe(true);
     expect(cacheFresh({ photo: PHOTO, checked_at: '2020-01-01T00:00:00Z' }, now)).toBe(false);
-    expect(cacheEntry({ photo: cachePhotoValue(null, true), checked_at: '2026-10-20T00:00:00Z' }, now)).toEqual({ fresh: true, photo: null, webTried: true });
-    expect(cacheEntry({ photo: null, checked_at: '2026-10-20T00:00:00Z' }, now)).toEqual({ fresh: true, photo: null, webTried: false });
+    expect(cacheEntry({ photo: cachePhotoValue(null, true), checked_at: '2026-10-20T00:00:00Z' }, now)).toEqual({ fresh: true, photo: null, webTried: true, flagged: false, bad: [] });
+    expect(cacheEntry({ photo: null, checked_at: '2026-10-20T00:00:00Z' }, now)).toEqual({ fresh: true, photo: null, webTried: false, flagged: false, bad: [] });
     const web = cachePhotoValue({ url: 'https://site.vn/a.jpg', sourceUrl: 'https://site.vn/bun-bo-hue', author: 'site.vn', license: '', source: 'web' }, true);
     expect(cacheEntry({ photo: web, checked_at: '2020-01-01T00:00:00Z' }, now)).toMatchObject({ fresh: true, webTried: true, photo: { source: 'web', license: '' } });
     expect(cacheFresh({ photo: { url: 'http://x' }, checked_at: '2026-11-01T00:00:00Z' }, now)).toBe(false);

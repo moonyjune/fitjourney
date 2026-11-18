@@ -22,7 +22,8 @@ export const FLEX_KCAL = 900;
 export function classifyMainMeals(items: DiaryItem[], th: Thresholds): MainMealRecord[] {
   const groups = new Map<string, DiaryItem[]>();
   for (const item of items) {
-    if (!isMainMeal(item.mealTime)) continue;
+    // A snack ticked on its own (1.5) is not part of the meal.
+    if (!isMainMeal(item.mealTime) || item.snack) continue;
     const key = `${item.dateKey}|${item.mealTime}`;
     const list = groups.get(key);
     if (list) list.push(item);
@@ -39,6 +40,8 @@ export function classifyMainMeals(items: DiaryItem[], th: Thresholds): MainMealR
     const eaten = list.filter((i) => !isSkippedMeal(i.text));
     const sum = (pick: (i: DiaryItem) => number) => eaten.reduce((s, i) => s + pick(i), 0);
     const flexible =
+      // A meal logged as a cheat meal (1.5) is the flexible meal of the 80/20 rule, whatever its figures.
+      eaten.some((i) => i.cheatMeal) ||
       sum((i) => i.kcal) > FLEX_KCAL ||
       sum((i) => i.purineMg) > th.purineMax / 2 ||
       sum((i) => i.sodiumMg) > 0.75 * th.sodiumMax ||

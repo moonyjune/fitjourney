@@ -3,6 +3,7 @@ import { showToast } from '../store/useToastStore';
 import { discardWorkoutPhotos, useWorkoutStore } from '../store/useWorkoutStore';
 import type { ExtraFoodItem, ExtraMealTime, MealSlot } from '../types';
 import { loggedAtFor, type Clock } from '../utils/mealClock';
+import { snackTogglePlan } from './snackItems';
 
 /* Deleting and logging again from the detail sheets, each with a "Hoàn tác" toast instead of a confirm (README §2, decision 3). A deleted
  * item keeps its photos until the toast goes away, so the undo brings it back whole; only then are the photos (proofs + files) thrown away. */
@@ -65,6 +66,7 @@ export function logExtraAgain(
     saltG: item.saltG,
     sugarG: item.sugarG,
     junk: item.junk,
+    snack: item.snack,
     waterMl: when?.waterMl !== undefined ? when.waterMl : item.waterMl,
     fromFoodDb: true,
     parts: item.parts,
@@ -72,6 +74,48 @@ export function logExtraAgain(
   });
   showToast({ text, undo: () => useNutritionStore.getState().removeExtraItem(dateKey, id) });
   return id;
+}
+
+/** The "Ăn vặt" toggle of food `index` in a logged meal's detail (snackItems.ts snackTogglePlan): a single food is marked or unmarked;
+ *  a food of a meal of several leaves the meal as a snack entry of its own, at the meal's time. Shows `texts.on` / `texts.off` /
+ *  `texts.split` (with {name}) and "Hoàn tác", which puts everything back. Returns false when nothing could be done. */
+export function toggleSnackWithUndo(dateKey: string, itemId: string, index: number, texts: { on: string; off: string; split: string }): boolean {
+  const store = useNutritionStore.getState();
+  const items = store.logs[dateKey]?.extraItems ?? [];
+  const at = items.findIndex((i) => i.id === itemId);
+  if (at < 0) return false;
+  const item = items[at];
+  const plan = snackTogglePlan(item, index);
+  if (!plan) return false;
+  const putBack = () => {
+    const s = useNutritionStore.getState();
+    s.removeExtraItem(dateKey, itemId, { keepPhotos: true });
+    s.restoreExtraItem(dateKey, item, at);
+  };
+  if (plan.kind === 'flag') {
+    store.updateExtra(dateKey, itemId, plan.patch);
+    showToast({ text: (plan.on ? texts.on : texts.off).replace('{name}', item.name), undo: putBack });
+    return true;
+  }
+  store.updateExtra(dateKey, itemId, plan.patch);
+  const p = plan.part;
+  const snackId = store.addExtra(dateKey, p.name, p.calories, p.proteinG, item.mealTime, {
+    purineMg: p.purineMg,
+    saltG: p.saltG,
+    sugarG: p.sugarG,
+    snack: true,
+    junk: true,
+    fromFoodDb: true,
+    clock: clockOf(item.loggedAtISO),
+  });
+  showToast({
+    text: texts.split.replace('{name}', p.name),
+    undo: () => {
+      useNutritionStore.getState().removeExtraItem(dateKey, snackId);
+      putBack();
+    },
+  });
+  return true;
 }
 
 /** The time of day of an ISO time, or null when it is not one. */

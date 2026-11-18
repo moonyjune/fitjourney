@@ -30,6 +30,10 @@ import { defaultForgotMeal, FORGOT_MEAL_NAME, FORGOT_MEALS, forgotMealKcal } fro
 import type { LookupResult } from '../src/food/components/FoodLookup';
 import { lookupDescribedFood } from '../src/food/describeLookup';
 import { joinTitle, sumParts } from '../src/food/mealParts';
+import { planSaveEntries } from '../src/food/snackItems';
+import { bufferedKcal } from '../src/game/cheatPlan';
+import { CheatGuide } from '../src/components/quest/CheatGuide';
+import { SnackToggle } from '../src/components/quest/MealDetailDialog';
 import { emptyRow, num, rowAmount, rowFromFigures, rowHasNoFigures, rowIsEmpty, rowIsSavable, rowPart, scaleRow, type MealRow } from '../src/food/mealRows';
 import { formatQty } from '../src/food/partScale';
 import { MAX_DRINK_ML, suggestedDrinkMl } from '../src/water/drinks';
@@ -86,7 +90,8 @@ type Run = 'text' | 'photo' | 'label';
  *     (a meal photo alone → the photo analysis; a nutrition label → the label reader; words, with or without photos → the text parser;
  *     foods the user's database knows are filled in without any AI). "Tự nhập" skips the AI.
  *  2. Kiểm tra món: one line per food (thumbnail, name, kcal · protein, − / + amount; ✎ opens every figure in a sheet, a removed food
- *     comes back with Hoàn tác), chips for the meal, the time and junk food, the impact on the day, "Chi tiết" (nutrients, the label,
+ *     comes back with Hoàn tác; "Ăn vặt" on each food since 1.5, saved as a snack of its own), chips for the meal, the time, the water
+ *     and Cheat (cheat meal ×1.3 / cheat day, with the numbers), the impact on the day, "Chi tiết" (nutrients, the label,
  *     swaps, advice, the description), and the sticky "Lưu bữa · N kcal". Nothing is saved before that button. */
 export default function AddFoodScreen() {
   const g = useGameText();
@@ -138,7 +143,17 @@ export default function AddFoodScreen() {
   const timeInvalid = timeTextInvalid(timeText);
   const [title, setTitle] = useState('');
   const [titleTouched, setTitleTouched] = useState(false);
-  const [junk, setJunk] = useState(false);
+  /** "Ăn vặt" per food (1.5): the lines ticked are saved as snacks of their own (src/food/snackItems.ts). */
+  const [snackKeys, setSnackKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const toggleSnack = (key: string) =>
+    setSnackKeys((old) => {
+      const next = new Set(old);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  /** "Cheat meal" (1.5): the meal's kcal are saved with the restaurant buffer (×1.3, src/game/cheatPlan.ts). */
+  const [cheatMeal, setCheatMeal] = useState(false);
   /** Millilitres typed for "Tính vào nước"; null follows what the foods' names say (a soy milk 250 ml → 250). */
   const [waterText, setWaterText] = useState<string | null>(null);
   const [note, setNote] = useState<{ kind: 'saved' | 'ai'; reasoning: string; accuracy: number | null } | null>(null);
@@ -148,7 +163,7 @@ export default function AddFoodScreen() {
   const [saveFailed, setSaveFailed] = useState(false);
   const [lastRun, setLastRun] = useState<Run | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<'slot' | 'saved' | 'info' | 'water' | 'forgot' | null>(null);
+  const [sheet, setSheet] = useState<'slot' | 'saved' | 'info' | 'water' | 'forgot' | 'cheat' | null>(null);
   const [forgotMeal, setForgotMeal] = useState<MainMeal>(() => defaultForgotMeal(pre.mealTime, new Date()));
   const [detailsOpen, setDetailsOpen] = useState<boolean | null>(null);
   /** The outcome of looking a name-only entry up in the food database: what was added from it, or why nothing was. */
@@ -373,6 +388,9 @@ export default function AddFoodScreen() {
   const savable = useMemo(() => rows.filter(rowIsSavable), [rows]);
   const partsOf = useMemo(() => savable.map(rowPart), [savable]);
   const totals = useMemo(() => sumParts(partsOf), [partsOf]);
+  const anySnack = savable.some((r) => snackKeys.has(r.key));
+  /** The kcal that will be saved: a cheat meal's with the ×1.3 buffer. */
+  const shownKcal = cheatMeal ? bufferedKcal(totals.calories) : totals.calories;
   // A drink logged as food (soy milk, coffee...) also counts toward the day's water, as its name says unless the user typed another amount.
   const suggestedWater = useMemo(() => suggestedDrinkMl(partsOf), [partsOf]);
   const typedWater = waterText == null ? suggestedWater : Math.round(num(waterText));
@@ -407,16 +425,18 @@ export default function AddFoodScreen() {
     () => ({
       id: 'draft',
       name: mealTitle,
-      calories: totals.calories,
+      calories: shownKcal,
       proteinG: totals.proteinG,
       mealTime,
       loggedAtISO: loggedAtFor(input.dateKey, mealTime, now, clock),
       purineMg: totals.purineMg || undefined,
       saltG: totals.saltG || undefined,
       sugarG: totals.sugarG || undefined,
-      junk: junk || undefined,
+      // A food ticked "Ăn vặt" is saved as a junk snack: the preview's "no junk food" mission sees it.
+      junk: anySnack || undefined,
+      cheatMeal: cheatMeal || undefined,
     }),
-    [mealTitle, totals, mealTime, junk, now, input.dateKey, clock]
+    [mealTitle, totals, shownKcal, mealTime, anySnack, cheatMeal, now, input.dateKey, clock]
   );
   // How the day's missions would change if this meal were saved right now.
   const preview = useMemo(() => previewDayChange(input, logWithExtra(input.log, input.dateKey, draft)), [input, draft]);
@@ -464,18 +484,33 @@ export default function AddFoodScreen() {
     try {
       if (photos[0]) kept = await persistPhotos(); // without photos the save runs at once
       for (const r of savable) if (!r.fromDb && r.aiCalories > 0) recordEstimate(r.aiCalories, num(r.calories));
-      addExtra(input.dateKey, mealTitle, totals.calories, totals.proteinG, mealTime, {
-        purineMg: totals.purineMg || undefined,
-        saltG: totals.saltG || undefined,
-        sugarG: totals.sugarG || undefined,
-        junk: junk || undefined,
-        waterMl: drinkMl || undefined,
-        photoUri: kept.main,
-        morePhotoUris: kept.more,
-        // Nothing new to remember only when the entry is exactly one food taken unchanged from the user's own database.
-        fromFoodDb: !!single && single.fromDb && single.baseline === `${single.name}|${single.calories}`,
-        clock,
-        parts: savable.length >= 2 ? partsOf : undefined,
+      // The foods not ticked "Ăn vặt" are one meal, each ticked one a snack of its own (1.5); the photos and the water go with the
+      // first entry. A cheat meal's kcal carry the restaurant buffer (×1.3).
+      const scale = (kcal: number) => (cheatMeal ? bufferedKcal(kcal) : kcal);
+      const entries = planSaveEntries(
+        savable.map((r) => ({ key: r.key, part: rowPart(r) })),
+        snackKeys,
+        titleTouched && title.trim() ? title.trim() : null
+      );
+      entries.forEach((e, i) => {
+        const lines = savable.filter((r) => e.keys.includes(r.key));
+        const one = lines.length === 1 ? lines[0] : null;
+        addExtra(input.dateKey, e.name, scale(e.calories), e.proteinG, mealTime, {
+          purineMg: e.purineMg || undefined,
+          saltG: e.saltG || undefined,
+          sugarG: e.sugarG || undefined,
+          junk: e.snack || undefined,
+          snack: e.snack || undefined,
+          cheatMeal: cheatMeal || undefined,
+          waterMl: i === 0 ? drinkMl || undefined : undefined,
+          photoUri: i === 0 ? kept.main : undefined,
+          morePhotoUris: i === 0 ? kept.more : undefined,
+          // Nothing new to remember only when the entry is exactly one food taken unchanged from the user's own database; a cheat
+          // meal's buffered figures are never remembered as the food's own.
+          fromFoodDb: cheatMeal || (!!one && one.fromDb && one.baseline === `${one.name}|${one.calories}`),
+          clock,
+          parts: e.parts?.map((p) => ({ ...p, calories: scale(p.calories) })),
+        });
       });
       goBack();
     } catch {
@@ -841,8 +876,8 @@ export default function AddFoodScreen() {
   // ───────────────────────────── Step 2: Kiểm tra món ─────────────────────────────
   const saveLabel = totals.calories > 0 || savable.length > 0
     ? day.isToday
-      ? g('meal.save', { kcal: totals.calories })
-      : g('meal.saveOn', { day: day.label, kcal: totals.calories })
+      ? g('meal.save', { kcal: shownKcal })
+      : g('meal.saveOn', { day: day.label, kcal: shownKcal })
     : g('meal.saveEmpty');
   const badges = (
     <View style={styles.badges}>
@@ -895,7 +930,13 @@ export default function AddFoodScreen() {
             label={drinkMl > 0 ? g('meal.water.pillA11yOn', { ml: drinkMl }) : g('meal.water.pillA11yOff')}
             onPress={() => setSheet('water')}
           />
-          <Pill icon="flame" text={g('meal.snack')} on={junk} label={g('food.junk')} selected={junk} onPress={() => setJunk((v) => !v)} />
+          <Pill
+            icon="flame"
+            text={cheatMeal || input.cheat ? g('cheatX.pillOn') : g('cheatX.pill')}
+            on={cheatMeal || !!input.cheat}
+            label={g('cheatX.pillA11y')}
+            onPress={() => setSheet('cheat')}
+          />
         </View>
 
         <View>
@@ -906,19 +947,25 @@ export default function AddFoodScreen() {
             return (
               <View key={r.key} style={styles.item}>
                 <DishThumb name={name || '?'} photoUri={rows.length === 1 ? photos[0] : undefined} size={52} />
-                <Pressable accessibilityRole="button" accessibilityLabel={`${g('meal.editA11y', { n: i + 1 })}: ${name}`} onPress={() => setEditingKey(r.key)} style={styles.itemText}>
-                  <HudText size={15} numberOfLines={2}>
-                    {name || g('meal.item.newTitle')}
-                  </HudText>
-                  <HudText size={12} weight="medium" color={figures ? quest.textSecondary : quest.goldLight} numberOfLines={2}>
-                    {figures ? g('meal.itemLine', { kcal: Math.round(num(r.calories)), p: Math.round(num(r.protein) * 10) / 10 }) : g('meal.itemNoFigures')}
-                  </HudText>
-                  {r.fromDb || r.accuracy !== null ? (
-                    <HudText size={11} weight="medium" color={r.fromDb ? quest.manaText : (r.accuracy ?? 0) >= 70 ? quest.xp : (r.accuracy ?? 0) >= 50 ? quest.goldLight : quest.hpText} numberOfLines={1}>
-                      {r.fromDb ? g('text.fromDb') : g('text.rowAccuracy', { pct: r.accuracy ?? 0 })}
+                <View style={styles.itemText}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`${g('meal.editA11y', { n: i + 1 })}: ${name}`} onPress={() => setEditingKey(r.key)}>
+                    <HudText size={15} numberOfLines={2}>
+                      {name || g('meal.item.newTitle')}
                     </HudText>
-                  ) : null}
-                </Pressable>
+                    <HudText size={12} weight="medium" color={figures ? quest.textSecondary : quest.goldLight} numberOfLines={2}>
+                      {figures ? g('meal.itemLine', { kcal: Math.round(num(r.calories)), p: Math.round(num(r.protein) * 10) / 10 }) : g('meal.itemNoFigures')}
+                    </HudText>
+                    {r.fromDb || r.accuracy !== null ? (
+                      <HudText size={11} weight="medium" color={r.fromDb ? quest.manaText : (r.accuracy ?? 0) >= 70 ? quest.xp : (r.accuracy ?? 0) >= 50 ? quest.goldLight : quest.hpText} numberOfLines={1}>
+                        {r.fromDb ? g('text.fromDb') : g('text.rowAccuracy', { pct: r.accuracy ?? 0 })}
+                      </HudText>
+                    ) : null}
+                  </Pressable>
+                  {/* "Ăn vặt" on this one food (1.5): saved as a snack of its own. */}
+                  <View style={styles.snackRow}>
+                    <SnackToggle name={name || g('meal.item.newTitle')} on={snackKeys.has(r.key)} onPress={() => toggleSnack(r.key)} />
+                  </View>
+                </View>
                 {figures && name ? (
                   <View style={styles.portion}>
                     <Pressable accessibilityRole="button" accessibilityLabel={g('meal.lessA11y', { n: i + 1 })} onPress={() => stepRow(r, -1)} hitSlop={4} style={styles.portionBtn}>
@@ -1021,7 +1068,7 @@ export default function AddFoodScreen() {
 
         <DraftFeedback
           name={mealTitle || joinTitle(rows.map((r) => r.name.trim()).filter(Boolean))}
-          calories={totals.calories}
+          calories={shownKcal}
           proteinG={totals.proteinG}
           purineMg={totals.purineMg}
           saltG={totals.saltG}
@@ -1179,6 +1226,24 @@ export default function AddFoodScreen() {
         </View>
       </BottomSheet>
 
+      <BottomSheet
+        visible={sheet === 'cheat'}
+        onClose={() => setSheet(null)}
+        title={g('cheatX.title')}
+        footer={<QuestButton title={g('meal.slotSheet.done')} onPress={() => setSheet(null)} />}
+      >
+        {sheet === 'cheat' && (
+          <CheatGuide
+            dateKey={input.dateKey}
+            now={now}
+            mealKcal={totals.calories}
+            eatenKcal={preview.after.eatenKcal}
+            cheatMeal={cheatMeal}
+            onCheatMeal={setCheatMeal}
+          />
+        )}
+      </BottomSheet>
+
       <SavedFoodsSheet
         visible={sheet === 'saved'}
         onClose={() => setSheet(null)}
@@ -1318,6 +1383,7 @@ const styles = StyleSheet.create({
   pillDanger: { borderColor: quest.hp },
   item: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: quest.border },
   itemText: { flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center', gap: 2 },
+  snackRow: { flexDirection: 'row', marginTop: 4 },
   portion: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: quest.border, borderRadius: questRadius.row, height: 44 },
   portionBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   portionText: { minWidth: 36, maxWidth: 70, textAlign: 'center' },

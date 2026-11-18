@@ -32,10 +32,16 @@
 // search yet) a web search. Answers { processed, kept, replaced, removed, stillNone, failed, remaining, next, done, changes }; call
 // again with {"after": <next>} until `done` (the end of the pass; rows that failed are retried by a new pass without `after`).
 // Its cost is system cost (tempt_pool_meta.system_cost_usd via tempt_pool_add_cost), never a user's.
+//
+// Reported photos (1.5, "Ảnh sai?", function report-photo): a cached photo with `photoFlag` is never served. The request that meets
+// it answers none (the emoji) and searches the web first after the answer; the repair takes every flagged row (both modes) and
+// looks for a new photo on the web first, then the libraries. A reported or replaced picture is kept in the row's `bad` list and
+// never taken again for that dish.
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { aiAllowance, jsonResponse, runAiCall, serveAi, systemAllowance, type AiContext } from '../_shared/ai.ts';
-import { cleanDishPhoto, cleanDishPhotoRequest, DISH_NAME_MAX, type DishPhotoInfo, type DishPhotoRequestDish, type DishPhotoResult } from '../_shared/dishPhoto.ts';
+import { cacheBad, cleanDishPhoto, cleanDishPhotoRequest, DISH_NAME_MAX, type DishPhotoInfo, type DishPhotoRequestDish, type DishPhotoResult } from '../_shared/dishPhoto.ts';
+import { isPhotoFlagged } from '../_shared/photoReport.ts';
 import { checkItemsOf, chooseLibraryPhotos, findVerifiedPhotos, readCache, searchDishes, verifyCall, verifyUrls, webPhotosFor, writeCache, type CacheWrite, type Runner } from '../_shared/dishPhotoLookup.ts';
 import { cleanVerdicts, pictureKey, REPAIR_MODEL, repairDecision, repairLimit } from '../_shared/photoMatch.ts';
 import { cronBody, inBackground, systemContext, systemRecord } from '../_shared/systemJobs.ts';
@@ -45,13 +51,14 @@ const WEB_PER_REQUEST = 6;
 
 /** The web search for dishes no library photo shows, after the answer: the rows are marked "web searched" first (so requests at the
  *  same moment do not search too), then get the confirmed photo, or stay "none"; a failed search is marked to be tried again. */
-async function webInBackground(ctx: AiContext, dishes: DishPhotoRequestDish[]): Promise<void> {
+async function webInBackground(ctx: AiContext, dishes: DishPhotoRequestDish[], bad: Map<string, string[]> = new Map()): Promise<void> {
   const list = dishes.filter((d, i) => dishes.findIndex((x) => x.key === d.key) === i).slice(0, WEB_PER_REQUEST);
   if (list.length === 0) return;
   await inBackground(
     (async () => {
       if (!(await aiAllowance(ctx, 'dishphoto')).ok) return;
-      await writeCache(ctx.admin, list.map((d) => ({ dish_key: d.key, name: d.core, photo: null, webTried: true })));
+      // The pictures known to be wrong (a photo a player reported, 1.5) stay on the row and are never taken again.
+      await writeCache(ctx.admin, list.map((d) => ({ dish_key: d.key, name: d.core, photo: null, webTried: true, bad: bad.get(d.key) })));
       const run: Runner = async (call) => {
         const outcome = await runAiCall(ctx, 'dishphoto', call);
         if ('error' in outcome) {
@@ -60,10 +67,10 @@ async function webInBackground(ctx: AiContext, dishes: DishPhotoRequestDish[]): 
         }
         return outcome;
       };
-      const found = await webPhotosFor(list.map((d) => d.core), run);
+      const found = await webPhotosFor(list.map((d) => d.core), run, new Set(list.flatMap((d) => bad.get(d.key) ?? [])));
       await writeCache(
         ctx.admin,
-        list.map((d, i) => ({ dish_key: d.key, name: d.core, photo: found[i] ?? null, webTried: found[i] !== undefined }))
+        list.map((d, i) => ({ dish_key: d.key, name: d.core, photo: found[i] ?? null, webTried: found[i] !== undefined, bad: bad.get(d.key) }))
       );
     })().catch((error) => console.warn('[dish-photo] web photos failed:', error instanceof Error ? error.message : error))
   );
@@ -81,8 +88,11 @@ async function repairStep(admin: SupabaseClient, body: Record<string, unknown>):
   const withNone = body.none === true;
   const pending = () => {
     let q = admin.from('dish_photos').select('dish_key,name,photo', { count: 'exact' }).like('dish_key', 'v2:%');
-    // Not checked by the current check: a photo without `v` (or, with "none", an old null "none" without a web search).
-    q = withNone ? q.or('photo.is.null,and(photo->>v.is.null,photo->>none.is.null)') : q.not('photo', 'is', null).filter('photo->>v', 'is', null);
+    // Not checked by the current check: a photo without `v` (or, with "none", an old null "none" without a web search); and (1.5)
+    // every photo a player reported wrong (`photoFlag`), in both modes.
+    q = withNone
+      ? q.or('photo.is.null,and(photo->>v.is.null,photo->>none.is.null),photo->>photoFlag.not.is.null')
+      : q.not('photo', 'is', null).or('photo->>v.is.null,photo->>photoFlag.not.is.null');
     return q;
   };
   // `after`: the `next` of the previous step (rows are taken in dish_key order), so a row that could not be decided does not hold
@@ -114,18 +124,28 @@ async function repairStep(admin: SupabaseClient, body: Record<string, unknown>):
     const name = (r.name ?? '').trim() || key;
     const dish = cleanDishPhotoRequest({ dishes: [{ name: name.slice(0, DISH_NAME_MAX) }] })?.[0];
     const p = r.photo as Record<string, unknown> | null;
-    const url = p && typeof p.url === 'string' ? p.url : null;
-    return dish ? [{ key, dish: { ...dish, key }, url, old: p }] : [];
+    const url = p && typeof p.url === 'string' && p.none !== true ? p.url : null;
+    // A photo a player reported wrong (1.5) is not judged again: it is invalid, and its picture is never taken again (`bad`).
+    const flagged = !!url && isPhotoFlagged(p);
+    return dish ? [{ key, dish: { ...dish, key }, url, old: p, flagged, bad: cacheBad(p) }] : [];
   });
-  // 1. The current photos, judged.
-  const withPhoto = items.filter((x) => x.url);
+  // 1. The current photos (not reported), judged.
+  const withPhoto = items.filter((x) => x.url && !x.flagged);
   const verdicts = await verifyUrls(withPhoto.map((x) => ({ dish: x.dish.core, url: x.url! })), run);
   if (verdicts === null) return jsonResponse({ error: 'The check failed; nothing changed. Try again.', costUsd: cost }, 502);
   const current = new Map(withPhoto.map((x, i) => [x.key, verdicts[i]]));
-  // 2. A new photo for each one that is not confirmed (never the one found wrong).
-  const needNew = items.filter((x) => !(x.url && repairDecision(current.get(x.key) ?? null, false, true) === 'keep'));
-  const found = needNew.length > 0 ? await findVerifiedPhotos(needNew.map((x) => x.dish), run, { exclude: new Set(needNew.flatMap((x) => (x.url ? [pictureKey(x.url)] : []))) }) : [];
-  const newPhoto = new Map(needNew.map((x, i) => [x.key, found[i]]));
+  const keeps = (x: (typeof items)[number]) => !!x.url && !x.flagged && repairDecision(current.get(x.key) ?? null, false, true) === 'keep';
+  // 2. A new photo for each one that is not confirmed (never the one found wrong, nor one reported): a reported one is searched on
+  //    the web first, the others in the libraries first.
+  const needNew = items.filter((x) => !keeps(x));
+  const excludeOf = (list: typeof items) => new Set(list.flatMap((x) => [...(x.url ? [pictureKey(x.url)] : []), ...x.bad]));
+  const reported = needNew.filter((x) => x.flagged);
+  const others = needNew.filter((x) => !x.flagged);
+  const [foundReported, foundOthers] = await Promise.all([
+    reported.length > 0 ? findVerifiedPhotos(reported.map((x) => x.dish), run, { exclude: excludeOf(reported), webFirst: true }) : Promise.resolve([]),
+    others.length > 0 ? findVerifiedPhotos(others.map((x) => x.dish), run, { exclude: excludeOf(others) }) : Promise.resolve([]),
+  ]);
+  const newPhoto = new Map([...reported.map((x, i) => [x.key, foundReported[i]] as const), ...others.map((x, i) => [x.key, foundOthers[i]] as const)]);
 
   const writes: CacheWrite[] = [];
   const changes: Record<string, unknown>[] = [];
@@ -133,27 +153,30 @@ async function repairStep(admin: SupabaseClient, body: Record<string, unknown>):
   for (const x of items) {
     const v = current.get(x.key) ?? null;
     const got = newPhoto.get(x.key);
-    if (x.url && repairDecision(v, false, true) === 'keep') {
+    const tag = x.flagged ? { reported: true } : {};
+    if (keeps(x)) {
       tally.kept++;
       // Written back as it was, now marked with the check's version.
-      writes.push({ dish_key: x.key, name: x.dish.core, photo: cleanDishPhoto(x.old) });
+      writes.push({ dish_key: x.key, name: x.dish.core, photo: cleanDishPhoto(x.old), bad: x.bad });
       continue;
     }
     if (got === undefined) {
       tally.failed++;
-      changes.push({ dish: x.dish.core, action: 'failed', old: x.url, verdict: v });
+      changes.push({ dish: x.dish.core, action: 'failed', old: x.url, verdict: v, ...tag });
       continue;
     }
-    const decision = repairDecision(x.url ? v : null, !!got, true);
+    const decision = x.flagged ? (got ? 'replace' : 'remove') : repairDecision(x.url ? v : null, !!got, true);
+    // The picture that goes is remembered as wrong for the dish.
+    const bad = x.url ? [...x.bad, pictureKey(x.url)] : x.bad;
     if (got) {
       tally.replaced++;
-      writes.push({ dish_key: x.key, name: x.dish.core, photo: got, webTried: true });
-      changes.push({ dish: x.dish.core, action: 'replace', old: x.url, new: got.url, source: got.source, verdict: v });
+      writes.push({ dish_key: x.key, name: x.dish.core, photo: got, webTried: true, bad });
+      changes.push({ dish: x.dish.core, action: 'replace', old: x.url, new: got.url, source: got.source, verdict: v, ...tag });
     } else {
       if (x.url) tally.removed++;
       else tally.stillNone++;
-      writes.push({ dish_key: x.key, name: x.dish.core, photo: null, webTried: true });
-      changes.push({ dish: x.dish.core, action: x.url ? 'remove' : 'none', old: x.url, verdict: v, decision });
+      writes.push({ dish_key: x.key, name: x.dish.core, photo: null, webTried: true, bad });
+      changes.push({ dish: x.dish.core, action: x.url ? 'remove' : 'none', old: x.url, verdict: v, decision, ...tag });
     }
   }
   await writeCache(admin, writes);
@@ -177,7 +200,10 @@ serveAi(
   async (body, ctx) => {
     const dishes = cleanDishPhotoRequest(body);
     if (!dishes) return jsonResponse({ error: 'Thiếu tên món.' }, 400);
-    const cached = await readCache(ctx.admin, dishes.map((d) => d.key));
+    // `bad`: pictures known to be wrong for each dish, never taken again. 1.5: a photo a player reported reads as a "none" the web
+    // was not searched for: the emoji now, the web searched first after the answer.
+    const bad = new Map<string, string[]>();
+    const cached = await readCache(ctx.admin, dishes.map((d) => d.key), bad);
     const found = new Map<string, DishPhotoInfo | null>([...cached].map(([k, e]) => [k, e.photo]));
     // A cached "none" the web was not searched for yet: searched after the answer.
     const webTodo = dishes.filter((d) => cached.has(d.key) && !cached.get(d.key)!.photo && !cached.get(d.key)!.webTried);
@@ -186,19 +212,19 @@ serveAi(
 
     const todo = dishes.filter((d, i) => !found.has(d.key) && dishes.findIndex((x) => x.key === d.key) === i);
     if (todo.length === 0) {
-      await webInBackground(ctx, webTodo);
+      await webInBackground(ctx, webTodo, bad);
       return jsonResponse({ result: answer() });
     }
 
     // Search every dish at once; one that is not done inside the budget counts as "nothing found" (and is not cached).
     const problems: string[] = [];
-    const searched = await searchDishes(todo, problems);
+    const searched = await searchDishes(todo, problems, new Set(todo.flatMap((d) => bad.get(d.key) ?? [])));
     const toCache: CacheWrite[] = [];
     for (const s of searched) {
       if (s.kept.length > 0) continue;
       found.set(s.dish.key, null);
       if (s.complete && s.candidates.length === 0) {
-        toCache.push({ dish_key: s.dish.key, name: s.dish.core, photo: null });
+        toCache.push({ dish_key: s.dish.key, name: s.dish.core, photo: null, bad: bad.get(s.dish.key) });
         webTodo.push(s.dish);
       }
     }
@@ -206,7 +232,7 @@ serveAi(
     if (asked.length === 0) {
       if (problems.length > 0) console.warn('[dish-photo] no candidate photo could be loaded:', JSON.stringify({ dishes: todo.length, problems: problems.slice(0, 12) }));
       await writeCache(ctx.admin, toCache);
-      await webInBackground(ctx, webTodo);
+      await webInBackground(ctx, webTodo, bad);
       return jsonResponse({ result: answer() });
     }
 
@@ -220,11 +246,11 @@ serveAi(
           const photo = picked[n] ?? null;
           found.set(s.dish.key, photo);
           // A "none" is cached only when every library answered (a timeout may have hidden the right photo); then the web is next.
-          if (photo || s.complete) toCache.push({ dish_key: s.dish.key, name: s.dish.core, photo });
+          if (photo || s.complete) toCache.push({ dish_key: s.dish.key, name: s.dish.core, photo, bad: bad.get(s.dish.key) });
           if (!photo && s.complete) webTodo.push(s.dish);
         });
         await writeCache(ctx.admin, toCache);
-        await webInBackground(info.ctx, webTodo);
+        await webInBackground(info.ctx, webTodo, bad);
         return answer();
       },
     };

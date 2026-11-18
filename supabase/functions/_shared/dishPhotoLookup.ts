@@ -113,12 +113,14 @@ export function within<T>(work: Promise<T>, ms: number, fallback: T): Promise<T>
 }
 
 type CacheRow = { dish_key: string; photo: unknown; checked_at: string };
-/** A cache row still good: its photo (null: none found) and whether the web was searched for it. */
-export type CachedPhoto = { photo: DishPhotoInfo | null; webTried: boolean };
+/** A cache row still good: its photo (null: none found) and whether the web was searched for it; `flagged`: its photo was reported
+ *  wrong by a player (1.5, "Ảnh sai?"), so it reads as none and the web is searched first; `bad`: pictures never to take again. */
+export type CachedPhoto = { photo: DishPhotoInfo | null; webTried: boolean; flagged?: boolean; bad?: string[] };
 
 /** The good cached answers by dish key (rows are stored under `cacheKey`: rows of an older key version are never read; a photo
- *  checked by an older check is not good, so it is looked up again). */
-export async function readCache(admin: SupabaseClient, keys: string[]): Promise<Map<string, CachedPhoto>> {
+ *  checked by an older check is not good, so it is looked up again). `badOut` gets every row's wrong pictures, stale rows included,
+ *  so a new search leaves them out. */
+export async function readCache(admin: SupabaseClient, keys: string[], badOut?: Map<string, string[]>): Promise<Map<string, CachedPhoto>> {
   const out = new Map<string, CachedPhoto>();
   const byRow = new Map(keys.map((k) => [cacheKey(k), k]));
   try {
@@ -127,7 +129,8 @@ export async function readCache(admin: SupabaseClient, keys: string[]): Promise<
     for (const row of (data ?? []) as CacheRow[]) {
       const key = byRow.get(row.dish_key);
       const entry = cacheEntry(row);
-      if (key && entry.fresh) out.set(key, { photo: entry.photo, webTried: entry.webTried });
+      if (key && entry.bad.length > 0) badOut?.set(key, entry.bad);
+      if (key && entry.fresh) out.set(key, { photo: entry.photo, webTried: entry.webTried, ...(entry.flagged ? { flagged: true } : {}), ...(entry.bad.length ? { bad: entry.bad } : {}) });
     }
   } catch (error) {
     // The table is created by schema.sql, which is run by hand: until then there is simply no cache.
@@ -136,7 +139,7 @@ export async function readCache(admin: SupabaseClient, keys: string[]): Promise<
   return out;
 }
 
-export type CacheWrite = { dish_key: string; name: string; photo: DishPhotoInfo | null; webTried?: boolean };
+export type CacheWrite = { dish_key: string; name: string; photo: DishPhotoInfo | null; webTried?: boolean; bad?: string[] };
 
 /** Writes answers to the cache (`dish_key` without the version prefix): a photo with the check's version, or a "none" marker. */
 export async function writeCache(admin: SupabaseClient, rows: CacheWrite[]): Promise<void> {
@@ -145,7 +148,7 @@ export async function writeCache(admin: SupabaseClient, rows: CacheWrite[]): Pro
     const now = new Date().toISOString();
     const { error } = await admin
       .from(CACHE_TABLE)
-      .upsert(rows.map((r) => ({ dish_key: cacheKey(r.dish_key), name: r.name, photo: cachePhotoValue(r.photo, r.webTried === true || r.photo?.source === 'web'), checked_at: now })), { onConflict: 'dish_key' });
+      .upsert(rows.map((r) => ({ dish_key: cacheKey(r.dish_key), name: r.name, photo: cachePhotoValue(r.photo, r.webTried === true || r.photo?.source === 'web', r.bad), checked_at: now })), { onConflict: 'dish_key' });
     if (error) throw error;
   } catch (error) {
     console.warn('[dish-photo] cache not written:', error instanceof Error ? error.message : JSON.stringify(error));
@@ -285,10 +288,26 @@ export async function webPhotosFor(names: string[], run: Runner, taken: Set<stri
 export async function findVerifiedPhotos(
   dishes: DishPhotoRequestDish[],
   run: Runner,
-  opts: { exclude?: Set<string>; taken?: Set<string>; web?: boolean } = {}
+  opts: { exclude?: Set<string>; taken?: Set<string>; web?: boolean; webFirst?: boolean } = {}
 ): Promise<(DishPhotoInfo | null | undefined)[]> {
   const taken = opts.taken ?? new Set<string>();
   const exclude = new Set([...(opts.exclude ?? []), ...taken]);
+  if (opts.webFirst && dishes.length > 0) {
+    // 1.5, a photo a player reported wrong: the web first (a page about the dish), the libraries only for the dishes it did not
+    // settle. The excluded pictures count as taken, so the web never brings the reported one back.
+    const webTaken = new Set([...exclude, ...taken]);
+    const web = await webPhotosFor(dishes.map((d) => d.core), run, webTaken);
+    for (const p of web) if (p) taken.add(pictureKey(p.url));
+    const rest = web.flatMap((p, i) => (p ? [] : [i]));
+    if (rest.length === 0) return web;
+    const lib = await findVerifiedPhotos(rest.map((i) => dishes[i]), run, { exclude, taken, web: false });
+    const out = [...web];
+    rest.forEach((i, n) => {
+      // Found in a library: the photo. Not there either: none when the web answered (null), else undecided.
+      out[i] = lib[n] ? lib[n] : web[i] === null && lib[n] === null ? null : undefined;
+    });
+    return out;
+  }
   const searched = await searchDishes(dishes, [], exclude);
   const library = await pickLibraryPhotos(searched, run, taken);
   const out = library.map((p, i) => (p === null && !searched[i].complete ? undefined : p));

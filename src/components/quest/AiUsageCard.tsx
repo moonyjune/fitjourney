@@ -53,7 +53,8 @@ export function AiUsageCard() {
   if (rows === null) return null; // unreadable (offline, dev account): show nothing rather than zeros
   const byFeature = new Map(rows.map((r) => [r.feature, r]));
   const used = (Object.keys(DAILY_QUOTA) as AiFeature[]).filter((f) => (byFeature.get(f)?.calls ?? 0) > 0);
-  const total = rows.reduce((t, r) => ({ calls: t.calls + r.calls, tokens: t.tokens + r.tokensIn + r.tokensOut, cost: t.cost + r.costUsd }), { calls: 0, tokens: 0, cost: 0 });
+  // Only AI features count (the photo reports, 1.5, are logged in the same table at no cost, as `photoreport`).
+  const total = rows.filter((r) => Object.prototype.hasOwnProperty.call(DAILY_QUOTA, r.feature)).reduce((t, r) => ({ calls: t.calls + r.calls, tokens: t.tokens + r.tokensIn + r.tokensOut, cost: t.cost + r.costUsd }), { calls: 0, tokens: 0, cost: 0 });
 
   return (
     <View style={styles.card} accessible accessibilityLabel={g('aiUsage.title')}>
