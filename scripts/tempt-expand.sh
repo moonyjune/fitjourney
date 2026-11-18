@@ -12,9 +12,9 @@ MODE="${1:-expand}"
 URL=$(grep '^EXPO_PUBLIC_SUPABASE_URL=' .env | cut -d= -f2- | tr -d '"')
 ANON=$(grep '^EXPO_PUBLIC_SUPABASE_ANON_KEY=' .env | cut -d= -f2- | tr -d '"')
 if [ -z "${PUSH_CRON_SECRET:-}" ]; then
-  PUSH_CRON_SECRET=$(npx -y supabase@3.2.0 db query --linked --read-only -o json \
+  PUSH_CRON_SECRET=$(npx -y supabase@3.2.0 db query --linked --yes -o json \
     "select decrypted_secret as s from vault.decrypted_secrets where name='push_cron_secret'" 2>/dev/null \
-    | python3 -c 'import sys,json; d=json.load(sys.stdin); r=d if isinstance(d,list) else d.get("rows",d.get("result",[])); print(r[0]["s"])')
+    | python3 -c 'import sys,json; t=sys.stdin.read(); d=json.loads(t[t.index("{"):]); print(d["rows"][0]["s"])')
 fi
 [ -n "$PUSH_CRON_SECRET" ] || { echo "no cron secret"; exit 1; }
 
