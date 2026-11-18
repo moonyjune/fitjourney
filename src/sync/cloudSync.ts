@@ -1713,6 +1713,9 @@ export interface MealTextItem {
   sugarG?: number;
   saltG?: number;
   accuracyPercent?: number;
+  /** The food's weight (g) or volume (ml) as eaten, when the AI gave it: added to a name that only has a count. */
+  amount?: number;
+  amountUnit?: 'g' | 'ml';
 }
 
 export interface MealTextResult {
@@ -1734,7 +1737,7 @@ export interface MealTextImage {
 /** Calls the parse-meal-text edge function: a sentence (and optionally up to 3 photos of the meal) in, one editable line per
  *  food out. Same rules as the photo analysis: the offline dev account gets a labelled simulated answer, offline fails softly,
  *  nothing is saved here. Without photos the request body is exactly the text-only one. */
-export async function requestMealText(text: string, profile?: BodyProfile, coach?: CoachContext, images?: MealTextImage[]): Promise<MealTextOutcome> {
+export async function requestMealText(text: string, profile?: BodyProfile, coach?: CoachContext, images?: MealTextImage[], notes?: string): Promise<MealTextOutcome> {
   const off = aiTurnedOff();
   if (off) return off;
   if (useAuthStore.getState().devMode) {
@@ -1743,7 +1746,9 @@ export async function requestMealText(text: string, profile?: BodyProfile, coach
   }
   if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
   try {
-    const body = images && images.length > 0 ? { text, profile, coach, images } : { text, profile, coach };
+    const base = images && images.length > 0 ? { text, profile, coach, images } : { text, profile, coach };
+    // Notes for the AI ("không ăn nước dùng", "bỏ da") go only when there are some, so a plain request is exactly as before.
+    const body = notes?.trim() ? { ...base, notes: notes.trim() } : base;
     const { data, error } = await supabase.functions.invoke('parse-meal-text', { body });
     if (error) throw error;
     if (data?.error) return { ok: false, message: data.error, kind: classifyAiError(String(data.error)) };

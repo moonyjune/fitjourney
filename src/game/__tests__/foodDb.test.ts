@@ -99,7 +99,7 @@ describe('amounts', () => {
     expect(baseName('Trứng gà (quả ≈50 g)')).toBe('Trứng gà');
     expect(baseName('Mì gói (gói ≈75 g, cả gia vị)')).toBe('Mì gói');
     expect(baseName('Măng')).toBe('Măng');
-    expect(describeLine(byName('Trứng gà (quả ≈50 g)'), 2)).toBe('2 quả Trứng gà');
+    expect(describeLine(byName('Trứng gà (quả ≈50 g)'), 2)).toBe('2 quả Trứng gà (≈100 g)'); // a count also says its weight
     expect(describeLine(byName('Ức gà chín (áp chảo/nướng/luộc)'), 150.04)).toBe('150 g Ức gà chín');
     expect(defaultQty(byName('Lòng trắng trứng'))).toBe(100);
     expect(defaultQty(byName('Sữa tươi không đường'))).toBe(100);

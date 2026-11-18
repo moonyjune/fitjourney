@@ -51,6 +51,7 @@ jest.mock('../../sync/cloudSync', () => ({
 import TextMealScreen from '../../../app/add-food';
 import { editItem, readItem, saveMeal, tap } from '../../testing/mealFlow';
 import { useAiCalibrationStore } from '../../store/useAiCalibrationStore';
+import { useAiPhotoStore } from '../../store/useAiPhotoStore';
 import { useFoodDbStore } from '../../store/useFoodDbStore';
 import { useNutritionStore } from '../../store/useNutritionStore';
 import { useToastStore } from '../../store/useToastStore';
@@ -132,7 +133,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     await press(r, ANALYZE);
     expect(mockText).not.toHaveBeenCalled();
     expect(allText(r)).toContain('Hãy mô tả món đã ăn');
-    await type(r, 'Bạn đã ăn gì?', '  2 tô mì quảng, 1 ly trà đá ít đường ');
+    await type(r, 'Món & lượng', '  2 tô mì quảng, 1 ly trà đá ít đường ');
     await press(r, ANALYZE);
     expect(mockText).toHaveBeenCalledTimes(1);
     const [sentence, profile, coach] = mockText.mock.calls[0] as [string, Record<string, unknown>, Record<string, any>];
@@ -145,38 +146,56 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     expect(mockPhoto).not.toHaveBeenCalled();
   });
 
-  it('attaches up to 3 photos (library and camera), lets one be removed, and sends the rest with the words to the text parser', async () => {
-    mockPickMany.mockResolvedValueOnce({ uris: ['file:///a.jpg', 'file:///b.jpg'] });
-    mockPickOne.mockResolvedValueOnce({ uri: 'file:///c.jpg' });
+  it('with the AI off, attaches up to 3 photos (library and camera) and lets one be removed', async () => {
+    useAiPhotoStore.setState({ aiEnabled: false });
+    try {
+      mockPickMany.mockResolvedValueOnce({ uris: ['file:///a.jpg', 'file:///b.jpg'] });
+      mockPickOne.mockResolvedValueOnce({ uri: 'file:///c.jpg' });
+      const r = await mount();
+      expect(allText(r)).toContain('ẢNH MÓN ĂN');
+      await press(r, 'Chọn ảnh');
+      expect(mockPickMany).toHaveBeenCalledWith(3);
+      await press(r, 'Chụp ảnh');
+      expect(mockPickOne).toHaveBeenCalledWith('camera');
+      expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh món ăn đã chọn 3' && n.props.source).length).toBeGreaterThan(0);
+      expect(allText(r)).toContain('Đã đủ 3 ảnh.');
+      expect(pressable(r, 'Chọn ảnh').props.disabled).toBe(true);
+      await press(r, 'Xóa ảnh 2');
+      expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh món ăn đã chọn 3' && n.props.source)).toHaveLength(0);
+      expect(allText(r)).toContain('2/3 ảnh');
+      expect(mockText).not.toHaveBeenCalled();
+      expect(mockPhoto).not.toHaveBeenCalled();
+    } finally {
+      useAiPhotoStore.setState({ aiEnabled: true });
+    }
+  });
+
+  it('a photo is analysed as soon as it is added (no description step), with the dish and the notes typed so far', async () => {
+    mockPickMany.mockResolvedValueOnce({ uris: ['file:///a.jpg', 'file:///c.jpg'] });
     const r = await mount();
-    expect(allText(r)).toContain('ẢNH MÓN ĂN');
+    expect(input(r, 'Món & lượng').props.placeholder).toBe('VD: 1 bát phở bò (200 g bánh, 80 g thịt)');
+    expect(input(r, 'Ghi chú cho AI').props.placeholder).toBe('VD: không ăn nước dùng, bỏ da, ít đường');
+    await type(r, 'Món & lượng', 'phở và trà');
+    await type(r, 'Ghi chú cho AI', 'không ăn nước dùng');
     await press(r, 'Chọn ảnh');
-    expect(mockPickMany).toHaveBeenCalledWith(3);
-    await press(r, 'Chụp ảnh');
-    expect(mockPickOne).toHaveBeenCalledWith('camera');
-    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh món ăn đã chọn 3' && n.props.source).length).toBeGreaterThan(0);
-    expect(allText(r)).toContain('Đã đủ 3 ảnh.');
-    expect(pressable(r, 'Chọn ảnh').props.disabled).toBe(true);
-    await press(r, 'Xóa ảnh 2');
-    expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Ảnh món ăn đã chọn 3' && n.props.source)).toHaveLength(0);
-    expect(allText(r)).toContain('2/3 ảnh');
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
-    await press(r, ANALYZE);
     expect(mockToBase64.mock.calls.map((c) => c[0])).toEqual(['file:///a.jpg', 'file:///c.jpg']);
-    const [sentence, , , images] = mockText.mock.calls[0] as [string, unknown, unknown, unknown];
+    expect(mockText).toHaveBeenCalledTimes(1);
+    const [sentence, , , images, notes] = mockText.mock.calls[0] as [string, unknown, unknown, unknown, unknown];
     expect(sentence).toBe('phở và trà');
+    expect(notes).toBe('không ăn nước dùng');
     expect(images).toEqual([
       { base64: 'B64:file:///a.jpg', mediaType: 'image/jpeg' },
       { base64: 'B64:file:///c.jpg', mediaType: 'image/jpeg' },
     ]);
     expect(mockPhoto).not.toHaveBeenCalled();
+    expect(allText(r)).toContain('Kiểm tra món');
     // The first attached photo becomes the meal's photo, shown large on the check step.
     expect(r.root.findAll((n) => n.props.source?.uri === 'file:///a.jpg').length).toBeGreaterThan(0);
     await saveMeal(r);
     expect(mockPersist).toHaveBeenCalledWith('file:///a.jpg', expect.stringContaining('extra-'));
   });
 
-  it('a photo alone goes to the photo analysis (analyze-proof-photo), and its foods come back as lines; with words the database shortcut is skipped', async () => {
+  it('a photo alone goes straight to the photo analysis; a note added on the check step analyses it again with the note', async () => {
     useFoodDbStore.setState({
       custom: [{ id: 'c1', name: 'Bún riêu nhà nấu', group: 'soup', unit: 'phần', unitG: 100, kcal: 450, proteinG: 25, purineMg: 90, sugarG: 2, sodiumMg: 800, note: '', confidence: 'low', auto: true }],
     });
@@ -196,7 +215,6 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     mockPickMany.mockResolvedValueOnce({ uris: ['file:///a.jpg'] });
     const r = await mount();
     await press(r, 'Chọn ảnh');
-    await press(r, ANALYZE);
     expect(mockText).not.toHaveBeenCalled();
     expect(mockPhoto).toHaveBeenCalledTimes(1);
     expect(mockPhoto.mock.calls[0][0]).toBe('meal');
@@ -208,21 +226,33 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     expect(text).toContain('Bún 200g');
     expect(text).toContain('480 kcal · 28 g đạm');
     expect(text).toContain('Lưu bữa · 700 kcal');
+    // A note on the check step: the photo goes again, now with the note, to the text parser; its lines replace the photo's.
+    mockText.mockResolvedValueOnce({
+      ok: true,
+      result: { items: [{ name: 'Bún chả 1 suất (không nước chấm)', caloriesKcal: 600, proteinG: 30, amount: 450, amountUnit: 'g' }], reasoning: 'Bỏ nước chấm.' },
+    });
+    await type(r, 'Ghi chú cho AI', 'không ăn nước chấm');
+    await press(r, 'Phân tích lại với ghi chú');
+    expect(mockText).toHaveBeenCalledTimes(1);
+    expect(mockText.mock.calls[0][0]).toBe('');
+    expect(mockText.mock.calls[0][4]).toBe('không ăn nước chấm');
+    expect(allText(r)).toContain('Bún chả 1 suất (không nước chấm) (≈450 g)');
+    expect(allText(r)).not.toContain('Bún 200g');
+    expect(allText(r)).toContain('Lưu bữa · 600 kcal');
     // Back to step 1, words added: the text parser gets them with the photo, even for a food the database knows.
     await press(r, 'Quay lại');
-    await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
+    await type(r, 'Món & lượng', 'bun rieu nha nau');
     await press(r, ANALYZE);
-    expect(mockText).toHaveBeenCalledTimes(1);
-    expect(mockText.mock.calls[0][0]).toBe('bun rieu nha nau');
+    expect(mockText).toHaveBeenCalledTimes(2);
+    expect(mockText.mock.calls[1][0]).toBe('bun rieu nha nau');
   });
 
-  it('a nutrition label is read when "Ảnh nhãn dinh dưỡng" is chosen (the quick choice chip)', async () => {
+  it('a nutrition label is read when "Ảnh nhãn dinh dưỡng" is chosen before the photo is added (the quick choice chip)', async () => {
     mockPickMany.mockResolvedValueOnce({ uris: ['file:///label.jpg'] });
     const r = await mount();
-    await press(r, 'Chọn ảnh');
     expect(allText(r)).toContain('Ảnh nhãn dinh dưỡng');
     await press(r, 'Ảnh nhãn dinh dưỡng');
-    await press(r, ANALYZE);
+    await press(r, 'Chọn ảnh');
     expect(mockPhoto).not.toHaveBeenCalled();
     expect(mockText).not.toHaveBeenCalled();
   });
@@ -234,14 +264,48 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     await press(r, 'Chọn ảnh');
     await press(r, 'Chụp ảnh');
     expect(allText(r)).toContain('Không lấy được ảnh.');
-    await type(r, 'Bạn đã ăn gì?', 'phở');
+    expect(mockPhoto).not.toHaveBeenCalled();
+    await type(r, 'Món & lượng', 'phở');
     await press(r, ANALYZE);
     expect(mockText.mock.calls[0][3]).toBeUndefined();
   });
 
+  it('a dish with its details ("1 bát bún bò, 100g thịt bò, ít đường") goes whole to the AI, even when the database knows a part', async () => {
+    useFoodDbStore.setState({
+      custom: [{ id: 'c1', name: 'Thịt bò', group: 'redMeat', unit: 'g', unitG: 1, kcal: 250, proteinG: 26, purineMg: 120, sugarG: 0, sodiumMg: 60, note: '', confidence: 'medium' }],
+    });
+    mockText.mockResolvedValueOnce({
+      ok: true,
+      result: { items: [{ name: 'Bún bò 1 bát (100 g thịt bò, ít đường)', caloriesKcal: 560, proteinG: 34, amount: 600, amountUnit: 'g' }], reasoning: 'Một bát.' },
+    });
+    const r = await mount();
+    await type(r, 'Món & lượng', '1 bát bún bò, 100g thịt bò, ít đường');
+    expect(allText(r)).not.toContain('có trong CSDL');
+    await press(r, ANALYZE);
+    expect(mockText).toHaveBeenCalledTimes(1);
+    expect(mockText.mock.calls[0][0]).toBe('1 bát bún bò, 100g thịt bò, ít đường');
+    expect(allText(r)).toContain('Lưu bữa · 560 kcal');
+    await saveMeal(r);
+    expect(items().map((i) => [i.name, i.calories])).toEqual([['Bún bò 1 bát (100 g thịt bò, ít đường)', 560]]);
+  });
+
+  it('"Không nhớ đã ăn gì" logs one estimated meal at a third of the day\'s target intake, without the AI', async () => {
+    const r = await mount();
+    await press(r, 'Không nhớ đã ăn gì');
+    const kcal = Number(/1\/3 năng lượng mục tiêu của ngày \((\d+) kcal\)/.exec(allText(r))?.[1]);
+    expect(kcal).toBeGreaterThan(300);
+    expect(kcal % 10).toBe(0);
+    await press(r, 'Trưa');
+    await press(r, `Ghi Trưa ước tính · ${kcal} kcal`);
+    expect(items()).toEqual([expect.objectContaining({ name: 'Bữa không nhớ (ước tính)', calories: kcal, proteinG: 0, mealTime: 'lunch' })]);
+    expect(useFoodDbStore.getState().custom).toHaveLength(0); // an estimate is never remembered as a food
+    expect(mockText).not.toHaveBeenCalled();
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
   it('shows one line per food (name, kcal · protein, its accuracy) with all its figures in the ✎ sheet, and saves nothing yet', async () => {
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', '2 tô mì quảng, 1 ly trà đá ít đường');
+    await type(r, 'Món & lượng', '2 tô mì quảng, 1 ly trà đá ít đường');
     await press(r, ANALYZE);
     const text = allText(r);
     expect(text).toContain('Phở bò (2 bát)');
@@ -266,7 +330,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
 
   it('saves ONE meal: the joined description, the totals of the lines as edited, the AI\'s meal time, the lines as its parts, and remembers it as a food', async () => {
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(r, 'Món & lượng', 'phở và trà');
     await press(r, ANALYZE);
     expect(allText(r)).toContain('Trưa'); // the AI said lunch: the meal chip shows it
     await editItem(r, 1, { kcal: '700' });
@@ -281,7 +345,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
 
   it('the description can be rewritten; an emptied one falls back to the joined names; one food has no parts', async () => {
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(r, 'Món & lượng', 'phở và trà');
     await press(r, ANALYZE);
     await openDetails(r);
     await type(r, 'Mô tả bữa ăn (một mô tả chung)', 'Bữa trưa ở quán quen');
@@ -290,7 +354,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     expect(items()[0].parts).toHaveLength(2);
     useNutritionStore.setState({ logs: {} });
     const again = await mount();
-    await type(again, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(again, 'Món & lượng', 'phở và trà');
     await press(again, ANALYZE);
     await openDetails(again);
     await type(again, 'Mô tả bữa ăn (một mô tả chung)', '   ');
@@ -303,7 +367,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
       custom: [{ id: 'c1', name: 'Bún riêu nhà nấu', group: 'soup', unit: 'phần', unitG: 100, kcal: 450, proteinG: 25, purineMg: 90, sugarG: 2, sodiumMg: 800, note: '', confidence: 'low', auto: true }],
     });
     let r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
+    await type(r, 'Món & lượng', 'bun rieu nha nau');
     expect(allText(r)).toContain('có trong CSDL của bạn · không cần AI'); // said before Analyze is pressed
     await press(r, ANALYZE);
     await saveMeal(r);
@@ -311,7 +375,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     act(() => r.unmount());
     useNutritionStore.setState({ logs: {} });
     r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
+    await type(r, 'Món & lượng', 'bun rieu nha nau');
     await press(r, ANALYZE);
     await editItem(r, 1, { name: 'Bún riêu quán góc phố' }); // one food: its name is the meal's description
     await saveMeal(r);
@@ -320,7 +384,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
 
   it('a photo added on the check step is saved with the meal', async () => {
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(r, 'Món & lượng', 'phở và trà');
     await press(r, ANALYZE);
     mockPickMany.mockResolvedValueOnce({ uris: ['file:///tmp/pick.jpg'] });
     await press(r, 'Thêm ảnh (0/3)');
@@ -334,7 +398,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   it('a line can be removed (with Hoàn tác), and lines with neither calories nor protein are left out', async () => {
     mockText.mockResolvedValue({ ok: true, result: { ...OK, items: [PHO, TEA, { name: 'Nước lọc', caloriesKcal: 0, proteinG: 0, accuracyPercent: 90 }] } });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'x');
+    await type(r, 'Món & lượng', 'x');
     await press(r, ANALYZE);
     expect(allText(r)).toContain('Chưa có số'); // the water line has no figures
     expect(allText(r)).toContain('Lưu bữa · 845 kcal');
@@ -354,7 +418,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   it('says so, and stays on step 1, when the AI finds no food', async () => {
     mockText.mockResolvedValue({ ok: true, result: { items: [], reasoning: 'Không phải đồ ăn.' } });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'hôm nay trời đẹp');
+    await type(r, 'Món & lượng', 'hôm nay trời đẹp');
     await press(r, ANALYZE);
     expect(allText(r)).toContain('AI không thấy món ăn nào');
     expect(allText(r)).toContain('Bước 1/2');
@@ -369,7 +433,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
       ],
     });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'BUN RIEU NHA NAU, che dau xanh nha nau');
+    await type(r, 'Món & lượng', 'BUN RIEU NHA NAU, che dau xanh nha nau');
     await press(r, ANALYZE);
     expect(mockText).not.toHaveBeenCalled();
     expect(allText(r)).toContain('Từ CSDL của bạn');
@@ -388,7 +452,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
       custom: [{ id: 'c1', name: 'Bún riêu nhà nấu', group: 'soup', unit: 'phần', unitG: 100, kcal: 450, proteinG: 25, purineMg: 90, sugarG: 2, sodiumMg: 800, note: '', confidence: 'low', auto: true }],
     });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'bun rieu nha nau');
+    await type(r, 'Món & lượng', 'bun rieu nha nau');
     await press(r, ANALYZE);
     await editItem(r, 1, { name: 'Bún riêu ít muối' });
     await saveMeal(r);
@@ -397,7 +461,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
 
   it('remembers the AI calories of each AI line next to what was saved (not the database lines)', async () => {
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(r, 'Món & lượng', 'phở và trà');
     await press(r, ANALYZE);
     await editItem(r, 1, { kcal: '700' });
     await saveMeal(r);
@@ -407,7 +471,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   it('shows how far off the AI has been once there is enough history', async () => {
     for (const [ai, final] of [[100, 100], [100, 100], [100, 100], [130, 100], [100, 100]]) useAiCalibrationStore.getState().record(ai, final);
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'x');
+    await type(r, 'Món & lượng', 'x');
     await press(r, ANALYZE);
     await openDetails(r);
     expect(allText(r)).toContain('Trước đây AI lệch trung bình ~0% so với số bạn chốt (5 lần).');
@@ -416,7 +480,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   it('files every line at the meal\'s usual time (a lunch typed at 16:10 is 12:00), or at the exact time typed, and refuses a bad time', async () => {
     const hhmm = (iso: string) => `${String(new Date(iso).getHours()).padStart(2, '0')}:${String(new Date(iso).getMinutes()).padStart(2, '0')}`;
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(r, 'Món & lượng', 'phở và trà');
     await press(r, ANALYZE);
     expect(pressable(r, 'Giờ ăn: 12:00. Chạm để đổi')).toBeDefined(); // the AI said lunch
     await openMealSheet(r);
@@ -434,7 +498,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   it('an exact time typed applies to the whole meal (and so to all its parts)', async () => {
     const hhmm = (iso: string) => `${String(new Date(iso).getHours()).padStart(2, '0')}:${String(new Date(iso).getMinutes()).padStart(2, '0')}`;
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(r, 'Món & lượng', 'phở và trà');
     await press(r, ANALYZE);
     await openMealSheet(r);
     await type(r, 'Giờ ăn (tuỳ chọn)', '13:15');
@@ -448,7 +512,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   it('shows the advice for the rest of the day in "Chi tiết"', async () => {
     mockText.mockResolvedValue({ ok: true, result: { ...OK, advice: { verdict: 'over', summary: 'Bữa này nhiều muối.', nextSteps: ['Uống thêm nước.'], remainingKcalToEat: 300, remainingProteinG: 40, extraBurnKcal: 120, bossNote: 'Cần 1000 mỗi ngày.' } } });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'x');
+    await type(r, 'Món & lượng', 'x');
     await press(r, ANALYZE);
     await openDetails(r);
     const text = allText(r);
@@ -466,10 +530,10 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   ] as Array<['notConfigured' | 'offline' | 'unreachable' | 'auth' | 'generic', string]>)('a %s failure: one message with "Thử lại" and "Tự nhập", the text kept', async (kind, expected) => {
     mockText.mockResolvedValue({ ok: false, message: 'x', kind });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở');
+    await type(r, 'Món & lượng', 'phở');
     await press(r, ANALYZE);
     expect(allText(r)).toContain(expected);
-    expect(input(r, 'Bạn đã ăn gì?').props.value).toBe('phở');
+    expect(input(r, 'Món & lượng').props.value).toBe('phở');
     await press(r, 'Thử lại');
     expect(mockText).toHaveBeenCalledTimes(2);
     await press(r, 'Tự nhập');
@@ -481,7 +545,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     let resolve!: (o: Outcome) => void;
     mockText.mockReturnValueOnce(new Promise((res) => (resolve = res)));
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở');
+    await type(r, 'Món & lượng', 'phở');
     await act(async () => {
       pressable(r, ANALYZE).props.onPress();
     });
@@ -497,7 +561,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
     const RICE = { name: 'Cơm trắng 150g', caloriesKcal: 195, proteinG: 4, purineMg: 30, saltG: 0, sugarG: 0, accuracyPercent: 80 };
     mockText.mockResolvedValue({ ok: true, result: { ...OK, items: [RICE, TEA] } });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'cơm và trà');
+    await type(r, 'Món & lượng', 'cơm và trà');
     await press(r, ANALYZE);
     expect(allText(r)).toContain('150 g'); // the amount and unit read from the name
     await press(r, 'Thêm lượng món 1');
@@ -523,7 +587,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
 
   it('the item sheet refuses a negative or non-numeric figure', async () => {
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'phở và trà');
+    await type(r, 'Món & lượng', 'phở và trà');
     await press(r, ANALYZE);
     await press(r, 'Sửa món 1');
     await type(r, 'Calo (kcal)', '-5');
@@ -552,7 +616,7 @@ describe('Ghi bữa: photos, words and saved foods → one Analyze → the check
   it('refuses to save when no line has calories or protein', async () => {
     mockText.mockResolvedValue({ ok: true, result: { ...OK, items: [{ ...PHO, name: 'Món lạ nhà hàng X' }] } });
     const r = await mount();
-    await type(r, 'Bạn đã ăn gì?', 'x');
+    await type(r, 'Món & lượng', 'x');
     await press(r, ANALYZE);
     await editItem(r, 1, { kcal: '', protein: '' });
     await saveMeal(r);

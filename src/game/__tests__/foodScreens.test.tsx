@@ -325,13 +325,13 @@ describe('Ghi bữa with only a name: the food database answers', () => {
     expect(items()).toHaveLength(0);
     expect(mockRouter.back).not.toHaveBeenCalled();
     const text = allText(r);
-    expect(text).toContain('Đã điền "2 quả Trứng gà" từ cơ sở dữ liệu');
+    expect(text).toContain('Đã điền "2 quả Trứng gà (≈100 g)" từ cơ sở dữ liệu');
     expect(text).toContain('Lấy từ cơ sở dữ liệu món ăn: Trứng gà · 143 kcal');
     expect(text).toContain('Lưu bữa · 143 kcal');
     await saveMeal(r);
     expect(items()).toHaveLength(1);
     // 2 eggs x 50 g: 143 kcal, 12.6 g protein, 5 mg purine, 140 mg sodium ≈ 0.4 g salt
-    expect(items()[0]).toMatchObject({ name: '2 quả Trứng gà', calories: 143, proteinG: 12.6, purineMg: 5, saltG: 0.4 });
+    expect(items()[0]).toMatchObject({ name: '2 quả Trứng gà (≈100 g)', calories: 143, proteinG: 12.6, purineMg: 5, saltG: 0.4 });
     // Figures from the database are not remembered as a new food.
     expect(useFoodDbStore.getState().custom).toHaveLength(0);
   });
@@ -366,11 +366,11 @@ describe('Ghi bữa with only a name: the food database answers', () => {
     expect(mockMealText.mock.calls[0][0]).toBe('bánh xèo');
     expect(allText(r)).toContain('Không có mạng'); // the AI's answer (here: offline) shows on the same screen, with "Tự nhập"
     await tap(r, 'Quay lại');
-    expect((input(r, 'Bạn đã ăn gì?').props as { value: string }).value).toBe('bánh xèo');
+    expect((input(r, 'Món & lượng').props as { value: string }).value).toBe('bánh xèo');
 
     act(() => renderer?.unmount());
     mockParams = { text: 'bánh xèo' };
     const t = await mount(<AddFoodScreen />);
-    expect((input(t, 'Bạn đã ăn gì?').props as { value: string }).value).toBe('bánh xèo');
+    expect((input(t, 'Món & lượng').props as { value: string }).value).toBe('bánh xèo');
   });
 });

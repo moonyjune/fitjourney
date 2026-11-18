@@ -230,6 +230,14 @@ describe('requestMealText', () => {
     expect(Object.keys((mockInvoke.mock.calls.at(-1) as [string, { body: object }])[1].body)).toEqual(['text', 'profile', 'coach']);
   });
 
+  it('sends the notes for the AI only when there are some', async () => {
+    mockInvoke.mockResolvedValue({ data: { result: { items: [], reasoning: 'ok' } } });
+    await requestMealText('1 bát phở bò', undefined, undefined, undefined, '  không ăn nước dùng ');
+    expect(mockInvoke).toHaveBeenLastCalledWith('parse-meal-text', { body: { text: '1 bát phở bò', profile: undefined, coach: undefined, notes: 'không ăn nước dùng' } });
+    await requestMealText('1 bát phở bò', undefined, undefined, undefined, '   ');
+    expect(Object.keys((mockInvoke.mock.calls.at(-1) as [string, { body: object }])[1].body)).toEqual(['text', 'profile', 'coach']);
+  });
+
   it('the offline dev account answers photos without text with one simulated line per photo', async () => {
     jest.useFakeTimers();
     signIn(true);

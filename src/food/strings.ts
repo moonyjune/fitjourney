@@ -66,6 +66,21 @@ const vi = {
   'fdb.lowConf': 'Có món độ tin cậy thấp: sai số lớn, hãy kiểm tra lại.',
   'fdb.openDb': 'Mở cơ sở dữ liệu món ăn',
   'fdb.addToBasket': 'Thêm {name}',
+  // ── Ghi bữa: món & lượng + ghi chú cho AI, phân tích ảnh ngay, "Không nhớ" ──
+  'log.dishLabel': 'Món & lượng',
+  'log.dishPlaceholder': 'VD: 1 bát phở bò (200 g bánh, 80 g thịt)',
+  'log.notesLabel': 'Ghi chú cho AI',
+  'log.notesPlaceholder': 'VD: không ăn nước dùng, bỏ da, ít đường',
+  'log.notesHint': 'Ghi chú và chi tiết trong ngoặc chỉ điều chỉnh món ở trên, không thành món riêng.',
+  'log.reanalyze': 'Phân tích lại với ghi chú',
+  'log.readAsLabel': 'Ảnh là nhãn dinh dưỡng? Đọc nhãn',
+  'log.infoBody': 'Chọn hoặc chụp ảnh là AI phân tích ngay (tối đa {max} ảnh). Hoặc ghi món & lượng, ví dụ "1 bát phở bò (200 g bánh, 80 g thịt)", rồi bấm Phân tích. Ghi chú cho AI như "không ăn nước dùng", "bỏ da", "ít đường" chỉ chỉnh số của món, không thành món riêng; ở bước Kiểm tra có thể thêm ghi chú và phân tích lại. Món tính theo cái, hộp, bát… luôn kèm khối lượng (g) hoặc thể tích (ml) ước tính. Món có trong cơ sở dữ liệu của bạn được điền luôn, không cần AI. Ảnh nhãn dinh dưỡng: chọn "Ảnh nhãn dinh dưỡng" trước khi thêm ảnh.',
+  'log.forgot': 'Không nhớ đã ăn gì',
+  'log.forgotTitle': 'Không nhớ bữa này',
+  'log.forgotBody': 'Ghi 1 bữa ước tính bằng 1/3 năng lượng mục tiêu của ngày ({kcal} kcal). Bữa được đánh dấu "ước tính" và tính là đã ghi bữa đó.',
+  'log.forgotSave': 'Ghi {meal} ước tính · {kcal} kcal',
+  'log.forgotDone': 'Đã ghi {meal} ước tính {kcal} kcal',
+  'log.forgotNoTarget': 'Chưa tính được năng lượng mục tiêu của ngày. Hãy cập nhật hồ sơ (cân nặng, chiều cao, tuổi) trước.',
 };
 
 export type FoodKey = keyof typeof vi;
@@ -132,6 +147,21 @@ const en: Record<FoodKey, string> = {
   'fdb.lowConf': 'Some foods have low confidence: large error, double-check them.',
   'fdb.openDb': 'Open the food database',
   'fdb.addToBasket': 'Add {name}',
+  // ── Meal logging: dish & amount + notes for the AI, instant photo analysis, "Don't remember" ──
+  'log.dishLabel': 'Dish & amount',
+  'log.dishPlaceholder': 'e.g. 1 bowl of beef pho (200 g noodles, 80 g beef)',
+  'log.notesLabel': 'Notes for the AI',
+  'log.notesPlaceholder': 'e.g. no broth, skin removed, less sugar',
+  'log.notesHint': 'Notes and details in brackets only adjust the dish above; they never become separate foods.',
+  'log.reanalyze': 'Analyze again with the notes',
+  'log.readAsLabel': 'Is it a nutrition label? Read it',
+  'log.infoBody': 'Pick or take a photo and the AI analyzes it at once (up to {max} photos). Or write the dish and amount, e.g. "1 bowl of beef pho (200 g noodles, 80 g beef)", then tap Analyze. Notes for the AI such as "no broth", "skin removed", "less sugar" only adjust the dish\'s figures, never add foods; on the Check step you can add a note and analyze again. Foods counted in pieces, boxes, bowls… always come with an estimated weight (g) or volume (ml). Foods in your database are filled in at once without the AI. For a nutrition label, pick "Nutrition label photo" before adding the photo.',
+  'log.forgot': "Don't remember what I ate",
+  'log.forgotTitle': "Don't remember this meal",
+  'log.forgotBody': 'Logs one estimated meal at a third of the day\'s target intake ({kcal} kcal). It is marked as an estimate and counts as that meal logged.',
+  'log.forgotSave': 'Log {meal} as an estimate · {kcal} kcal',
+  'log.forgotDone': 'Logged {meal} as an estimate, {kcal} kcal',
+  'log.forgotNoTarget': 'The day\'s target intake cannot be worked out yet. Update your profile (weight, height, age) first.',
 };
 
 export const GROUP_LABEL: Record<'vi' | 'en', Record<FoodGroup, string>> = {

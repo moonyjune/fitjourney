@@ -62,9 +62,14 @@ export function baseName(name: string): string {
 
 const trimNumber = (n: number): string => String(Math.round(n * 10) / 10);
 
-/** One line of a meal description: "150 g Ức gà chín", "2 quả Trứng gà". */
-export function describeLine(food: Pick<FoodEntry, 'name' | 'unit'>, qty: number): string {
-  return `${trimNumber(qty)} ${food.unit} ${baseName(food.name)}`;
+/** One line of a meal description: "150 g Ức gà chín", "2 quả Trứng gà (≈100 g)". A food counted in pieces, bowls, boxes…
+ *  also says the weight (or volume) that count stands for, so every logged food carries a gram / ml figure. */
+export function describeLine(food: Pick<FoodEntry, 'name' | 'unit'> & Partial<Pick<FoodEntry, 'unitG' | 'group' | 'auto'>>, qty: number): string {
+  const line = `${trimNumber(qty)} ${food.unit} ${baseName(food.name)}`;
+  const byWeight = food.unit === 'g' || food.unit === 'ml';
+  // A remembered meal's unitG is only nominal (see remember.ts), so it gets no weight.
+  if (byWeight || food.auto || !food.unitG || !(qty > 0)) return line;
+  return `${line} (≈${Math.round(qty * food.unitG)} ${baseUnit({ unit: food.unit, group: food.group ?? 'processed' })})`;
 }
 
 /** Default quantity when a food is first added: 100 for by-weight foods, one portion otherwise. */

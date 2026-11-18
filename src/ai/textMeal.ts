@@ -1,5 +1,7 @@
 import { lookupQuantified, type QuantifiedFood } from '../food/dbLookup';
+import { withMeasure } from '../food/measure';
 import { findRememberedFood, portionOf } from '../food/remember';
+import { fold } from '../food/search';
 import type { FoodEntry } from '../food/types';
 import type { ExtraMealTime } from '../types';
 import type { MealTextItem, MealTextResult } from '../sync/cloudSync';
@@ -32,15 +34,69 @@ export function validMealTime(value: unknown): ExtraMealTime | null {
   return MEAL_TIMES.includes(value as ExtraMealTime) ? (value as ExtraMealTime) : null;
 }
 
-/** The separate foods named in a sentence: split at commas, semicolons, "+", "và" and new lines. */
+/** The separate foods named in a sentence: split at commas, semicolons, "+", "và" and new lines, but never inside brackets
+ *  ("1 bát phở bò (200 g bánh, 80 g thịt)" is one food). */
 export function splitMealText(text: string): string[] {
-  return text
-    .split(/[,;+\n]|\s+và\s+/i)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const out: string[] = [];
+  let depth = 0;
+  let current = '';
+  const flush = () => {
+    out.push(current);
+    current = '';
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '(' || c === '[') depth++;
+    else if ((c === ')' || c === ']') && depth > 0) depth--;
+    if (depth === 0 && (c === ',' || c === ';' || c === '+' || c === '\n')) {
+      flush();
+      continue;
+    }
+    if (depth === 0) {
+      const and = /^\s+và\s+/i.exec(text.slice(i));
+      if (and && /\s/.test(c)) {
+        flush();
+        i += and[0].length - 1;
+        continue;
+      }
+    }
+    current += c;
+  }
+  flush();
+  return out.map((p) => p.trim()).filter(Boolean);
+}
+
+/** A part of a sentence that is a note about how the food was eaten, not a food: "ít đường", "không ăn nước dùng", "bỏ da". */
+const NOTE_START = /^(?:ít|nhiều|không|ko|k|bỏ|thêm|chỉ|hơi|chưa|giảm|trừ|loại|hết|uống hết|ăn hết|ăn một nửa|ăn nửa)(?:\s|$)/i;
+
+const CONTAINER = /\b\d+(?:[.,]\d+)?\s*(?:bát|tô|đĩa|dĩa|suất|xuất|phần|hộp|cốc|ly|chén|cái|ổ|gói|nồi|bịch)(?![A-Za-zÀ-ỹđĐ])/i;
+const WEIGHT_FIRST = /^\d+(?:[.,]\d+)?\s*(?:g|gr|gram|gam|ml)(?![A-Za-zÀ-ỹđĐ])\s*(.+)$/i;
+const GENERIC = new Set(['mon', 'an', 'cua', 'voi', 'kem', 'them', 'it', 'nhieu']);
+const words = (text: string) => new Set(foldWords(text).filter((w) => w.length >= 2 && !GENERIC.has(w)));
+
+/** Is part `i` a detail of the dish before it rather than a food of its own? A note ("ít đường"), anything in brackets, or an
+ *  ingredient weighed out right after a bowl / plate / box of a dish that shares a word with it ("1 bát bún bò, 100g thịt bò":
+ *  the beef is in the bowl). Such a sentence is ONE dish with details, so it is never split into separate foods here. */
+export function isDetailPart(parts: string[], i: number): boolean {
+  const part = parts[i].trim();
+  if (NOTE_START.test(part) || /[([]/.test(part)) return true;
+  if (i === 0) return false;
+  const weighed = WEIGHT_FIRST.exec(part);
+  const prev = parts[i - 1];
+  if (!weighed || !CONTAINER.test(prev)) return false;
+  const own = words(weighed[1]);
+  for (const w of words(prev.replace(CONTAINER, ' '))) if (own.has(w)) return true;
+  return false;
+}
+
+/** Does the sentence carry details of a dish (notes, brackets, an ingredient of the bowl before it)? Then only the AI reads it. */
+export function hasDishDetails(text: string): boolean {
+  const parts = splitMealText(text);
+  return parts.some((_, i) => isDetailPart(parts, i));
 }
 
 const hasQuantity = (name: string) => /\d/.test(name);
+const foldWords = (text: string) => fold(text).replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
 
 function savedRow(key: string, name: string, food: FoodEntry): TextMealRow {
   const p = portionOf(food);
@@ -80,6 +136,8 @@ function quantifiedRow(key: string, q: QuantifiedFood): TextMealRow {
 export function resolveFromDb(text: string, foods: FoodEntry[]): { rows: TextMealRow[]; unknown: string[] } | null {
   const parts = splitMealText(text);
   if (parts.length === 0 || parts.length > MAX_ROWS) return null;
+  // "1 bát bún bò, 100g thịt bò, ít đường" is one dish with its details: splitting it would count the beef twice.
+  if (parts.some((_, i) => isDetailPart(parts, i))) return null;
   const rows: TextMealRow[] = [];
   const unknown: string[] = [];
   for (const [i, part] of parts.entries()) {
@@ -112,8 +170,10 @@ export function rowsFromResult(result: MealTextResult, foods: FoodEntry[]): Text
   const items = Array.isArray(result.items) ? result.items.slice(0, MAX_ROWS) : [];
   const rows: TextMealRow[] = [];
   for (const [i, item] of items.entries()) {
-    const name = typeof item?.name === 'string' ? item.name.trim() : '';
-    if (!name) continue;
+    const said = typeof item?.name === 'string' ? item.name.trim() : '';
+    if (!said) continue;
+    // A food named by a count ("1 hộp sữa chua") also gets the weight / volume the AI gave for it: "1 hộp sữa chua (≈100 g)".
+    const name = withMeasure(said, item.amount, item.amountUnit);
     const known = hasQuantity(name) ? undefined : findRememberedFood(foods, name);
     if (known) {
       rows.push(savedRow(`ai-${i}`, name, known));

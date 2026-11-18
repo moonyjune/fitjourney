@@ -1,6 +1,7 @@
 import type { ExtraFoodItem, MealPart } from '../types';
 import type { ExtraPatch } from '../store/useNutritionStore';
 import { cleanParts, joinTitle, sumParts } from './mealParts';
+import { scaleApprox } from './measure';
 
 const NUMBER = /\d+(?:[.,]\d+)?/;
 export const MAX_PART_QTY = 5000;
@@ -24,7 +25,9 @@ export function scalePart(part: MealPart, newQty: number): MealPart | null {
   if (!(newQty > 0) || newQty > MAX_PART_QTY) return null;
   const { qty, written } = partQuantity(part.name);
   const ratio = newQty / qty;
-  const name = written ? part.name.replace(NUMBER, formatQty(newQty)) : `${formatQty(newQty)} × ${part.name}`;
+  // "1 hộp (≈250 g)" → "2 hộp (≈500 g)": the standard amount after the count follows it.
+  const at = written ? NUMBER.exec(part.name)?.index ?? 0 : -1;
+  const name = written ? scaleApprox(part.name, at, ratio).replace(NUMBER, formatQty(newQty)) : `${formatQty(newQty)} × ${part.name}`;
   const scaled: MealPart = { name, calories: Math.round(part.calories * ratio), proteinG: r1(part.proteinG * ratio) };
   if (part.purineMg) scaled.purineMg = Math.round(part.purineMg * ratio);
   if (part.saltG) scaled.saltG = Math.round(part.saltG * ratio * 100) / 100;

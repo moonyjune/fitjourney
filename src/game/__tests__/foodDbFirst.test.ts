@@ -18,7 +18,7 @@ describe('lookupQuantified', () => {
     expect(lookupQuantified('cơm trắng 150 g', foods)?.calories).toBe(195);
   });
   it('counts pieces of a countable food, by its unit or none', () => {
-    expect(lookupQuantified('2 quả trứng gà', foods)).toMatchObject({ calories: 143, name: '2 quả Trứng gà' });
+    expect(lookupQuantified('2 quả trứng gà', foods)).toMatchObject({ calories: 143, name: '2 quả Trứng gà (≈100 g)' });
     expect(lookupQuantified('2 trứng gà', foods)?.calories).toBe(143);
     expect(lookupQuantified('100g trứng gà', foods)?.calories).toBe(143);
   });

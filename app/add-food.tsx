@@ -26,6 +26,7 @@ import { ScreenTemplate } from '../src/components/quest/ScreenTemplate';
 import { SwapSuggestions } from '../src/components/quest/SwapSuggestions';
 import { DraftFeedback } from '../src/feedback/components/DraftFeedback';
 import { baseName } from '../src/food/calc';
+import { defaultForgotMeal, FORGOT_MEAL_NAME, FORGOT_MEALS, forgotMealKcal } from '../src/food/forgotMeal';
 import type { LookupResult } from '../src/food/components/FoodLookup';
 import { lookupDescribedFood } from '../src/food/describeLookup';
 import { joinTitle, sumParts } from '../src/food/mealParts';
@@ -46,6 +47,7 @@ import { useNow, useTodayInput } from '../src/game/useGameState';
 import { useLogDate } from '../src/game/useLogDate';
 import type { StringKey } from '../src/i18n/strings';
 import { useTranslation } from '../src/i18n/useTranslation';
+import type { MainMeal } from '../src/insights/days';
 import { SKIPPED_MEAL_NAME } from '../src/insights/missing';
 import { useAiCalibrationStore } from '../src/store/useAiCalibrationStore';
 import { useAiPhotoStore } from '../src/store/useAiPhotoStore';
@@ -121,6 +123,8 @@ export default function AddFoodScreen() {
 
   const [step, setStep] = useState<Step>(prefilled ? 'review' : 'input');
   const [text, setText] = useState(textParam);
+  /** "Ghi chú cho AI": how the dish was eaten ("không ăn nước dùng", "bỏ da", "ít đường"); it adjusts the dish, never adds foods. */
+  const [notes, setNotes] = useState('');
   const [photos, setPhotos] = useState<string[]>(() => (handedPhoto.current ? [handedPhoto.current] : []));
   const [kind, setKind] = useState<PhotoKind>('food');
   const [rows, setRows] = useState<MealRow[]>(() =>
@@ -144,7 +148,8 @@ export default function AddFoodScreen() {
   const [saveFailed, setSaveFailed] = useState(false);
   const [lastRun, setLastRun] = useState<Run | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<'slot' | 'saved' | 'info' | 'water' | null>(null);
+  const [sheet, setSheet] = useState<'slot' | 'saved' | 'info' | 'water' | 'forgot' | null>(null);
+  const [forgotMeal, setForgotMeal] = useState<MainMeal>(() => defaultForgotMeal(pre.mealTime, new Date()));
   const [detailsOpen, setDetailsOpen] = useState<boolean | null>(null);
   /** The outcome of looking a name-only entry up in the food database: what was added from it, or why nothing was. */
   const [dbOutcome, setDbOutcome] = useState<
@@ -185,8 +190,17 @@ export default function AddFoodScreen() {
     };
   }, [lab.label]);
 
+  // A photo added on step 1 is analysed at once (no description step first); the words and notes typed so far go with it.
+  const autoRun = useRef(false);
+  useEffect(() => {
+    if (!autoRun.current) return;
+    autoRun.current = false;
+    void analyze();
+  }, [photos]); // eslint-disable-line react-hooks/exhaustive-deps
+
   function changePhotos(next: string[]) {
     if (next[0] !== photos[0]) lab.reset(); // the label was read from the main photo
+    if (next.length > photos.length && aiEnabled && step === 'input') autoRun.current = true;
     setPhotos(next);
     setSaveFailed(false);
     setHint(null);
@@ -203,16 +217,18 @@ export default function AddFoodScreen() {
   /** Lines a new AI analysis replaces: its own earlier ones and lines with no figures yet. */
   const replaceable = (r: MealRow) => r.key.startsWith('ai') || rowHasNoFigures(r);
 
-  /** The one "Phân tích": a label photo → the label reader; photos without words → the photo analysis; words (with or without
-   *  photos) → the text parser, after the user's own database has answered what it can. */
-  async function analyze(override?: string) {
+  /** The one "Phân tích": a label photo → the label reader; photos without words or notes → the photo analysis; words or notes
+   *  (with or without photos) → the text parser, unless the user's own database answers every food of a plain sentence. A sentence
+   *  with details of a dish ("1 bát bún bò, 100g thịt bò, ít đường") always goes whole to the AI, so it stays ONE dish. */
+  async function analyze(override?: string, asFood = false) {
     if (busy) return;
-    if (photos.length > 0 && kind === 'label' && override === undefined) {
+    if (photos.length > 0 && kind === 'label' && override === undefined && !asFood) {
       await readLabel();
       return;
     }
     const loneName = rows.length === 1 && rowHasNoFigures(rows[0]) ? rows[0].name.trim() : '';
     const sentence = (override ?? text).trim() || loneName;
+    const aiNotes = notes.trim();
     if (!sentence && photos.length === 0) {
       setHint('text');
       return;
@@ -224,7 +240,7 @@ export default function AddFoodScreen() {
     const run = newKey('ai');
     const kept = rows.filter((r) => !replaceable(r));
 
-    if (!sentence) {
+    if (!sentence && !aiNotes) {
       setLastRun('photo');
       const result = await photoAi.analyze(photos[0], photos.slice(1, MAX_MEAL_PHOTOS));
       if (!result || !alive.current) return;
@@ -234,22 +250,22 @@ export default function AddFoodScreen() {
     }
 
     setLastRun('text');
-    // Foods the database already has (saved meals, or any food with its amount typed) are used as they are; only the rest goes to the AI.
-    // With photos the whole description goes to the AI with them: the photos may show more than the words say.
-    const local = photos.length === 0 ? resolveFromDb(sentence, foods) : null;
-    const known = (local?.rows ?? []).map((r, i) => ({ ...r, key: `${run}-d${i}` }));
-    if (local && local.unknown.length === 0) {
-      setRows([...kept, ...known]);
+    // When the database knows every food of the sentence (saved meals, or any food with its amount typed) no AI is needed. Otherwise
+    // the WHOLE sentence goes to the AI: splitting off what the database knows would turn a dish's details into extra foods.
+    // With photos or notes the AI always reads it: the photos may show more than the words say, and notes change the figures.
+    const local = photos.length === 0 && !aiNotes && sentence ? resolveFromDb(sentence, foods) : null;
+    if (local && local.rows.length > 0 && local.unknown.length === 0) {
+      setRows([...kept, ...local.rows.map((r, i) => ({ ...r, key: `${run}-d${i}` }))]);
       setNote({ kind: 'saved', reasoning: g('text.fromSaved'), accuracy: null });
       setStep('review');
       return;
     }
-    const result = await ai.analyze(local ? local.unknown.join(', ') : sentence, photos);
+    const result = await ai.analyze(sentence, photos, aiNotes);
     if (!result || !alive.current) return;
     const found = rowsFromResult(result, foods).map((r, i) => ({ ...r, key: `${run}-${i}` }));
     const time = validMealTime(result.mealTime);
     if (time) setMealTime(time);
-    finish(kept, known, found, result.reasoning, result.accuracyPercent, result.advice);
+    finish(kept, [], found, result.reasoning, result.accuracyPercent, result.advice);
   }
 
   /** The lines of an answer go in (after what is kept); nothing found keeps the user on the input step with a message. */
@@ -276,6 +292,8 @@ export default function AddFoodScreen() {
       if (local) {
         for (const r of local.rows) add.push({ ...r, key: newKey('db') });
         for (const name of local.unknown) add.push(emptyRow(newKey('m'), name.slice(0, 100)));
+      } else {
+        add.push(emptyRow(newKey('m'), sentence.slice(0, 100))); // one dish with its details: one line to fill in
       }
     }
     const next = [...base, ...add];
@@ -379,11 +397,11 @@ export default function AddFoodScreen() {
   // What the user's database already answers in the sentence being typed (no photos): said before "Phân tích" is pressed.
   const dbPreview = useMemo(() => {
     const sentence = text.trim();
-    if (!sentence || photos.length > 0) return null;
+    if (!sentence || photos.length > 0 || notes.trim()) return null;
     const local = resolveFromDb(sentence, foods);
-    if (!local || local.rows.length === 0) return null;
-    return { names: local.rows.map((r) => r.name).join(', '), all: local.unknown.length === 0 };
-  }, [text, photos.length, foods]);
+    if (!local || local.rows.length === 0 || local.unknown.length > 0) return null;
+    return { names: local.rows.map((r) => r.name).join(', ') };
+  }, [text, notes, photos.length, foods]);
 
   const draft: ExtraFoodItem = useMemo(
     () => ({
@@ -489,6 +507,18 @@ export default function AddFoodScreen() {
     ]);
     setHint(null);
     setDbOutcome({ kind: 'filled', name: item.name, food: baseName(item.food.name), kcal: item.calories });
+  }
+
+  /** "Không nhớ": one full meal estimated at a third of the day's target intake, named as an estimate (never remembered as a food). */
+  const forgotKcal = forgotMealKcal(input.tdeeKcal, input.targetDeficitKcal);
+  function saveForgot() {
+    if (saving || forgotKcal <= 0) return;
+    addExtra(input.dateKey, FORGOT_MEAL_NAME, forgotKcal, 0, forgotMeal, { fromFoodDb: true });
+    const meal = t(`extraMealTime.${forgotMeal}` as StringKey);
+    showToast({ text: f('log.forgotDone', { meal, kcal: forgotKcal }) });
+    AccessibilityInfo.announceForAccessibility(f('log.forgotDone', { meal, kcal: forgotKcal }));
+    setSheet(null);
+    goBack();
   }
 
   /** Logs the chosen main meal as not eaten (0 kcal, the diary's "Không ăn" convention) and closes. */
@@ -606,6 +636,50 @@ export default function AddFoodScreen() {
     </View>
   ) : null;
 
+  const notesField = (
+    <View style={styles.group}>
+      <QuestField
+        label={f('log.notesLabel')}
+        value={notes}
+        onChangeText={(v) => {
+          setNotes(v);
+          setHint(null);
+        }}
+        placeholder={f('log.notesPlaceholder')}
+        maxLength={200}
+      />
+      <HudText size={11} weight="medium" color={quest.textSecondary}>
+        {f('log.notesHint')}
+      </HudText>
+    </View>
+  );
+
+  const forgotSheet = (
+    <BottomSheet
+      visible={sheet === 'forgot'}
+      onClose={() => setSheet(null)}
+      title={f('log.forgotTitle')}
+      footer={
+        <QuestButton
+          title={f('log.forgotSave', { meal: t(`extraMealTime.${forgotMeal}` as StringKey), kcal: forgotKcal })}
+          onPress={saveForgot}
+          disabled={saving || forgotKcal <= 0}
+        />
+      }
+    >
+      <View style={styles.form}>
+        <View style={styles.chips} accessibilityRole="radiogroup">
+          {FORGOT_MEALS.map((m) => (
+            <QuestChip key={m} label={t(`extraMealTime.${m}` as StringKey)} selected={forgotMeal === m} onPress={() => setForgotMeal(m)} />
+          ))}
+        </View>
+        <HudText size={13} weight="medium" color={forgotKcal > 0 ? quest.textSecondary : quest.goldLight} style={styles.infoBody}>
+          {forgotKcal > 0 ? f('log.forgotBody', { kcal: forgotKcal }) : f('log.forgotNoTarget')}
+        </HudText>
+      </View>
+    </BottomSheet>
+  );
+
   // ───────────────────────────── Step 1: Nhập ─────────────────────────────
   if (step === 'input') {
     const analyzingText = photoAi.analyzing || (ai.analyzing && photos.length > 0) ? g('meal.analyzingPhotos', { n: photos.length }) : lab.reading ? g('label.reading') : g('text.analyzing');
@@ -634,25 +708,26 @@ export default function AddFoodScreen() {
             </Pressable>
           </View>
 
-          <MealTextPhotos kind="meal" max={MAX_MEAL_PHOTOS} photos={photos} onChange={changePhotos} disabled={busy} />
-          {photos.length > 0 && aiEnabled && (
+          {aiEnabled && (
             <View style={styles.chips} accessibilityRole="radiogroup">
               <QuestChip label={g('meal.kindFood')} selected={kind === 'food'} onPress={() => setKind('food')} tone="mana" />
               <QuestChip label={g('meal.kindLabel')} selected={kind === 'label'} onPress={() => setKind('label')} tone="mana" />
             </View>
           )}
+          <MealTextPhotos kind="meal" max={MAX_MEAL_PHOTOS} photos={photos} onChange={changePhotos} disabled={busy} />
 
           <QuestField
-            label={g('text.label')}
+            label={f('log.dishLabel')}
             value={text}
             onChangeText={(v) => {
               setText(v);
               setHint(null);
             }}
-            placeholder={g('text.placeholder')}
+            placeholder={f('log.dishPlaceholder')}
             multiline
             maxLength={400}
           />
+          {aiEnabled && notesField}
           <View style={styles.pair}>
             {speech.available && (
               <Pressable
@@ -682,7 +757,7 @@ export default function AddFoodScreen() {
           {dbPreview && aiEnabled && (
             <View style={styles.note} accessibilityLiveRegion="polite">
               <HudText size={12} weight="medium" color={quest.manaText}>
-                {g(dbPreview.all ? 'meal.dbAllKnown' : 'meal.dbKnown', { names: dbPreview.names })}
+                {g('meal.dbAllKnown', { names: dbPreview.names })}
               </HudText>
             </View>
           )}
@@ -714,6 +789,7 @@ export default function AddFoodScreen() {
           )}
 
           {aiEnabled && <QuestButton variant="ghost" icon="edit" title={g('meal.manual')} onPress={manual} disabled={busy} />}
+          <QuestButton variant="ghost" icon="clock" title={f('log.forgot')} onPress={() => setSheet('forgot')} disabled={busy} />
         </View>
 
         <BottomSheet
@@ -754,9 +830,10 @@ export default function AddFoodScreen() {
         />
         <BottomSheet visible={sheet === 'info'} onClose={() => setSheet(null)} title={g('meal.infoTitle')}>
           <HudText size={14} weight="medium" color={quest.textSecondary} style={styles.infoBody}>
-            {g('meal.infoBody', { max: MAX_MEAL_PHOTOS })}
+            {f('log.infoBody', { max: MAX_MEAL_PHOTOS })}
           </HudText>
         </BottomSheet>
+        {forgotSheet}
       </ScreenTemplate>
     );
   }
@@ -877,6 +954,31 @@ export default function AddFoodScreen() {
             </HudText>
           </Pressable>
         </View>
+
+        {aiEnabled && (photos.length > 0 || text.trim() !== '' || notes.trim() !== '') && (
+          <View style={styles.group}>
+            {notesField}
+            <QuestButton variant="ghost" icon="chart" title={f('log.reanalyze')} onPress={() => {
+                setKind('food');
+                void analyze(undefined, true);
+              }}
+              loading={ai.analyzing || photoAi.analyzing}
+              disabled={busy}
+            />
+            {photos.length > 0 && lastRun === 'photo' && (
+              <QuestButton
+                variant="ghost"
+                title={f('log.readAsLabel')}
+                onPress={() => {
+                  setKind('label');
+                  void readLabel();
+                }}
+                loading={lab.reading}
+                disabled={busy}
+              />
+            )}
+          </View>
+        )}
 
         {saved && lone && String(portionOf(saved).calories) !== lone.calories.trim() && (
           <View style={styles.note} accessibilityLiveRegion="polite">

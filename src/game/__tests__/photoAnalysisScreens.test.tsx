@@ -170,8 +170,16 @@ describe('Photo → AI analysis in the screens', () => {
   });
 
   describe('Add food (Ghi bữa)', () => {
+    /** A photo added on step 1 is analysed at once (no description step, no Analyze tap). */
     const withPhoto = async () => {
       const r = await mount(<AddFoodScreen />);
+      await press(r, 'Chọn ảnh');
+      return r;
+    };
+    /** "Ảnh nhãn dinh dưỡng" chosen first, so the photo is read as a label as soon as it is added. */
+    const withLabel = async () => {
+      const r = await mount(<AddFoodScreen />);
+      await press(r, 'Ảnh nhãn dinh dưỡng');
       await press(r, 'Chọn ảnh');
       return r;
     };
@@ -183,10 +191,9 @@ describe('Photo → AI analysis in the screens', () => {
       ['generic', 'Chưa phân tích được ảnh này'],
     ];
 
-    describe('meal photo (the one Analyze, photo only → analyze-proof-photo)', () => {
+    describe('meal photo (analysed as soon as it is added, photo only → analyze-proof-photo)', () => {
       it('sends the photo to the photo analysis and fills one line from it', async () => {
         const r = await withPhoto();
-        await press(r, ANALYZE_ONE);
         expect(mockAnalysis).toHaveBeenCalledTimes(1);
         expect(mockAnalysis.mock.calls[0][0]).toBe('meal');
         expect(mockLabel).not.toHaveBeenCalled();
@@ -202,7 +209,6 @@ describe('Photo → AI analysis in the screens', () => {
       it.each(failures)('a %s failure: one line + "Thử lại" / "Tự nhập", nothing saved', async (kind, expected) => {
         mockAnalysis.mockResolvedValue({ ok: false, message: 'x', kind });
         const r = await withPhoto();
-        await press(r, ANALYZE_ONE);
         expect(allText(r)).toContain(expected);
         expect(pressable(r, 'Thử lại')).toBeDefined();
         await press(r, 'Tự nhập');
@@ -211,15 +217,19 @@ describe('Photo → AI analysis in the screens', () => {
       });
     });
 
-    describe('nutrition label (the quick choice chip, then the one Analyze)', () => {
-      const READ = async (r: ReactTestRenderer) => {
+    describe('nutrition label (the quick choice chip, then the photo is read at once)', () => {
+      /** The label chip, then a line typed by hand, then back to add the photo (read at once). */
+      const typedThenLabel = async (line: Parameters<typeof addByHand>[1]) => {
+        const r = await mount(<AddFoodScreen />);
         await press(r, 'Ảnh nhãn dinh dưỡng');
-        await press(r, ANALYZE_ONE);
+        await addByHand(r, line);
+        await press(r, 'Quay lại');
+        await press(r, 'Chọn ảnh');
+        return r;
       };
 
       it('fills the name and the printed figures for one serving, and sends the photo at Full HD size whatever the switch says', async () => {
-        const r = await withPhoto();
-        await READ(r);
+        const r = await withLabel();
         expect(mockAnalysis).not.toHaveBeenCalled();
         expect(mockToBase64).toHaveBeenCalledWith(PHOTO, { maxEdge: 1920 });
         expect(mockLabel).toHaveBeenCalledWith('QUJD', 'image/png');
@@ -236,8 +246,7 @@ describe('Photo → AI analysis in the screens', () => {
       });
 
       it('recomputes when the number of servings changes, and again for an amount in grams', async () => {
-        const r = await withPhoto();
-        await READ(r);
+        const r = await withLabel();
         await type(r, 'Số phần đã ăn', '2.5');
         expect(allText(r)).toContain('338 kcal'); // 135 × 2.5 = 337.5
         await press(r, 'Theo khối lượng');
@@ -253,10 +262,7 @@ describe('Photo → AI analysis in the screens', () => {
       });
 
       it('never overwrites a figure the user typed, and saves what the list ends up with', async () => {
-        const r = await withPhoto();
-        await addByHand(r, { name: 'Bánh nhà làm', protein: '9' });
-        await press(r, 'Quay lại');
-        await READ(r);
+        const r = await typedThenLabel({ name: 'Bánh nhà làm', protein: '9' });
         expect(await readItem(r, 1)).toMatchObject({ name: 'Bánh nhà làm', protein: '9', kcal: '135' });
         await type(r, 'Số phần đã ăn', '2');
         expect(await readItem(r, 1)).toMatchObject({ protein: '9', kcal: '270' });
@@ -268,8 +274,7 @@ describe('Photo → AI analysis in the screens', () => {
 
       it('with only a per-100 column it asks for an amount, starting at 100 g', async () => {
         mockLabel.mockResolvedValue({ ok: true, label: { readable: true, per100: { energyKcal: 52, proteinG: 0.3, sugarG: 10 }, reasoning: '' } });
-        const r = await withPhoto();
-        await READ(r);
+        const r = await withLabel();
         expect(textInput(r, 'Khối lượng đã ăn (g/ml)').props.value).toBe('100');
         expect(allText(r)).toContain('52 kcal');
         expect(r.root.findAll((n) => n.props.accessibilityLabel === 'Theo phần')).toHaveLength(0); // one way only: no mode chips
@@ -279,10 +284,7 @@ describe('Photo → AI analysis in the screens', () => {
 
       it('says so when the photo has no readable panel, and leaves the list alone', async () => {
         mockLabel.mockResolvedValue({ ok: true, label: { readable: false, reasoning: 'Không thấy bảng.' } });
-        const r = await withPhoto();
-        await addByHand(r, { kcal: '400' });
-        await press(r, 'Quay lại');
-        await READ(r);
+        const r = await typedThenLabel({ kcal: '400' });
         expect(allText(r)).toContain('Không đọc được bảng dinh dưỡng');
         await press(r, 'Tự nhập, không dùng AI');
         expect((await readItem(r, 1)).kcal).toBe('400');
@@ -295,16 +297,14 @@ describe('Photo → AI analysis in the screens', () => {
         ['offline', 'Không có mạng'],
       ] as Array<['notConfigured' | 'quota' | 'disabled' | 'offline', string]>)('shows a friendly message for a %s failure', async (kind, expected) => {
         mockLabel.mockResolvedValue({ ok: false, message: 'x', kind });
-        const r = await withPhoto();
-        await READ(r);
+        const r = await withLabel();
         expect(allText(r)).toContain(expected);
         expect(allText(r)).toContain('Bước 1/2');
         expect(items()).toHaveLength(0);
       });
 
       it('tapping the mode that is already selected keeps what was typed', async () => {
-        const r = await withPhoto();
-        await READ(r);
+        const r = await withLabel();
         await type(r, 'Số phần đã ăn', '2.5');
         await press(r, 'Theo phần');
         expect(textInput(r, 'Số phần đã ăn').props.value).toBe('2.5');
@@ -312,8 +312,7 @@ describe('Photo → AI analysis in the screens', () => {
       });
 
       it('keeps the label card for another photo of the meal, and drops it when the main photo is removed', async () => {
-        const r = await withPhoto();
-        await READ(r);
+        const r = await withLabel();
         expect(allText(r)).toContain('Từ nhãn dinh dưỡng');
         mockLaunchLibrary.mockResolvedValue({ canceled: false, assets: [{ uri: 'file:///tmp/other.png' }] });
         await press(r, 'Thêm ảnh (1/3)');
