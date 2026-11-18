@@ -9,6 +9,28 @@ export const ACCURACY_PROPERTY = {
     'Your honest estimate, as a percentage 0-100, of how accurate the numbers are. Clear nutrition label or exact weights: 85-95. A typical plate in a clear photo or a precise description: 60-80. Hidden ingredients, unknown portion, sauces or vague wording: 30-55.',
 };
 
+const WHY_LIST = { type: 'array', maxItems: 3, items: { type: 'string' } };
+
+/** Why accuracyPercent is what it is: shown in the app's "chính xác ~XX%" tooltip. Optional (old clients ignore it); kept small so it
+ *  costs few output tokens. */
+export const ACCURACY_WHY_PROPERTY = {
+  type: 'object',
+  description:
+    'Why accuracyPercent is what it is, for a tooltip. Short CONCRETE Vietnamese phrases about THIS meal/photo (each at most 60 characters, at most 3 per list, never generic advice). ' +
+    'up: what made the numbers accurate ("Đọc đúng số trên nhãn dinh dưỡng", "Thấy rõ khẩu phần, có thìa để so"). ' +
+    'down: what lowered it ("Không thấy lượng dầu/nước sốt", "Món bị che một phần"). ' +
+    'missing: information the user could add that would raise it, as a short noun phrase ("Khối lượng cơm (g)", "Có ăn nước dùng không"). An empty list when nothing fits.',
+  properties: {
+    up: WHY_LIST,
+    down: WHY_LIST,
+    missing: WHY_LIST,
+  },
+};
+
+/** The prompt sentence that asks for accuracyWhy (meal photo, meal text, nutrition label). */
+export const ACCURACY_WHY_PROMPT =
+  ' Điền accuracyWhy thật ngắn: up = điều làm số liệu chính xác, down = điều làm giảm độ chính xác, missing = thông tin còn thiếu mà người dùng có thể bổ sung để tăng độ chính xác; mỗi ý ≤60 ký tự, tối đa 3 ý mỗi mục, CỤ THỂ cho bữa/ảnh này, không chung chung.';
+
 export const ADVICE_PROPERTY = {
     type: 'object',
     description: 'Assessment of the day and what to do next, using the coach snapshot. Omit only if no snapshot was given.',

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import type { FoodAccuracy } from '../../ai/accuracyWhy';
+import { AccuracyBadge } from './AccuracyInfo';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { mealTimeAt } from '../../food/eatAgain';
 import { useGameText } from '../../game/strings';
@@ -38,6 +40,8 @@ export interface MealDetail {
   waterMl?: number;
   /** What its name says it holds as a drink, offered in "Sửa bữa & giờ" when nothing is counted. */
   suggestedWaterMl?: number;
+  /** How accurate the figures were when logged: a tappable "chính xác ~XX%" opening the same tooltip as in Ghi bữa. */
+  accuracy?: FoodAccuracy;
 }
 
 interface Props {
@@ -202,6 +206,14 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
             {photoError}
           </HudText>
         )}
+
+        {detail.accuracy ? (
+          <AccuracyBadge
+            accuracy={detail.accuracy}
+            label={detail.accuracy.pct !== null ? g('accWhy.badge', { pct: detail.accuracy.pct }) : g('text.fromDb')}
+            testID="meal-detail-accuracy"
+          />
+        ) : null}
 
         {onEditWhen && (
           <Pressable

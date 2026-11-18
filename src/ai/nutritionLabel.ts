@@ -1,3 +1,4 @@
+import { cleanAccuracyWhy, type AccuracyWhy } from './accuracyWhy';
 import { SODIUM_MG_PER_SALT_G } from '../insights/thresholds';
 
 /** Figures printed in one column of a label. Every field is optional: the label may not print it. */
@@ -19,6 +20,8 @@ export interface NutritionLabel {
   servingSize?: { amount: number; unit: 'g' | 'ml' };
   servingsPerPack?: number;
   accuracyPercent?: number;
+  /** The AI's reasons for its accuracy (cleaned). */
+  accuracyWhy?: AccuracyWhy;
   reasoning: string;
 }
 
@@ -68,6 +71,8 @@ export function cleanLabel(raw: unknown): NutritionLabel | null {
   const perPack = positive(r.servingsPerPack, 200);
   if (perPack) label.servingsPerPack = perPack;
   if (typeof r.accuracyPercent === 'number' && Number.isFinite(r.accuracyPercent)) label.accuracyPercent = r.accuracyPercent;
+  const why = cleanAccuracyWhy(r.accuracyWhy);
+  if (why) label.accuracyWhy = why;
   return label;
 }
 

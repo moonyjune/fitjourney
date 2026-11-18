@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { quest, questFonts, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
@@ -6,10 +7,12 @@ interface QuestFieldProps extends Omit<TextInputProps, 'style'> {
   label: string;
   /** Short unit shown inside the field, e.g. "kcal". */
   unit?: string;
+  /** The input itself, e.g. to focus it from elsewhere. */
+  inputRef?: Ref<TextInput>;
 }
 
 /** Labelled dark text input. The label doubles as the accessible name. */
-export function QuestField({ label, unit, ...input }: QuestFieldProps) {
+export function QuestField({ label, unit, inputRef, ...input }: QuestFieldProps) {
   return (
     <View style={styles.wrap}>
       <HudText size={12} weight="medium" color={quest.textSecondary}>
@@ -17,6 +20,7 @@ export function QuestField({ label, unit, ...input }: QuestFieldProps) {
       </HudText>
       <View style={styles.box}>
         <TextInput
+          ref={inputRef}
           accessibilityLabel={label}
           placeholderTextColor={quest.textSecondary}
           {...input}

@@ -1,3 +1,4 @@
+import { foodAccuracyOf } from '../ai/accuracyWhy';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { appStorage } from '../lib/appStorage';
@@ -38,7 +39,7 @@ interface NutritionState {
     proteinG: number,
     mealTime: ExtraMealTime | null,
     /** Optional FitJourney fields; omitted ones are simply not stored on the item. */
-    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'snack' | 'cheatMeal' | 'photoUri' | 'waterMl'> & {
+    extras?: Pick<ExtraFoodItem, 'purineMg' | 'saltG' | 'sugarG' | 'junk' | 'snack' | 'cheatMeal' | 'photoUri' | 'waterMl' | 'accuracy'> & {
       /** More photos of the same meal (after `photoUri`, which is the one shown first); kept as its proof photos. */
       morePhotoUris?: string[];
       /** The figures came straight from a food in the database, so there is nothing new to remember. */
@@ -172,6 +173,8 @@ export const useNutritionStore = create<NutritionState>()(
         if (extras?.snack) item.snack = true;
         if (extras?.cheatMeal) item.cheatMeal = true;
         if (extras?.waterMl && extras.waterMl > 0) item.waterMl = Math.round(extras.waterMl);
+        const accuracy = foodAccuracyOf(extras?.accuracy);
+        if (accuracy) item.accuracy = accuracy;
         // A photo kept inline (web) lives only in the proof store; a second copy here would fill the browser's storage and stop the day from saving.
         if (extras?.photoUri && !isInlinePhoto(extras.photoUri)) item.photoUri = extras.photoUri;
         const parts = cleanParts(extras?.parts);
