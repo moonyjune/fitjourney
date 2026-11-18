@@ -32,44 +32,40 @@
 // only by the claim guards (one refill at a time, at most every 12 h / 2 h; one picture job at a time) and by the global daily cap
 // AI_DAILY_BUDGET_USD when set (ai_cost_on_day counts the pool's cost of the day). A pop-up from the pool costs $0.
 // Calls per user per day: app_settings key `ai_quota.tempt` (default 6) only for the old way below (no pool tables).
+// Pictures (1.3.x): the photos were often wrong (generic Wikimedia files, site banners, look-alike dishes). All picture work now runs
+// on Sonnet 5.5 (photoMatch.ts REPAIR_MODEL), whatever model.photo says: a source page's picture is judged before it is taken, the
+// libraries only offer files named after the dish, the web search reads pages about one dish, and every candidate is judged alone
+// (exact / similar / wrong / not food + confidence; only a confident "exact" is kept). Shared code: _shared/dishPhotoLookup.ts.
+// Re-photo (1.3.x): POST {"action":"rephoto","limit":6} with the x-cron-secret header audits the pool's pictures step by step
+// (rephotoStep), library photos first; call it until `done`. Its cost is pool (system) cost like the seed's.
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { jsonResponse, runAiCall, serveAi, systemAllowance, type AiContext } from '../_shared/ai.ts';
-import { cleanDishPhotoRequest } from '../_shared/dishPhoto.ts';
-import { imageBlockOf, lookupDishPhotos, within } from '../_shared/dishPhotoLookup.ts';
-import type { TokenUsage } from '../_shared/usage.ts';
+import { cleanDishPhotoRequest, type DishPhotoInfo } from '../_shared/dishPhoto.ts';
+import { findVerifiedPhotos, verifyUrls, within, type Runner } from '../_shared/dishPhotoLookup.ts';
+import { genericPictureUrl, PHOTO_CHECK_VERSION, poolRepairQueue, REPAIR_MODEL, repairDecision, repairLimit, verdictAccepts } from '../_shared/photoMatch.ts';
+import { cronBody, inBackground, systemContext, systemRecord, type RecordFn } from '../_shared/systemJobs.ts';
 import {
   cleanStoredPoolItem,
   cleanTemptAnswer,
   cleanTemptRequest,
-  extractOgImage,
   fitNow,
   newPoolItems,
   pickPoolItem,
   POOL_CHUNKS,
   POOL_SYSTEM,
   POOL_TOOL,
-  cleanPictureAnswers,
-  cleanWebPhotoPages,
   photoFree,
   photoKey,
-  PICTURE_CHECK_ASK,
-  PICTURE_CHECK_SYSTEM,
-  PICTURE_CHECK_TOOL,
-  pictureHeading,
   rowsToRepair,
   takenPhotos,
   withoutPhoto,
   needsPhoto,
+  MAX_PHOTO_TRIES,
   photoQueue,
   photoStage,
   poolAnswerShape,
   poolItemsOf,
-  WEB_PHOTO_GROUP,
-  WEB_PHOTO_SEARCHES,
-  WEB_PHOTO_SYSTEM,
-  WEB_PHOTO_TOOL,
-  webPhotoPrompt,
   withWebPhoto,
   POPUP_PHOTOS,
   poolAnswer,
@@ -92,48 +88,16 @@ import {
   withDishPhoto,
   withOgImage,
 } from '../_shared/tempt.ts';
+import { pagePhoto, type PageFetch } from '../_shared/webImage.ts';
 import { seenInEvidence, webToolsFor } from '../_shared/webtools.ts';
 
-declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
-
-const PAGE_TIMEOUT_MS = 5000;
-const PAGE_MAX_BYTES = 400_000;
-
-/** The og:image of a page the search found, or null (not HTML, too slow, an unsafe address, none on the page). */
+/** The preview picture (og:image) of a page the search found, or null (not HTML, too slow, an unsafe address on the way, none on the
+ *  page, the picture not answering as a photo). webImage.ts pagePhoto: redirects followed one by one, every address checked public. */
 async function ogImageOf(pageUrl: string): Promise<string | null> {
   const url = publicHttpsUrl(pageUrl);
   if (!url) return null;
-  try {
-    const response = await fetch(url, {
-      headers: { 'user-agent': 'Mozilla/5.0 (FitJourney temptation preview)', accept: 'text/html' },
-      redirect: 'follow',
-      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
-    });
-    if (!response.ok || !publicHttpsUrl(response.url || url)) return null;
-    if (!(response.headers.get('content-type') ?? '').includes('html')) return null;
-    const reader = response.body?.getReader();
-    if (!reader) return null;
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    while (size < PAGE_MAX_BYTES) {
-      const { done, value } = await reader.read();
-      if (done || !value) break;
-      chunks.push(value);
-      size += value.length;
-    }
-    await reader.cancel().catch(() => undefined);
-    const bytes = new Uint8Array(size);
-    let at = 0;
-    for (const c of chunks) {
-      bytes.set(c, at);
-      at += c.length;
-    }
-    const html = new TextDecoder().decode(bytes);
-    return extractOgImage(html, response.url || url);
-  } catch (error) {
-    console.warn('[tempt-me] page not read:', error instanceof Error ? error.message : error);
-    return null;
-  }
+  const photo = await within(pagePhoto(url, fetch as unknown as PageFetch, 5000), 11_000, null);
+  return photo && publicHttpsUrl(photo.url) ? photo.url : null;
 }
 
 const POOL = 'tempt_pool';
@@ -148,28 +112,7 @@ const SEED_PHOTOS_BUDGET_MS = 100_000;
 const REFILL_PHOTOS_BUDGET_MS = 40_000;
 /** A picture backfill is trusted to be running for this long (only one at a time). */
 const PHOTOS_RUNNING_MS = 3 * 60_000;
-const CRON_SECRET = Deno.env.get('PUSH_CRON_SECRET') ?? '';
-
-type Record_ = (usage: TokenUsage | undefined, costUsd: number, model: string) => Promise<void>;
-
-/** Logs a call made for the pool itself (refills, seed, pictures) on the pool's meta row, not on any player's usage. */
-const systemRecord =
-  (admin: SupabaseClient): Record_ =>
-  async (usage, costUsd, model) => {
-    const { error } = await admin.rpc('tempt_pool_add_cost', { p_in: usage?.input_tokens ?? 0, p_out: usage?.output_tokens ?? 0, p_cost: costUsd });
-    if (error) console.warn('[tempt-me] pool cost not recorded:', JSON.stringify(error));
-    console.log('[tempt-me] pool call', model, 'cost', costUsd.toFixed(4));
-  };
-
-/** A context for work done for nobody in particular (refills, the seed, pictures): service role everywhere, no player. */
-const systemContext = (admin: SupabaseClient): AiContext => ({ userId: '', userClient: admin, admin });
-
-function sameSecret(a: string, b: string): boolean {
-  if (!a || !b || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+type Record_ = RecordFn;
 
 const toRows = (data: unknown): PoolRow[] =>
   ((data ?? []) as { id: string; item: unknown; created_at: string }[]).flatMap((r) => {
@@ -298,147 +241,187 @@ function startRefill(admin: SupabaseClient, rows: PoolRow[], date: string, chunk
   return { first, all };
 }
 
-/** Keeps `work` running after the answer is sent (Supabase's EdgeRuntime.waitUntil); awaited where that is not available. */
-async function inBackground(work: Promise<unknown>): Promise<void> {
-  if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime?.waitUntil) EdgeRuntime.waitUntil(work);
-  else await work;
-}
-
 async function saveItem(admin: SupabaseClient, id: string, item: TemptPoolItem): Promise<void> {
   const { error } = await admin.from(POOL).update({ item }).eq('id', id);
   if (error) console.warn('[tempt-me] pool item not saved:', JSON.stringify(error));
 }
 
-/** The model's look at web pictures (one Haiku call for the group): whether each picture shows its dish. A picture that cannot be
- *  downloaded counts as no; a failed call as no for all (tried again later only through the next stage's budget). */
-async function checkPictures(admin: SupabaseClient, list: { dish: string; url: string }[], record: Record_): Promise<boolean[]> {
-  const blocks = await Promise.all(list.map((c) => within(imageBlockOf(c.url), 8000, null)));
-  const shown = list.map((c, i) => ({ ...c, block: blocks[i] })).filter((x) => x.block !== null);
-  if (shown.length === 0) return list.map(() => false);
-  const content: unknown[] = [];
-  shown.forEach((x, n) => content.push({ type: 'text', text: pictureHeading(n + 1, x.dish) }, x.block));
-  content.push({ type: 'text', text: PICTURE_CHECK_ASK });
-  const outcome = await runAiCall(
-    systemContext(admin),
-    'dishphoto',
-    { tool: PICTURE_CHECK_TOOL, system: PICTURE_CHECK_SYSTEM, maxTokens: 800, messages: [{ role: 'user', content }] },
-    { record }
-  );
-  if ('error' in outcome) {
-    console.warn('[tempt-me] picture check failed:', outcome.error);
-    return list.map(() => false);
-  }
-  const yes = cleanPictureAnswers(outcome.input, shown.length);
-  return list.map((c) => {
-    const n = shown.findIndex((x) => x.url === c.url && x.dish === c.dish);
-    return n >= 0 && yes[n];
-  });
+/** Runs the pool's picture calls on REPAIR_MODEL (Sonnet 5.5, 1.3.x: the Haiku checks let wrong photos through), logged as pool
+ *  cost; `spent` gets the cost of each call. */
+function poolRunner(admin: SupabaseClient, spent?: { usd: number }): Runner {
+  const ctx = systemContext(admin);
+  const record = systemRecord(admin, 'tempt-me');
+  return async (call) => {
+    const outcome = await runAiCall(ctx, 'dishphoto', call, {
+      model: REPAIR_MODEL,
+      record: async (usage, costUsd, model) => {
+        if (spent) spent.usd += costUsd;
+        await record(usage, costUsd, model);
+      },
+    });
+    if ('error' in outcome) {
+      console.warn('[tempt-me] picture call failed:', outcome.error);
+      return null;
+    }
+    return outcome;
+  };
 }
 
-/** The web photo search for up to WEB_PHOTO_GROUP rows: one call (up to 3 searches) for a page about each dish, each page's og:image
- *  read here, refused when generic or another item's, then checked by the model. Every row is saved (a photo, or "no photo"). */
-async function webPhotos(admin: SupabaseClient, group: PoolRow[], taken: Set<string>, record: Record_): Promise<void> {
-  const outcome = await runAiCall(
-    systemContext(admin),
-    'dishphoto',
-    {
-      tool: WEB_PHOTO_TOOL,
-      system: WEB_PHOTO_SYSTEM,
-      maxTokens: 3000,
-      attemptTimeoutMs: 90_000,
-      messages: [{ role: 'user', content: `<request>${webPhotoPrompt(group.map((r) => r.item.name))}</request>` }],
-      serverTools: (model: string) => webToolsFor(model, { maxSearches: WEB_PHOTO_SEARCHES, maxFetches: 0 }),
-    },
-    { record }
-  );
-  if ('error' in outcome) {
-    // Not decided: tried again by a later step.
-    console.warn('[tempt-me] web photo search failed:', outcome.error);
-    return;
-  }
-  const evidence = outcome.web?.evidence;
-  const pages = cleanWebPhotoPages(outcome.input, group.length, (url) => !!evidence && seenInEvidence(url, evidence));
-  const images = await Promise.all(pages.map((page) => (page ? ogImageOf(page) : Promise.resolve(null))));
-  // Generic, refused before, another item's, or the same picture twice in this group: not a candidate.
-  const inGroup = new Set<string>();
-  const candidates = group.map((row, i) => {
-    const url = images[i];
-    if (!url || !photoFree(url, row.item, taken) || inGroup.has(photoKey(url))) return null;
-    inGroup.add(photoKey(url));
-    return { dish: row.item.name, url, page: pages[i]! };
-  });
-  const listed = candidates.filter((c): c is NonNullable<typeof c> => c !== null);
-  const verdicts = await checkPictures(admin, listed, record);
-  await Promise.all(
-    group.map(async (row, i) => {
-      const c = candidates[i];
-      const ok = !!c && verdicts[listed.indexOf(c)] && photoFree(c.url, row.item, taken);
-      if (ok) taken.add(photoKey(c!.url));
-      await saveItem(admin, row.id, withWebPhoto(row.item, ok ? { pageUrl: c!.page, imageUrl: c!.url, verified: true } : null));
-    })
-  );
+/** The item with a confirmed photo (a library one credited "author · licence · library", a web one credited to the site). */
+function withFoundPhoto(item: TemptPoolItem, photo: DishPhotoInfo): TemptPoolItem {
+  if (photo.source === 'web') return { ...withWebPhoto(item, { pageUrl: photo.sourceUrl, imageUrl: photo.url, verified: true }), libraryNone: true };
+  return withDishPhoto(item, { ...photo, source: photo.source });
 }
 
-/** Real pictures for up to `max` rows without one (the newest first), each row saved as soon as it is decided: a web item's source
- *  page og:image; then the photo libraries + the model's check (6 dishes per check); then, for what the libraries do not have, a web
- *  search for a page about the dish, its og:image checked by the model (8 dishes per search call). A picture is taken only when it is
- *  not generic and no other pool item has it (0.26.5). All at once, calls logged on the pool. Stops waiting after `budgetMs` (what is
- *  not decided by then is looked for next time). The number of rows worked on. */
+/** The item when no photo shows it (libraries and web searched): served only when nothing with a photo fits. */
+const withNoPhoto = (item: TemptPoolItem): TemptPoolItem => ({ ...item, imageUrl: null, noPhoto: true, libraryNone: true, webPhotoTried: true });
+
+/** Real pictures for up to `max` rows without one (the newest first), each row saved as soon as it is decided (1.3.x): a web item's
+ *  source page picture, when the model confirms it shows the dish; then the photo libraries (files named after the dish) and the web
+ *  (pages about the dish), every candidate judged by the model alone, only an "exact" kept. A picture is taken only when it is not
+ *  generic and no other pool item has it. Calls on Sonnet 5.5, logged on the pool. Stops waiting after `budgetMs` (what is not
+ *  decided by then is looked for next time). The number of rows worked on. */
 async function backfillPhotos(admin: SupabaseClient, rows: PoolRow[], max: number, budgetMs: number): Promise<number> {
   const queue = photoQueue(rows, max);
   if (queue.length === 0) return 0;
   const all = await loadPool(admin, null);
   const taken = takenPhotos(all ? all.rows : rows);
-  const ctx = systemContext(admin);
-  const record = systemRecord(admin);
+  const run = poolRunner(admin);
   const work = (async () => {
-    // 1. Web items: their page's picture (no tokens).
-    const afterSource = await Promise.all(
-      queue.map(async (row) => {
-        if (photoStage(row.item) !== 'source') return row;
-        const og = await ogImageOf(row.item.sourceUrl!);
-        const free = og && photoFree(og, row.item, taken);
-        if (free) taken.add(photoKey(og));
-        const item = withOgImage(row.item, free ? og : null);
-        await saveItem(admin, row.id, item);
-        return { ...row, item };
-      })
-    );
-    const library = afterSource.filter((r) => photoStage(r.item) === 'library');
-    const web = afterSource.filter((r) => photoStage(r.item) === 'web');
-    const groups = (list: PoolRow[], size: number) => Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, i * size + size));
-    await Promise.all([
-      // 2. The photo libraries, checked by the model.
-      ...groups(library, 6).map(async (group) => {
-        const dishes = group.map((r) => cleanDishPhotoRequest({ dishes: [{ name: r.item.name }] })?.[0] ?? null);
-        const found = await lookupDishPhotos(
-          admin,
-          dishes.filter((d): d is NonNullable<typeof d> => d !== null),
-          async (call) => {
-            const outcome = await runAiCall(ctx, 'dishphoto', call, { record });
-            if ('error' in outcome) {
-              console.warn('[tempt-me] photo check failed:', outcome.error);
-              return null;
-            }
-            return outcome.input;
-          }
-        );
-        await Promise.all(
-          group.map((row, i) => {
-            let photo = dishes[i] ? found.get(dishes[i]!.key) : null;
-            // Another item's picture (two names of one dish): this one looks on the web instead.
-            if (photo && !photoFree(photo.url, row.item, taken)) photo = null;
-            if (photo) taken.add(photoKey(photo.url));
-            return saveItem(admin, row.id, withDishPhoto(row.item, photo));
-          })
-        );
-      }),
-      // 3. What the libraries do not have: a page on the web.
-      ...groups(web, WEB_PHOTO_GROUP).map((group) => webPhotos(admin, group, taken, record)),
-    ]);
+    // 1. Web items: their page's picture, judged.
+    const sourced = await Promise.all(queue.map(async (row) => ({ row, og: photoStage(row.item) === 'source' ? await ogImageOf(row.item.sourceUrl!) : null })));
+    const ogList = sourced.filter((x) => x.og && !genericPictureUrl(x.og) && photoFree(x.og, x.row.item, taken));
+    const ogVerdicts = ogList.length > 0 ? await verifyUrls(ogList.map((x) => ({ dish: x.row.item.name, url: x.og! })), run) : [];
+    const rest: PoolRow[] = [];
+    for (const x of sourced) {
+      const n = ogList.indexOf(x);
+      const ok = n >= 0 && !!ogVerdicts && verdictAccepts(ogVerdicts[n]) && photoFree(x.og, x.row.item, taken);
+      if (ok) {
+        taken.add(photoKey(x.og));
+        await saveItem(admin, x.row.id, { ...withOgImage(x.row.item, x.og), photoVerified: true, photoAudit: PHOTO_CHECK_VERSION });
+      } else rest.push(photoStage(x.row.item) === 'source' ? { ...x.row, item: { ...x.row.item, imageChecked: true } } : x.row);
+    }
+    // 2. The libraries, then the web, all judged.
+    const groups = Array.from({ length: Math.ceil(rest.length / 6) }, (_, i) => rest.slice(i * 6, i * 6 + 6));
+    await Promise.all(groups.map((group) => photosForGroup(admin, group, taken, run)));
   })().catch((error) => console.warn('[tempt-me] pictures failed:', error instanceof Error ? error.message : error));
   await within(work, budgetMs, undefined);
   return queue.length;
+}
+
+/** Library + web photos for a group of rows, each saved: the photo, "no photo", or one more try (after MAX_PHOTO_TRIES: no photo). */
+async function photosForGroup(admin: SupabaseClient, group: PoolRow[], taken: Set<string>, run: Runner): Promise<void> {
+  const dishes = group.map((r) => cleanDishPhotoRequest({ dishes: [{ name: r.item.name }] })?.[0] ?? null);
+  const asked = group.flatMap((r, i) => (dishes[i] ? [{ r, d: dishes[i]! }] : []));
+  const exclude = new Set(group.flatMap((r) => r.item.badPhotos ?? []));
+  const found = asked.length > 0 ? await findVerifiedPhotos(asked.map((x) => x.d), run, { taken, exclude }) : [];
+  await Promise.all(
+    group.map((row) => {
+      const n = asked.findIndex((x) => x.r === row);
+      const photo = n >= 0 ? found[n] : null;
+      if (photo) return saveItem(admin, row.id, { ...withFoundPhoto(row.item, photo), photoAudit: PHOTO_CHECK_VERSION });
+      if (photo === null) return saveItem(admin, row.id, { ...withNoPhoto(row.item), photoAudit: PHOTO_CHECK_VERSION });
+      const tried = withDishPhoto(row.item, undefined);
+      return saveItem(admin, row.id, (tried.photoTries ?? 0) >= MAX_PHOTO_TRIES ? withNoPhoto(tried) : tried);
+    })
+  );
+}
+
+/** Repair steps that could not decide an item before it is left as it is. */
+const AUDIT_MAX_FAILS = 2;
+
+/** One step of the picture repair (POST {"action":"rephoto","limit":6} with the x-cron-secret header; called again until `done`):
+ *  up to `limit` (1-12) items not audited by the current photo check, library photos first (the generic Wikimedia ones were there).
+ *  Sonnet 5.5 judges each current picture alone; a confirmed one stays (marked checked); for the others a new photo is looked for in
+ *  the libraries and on the web (never the one found wrong, nor another item's) and judged the same way. A picture is replaced only
+ *  by a confirmed better one; a clearly wrong one (wrong dish / not food) with nothing better is taken away (the item is then served
+ *  only when nothing with a photo fits, and the app shows the dish's photo from dish_photos or its emoji); a "similar" one stays.
+ *  Every item looked at is marked audited (photoAudit), so the next step goes on with the next ones. Cost: pool (system) cost. */
+async function rephotoStep(admin: SupabaseClient, body: Record<string, unknown>): Promise<Response> {
+  const loaded = await loadPool(admin, null);
+  if (!loaded) return jsonResponse({ error: 'Chưa có bảng tempt_pool: hãy chạy supabase/schema.sql.' }, 503);
+  const allowed = await systemAllowance(admin);
+  if (!allowed.ok) return jsonResponse({ error: allowed.error }, allowed.status);
+  const limit = repairLimit(body.limit, 6, 12);
+  const { data: claimed, error: claimError } = await admin.rpc('tempt_pool_claim_photos', { p_running_before: new Date(Date.now() - PHOTOS_RUNNING_MS).toISOString() });
+  if (claimError || claimed !== true) return jsonResponse({ busy: true, error: claimError ? JSON.stringify(claimError) : 'Another picture job is running; try again in a few minutes.' }, 409);
+  const spent = { usd: 0 };
+  const changes: Record<string, unknown>[] = [];
+  const tally = { kept: 0, keptSimilar: 0, replaced: 0, removed: 0, stillNone: 0, failed: 0 };
+  let rows = loaded.rows;
+  try {
+    const queue = poolRepairQueue(rows, limit);
+    const run = poolRunner(admin, spent);
+    const taken = takenPhotos(rows);
+    // 1. The current pictures, judged.
+    const withPic = queue.filter((r) => r.item.imageUrl);
+    const verdicts = await verifyUrls(withPic.map((r) => ({ dish: r.item.name, url: r.item.imageUrl! })), run);
+    if (verdicts === null) return jsonResponse({ error: 'The check failed; nothing changed. Try again.', costUsd: spent.usd }, 502);
+    const current = new Map(withPic.map((r, i) => [r.id, verdicts[i]]));
+    // 2. A new photo for each item whose picture is not confirmed (never the one found wrong, nor another item's).
+    const needNew = queue.filter((r) => !(r.item.imageUrl && verdictAccepts(current.get(r.id))));
+    const dishes = needNew.map((r) => cleanDishPhotoRequest({ dishes: [{ name: r.item.name }] })?.[0] ?? null);
+    const asked = needNew.flatMap((r, i) => (dishes[i] ? [{ r, d: dishes[i]! }] : []));
+    const exclude = new Set(needNew.flatMap((r) => [...(r.item.badPhotos ?? []), ...(r.item.imageUrl ? [photoKey(r.item.imageUrl)] : [])]));
+    const found = asked.length > 0 ? await findVerifiedPhotos(asked.map((x) => x.d), run, { taken, exclude }) : [];
+    const fresh = new Map(asked.map((x, i) => [x.r.id, found[i]]));
+    // 3. Decide and save each item.
+    const updated = new Map<string, TemptPoolItem>();
+    for (const row of queue) {
+      const item = row.item;
+      const v = item.imageUrl ? (current.get(row.id) ?? null) : null;
+      // A confirmed picture needs nothing new; an item whose name gives no search counts as "nothing found".
+      const got = verdictAccepts(v) ? null : fresh.has(row.id) ? fresh.get(row.id) : null;
+      const note = { name: item.name, old: item.imageUrl ?? null, verdict: v?.verdict ?? null, confidence: v?.confidence ?? null };
+      let next: TemptPoolItem;
+      if (got === undefined) {
+        const fails = (item.photoAuditFails ?? 0) + 1;
+        tally.failed++;
+        changes.push({ ...note, action: 'failed' });
+        next = fails >= AUDIT_MAX_FAILS ? { ...item, photoAuditFails: fails, photoAudit: PHOTO_CHECK_VERSION } : { ...item, photoAuditFails: fails };
+      } else {
+        const decision = repairDecision(v, !!got);
+        if (decision === 'keep') {
+          if (verdictAccepts(v)) tally.kept++;
+          else {
+            tally.keptSimilar++;
+            changes.push({ ...note, action: 'keep' });
+          }
+          next = { ...item, ...(verdictAccepts(v) ? { photoVerified: true } : {}) };
+        } else if (decision === 'replace') {
+          tally.replaced++;
+          changes.push({ ...note, action: 'replace', new: got!.url, source: got!.source });
+          next = withFoundPhoto(item.imageUrl ? withoutPhoto(item) : item, got!);
+        } else if (decision === 'remove') {
+          tally.removed++;
+          changes.push({ ...note, action: 'remove' });
+          next = withNoPhoto(withoutPhoto(item));
+        } else {
+          tally.stillNone++;
+          next = withNoPhoto(item);
+        }
+        next = { ...next, photoAudit: PHOTO_CHECK_VERSION };
+        delete next.photoAuditFails;
+      }
+      updated.set(row.id, next);
+      await saveItem(admin, row.id, next);
+    }
+    rows = rows.map((r) => (updated.has(r.id) ? { ...r, item: updated.get(r.id)! } : r));
+  } finally {
+    await admin.from(META).update({ photos_started_at: null }).eq('id', 1);
+  }
+  const remaining = poolRepairQueue(rows, rows.length).length;
+  const { data: m } = await admin.from(META).select('system_cost_usd').eq('id', 1).maybeSingle();
+  return jsonResponse({
+    step: 'rephoto',
+    processed: Object.values(tally).reduce((a, b) => a + b, 0),
+    ...tally,
+    remaining,
+    done: remaining === 0,
+    costUsd: Math.round(spent.usd * 1e6) / 1e6,
+    poolCostUsd: Number(m?.system_cost_usd ?? 0),
+    changes,
+  });
 }
 
 /** Takes away the pictures that are generic or shared by several items (rowsToRepair) so those items look again. The rows changed. */
@@ -545,19 +528,15 @@ async function seedStep(admin: SupabaseClient): Promise<Response> {
   return report('photos', { decided, repaired: repaired.length });
 }
 
-/** The seed bypasses the player sign-in, only with the cron secret (PUSH_CRON_SECRET, the same as send-push's). */
+/** The maintenance calls bypass the player sign-in, only with the cron secret (PUSH_CRON_SECRET, the same as send-push's):
+ *  {"action":"seed"} (seedStep) and {"action":"rephoto","limit":6} (rephotoStep, 1.3.x). */
 async function seedGate(req: Request, admin: SupabaseClient): Promise<Response | null> {
-  const secret = req.headers.get('x-cron-secret');
-  if (secret === null) return null;
-  if (!sameSecret(secret, CRON_SECRET)) return jsonResponse({ error: 'forbidden' }, 401);
-  let body: Record<string, unknown> = {};
-  try {
-    body = (await req.json()) as Record<string, unknown>;
-  } catch {
-    // no body
-  }
-  if (body?.action !== 'seed') return jsonResponse({ error: 'Unknown action (expected {"action":"seed"}).' }, 400);
-  return seedStep(admin);
+  const got = await cronBody(req);
+  if (got === null) return null;
+  if ('forbidden' in got) return jsonResponse({ error: 'forbidden' }, 401);
+  if (got.body.action === 'seed') return seedStep(admin);
+  if (got.body.action === 'rephoto') return rephotoStep(admin, got.body);
+  return jsonResponse({ error: 'Unknown action (expected {"action":"seed"} or {"action":"rephoto"}).' }, 400);
 }
 
 serveAi(

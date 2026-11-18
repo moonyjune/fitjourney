@@ -116,7 +116,12 @@ export function DishPhotoCredit({ name, off, known, fallback }: { name: string; 
   if (other) return <WebPhotoCredit photo={other} name={name} />;
   if (off || state?.status !== 'done' || !state.photo) return null;
   const p = state.photo;
-  const text = state.sample ? g('dishPhoto.sample') : g('dishPhoto.credit', { author: p.author, license: p.license, source: p.source === 'wikimedia' ? 'Wikimedia' : 'Openverse' });
+  // A photo found on a web page about the dish (source 'web') is credited to that site, like a place's photo.
+  const text = state.sample
+    ? g('dishPhoto.sample')
+    : p.source === 'web'
+      ? g('cheat.photoCredit', { source: p.author })
+      : g('dishPhoto.credit', { author: p.author, license: p.license, source: p.source === 'wikimedia' ? 'Wikimedia' : 'Openverse' });
   return (
     <Pressable accessibilityRole="link" accessibilityLabel={g('dishPhoto.creditA11y', { name })} onPress={() => void Linking.openURL(p.sourceUrl).catch(() => undefined)} hitSlop={4}>
       <HudText size={10} weight="medium" color={quest.textTertiary} numberOfLines={1}>

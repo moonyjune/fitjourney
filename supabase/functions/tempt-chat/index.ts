@@ -7,8 +7,9 @@
 //   items, with the player's day, recent foods and weak spots), then writes its opening lines looking at the item's real photo (a
 //   second call, with the picture). A photo the model says does not show the item is taken off the item in the pool (withoutPhoto:
 //   tempt-me looks for another later) and the pop-up shows none. The item is recorded as shown (tempt_shown), as a plain pop-up is.
-// - reply: after the player said no, one call per player line: the boss answers it and insists, tries another angle, switches to
-//   another pool item (recorded as shown) or gives up; at the MAX_TURNS-th turn it always gives up.
+// - reply: one call per player line (the "no" button or their own words, teasing the boss back): the boss answers it playfully and
+//   insists, tries another angle, switches to another pool item (recorded as shown) or gives up; the player has MAX_TURNS replies and
+//   at the last one the boss always gives up (a reply after that is refused without a call).
 // Calls per user per day: app_settings key `ai_quota.temptchat` (default 60; an open is 2 calls, a reply 1). Model: the `tempt` group
 // (ai_settings model.tempt, default claude-haiku-5-5). The calls count on the player's usage and daily budget.
 
@@ -27,6 +28,7 @@ import {
   cleanPick,
   cleanTemptChatRequest,
   cleanTurn,
+  MAX_TURNS,
   OPEN_TOOL,
   openPrompt,
   PICK_TOOL,
@@ -108,6 +110,7 @@ async function open(ctx: AiContext, body: Record<string, unknown>): Promise<Resp
 async function reply(ctx: AiContext, body: Record<string, unknown>): Promise<Response> {
   const req = cleanTemptChatRequest(body, cleanTemptRequest(body.now));
   if (!req || req.action !== 'reply') return jsonResponse({ error: 'Thiếu nội dung trò chuyện.' }, 400);
+  if (req.turn >= MAX_TURNS) return jsonResponse({ error: 'Hết lượt đáp trả rồi, Quỷ đã chịu thua.' }, 400);
   const loaded = await loadPool(ctx.admin, ctx.userId);
   const alternatives = loaded ? chatCandidates(loaded.rows, loaded.shown, req.now, req.player, new Date(), [req.item.name, ...req.offered], SWITCH_CANDIDATES) : [];
   const call = await runAiCall(ctx, 'temptchat', {

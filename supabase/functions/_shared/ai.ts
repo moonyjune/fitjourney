@@ -38,6 +38,7 @@ import {
   type TokenUsage,
   addUsage,
   chatAnswer,
+  MODEL_PRICES,
 } from './usage.ts';
 import {
   collectWebFindings,
@@ -532,10 +533,18 @@ export async function runAiCall(
     /** Logs the call somewhere else than the user's ai_usage (a call made for nobody in particular, e.g. the temptation pool's seed);
      *  then it counts against no user's quota or budget. */
     record?: (usage: TokenUsage | undefined, costUsd: number, model: string) => Promise<void>;
+    /** A model for this call only, whatever the feature's setting (e.g. Sonnet for the photo repair jobs); priced from MODEL_PRICES.
+     *  Sonnet / Opus 5.x refuse a forced tool call, so they are asked with tool_choice auto from the start. */
+    model?: string;
   } = {}
 ): Promise<AiCallResult | { error: string; status: number }> {
   if (!ANTHROPIC_API_KEY) return { error: 'Server chưa cấu hình ANTHROPIC_API_KEY.', status: 500 };
-  const config = await loadConfig(ctx.admin, feature);
+  let config = await loadConfig(ctx.admin, feature);
+  if (opts.model && opts.model !== config.model) {
+    const price = MODEL_PRICES[opts.model];
+    config = { model: opts.model, priceInPerMtok: price?.in ?? config.priceInPerMtok, priceOutPerMtok: price?.out ?? config.priceOutPerMtok };
+  }
+  if (/^claude-(sonnet|opus)-5/.test(config.model)) noForcedTool.add(config.model);
   const outcome = call.webSearch ? await callClaudeWithSearch(call, config.model) : await callClaude(call, config.model);
   if ('error' in outcome) return outcome;
   if (opts.record) await opts.record(outcome.usage, estimateCostUsd(outcome.usage, config.priceInPerMtok, config.priceOutPerMtok), config.model).catch((e) => console.warn('[ai] usage not recorded:', e));

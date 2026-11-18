@@ -34,6 +34,20 @@ export const CHAT_TURN_XP = 5;
 export const CHAT_TURN_XP_MAX = 20;
 export const CHAT_WIN_XP = 15;
 
+/** Replies the player can send in a chat with the AI boss (the "no" button or their own line teasing it back); the boss answers each and
+ *  gives up at the last one. Same as MAX_TURNS in supabase/functions/_shared/tempt.ts. */
+export const MAX_CHAT_REPLIES = 3;
+
+/** Replies the player still has after `turns` boss answers. */
+export function chatRepliesLeft(turns: number): number {
+  return Math.max(0, MAX_CHAT_REPLIES - Math.max(0, Math.floor(turns)));
+}
+
+/** Whether the chat is over after a boss answer: it gave up, or the player used all their replies. */
+export function chatOver(turns: number, move: string): boolean {
+  return move === 'concede' || chatRepliesLeft(turns) === 0;
+}
+
 /** Bonus XP of a chat with the AI boss that the player won: `turns` boss turns held out, `conceded` when the boss gave up. */
 export function chatBonusXp(turns: number, conceded: boolean): number {
   return Math.min(CHAT_TURN_XP_MAX, Math.max(0, turns) * CHAT_TURN_XP) + (conceded ? CHAT_WIN_XP : 0);

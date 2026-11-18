@@ -38,7 +38,10 @@ import { useCookbookStore } from '../../store/useCookbookStore';
 import { resetDishPhotoStore } from '../../store/useDishPhotoStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import {
+  cacheEntry,
   cacheFresh,
+  cachePhotoValue,
+  DISH_PHOTO_VERSION,
   cleanDishPhoto,
   cleanDishPhotoAnswer,
   cleanDishPhotoRequest,
@@ -192,9 +195,14 @@ describe('dish photos (server, pure)', () => {
     expect(cleanPicks(null, [2])).toEqual([null]);
   });
 
-  it('cache rows: a photo is kept, a "none" is tried again after 30 days', () => {
+  it('cache rows: a photo that passed the current check is kept, an older one is looked up again; a "none" is tried again after 30 days', () => {
     const now = new Date('2026-11-02T00:00:00Z');
-    expect(cacheFresh({ photo: PHOTO, checked_at: '2020-01-01T00:00:00Z' }, now)).toBe(true);
+    expect(cacheFresh({ photo: { ...PHOTO, v: DISH_PHOTO_VERSION }, checked_at: '2020-01-01T00:00:00Z' }, now)).toBe(true);
+    expect(cacheFresh({ photo: PHOTO, checked_at: '2020-01-01T00:00:00Z' }, now)).toBe(false);
+    expect(cacheEntry({ photo: cachePhotoValue(null, true), checked_at: '2026-10-20T00:00:00Z' }, now)).toEqual({ fresh: true, photo: null, webTried: true });
+    expect(cacheEntry({ photo: null, checked_at: '2026-10-20T00:00:00Z' }, now)).toEqual({ fresh: true, photo: null, webTried: false });
+    const web = cachePhotoValue({ url: 'https://site.vn/a.jpg', sourceUrl: 'https://site.vn/bun-bo-hue', author: 'site.vn', license: '', source: 'web' }, true);
+    expect(cacheEntry({ photo: web, checked_at: '2020-01-01T00:00:00Z' }, now)).toMatchObject({ fresh: true, webTried: true, photo: { source: 'web', license: '' } });
     expect(cacheFresh({ photo: { url: 'http://x' }, checked_at: '2026-11-01T00:00:00Z' }, now)).toBe(false);
     expect(cacheFresh({ photo: null, checked_at: '2026-10-20T00:00:00Z' }, now)).toBe(true);
     expect(cacheFresh({ photo: null, checked_at: '2026-09-01T00:00:00Z' }, now)).toBe(false);

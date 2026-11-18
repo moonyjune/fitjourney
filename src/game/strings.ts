@@ -2021,6 +2021,18 @@ const vi = {
   'boss.hpLevel.mid': 'máu còn một nửa',
   'boss.hpLevel.low': 'máu thấp',
   'boss.hpLevel.critical': 'sắp gục',
+  // Workout date & time, journal day swipe, teasing the temptation boss back (agent block; keep at the end).
+  'wkWhen.chip': 'Ngày & giờ',
+  'wkWhen.chipA11y': 'Sửa ngày và giờ tập: {name}',
+  'wkWhen.title': 'Sửa ngày & giờ: {name}',
+  'wkWhen.day': 'Ngày tập',
+  'wkWhen.time': 'Giờ bắt đầu',
+  'wkWhen.hint': 'Nhập dạng 17:30. Để trống: giữ giờ cũ.',
+  'wkWhen.timeError': 'Giờ chưa đúng. Nhập dạng 17:30 (giờ 0-23, phút 00-59).',
+  'wkWhen.future': 'Giờ này chưa tới. Chọn giờ sớm hơn hoặc một ngày trước.',
+  'wkWhen.moved': 'Đã chuyển {name} sang {day} lúc {time}',
+  'temptX.repliesLeft': 'Còn {n}/{max} lượt đáp trả',
+  'temptX.teaseHint': 'Hoặc gõ một câu trêu lại Quỷ (tối đa {max} lượt).',
 } as const;
 
 export type GameKey = keyof typeof vi;
@@ -4042,6 +4054,18 @@ const en: Record<GameKey, string> = {
   'boss.hpLevel.mid': 'HP at half',
   'boss.hpLevel.low': 'HP low',
   'boss.hpLevel.critical': 'about to fall',
+  // Workout date & time, journal day swipe, teasing the temptation boss back (agent block; keep at the end).
+  'wkWhen.chip': 'Day & time',
+  'wkWhen.chipA11y': 'Edit the day and time of: {name}',
+  'wkWhen.title': 'Edit day & time: {name}',
+  'wkWhen.day': 'Day',
+  'wkWhen.time': 'Start time',
+  'wkWhen.hint': 'Type it like 17:30. Empty: keep the old time.',
+  'wkWhen.timeError': 'That is not a time. Type it like 17:30 (hour 0-23, minutes 00-59).',
+  'wkWhen.future': 'That time has not come yet. Pick an earlier time or an earlier day.',
+  'wkWhen.moved': 'Moved {name} to {day} at {time}',
+  'temptX.repliesLeft': '{n}/{max} replies left',
+  'temptX.teaseHint': 'Or type a line to tease the boss back (up to {max} replies).',
 };
 
 export function formatGameText(language: 'vi' | 'en', key: GameKey, params?: Record<string, string | number>): string {

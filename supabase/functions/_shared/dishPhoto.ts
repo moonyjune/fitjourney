@@ -12,6 +12,9 @@ export const MAX_CANDIDATES = 3;
 export const DISH_NAME_MAX = 100;
 /** A "no photo found" answer in the cache is tried again after this many days (a photo found is kept). */
 export const NONE_RETRY_DAYS = 30;
+/** The photo check a cached photo passed (photoMatch.ts PHOTO_CHECK_VERSION, kept equal by hand: this file has no imports). A photo
+ *  cached by an older, looser check (no `v`) is looked up again. */
+export const DISH_PHOTO_VERSION = 3;
 /** The app's public page, the contact in the User-Agent when DISH_PHOTO_CONTACT is not set. */
 export const DEFAULT_PHOTO_CONTACT = 'https://fitjourney-vn.vercel.app';
 /** What the photo libraries are asked with: Wikimedia asks for a User-Agent naming the app and a way to reach its owner (their API
@@ -28,7 +31,9 @@ export const PHOTO_ACCEPT = 'image/webp,image/jpeg,image/png,*/*;q=0.8';
 /** Width of the thumbnail asked for (the shown picture and the one the model checks). */
 export const THUMB_WIDTH = 640;
 
-export type PhotoSource = 'wikimedia' | 'openverse';
+/** Where a photo comes from: one of the two photo libraries, or (1.3.x) a web page about the dish whose preview picture the model
+ *  confirmed shows it (then `author` is the site's host and `license` is empty: the credit line names the site and opens the page). */
+export type PhotoSource = 'wikimedia' | 'openverse' | 'web';
 
 /** One photo as the app shows it: the thumbnail, and the credit (author, licence, the page it comes from). */
 export interface DishPhotoInfo {
@@ -214,7 +219,7 @@ export function cleanDishPhotoRequest(raw: unknown): DishPhotoRequestDish[] | nu
 }
 
 /** The Wikimedia Commons API request: files (namespace 6) matching the query, with their 640 px thumbnail, mime type and licence. */
-export function wikimediaSearchUrl(query: string, limit = 6): string {
+export function wikimediaSearchUrl(query: string, limit = 10): string {
   const params = new URLSearchParams({
     action: 'query',
     format: 'json',
@@ -233,7 +238,7 @@ export function wikimediaSearchUrl(query: string, limit = 6): string {
 }
 
 /** The Openverse request: images matching the query, only under licences that allow reuse. */
-export function openverseSearchUrl(query: string, limit = 6): string {
+export function openverseSearchUrl(query: string, limit = 10): string {
   const params = new URLSearchParams({ q: query, license: 'cc0,pdm,by,by-sa', page_size: String(limit), mature: 'false' });
   return `https://api.openverse.org/v1/images/?${params.toString()}`;
 }
@@ -426,12 +431,27 @@ export function cleanPicks(input: unknown, counts: number[]): (number | null)[] 
   return out;
 }
 
-/** A cache row (`dish_photos`): still good when it holds a photo, or a "none" checked less than NONE_RETRY_DAYS ago. */
-export function cacheFresh(row: { photo: unknown; checked_at: string }, now: Date = new Date()): boolean {
-  if (row.photo) return cleanDishPhoto(row.photo) !== null;
+/** A cache row (`dish_photos`) read: whether it is still good, its photo, and whether the web was searched for it already. The
+ *  `photo` column holds a photo (with `v`, the check it passed), a "none" marker `{ none: true, web, v }`, or null (a "none" from
+ *  before 1.3.x: only the libraries were searched). A photo is good when it passed the current check; a none for NONE_RETRY_DAYS. */
+export function cacheEntry(row: { photo: unknown; checked_at: string }, now: Date = new Date()): { fresh: boolean; photo: DishPhotoInfo | null; webTried: boolean } {
+  const p = row.photo as Record<string, unknown> | null;
+  const version = p && typeof p.v === 'number' ? p.v : 0;
+  if (p && p.none !== true) {
+    const photo = cleanDishPhoto(p);
+    return { fresh: photo !== null && version >= DISH_PHOTO_VERSION, photo, webTried: photo?.source === 'web' };
+  }
   const at = Date.parse(row.checked_at);
-  return Number.isFinite(at) && now.getTime() - at < NONE_RETRY_DAYS * 86_400_000;
+  return { fresh: Number.isFinite(at) && now.getTime() - at < NONE_RETRY_DAYS * 86_400_000, photo: null, webTried: !!p && p.web === true };
 }
+
+/** A cache row's `photo` value: the photo marked with the check it passed, or the "none" marker (`web`: the web was searched too). */
+export function cachePhotoValue(photo: DishPhotoInfo | null, webTried: boolean): Record<string, unknown> {
+  return photo ? { ...photo, v: DISH_PHOTO_VERSION } : { none: true, web: webTried, v: DISH_PHOTO_VERSION };
+}
+
+/** Whether a cache row is still good (see cacheEntry). */
+export const cacheFresh = (row: { photo: unknown; checked_at: string }, now: Date = new Date()): boolean => cacheEntry(row, now).fresh;
 
 /** A photo as the app may show it (https URLs, short texts, a known source), else null. Used on the server's answer, the cache and the
  *  app's side. */
@@ -440,8 +460,9 @@ export function cleanDishPhoto(raw: unknown): DishPhotoInfo | null {
   const r = raw as Record<string, unknown>;
   const url = httpsUrl(r.url);
   const sourceUrl = httpsUrl(r.sourceUrl);
-  const source = r.source === 'wikimedia' || r.source === 'openverse' ? r.source : null;
+  const source = r.source === 'wikimedia' || r.source === 'openverse' || r.source === 'web' ? r.source : null;
   if (!url || !sourceUrl || !source) return null;
+  if (source === 'web') return { url, sourceUrl, author: cleanText(r.author, 80) || new URL(sourceUrl).hostname.replace(/^www\./, ''), license: '', source };
   return { url, sourceUrl, author: cleanText(r.author, 80) || source, license: cleanText(r.license, 40) || '?', source };
 }
 
