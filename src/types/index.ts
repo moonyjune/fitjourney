@@ -1,3 +1,4 @@
+import type { FoodAccuracy } from '../ai/accuracyWhy';
 export type DayType = 'training' | 'rest';
 
 export type MealSlot = 'meal1' | 'meal2' | 'meal3';
@@ -123,6 +124,9 @@ export interface ExtraFoodItem {
   /** Millilitres of this food that count as water drunk (a soy milk, a coffee): added to the day's water on top of `waterMl` of the
    *  day. Absent for food and for drinks the user did not count. */
   waterMl?: number;
+  /** How accurate the figures were when logged (AI %, the AI's reasons, where they came from), for the "chính xác ~XX%" tooltip of
+   *  the meal detail (src/ai/accuracyWhy.ts). Stored in the extra_items jsonb; absent on older items and hand-typed foods. */
+  accuracy?: FoodAccuracy;
 }
 
 /** One part of a meal: a name that carries its amount (g / ml / pieces) and its own figures. */

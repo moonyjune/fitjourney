@@ -25,6 +25,7 @@ export interface FakePhotoResult {
   estimatedSaltG?: number;
   advice?: PhotoAdvice;
   accuracyPercent?: number;
+  accuracyWhy?: { up: string[]; down: string[]; missing: string[] };
   activityName?: string;
   durationMin?: number;
   estimatedCaloriesBurned?: number;
@@ -68,6 +69,11 @@ export function fakePhotoAnalysis(taskType: 'meal' | 'workout', profile?: BodyPr
   if (taskType === 'meal') {
     return {
       accuracyPercent: 70,
+      accuracyWhy: {
+        up: ['Thấy rõ ức gà và khoai lang, tách riêng'],
+        down: ['Không thấy lượng dầu áp chảo'],
+        missing: ['Lượng dầu đã dùng (thìa)', 'Khối lượng khoai lang (g)'],
+      },
       estimatedPurineMg: FAKE_MEAL.purineMg,
       estimatedSaltG: FAKE_MEAL.saltG,
       estimatedSugarG: FAKE_MEAL.sugarG,
@@ -115,6 +121,7 @@ export function fakeMealText(text: string, coach?: CoachContext, imageCount = 0)
   return {
     items,
     accuracyPercent: 55,
+    accuracyWhy: { up: [], down: ['Không rõ khẩu phần từng món'], missing: ['Khối lượng từng món (g)', 'Có ăn nước dùng không'] },
     reasoning: `${SIMULATED}: số liệu mẫu cho ${items.length} món.`,
     ...(coach && items.length ? { advice: fakeAdvice(coach, kcal, protein, 0) } : {}),
   };
@@ -131,6 +138,7 @@ export function fakeNutritionLabel(): NutritionLabel {
     servingSize: { amount: 30, unit: 'g' },
     servingsPerPack: 6,
     accuracyPercent: 90,
+    accuracyWhy: { up: ['Đọc rõ cả cột 100 g và cột khẩu phần'], down: [], missing: [] },
     reasoning: `${SIMULATED}: bảng mẫu, không phải ảnh của bạn.`,
   };
 }

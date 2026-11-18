@@ -25,5 +25,5 @@ export function photoResultToMealText(result: PhotoAnalysisResult, fallbackName:
   } else {
     items = [];
   }
-  return { items, advice: result.advice, accuracyPercent, reasoning: result.reasoning ?? '' };
+  return { items, advice: result.advice, accuracyPercent, accuracyWhy: result.accuracyWhy, reasoning: result.reasoning ?? '' };
 }

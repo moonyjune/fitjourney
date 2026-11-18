@@ -7,7 +7,7 @@
 // per pack) and nothing else. The client does the arithmetic for how much was eaten, shows every figure in editable
 // fields and saves nothing until the user confirms. Labels carry no purine, so none is returned.
 
-import { ACCURACY_PROPERTY } from '../_shared/coach.ts';
+import { ACCURACY_PROPERTY, ACCURACY_WHY_PROMPT, ACCURACY_WHY_PROPERTY } from '../_shared/coach.ts';
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
 
 const FIGURES = {
@@ -40,6 +40,7 @@ const LABEL_TOOL = {
       servingsPerPack: { type: 'number', description: 'Servings per pack as printed, if any.' },
       per100Unit: { type: 'string', enum: ['g', 'ml'], description: 'Whether the per-100 column is per 100 g or per 100 ml.' },
       accuracyPercent: ACCURACY_PROPERTY,
+      accuracyWhy: ACCURACY_WHY_PROPERTY,
       reasoning: { type: 'string', description: 'One short sentence (Vietnamese): which columns were found, anything unclear (blur, glare, cut off).' },
     },
     required: ['readable', 'reasoning'],
@@ -56,7 +57,9 @@ serveAi('label', async (body) => {
     'năng lượng (kcal), đạm, đường, muối hoặc natri, cho cột "trên 100 g/ml" và/hoặc cột "mỗi khẩu phần", cùng khối lượng một khẩu phần và số khẩu phần mỗi gói. ' +
     'Chỉ điền những gì nhãn thật sự in; trường nào không in thì bỏ trống, đừng suy ra từ kiến thức về loại thực phẩm. ' +
     'Nếu chỉ có kJ thì đổi sang kcal (chia 4,184). Nếu ảnh không có bảng dinh dưỡng hoặc quá mờ để đọc số thì đặt readable=false. ' +
-    'Ghi accuracyPercent theo mức bạn chắc chắn đã đọc đúng các con số (ảnh nét, đủ cột: cao; mờ, loá, bị cắt: thấp). Gọi tool report_nutrition_label.';
+    'Ghi accuracyPercent theo mức bạn chắc chắn đã đọc đúng các con số (ảnh nét, đủ cột: cao; mờ, loá, bị cắt: thấp).' +
+    ACCURACY_WHY_PROMPT +
+    ' Gọi tool report_nutrition_label.';
   return {
     responseKey: 'result',
     call: {

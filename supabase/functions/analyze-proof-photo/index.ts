@@ -14,7 +14,7 @@
 // Optional `images` adds up to MAX_IMAGES - 1 more photos of the same meal/session (other angles, other dishes, the receipt or
 // label); all of them are read together as one meal or one session.
 
-import { ACCURACY_PROPERTY, ADVICE_PROPERTY, describeCoach, describePerson, sanitizeProfile } from '../_shared/coach.ts';
+import { ACCURACY_PROPERTY, ACCURACY_WHY_PROMPT, ACCURACY_WHY_PROPERTY, ADVICE_PROPERTY, describeCoach, describePerson, sanitizeProfile } from '../_shared/coach.ts';
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
 import { imageBlocks, MAX_IMAGES } from '../_shared/images.ts';
 
@@ -53,6 +53,7 @@ const ANALYSIS_TOOL = {
       estimatedCaloriesBurned: { type: 'number', description: 'Workout photos only: calories burned this session for THIS person.' },
       advice: ADVICE_PROPERTY,
       accuracyPercent: ACCURACY_PROPERTY,
+      accuracyWhy: { ...ACCURACY_WHY_PROPERTY, description: `Meal photos only. ${ACCURACY_WHY_PROPERTY.description}` },
       confidence: { type: 'string', enum: ['low', 'medium', 'high'], description: 'How sure the estimate is given what the photo shows.' },
       reasoning: { type: 'string', description: 'One short sentence (Vietnamese) explaining the estimate.' },
     },
@@ -92,7 +93,7 @@ serveAi('photo', async (body) => {
     taskType === 'meal'
       ? `Đây là ảnh món ăn/đồ uống${label ? ` "${label}"` : ''}${
           context?.plannedCalories ? ` (kế hoạch ~${context.plannedCalories} kcal)` : ''
-        }.${several} ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về MỘT mô tả chung của cả bữa ghi rõ khối lượng (g) hoặc thể tích (ml) từng món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Ước tính cả purine (mg), đường tự do (g) và muối (g). Nếu bữa có từ 2 món trở lên thì liệt kê từng món trong components (cộng lại bằng tổng của cả bữa). Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`
+        }.${several} ${person} Nhận diện món, ước tính khẩu phần thực tế trong ảnh rồi trả về MỘT mô tả chung của cả bữa ghi rõ khối lượng (g) hoặc thể tích (ml) từng món, calo, protein (g) và nếu có nước/đồ uống thì ml. Nếu ảnh có nhãn dinh dưỡng thì ưu tiên số trên nhãn. Nếu không chắc, nói rõ ở confidence và reasoning. Ước tính cả purine (mg), đường tự do (g) và muối (g). Nếu bữa có từ 2 món trở lên thì liệt kê từng món trong components (cộng lại bằng tổng của cả bữa). Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số.${ACCURACY_WHY_PROMPT} Gọi tool report_photo_analysis.${coachPrompt}`
       : `Đây là ảnh buổi tập${label ? ` "${label}"` : ''}${
           context?.plannedCalories ? ` (kế hoạch đốt ~${context.plannedCalories} kcal)` : ''
         }.${several} ${person} Đọc những gì thấy được (màn hình máy tập/đồng hồ/ứng dụng: thời gian, quãng đường, nhịp tim, calo hiển thị; hoặc dụng cụ, tư thế). Trả về hoạt động, thời lượng (phút) và lượng calo đã đốt TÍNH CHO NGƯỜI NÀY (theo cân nặng và thể trạng, không chép nguyên số calo của máy nếu số đó rõ ràng không hợp lý). Nếu không chắc, nói rõ ở confidence và reasoning. Ghi accuracyPercent (0-100): độ chính xác bạn tự đánh giá cho các con số. Gọi tool report_photo_analysis.${coachPrompt}`;

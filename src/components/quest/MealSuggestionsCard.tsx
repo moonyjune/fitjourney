@@ -22,6 +22,7 @@ import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { MealPrefsEditor } from './MealPrefsEditor';
+import { AccuracyBadge } from './AccuracyInfo';
 
 /** Ideas shown per meal from the user's own foods (the AI adds its own on request). */
 const DB_IDEAS_PER_MEAL = 2;
@@ -262,8 +263,10 @@ export function MealSuggestionsCard({ now, bare }: { now: Date; bare?: boolean }
                 <HudText size={13}>{idea.recipe?.emoji ? `${idea.recipe.emoji} ${idea.name}` : idea.name}</HudText>
                 <HudText size={11} color={idea.source === 'db' ? quest.manaText : quest.goldLight}>
                   {idea.source === 'db' ? g('dinner.fromDb') : idea.source === 'book' ? g('cookbook.fromBook') : idea.source === 'shared' ? g('cookbook.fromShared') : g('swap.fromAi')}
-                  {idea.source === 'ai' && idea.accuracy !== undefined ? ` · ${g('ai.accuracy', { pct: idea.accuracy })}` : ''}
                 </HudText>
+                {idea.source === 'ai' && idea.accuracy !== undefined ? (
+                  <AccuracyBadge accuracy={{ pct: idea.accuracy, source: 'idea' }} label={g('ai.accuracy', { pct: idea.accuracy })} size={11} color={quest.goldLight} />
+                ) : null}
                 {idea.amount ? (
                   <HudText size={12} weight="medium" color={quest.textSecondary}>
                     {g('swap.amount', { amount: idea.amount })}

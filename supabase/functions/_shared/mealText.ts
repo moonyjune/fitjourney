@@ -61,6 +61,6 @@ export function buildMealTextPrompt({ sentence, notes, photoCount, person, coach
     notesBlock +
     `${person} Tách thành từng món (nhân số lượng vào). ${DISH_RULES} ${AMOUNT_RULES} ${notes ? NOTES_RULES : NOTES_RULES.replace('(thẻ <notes>, cũng như ghi chú viết lẫn trong câu)', '(viết lẫn trong câu)')} ` +
     `Ước tính khẩu phần Việt Nam phổ biến khi người dùng không nói rõ, rồi trả về calo, protein (g), purine (mg), đường tự do (g), muối (g) cho từng món, mỗi món có accuracyPercent (0-100) riêng và cả bữa có accuracyPercent. ` +
-    `Nếu mô tả quá mơ hồ thì vẫn ước tính nhưng cho accuracyPercent thấp và nói rõ giả định ở reasoning. Nếu câu (và ảnh) không nói về đồ ăn/uống thì trả items rỗng. Gọi tool report_meal_text.${coachPrompt}`
+    `Nếu mô tả quá mơ hồ thì vẫn ước tính nhưng cho accuracyPercent thấp và nói rõ giả định ở reasoning. Điền accuracyWhy thật ngắn: up = điều làm số liệu chính xác, down = điều làm giảm độ chính xác, missing = thông tin còn thiếu mà người dùng có thể bổ sung (ví dụ "Khối lượng cơm (g)", "Có ăn nước dùng không"); mỗi ý ≤60 ký tự, tối đa 3 ý mỗi mục, CỤ THỂ cho bữa này, không chung chung. Nếu câu (và ảnh) không nói về đồ ăn/uống thì trả items rỗng. Gọi tool report_meal_text.${coachPrompt}`
   );
 }

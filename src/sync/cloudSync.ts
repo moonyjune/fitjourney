@@ -1023,6 +1023,8 @@ export interface PhotoAnalysisResult {
   advice?: PhotoAdvice;
   /** The AI's own estimate (0-100) of how accurate the numbers are. */
   accuracyPercent?: number;
+  /** Why the accuracy is what it is (raw from the AI; cleaned with `cleanAccuracyWhy`). Absent from older servers. */
+  accuracyWhy?: unknown;
   // Workout photos
   activityName?: string;
   durationMin?: number;
@@ -1777,6 +1779,8 @@ export interface MealTextResult {
   mealTime?: string;
   advice?: PhotoAdvice;
   accuracyPercent?: number;
+  /** Why the accuracy is what it is (raw from the AI; cleaned with `cleanAccuracyWhy`). Absent from older servers. */
+  accuracyWhy?: unknown;
   reasoning: string;
 }
 

@@ -1,3 +1,4 @@
+import { readFoodAccuracy } from '../../ai/accuracyWhy';
 import { useTranslation } from '../../i18n/useTranslation';
 import type { StringKey } from '../../i18n/strings';
 import { deleteExtraWithUndo, editExtraWhen, logExtraAgain, toggleSnackWithUndo } from '../../food/mealActions';
@@ -38,6 +39,7 @@ export function LoggedFoodSheet({ dateKey, itemId, now, onClose }: { dateKey: st
     mealTime: item.mealTime,
     waterMl: item.waterMl,
     suggestedWaterMl: suggestedDrinkMl(partsOrSelf(item)),
+    accuracy: readFoodAccuracy(item.accuracy),
   };
 
   const mealName = (mealTime: MealWhen['mealTime']) => (mealTime ? t(`extraMealTime.${mealTime}` as StringKey) : g('meal.slotNone'));

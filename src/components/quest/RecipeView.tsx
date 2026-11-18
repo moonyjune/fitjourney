@@ -14,6 +14,7 @@ import { DishPhotoCredit } from './DishPhoto';
 import { DishThumb } from './DishThumb';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
+import { AccuracyBadge } from './AccuracyInfo';
 
 const stars = (n: number): string => '★'.repeat(Math.max(0, Math.min(5, n))) + '☆'.repeat(5 - Math.max(0, Math.min(5, n)));
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -108,8 +109,11 @@ export function RecipeView({ idea, brief, mealLabel, hero, onRemoved }: RecipeVi
         )}
         <View style={styles.flex}>
           <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {`${source}${shown.amount ? ` · ${shown.amount}` : ''}${shown.source === 'ai' && shown.accuracy !== undefined ? ` · ${g('cookbook.ui.ai', { pct: shown.accuracy })}` : ''}`}
+            {`${source}${shown.amount ? ` · ${shown.amount}` : ''}`}
           </HudText>
+          {shown.source === 'ai' && shown.accuracy !== undefined ? (
+            <AccuracyBadge accuracy={{ pct: shown.accuracy, source: 'idea' }} label={g('cookbook.ui.ai', { pct: shown.accuracy })} size={12} color={quest.textSecondary} />
+          ) : null}
           <HudText size={hero ? 22 : 17} accessibilityRole="header">
             {shown.name}
           </HudText>

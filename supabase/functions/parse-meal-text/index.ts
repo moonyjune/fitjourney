@@ -10,7 +10,7 @@
 // "không ăn nước dùng", "bỏ da", "ít đường") adjust the dishes' figures. Details of a dish never become foods of their own, and
 // every food comes back with its weight or volume (amount + amountUnit), see _shared/mealText.ts.
 
-import { ACCURACY_PROPERTY, ADVICE_PROPERTY, describeCoach, describePerson, sanitizeProfile } from '../_shared/coach.ts';
+import { ACCURACY_PROPERTY, ACCURACY_WHY_PROPERTY, ADVICE_PROPERTY, describeCoach, describePerson, sanitizeProfile } from '../_shared/coach.ts';
 import { jsonResponse, serveAi } from '../_shared/ai.ts';
 import { imageBlocks, MAX_IMAGES } from '../_shared/images.ts';
 import { buildMealTextPrompt, cleanMealInput, MAX_MEAL_NOTES_CHARS, MAX_MEAL_TEXT_CHARS } from '../_shared/mealText.ts';
@@ -54,6 +54,7 @@ const MEAL_TEXT_TOOL = {
       },
       advice: ADVICE_PROPERTY,
       accuracyPercent: ACCURACY_PROPERTY,
+      accuracyWhy: { ...ACCURACY_WHY_PROPERTY, description: `For the whole meal (start a phrase with the dish when it is about one dish). ${ACCURACY_WHY_PROPERTY.description}` },
       reasoning: { type: 'string', description: 'One short sentence (Vietnamese): the assumptions made (portion sizes, cooking method) and how the notes were applied.' },
     },
     required: ['items', 'reasoning'],

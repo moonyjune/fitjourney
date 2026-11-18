@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AccessibilityInfo, Image, Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Image, Pressable, StyleSheet, View, type TextInput } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { cleanAdvice } from '../src/ai/adviceText';
 import { accuracyOf } from '../src/ai/accuracy';
+import { cleanAccuracyWhy, mentionsAmount, type AccuracyAction, type FoodAccuracy } from '../src/ai/accuracyWhy';
 import { defaultEaten, labelToFigures, type Eaten, type NutritionLabel } from '../src/ai/nutritionLabel';
 import { MEAL_TIMES, resolveFromDb, rowsFromResult, validMealTime } from '../src/ai/textMeal';
 import { useLabelReading } from '../src/ai/useLabelReading';
 import { useMealTextAnalysis } from '../src/ai/useMealTextAnalysis';
 import { useAiErrorText, useCalibrationText, usePhotoAnalysis } from '../src/ai/usePhotoAnalysis';
+import { AccuracyBadge } from '../src/components/quest/AccuracyInfo';
 import { AiAdviceCard } from '../src/components/quest/AiAdviceCard';
 import { BottomSheet } from '../src/components/quest/BottomSheet';
 import { DateChip } from '../src/components/quest/DateChip';
@@ -156,7 +158,9 @@ export default function AddFoodScreen() {
   const [cheatMeal, setCheatMeal] = useState(false);
   /** Millilitres typed for "Tính vào nước"; null follows what the foods' names say (a soy milk 250 ml → 250). */
   const [waterText, setWaterText] = useState<string | null>(null);
-  const [note, setNote] = useState<{ kind: 'saved' | 'ai'; reasoning: string; accuracy: number | null } | null>(null);
+  // `acc`: how the AI's figures came about (source, its reasons, photos / grams / notes given), for the "chính xác ~XX%" tooltip.
+  const [note, setNote] = useState<{ kind: 'saved' | 'ai'; reasoning: string; accuracy: number | null; acc?: FoodAccuracy } | null>(null);
+  const notesInput = useRef<TextInput>(null);
   const [advice, setAdvice] = useState<PhotoAdvice | null>(null);
   const [hint, setHint] = useState<'text' | 'foods' | 'value' | null>(null);
   const [saving, setSaving] = useState(false);
@@ -260,7 +264,12 @@ export default function AddFoodScreen() {
       const result = await photoAi.analyze(photos[0], photos.slice(1, MAX_MEAL_PHOTOS));
       if (!result || !alive.current) return;
       const parsed = photoResultToMealText(result, g('meal.photoFood'));
-      finish(kept, [], rowsFromResult(parsed, foods).map((r, i) => ({ ...r, key: `${run}-${i}` })), parsed.reasoning, parsed.accuracyPercent, parsed.advice);
+      finish(kept, [], rowsFromResult(parsed, foods).map((r, i) => ({ ...r, key: `${run}-${i}` })), parsed.reasoning, parsed.accuracyPercent, parsed.advice, {
+        pct: accuracyOf(parsed.accuracyPercent),
+        source: 'photo',
+        why: cleanAccuracyWhy(parsed.accuracyWhy),
+        photos: Math.min(photos.length, MAX_MEAL_PHOTOS),
+      });
       return;
     }
 
@@ -280,18 +289,26 @@ export default function AddFoodScreen() {
     const found = rowsFromResult(result, foods).map((r, i) => ({ ...r, key: `${run}-${i}` }));
     const time = validMealTime(result.mealTime);
     if (time) setMealTime(time);
-    finish(kept, [], found, result.reasoning, result.accuracyPercent, result.advice);
+    finish(kept, [], found, result.reasoning, result.accuracyPercent, result.advice, {
+      pct: accuracyOf(result.accuracyPercent),
+      source: 'text',
+      why: cleanAccuracyWhy(result.accuracyWhy),
+      photos: Math.min(photos.length, MAX_MEAL_PHOTOS),
+      hasText: !!sentence,
+      gramsGiven: mentionsAmount(sentence),
+      notesGiven: !!aiNotes,
+    });
   }
 
   /** The lines of an answer go in (after what is kept); nothing found keeps the user on the input step with a message. */
-  function finish(kept: MealRow[], known: MealRow[], found: MealRow[], reasoning: string, accuracy: number | undefined, adv: PhotoAdvice | undefined) {
+  function finish(kept: MealRow[], known: MealRow[], found: MealRow[], reasoning: string, accuracy: number | undefined, adv: PhotoAdvice | undefined, acc: FoodAccuracy) {
     if (known.length + found.length === 0) {
       setHint('foods');
       if (kept.length > 0) setRows(kept);
       return;
     }
     setRows([...kept, ...known, ...found]);
-    setNote({ kind: 'ai', reasoning: known.length > 0 ? `${g('text.partlyFromDb', { n: known.length })} ${reasoning}` : reasoning, accuracy: accuracyOf(accuracy) });
+    setNote({ kind: 'ai', reasoning: known.length > 0 ? `${g('text.partlyFromDb', { n: known.length })} ${reasoning}` : reasoning, accuracy: accuracyOf(accuracy), acc });
     setAdvice(cleanAdvice(adv));
     setStep('review');
   }
@@ -456,6 +473,47 @@ export default function AddFoodScreen() {
     return { main, more };
   }
 
+  /** The tooltip context of the label being read. */
+  const labelAcc: FoodAccuracy | null = lab.label
+    ? { pct: accuracyOf(lab.label.accuracyPercent), source: 'label', why: lab.label.accuracyWhy, photos: 1 }
+    : null;
+
+  /** How one line's figures came about: the food database, the label, or the AI (with the run's context); null for hand-typed. */
+  function rowAcc(r: MealRow): FoodAccuracy | null {
+    if (r.fromDb) return { pct: null, source: 'db' };
+    if (r.key === 'label') return labelAcc?.pct != null ? labelAcc : null;
+    if (r.accuracy === null) return null;
+    return { ...(note?.acc ?? { source: lastRun === 'photo' ? 'photo' : 'text' }), pct: r.accuracy };
+  }
+
+  /** What a saved entry keeps: its one line's accuracy, else the meal's (all from the database: standard figures). */
+  function entryAcc(lines: MealRow[]): FoodAccuracy | undefined {
+    const accs = lines.map(rowAcc).filter((a): a is FoodAccuracy => !!a);
+    if (accs.length === 0) return undefined;
+    if (lines.length === 1) return accs[0];
+    if (accs.length === lines.length && accs.every((a) => a.source === 'db')) return { pct: null, source: 'db' };
+    const ai = accs.find((a) => a.source !== 'db');
+    if (!ai) return undefined; // database lines mixed with hand-typed ones: no single source to explain
+    return ai.source !== 'label' && note?.acc && note.accuracy !== null ? { ...note.acc, pct: note.accuracy } : ai;
+  }
+
+  /** A "Còn thiếu" action of the tooltip: add the phrase to "Ghi chú cho AI" and put the cursor there, or open the line's amount. */
+  function accuracyAction(action: AccuracyAction, prefill?: string, key?: string) {
+    if (action === 'amount') {
+      const target = key ?? rows.find((r) => r.key.startsWith('ai') || r.key === 'label')?.key ?? rows[0]?.key;
+      if (target) setEditingKey(target);
+      return;
+    }
+    if (prefill) setNotes((n) => (n.trim() ? `${n.trim()}, ${prefill}: ` : `${prefill}: `).slice(0, 200));
+    setTimeout(() => notesInput.current?.focus(), 350);
+  }
+
+  const canReanalyze = aiEnabled && (photos.length > 0 || text.trim() !== '' || notes.trim() !== '');
+  const reanalyze = () => {
+    setKind('food');
+    void analyze(undefined, true);
+  };
+
   async function save() {
     if (saving) return;
     setDbOutcome(null);
@@ -502,6 +560,7 @@ export default function AddFoodScreen() {
           junk: e.snack || undefined,
           snack: e.snack || undefined,
           cheatMeal: cheatMeal || undefined,
+          accuracy: entryAcc(lines),
           waterMl: i === 0 ? drinkMl || undefined : undefined,
           photoUri: i === 0 ? kept.main : undefined,
           morePhotoUris: i === 0 ? kept.more : undefined,
@@ -675,6 +734,7 @@ export default function AddFoodScreen() {
     <View style={styles.group}>
       <QuestField
         label={f('log.notesLabel')}
+        inputRef={notesInput}
         value={notes}
         onChangeText={(v) => {
           setNotes(v);
@@ -883,7 +943,16 @@ export default function AddFoodScreen() {
     <View style={styles.badges}>
       {aiFound > 0 && <Badge text={g('meal.found', { n: aiFound })} tone="mana" />}
       {note?.kind === 'saved' && <Badge text={g('meal.fromDb')} tone="mana" />}
-      {note?.kind === 'ai' && note.accuracy !== null && <Badge text={g('meal.accuracyBadge', { pct: note.accuracy })} tone="xp" />}
+      {note?.kind === 'ai' && note.accuracy !== null && (
+        <AccuracyBadge
+          accuracy={{ ...(note.acc ?? { source: 'text' }), pct: note.accuracy }}
+          label={g('meal.accuracyBadge', { pct: note.accuracy })}
+          pill
+          onAction={accuracyAction}
+          onReanalyze={canReanalyze ? reanalyze : undefined}
+          testID="meal-accuracy-badge"
+        />
+      )}
     </View>
   );
 
@@ -955,12 +1024,20 @@ export default function AddFoodScreen() {
                     <HudText size={12} weight="medium" color={figures ? quest.textSecondary : quest.goldLight} numberOfLines={2}>
                       {figures ? g('meal.itemLine', { kcal: Math.round(num(r.calories)), p: Math.round(num(r.protein) * 10) / 10 }) : g('meal.itemNoFigures')}
                     </HudText>
-                    {r.fromDb || r.accuracy !== null ? (
-                      <HudText size={11} weight="medium" color={r.fromDb ? quest.manaText : (r.accuracy ?? 0) >= 70 ? quest.xp : (r.accuracy ?? 0) >= 50 ? quest.goldLight : quest.hpText} numberOfLines={1}>
-                        {r.fromDb ? g('text.fromDb') : g('text.rowAccuracy', { pct: r.accuracy ?? 0 })}
-                      </HudText>
-                    ) : null}
                   </Pressable>
+                  {(() => {
+                    const acc = rowAcc(r);
+                    return acc ? (
+                      <AccuracyBadge
+                        accuracy={acc}
+                        size={11}
+                        label={r.fromDb ? g('text.fromDb') : acc.pct !== null ? g('text.rowAccuracy', { pct: acc.pct }) : undefined}
+                        onAction={(a, prefill) => accuracyAction(a, prefill, r.key)}
+                        onReanalyze={canReanalyze && acc.source !== 'db' && acc.source !== 'label' ? reanalyze : undefined}
+                        testID={`row-accuracy-${i}`}
+                      />
+                    ) : null;
+                  })()}
                   {/* "Ăn vặt" on this one food (1.5): saved as a snack of its own. */}
                   <View style={styles.snackRow}>
                     <SnackToggle name={name || g('meal.item.newTitle')} on={snackKeys.has(r.key)} onPress={() => toggleSnack(r.key)} />
@@ -1119,8 +1196,10 @@ export default function AddFoodScreen() {
                 <HudText size={12} color={quest.manaText}>
                   {g('label.title')}
                   {lab.label.productName ? ` · ${lab.label.productName}` : ''}
-                  {accuracyOf(lab.label.accuracyPercent) !== null ? ` · ${g('ai.accuracy', { pct: accuracyOf(lab.label.accuracyPercent)! })}` : ''}
                 </HudText>
+                {labelAcc && labelAcc.pct !== null ? (
+                  <AccuracyBadge accuracy={labelAcc} label={g('ai.accuracy', { pct: labelAcc.pct })} onAction={(a, prefill) => accuracyAction(a, prefill, 'label')} testID="label-accuracy" />
+                ) : null}
                 {modes.servings && modes.amount && (
                   <View style={styles.chips}>
                     <QuestChip label={g('label.modeServings')} selected={eatenMode === 'servings'} onPress={() => switchEatenMode('servings')} />
@@ -1150,15 +1229,26 @@ export default function AddFoodScreen() {
                   <HudText size={13} style={styles.flex}>
                     {g('meal.source')}
                   </HudText>
-                  <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={2} style={styles.sourceRight}>
-                    {note?.kind === 'saved'
-                      ? g('text.fromDb')
-                      : note?.kind === 'ai'
-                        ? note.accuracy !== null
-                          ? g('ai.accuracy', { pct: note.accuracy })
-                          : g('ai.suggested')
-                        : savable.map(sourceText).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}
-                  </HudText>
+                  {note?.kind === 'ai' && note.accuracy !== null ? (
+                    <View style={styles.sourceRight}>
+                      <AccuracyBadge
+                        accuracy={{ ...(note.acc ?? { source: 'text' }), pct: note.accuracy }}
+                        label={g('ai.accuracy', { pct: note.accuracy })}
+                        color={quest.textSecondary}
+                        onAction={accuracyAction}
+                        onReanalyze={canReanalyze ? reanalyze : undefined}
+                        testID="source-accuracy"
+                      />
+                    </View>
+                  ) : (
+                    <HudText size={12} weight="medium" color={quest.textSecondary} numberOfLines={2} style={styles.sourceRight}>
+                      {note?.kind === 'saved'
+                        ? g('text.fromDb')
+                        : note?.kind === 'ai'
+                          ? g('ai.suggested')
+                          : savable.map(sourceText).filter((v, i, a) => a.indexOf(v) === i).join(' · ')}
+                    </HudText>
+                  )}
                 </View>
                 {note?.reasoning ? (
                   <HudText size={12} weight="medium" color={quest.textSecondary}>

@@ -9,6 +9,7 @@ import { requestSwaps, type AiErrorKind } from '../../sync/cloudSync';
 import { quest, questRadius } from '../../theme/quest';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
+import { AccuracyBadge } from './AccuracyInfo';
 
 interface Props {
   item: SwapItem;
@@ -71,8 +72,10 @@ export function SwapSuggestions({ item, context, limits, mealTime, disabled, onU
           <HudText size={13}>{o.name}</HudText>
           <HudText size={11} color={o.source === 'db' ? quest.manaText : quest.goldLight}>
             {o.source === 'db' ? g('swap.fromDb') : g('swap.fromAi')}
-            {o.source === 'ai' && o.accuracy !== undefined ? ` · ${g('ai.accuracy', { pct: o.accuracy })}` : ''}
           </HudText>
+          {o.source === 'ai' && o.accuracy !== undefined ? (
+            <AccuracyBadge accuracy={{ pct: o.accuracy, source: 'swap' }} label={g('ai.accuracy', { pct: o.accuracy })} size={11} color={quest.goldLight} />
+          ) : null}
           {o.amount ? (
             <HudText size={12} weight="medium" color={quest.textSecondary}>
               {g('swap.amount', { amount: o.amount })}
