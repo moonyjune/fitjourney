@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.5.0 | yes | dish-photo, report-photo, tempt-chat, tempt-me |
 | 1.4.0 | no | analyze-proof-photo, analyze-weekly-feelings, boss-banter, coach-digest, dish-photo, estimate-workout-kcal, generate-meal-recipe, parse-meal-text, read-nutrition-label, suggest-cheat-places, suggest-dinner, suggest-plan-update, suggest-swap, tempt-chat, tempt-me, weekly-report |
 | 1.3.0 | no | — |
 | 1.2.0 | no | tempt-chat, tempt-me |
@@ -98,6 +99,15 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.5.0
+- Temptation challenge pool grows to ~500 dishes, each tagged with conditions: time slot (sáng, giữa buổi sáng làm việc, trưa, chiều, tối, khuya), weather and temperature, season/months, weekday or weekend, office hours, and 21 solar and lunar events (Tết, Ông Táo, Trung thu, Vu Lan, Valentine, 20/10, Giáng sinh, payday, big football tournaments…). Lunar dates come from a lunar-calendar converter.
+- The boss picks by the moment and by your meals: right after a meal it offers a dessert or a drink, after a long gap a snack, and it favours the kind of snack you often log (from your food log). One scoring function is shared by the server and the app.
+- Offline: the app keeps a compact copy of the pool (with photo links) and picks from it when the server can't be reached.
+- "Ảnh sai?" on every dish photo (meal ideas, cookbook, cheat day, challenge): one tap hides the photo for you (emoji instead, "Hoàn tác", synced) and reports it; the photo is flagged on the server, a new one is searched for on the web first, and the wrong picture is never used again for that dish. Up to 20 reports a day. Flagged challenge photos are re-done first by rephoto.
+- "Ăn vặt" is ticked on each food in Ghi bữa and in a logged meal's detail (one food leaves the meal as a snack of its own, with "Hoàn tác"). Snacks count their kcal and the "Không đồ ăn vặt" mission but never make a meal eaten. Earlier data unchanged.
+- "Cheat" in Ghi bữa: cheat meal (kcal ×1.3 with the calculation shown, reminder to log drinks and sauces, counts as the 80/20 flexible meal) and cheat day (the same mark as in the Journal) with your real numbers: budget = TDEE, what the day costs the week and the weekly boss, and how to win it back over 2–3 days (at most 300 kcal/day).
+- Server: schema.sql adds an UPDATE policy on tempt_shown (offline picks record repeats); new function report-photo; after deploy run `scripts/tempt-expand.sh` (tag → generate → photos) to grow the pool, and `scripts/photo-repair.sh dish` to clear flagged dish photos.
 
 ## 1.4.0
 - Ghi bữa has two fields: "Món & lượng" (placeholder "VD: 1 bát phở bò (200 g bánh, 80 g thịt)") and "Ghi chú cho AI" ("VD: không ăn nước dùng, bỏ da, ít đường"). The AI applies the notes to that dish's figures (no broth → less salt and purine, skin removed → less fat…).
