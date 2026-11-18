@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.4.0 | no | analyze-proof-photo, analyze-weekly-feelings, boss-banter, coach-digest, dish-photo, estimate-workout-kcal, generate-meal-recipe, parse-meal-text, read-nutrition-label, suggest-cheat-places, suggest-dinner, suggest-plan-update, suggest-swap, tempt-chat, tempt-me, weekly-report |
 | 1.3.0 | no | — |
 | 1.2.0 | no | tempt-chat, tempt-me |
 | 1.1.0 | no | send-push |
@@ -97,6 +98,19 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.4.0
+- Ghi bữa has two fields: "Món & lượng" (placeholder "VD: 1 bát phở bò (200 g bánh, 80 g thịt)") and "Ghi chú cho AI" ("VD: không ăn nước dùng, bỏ da, ít đường"). The AI applies the notes to that dish's figures (no broth → less salt and purine, skin removed → less fat…).
+- Adding a photo analyses it at once, with no description step. On the check step a note can be added and "Phân tích lại với ghi chú" re-runs the AI; a label photo can be read with "Đọc nhãn" (or pick "Ảnh nhãn dinh dưỡng" before adding the photo).
+- Fix: "1 bát bún bò, 100g thịt bò, ít đường" was split into several foods and counted twice. Details and notes now only adjust that one dish; the food database answers a sentence only when it knows every food in it, otherwise the whole sentence goes to the AI.
+- Foods counted in cái, phần, xuất, hộp, bát, chén, ly, cốc… always carry the converted weight or volume, e.g. "Sữa chua 1 hộp (≈100 g)"; − / + changes the grams too.
+- "Không nhớ đã ăn gì" logs "Bữa không nhớ (ước tính)" for breakfast, lunch or dinner at 1/3 of the day's target intake (TDEE − deficit target), and counts as that meal being logged.
+- Training: a logged workout has a "Ngày & giờ" chip (WorkoutDetail sheet, Train tab and Journal) to move it to another day (today or earlier) and start time, with "Hoàn tác".
+- Journal › Ngày: swipe left/right for the next/previous day (never past today); vertical scrolling is unaffected.
+- Meal-suggestion photos (next meal, cookbook, cheat day) match the dish better: the file title must name the dish, each picture is checked by AI on its own (only an exact match is kept), generic share images and list pages are rejected, old cached photos are checked again, and when no library photo fits a web search finds one, checks it and saves it in dish_photos.
+- Temptation challenge photos are looked up again and checked with Sonnet 5.5 (system cost); wrong pictures are replaced or removed.
+- AI challenge chat ("AI tương tác"): type a line to tease the boss back right away, up to 3 replies ("Còn n/3 lượt đáp trả"); at the third the boss gives up. Replies use the cheap tempt model (Haiku).
+- Server: every AI function is redeployed (`_shared/ai.ts` changed); after deploy the photo repairs run once (tempt-me `rephoto`, dish-photo `repair`, both with `x-cron-secret`).
 
 ## 1.3.0
 - "Sửa ngày, bữa & giờ" (meal detail sheet, Journal › Ngày and Camp) also changes the day a food was eaten: pick another day in the calendar and the food moves there whole — its figures, parts, water and photos — keeping its own time when the meal is unchanged, else that meal's usual time or the time typed. A toast says where it went, with "Hoàn tác" to put it back; the sheet closes, as the food is no longer on the day shown.
