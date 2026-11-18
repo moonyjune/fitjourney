@@ -200,9 +200,22 @@ export async function verifyUrls(list: { dish: string; url: string }[], run: Run
   const out: VerdictOut[] = list.map(() => ({ verdict: null, confidence: 0 }));
   if (shown.length === 0) return out;
   const verdicts = await verifyItems(shown.map((s) => s.item), run);
-  if (!verdicts) return null;
-  shown.forEach((s, n) => (out[s.i] = verdicts[n]));
-  return out;
+  if (verdicts) {
+    shown.forEach((s, n) => (out[s.i] = verdicts[n]));
+    return out;
+  }
+  if (shown.length === 1) return null;
+  // 1.6.0: one picture the API rejects (format, size) used to fail the whole check, every time, so a rephoto loop stuck on the same
+  // queue head. Check each picture alone instead; a picture that still fails gets no verdict (= not confirmed → a new photo is sought).
+  let anyOk = false;
+  for (const s of shown) {
+    const one = await verifyItems([s.item], run);
+    if (one) {
+      out[s.i] = one[0];
+      anyOk = true;
+    }
+  }
+  return anyOk ? out : null;
 }
 
 /** The thumbnails of searched dishes as one list for the check (dish by dish, in order). */
