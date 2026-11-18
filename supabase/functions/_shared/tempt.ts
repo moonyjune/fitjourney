@@ -216,6 +216,11 @@ export interface TemptPoolItem extends TemptItemOut {
   photoAudit?: number;
   /** Repair steps that could not decide this item (a call failed); after 2 it counts as audited, unchanged. */
   photoAuditFails?: number;
+  /** When it fits best (1.5, _shared/temptPick.ts TemptTags: course, slots, weather, temperature, months, events, after a meal...);
+   *  kept as stored here and cleaned where it is read (temptPick.ts tagsOf). */
+  tags?: Record<string, unknown>;
+  /** A player reported its photo as wrong ("báo ảnh sai"): the next rephoto step looks for a new one first. Kept as stored. */
+  photoFlag?: unknown;
 }
 
 /** A pool item's picture with its credit, as the app shows a web photo ("Ảnh: <credit>", opening `pageUrl`). */
@@ -341,6 +346,9 @@ export function cleanStoredPoolItem(raw: unknown): TemptPoolItem | null {
   const phPage = ph ? publicHttpsUrl(ph.pageUrl) : null;
   if (phUrl && phPage) item.photo = { url: phUrl, pageUrl: phPage, credit: cleanText(ph!.credit, 120) || new URL(phPage).hostname.replace(/^www\./, '') };
   if (!item.sourceDomain && typeof r.sourceDomain === 'string' && /^[a-z0-9.-]+$/i.test(r.sourceDomain)) item.sourceDomain = r.sourceDomain.toLowerCase();
+  // 1.5: the tags and a "wrong photo" report are kept as they are (a save must not drop them).
+  if (r.tags && typeof r.tags === 'object' && !Array.isArray(r.tags)) item.tags = r.tags as Record<string, unknown>;
+  if (r.photoFlag !== undefined && r.photoFlag !== null && r.photoFlag !== false) item.photoFlag = r.photoFlag;
   return item;
 }
 

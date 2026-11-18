@@ -10,6 +10,8 @@
 // - reply: one call per player line (the "no" button or their own words, teasing the boss back): the boss answers it playfully and
 //   insists, tries another angle, switches to another pool item (recorded as shown) or gives up; the player has MAX_TURNS replies and
 //   at the last one the boss always gives up (a reply after that is refused without a call).
+// 1.5: the candidates are ranked with _shared/temptPick.ts (time slot, weather, events, what the player just ate `meal`, their snacking
+// `habits`, both sent by the app; their weak spots count as favourites); the 1.2.0 ranking is the fallback when nothing unseen fits.
 // Calls per user per day: app_settings key `ai_quota.temptchat` (default 60; an open is 2 calls, a reply 1). Model: the `tempt` group
 // (ai_settings model.tempt, default claude-haiku-5-5). The calls count on the player's usage and daily budget.
 
@@ -22,6 +24,8 @@ import {
   poolAnswer,
   withoutPhoto,
   type PoolRow,
+  type TemptPlayer,
+  type TemptRequest,
   CHAT_SYSTEM,
   chatCandidates,
   cleanOpen,
@@ -31,12 +35,14 @@ import {
   MAX_TURNS,
   OPEN_TOOL,
   openPrompt,
+  PICK_CANDIDATES,
   PICK_TOOL,
   pickPrompt,
   SWITCH_CANDIDATES,
   TURN_TOOL,
   turnPrompt,
 } from '../_shared/tempt.ts';
+import { cleanHabits, cleanMeal, rankRows, type HabitProfile, type PickContext } from '../_shared/temptPick.ts';
 
 const POOL = 'tempt_pool';
 const SHOWN = 'tempt_shown';
@@ -73,12 +79,20 @@ function answerOf(row: PoolRow, lines: string[], photo: boolean) {
   return { ...base, poolId: row.id, lines };
 }
 
+/** "Now" for the scored ranking (1.5, _shared/temptPick.ts): the request, what the player ate today and their snacking habits (sent
+ *  by the app), their weak spots counted as favourite names; a treat (>= 250 kcal) is not boosted here, the boss prompt asks for one. */
+function chatContext(now: TemptRequest, player: TemptPlayer, body: Record<string, unknown>): PickContext {
+  const habits: HabitProfile = cleanHabits(body.habits) ?? { total: 0, cats: {}, names: [] };
+  return { ...now, meal: cleanMeal(body.meal), habits: { ...habits, total: Math.max(habits.total, 1), names: [...habits.names, ...player.weaknesses].slice(0, 16) } };
+}
+
 async function open(ctx: AiContext, body: Record<string, unknown>): Promise<Response> {
   const req = cleanTemptChatRequest(body, cleanTemptRequest(body.now));
   if (!req || req.action !== 'open') return jsonResponse({ error: 'Thiếu ngày giờ hiện tại.' }, 400);
   const loaded = await loadPool(ctx.admin, ctx.userId);
   if (!loaded || loaded.rows.length === 0) return jsonResponse({ error: BUSY }, 503);
-  const candidates = chatCandidates(loaded.rows, loaded.shown, req.now, req.player, new Date());
+  const ranked = rankRows(loaded.rows, loaded.shown, chatContext(req.now, req.player, body), new Date(), PICK_CANDIDATES).map((x) => x.row);
+  const candidates = ranked.length > 0 ? ranked : chatCandidates(loaded.rows, loaded.shown, req.now, req.player, new Date());
   if (candidates.length === 0) return jsonResponse({ error: BUSY }, 503);
 
   const pickCall = await runAiCall(ctx, 'temptchat', {
@@ -112,7 +126,9 @@ async function reply(ctx: AiContext, body: Record<string, unknown>): Promise<Res
   if (!req || req.action !== 'reply') return jsonResponse({ error: 'Thiếu nội dung trò chuyện.' }, 400);
   if (req.turn >= MAX_TURNS) return jsonResponse({ error: 'Hết lượt đáp trả rồi, Quỷ đã chịu thua.' }, 400);
   const loaded = await loadPool(ctx.admin, ctx.userId);
-  const alternatives = loaded ? chatCandidates(loaded.rows, loaded.shown, req.now, req.player, new Date(), [req.item.name, ...req.offered], SWITCH_CANDIDATES) : [];
+  const avoid = [req.item.name, ...req.offered];
+  const ranked = loaded ? rankRows(loaded.rows, loaded.shown, { ...chatContext(req.now, req.player, body), avoid: [...req.now.avoid, ...avoid] }, new Date(), SWITCH_CANDIDATES).map((x) => x.row) : [];
+  const alternatives = ranked.length > 0 ? ranked : loaded ? chatCandidates(loaded.rows, loaded.shown, req.now, req.player, new Date(), avoid, SWITCH_CANDIDATES) : [];
   const call = await runAiCall(ctx, 'temptchat', {
     tool: TURN_TOOL,
     system: CHAT_SYSTEM,

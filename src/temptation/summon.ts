@@ -4,7 +4,9 @@ import { requestTemptation, requestTemptChat } from '../sync/cloudSync';
 import { toDateKey } from '../utils/date';
 import { TEMPT_CATALOG } from './catalog';
 import type { TemptTalk, TemptTurn } from '../components/quest/TemptationDialog';
+import { pickExtrasNow } from './context';
 import { itemFromAi, pickEasy, type TemptItem } from './item';
+import { answerOfCompact, markShownLocal, pickFromCache, readPoolCache, refreshPool } from './offlinePool';
 import { currentTemptPlayer } from './player';
 import { currentWeather, type Weather } from './weather';
 
@@ -25,7 +27,7 @@ export function temptNow(now: Date, city: string, weather: Weather | null, avoid
 export async function aiChatItem(now: Date): Promise<TemptItem | null> {
   const { settings } = useTemptationStore.getState();
   const weather = await currentWeather(settings.city).catch(() => null);
-  const outcome = await requestTemptChat({ action: 'open', now: temptNow(now, settings.city, weather, recentNames()), player: currentTemptPlayer(now) });
+  const outcome = await requestTemptChat({ action: 'open', now: temptNow(now, settings.city, weather, recentNames()), player: currentTemptPlayer(now), ...pickExtrasNow(now) });
   return outcome.ok ? itemFromAi(outcome.result, outcome.sample ? 'sample' : 'ai', true) : null;
 }
 
@@ -37,6 +39,7 @@ export async function bossReply(talk: TemptTalk, now: Date = new Date()): Promis
     action: 'reply',
     now: temptNow(now, settings.city, weather, []),
     player: currentTemptPlayer(now),
+    ...pickExtrasNow(now),
     item: { poolId: talk.item.chat?.poolId ?? '', name: talk.item.name, kcal: talk.item.kcal },
     offered: talk.offered,
     chat: talk.chat,
@@ -50,16 +53,32 @@ export async function bossReply(talk: TemptTalk, now: Date = new Date()): Promis
   return { move: item || move !== 'switch' ? move : 'retry', lines, ...(item ? { item } : {}) };
 }
 
-/** A Hard item: the AI (with the weather when it can be had), or, when the AI is unavailable, an Easy item marked as a fallback. */
+/** A Hard item from the pool copy on this device (1.5, offline): the same scoring as the server, recorded as shown; null without a copy. */
+export async function offlineItem(now: Date, weather: Weather | null, names: string[]): Promise<TemptItem | null> {
+  const { settings } = useTemptationStore.getState();
+  const cache = await readPoolCache().catch(() => null);
+  const pick = pickFromCache(cache, { ...temptNow(now, settings.city, weather, names), ...pickExtrasNow(now) }, now);
+  if (!pick) return null;
+  void markShownLocal(pick.item.id, now);
+  return itemFromAi(answerOfCompact(pick.item, pick.repeat), 'ai');
+}
+
+/** A Hard item: the server's pick from the pool (with the weather, what was eaten today and the player's habits), else (offline, the
+ *  server unavailable) the pick from the pool copy on this device, else an Easy item marked as a fallback. The copy is refreshed
+ *  afterwards when it is old. */
 export async function hardItem(now: Date, language: 'vi' | 'en'): Promise<TemptItem> {
   const { settings } = useTemptationStore.getState();
   const names = recentNames();
   const weather = await currentWeather(settings.city).catch(() => null);
-  const outcome = await requestTemptation(temptNow(now, settings.city, weather, names));
+  const outcome = await requestTemptation({ ...temptNow(now, settings.city, weather, names), ...pickExtrasNow(now) });
+  void refreshPool().catch(() => undefined);
   if (outcome.ok) {
     const item = itemFromAi(outcome.result, outcome.sample ? 'sample' : 'ai');
     if (item) return item;
   }
+  // The pool pick is no AI call, so it also stands in when the AI is off. (The dev account never downloads the pool: no copy.)
+  const local = await offlineItem(now, weather, names).catch(() => null);
+  if (local) return local;
   return { ...pickEasy(now, language, recentIds(names)), note: 'fallback' };
 }
 

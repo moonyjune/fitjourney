@@ -38,6 +38,16 @@
 // (exact / similar / wrong / not food + confidence; only a confident "exact" is kept). Shared code: _shared/dishPhotoLookup.ts.
 // Re-photo (1.3.x): POST {"action":"rephoto","limit":6} with the x-cron-secret header audits the pool's pictures step by step
 // (rephotoStep), library photos first; call it until `done`. Its cost is pool (system) cost like the seed's.
+// 1.5 ("500 món"): every item carries `tags` (_shared/temptPick.ts: course, time slots of a working day, weather, temperature, months,
+// weekday / weekend, office hours, solar and lunar events, after a meal). A pop-up is picked with temptPick.ts pickScored from the
+// time, weather, events, what the player ate today (`meal`) and their snacking habits (`habits`), both sent by the app. Items a
+// player reported as having a wrong photo (`photoFlag`) are the first a rephoto step looks at, and get a new photo (never the old).
+// Expand: POST {"action":"expand"} with the x-cron-secret header grows the pool step by step: tags for untagged items (the `tempt`
+// model, 40 per call), new tagged items by theme up to EXPAND_TARGET (~500; the brands theme with 2 web searches), then a verified
+// photo for every new item (the 0.26.2 / 1.3.x picture work on Sonnet 5.5, under the same one-picture-job-at-a-time lock as rephoto).
+// Call it until `done`; {"phase":"tag"|"generate"|"photos"} forces one phase. Pool (system) cost.
+// Pool download (offline pick): POST {"action":"pool","etag":"..."} (signed in) answers the compact pool with its etag (or
+// notModified) and the player's showings of the last 30 days; no AI call, no quota.
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { jsonResponse, runAiCall, serveAi, systemAllowance, type AiContext } from '../_shared/ai.ts';
@@ -46,12 +56,12 @@ import { findVerifiedPhotos, verifyUrls, within, type Runner } from '../_shared/
 import { genericPictureUrl, PHOTO_CHECK_VERSION, poolRepairQueue, REPAIR_MODEL, repairDecision, repairLimit, verdictAccepts } from '../_shared/photoMatch.ts';
 import { cronBody, inBackground, systemContext, systemRecord, type RecordFn } from '../_shared/systemJobs.ts';
 import {
+  cleanPoolItem,
   cleanStoredPoolItem,
   cleanTemptAnswer,
   cleanTemptRequest,
   fitNow,
   newPoolItems,
-  pickPoolItem,
   POOL_CHUNKS,
   POOL_SYSTEM,
   POOL_TOOL,
@@ -88,6 +98,29 @@ import {
   withDishPhoto,
   withOgImage,
 } from '../_shared/tempt.ts';
+import {
+  cleanHabits,
+  cleanMeal,
+  cleanTagAnswer,
+  cleanTags,
+  deriveTags,
+  EXPAND_SYSTEM,
+  EXPAND_TARGET,
+  EXPAND_TOOL,
+  expandedItem,
+  expandPrompt,
+  needsTags,
+  pickScored,
+  poolDownload,
+  TAG_CALLS,
+  TAG_PER_CALL,
+  TAG_SYSTEM,
+  TAG_TOOL,
+  tagPrompt,
+  TAGS_VERSION,
+  themesToGrow,
+  type PickContext,
+} from '../_shared/temptPick.ts';
 import { pagePhoto, type PageFetch } from '../_shared/webImage.ts';
 import { seenInEvidence, webToolsFor } from '../_shared/webtools.ts';
 
@@ -330,6 +363,21 @@ async function photosForGroup(admin: SupabaseClient, group: PoolRow[], taken: Se
 /** Repair steps that could not decide an item before it is left as it is. */
 const AUDIT_MAX_FAILS = 2;
 
+/** A player reported this item's photo as wrong (the "báo ảnh sai" button sets `photoFlag`; read defensively, any truthy value). */
+const photoFlagged = (item: TemptPoolItem): boolean => !!(item as { photoFlag?: unknown }).photoFlag;
+
+/** The item without its report. */
+function unflagged(item: TemptPoolItem): TemptPoolItem {
+  const { photoFlag: _f, ...rest } = item as TemptPoolItem & { photoFlag?: unknown };
+  return rest;
+}
+
+/** The rows a rephoto step looks at: reported ones first (whatever their audit), then the audit queue; `limit` in all. */
+function rephotoQueue(rows: PoolRow[], limit: number): PoolRow[] {
+  const flagged = rows.filter((r) => photoFlagged(r.item));
+  return [...flagged, ...poolRepairQueue(rows.filter((r) => !photoFlagged(r.item)), limit)].slice(0, limit);
+}
+
 /** One step of the picture repair (POST {"action":"rephoto","limit":6} with the x-cron-secret header; called again until `done`):
  *  up to `limit` (1-12) items not audited by the current photo check, library photos first (the generic Wikimedia ones were there).
  *  Sonnet 5.5 judges each current picture alone; a confirmed one stays (marked checked); for the others a new photo is looked for in
@@ -350,16 +398,16 @@ async function rephotoStep(admin: SupabaseClient, body: Record<string, unknown>)
   const tally = { kept: 0, keptSimilar: 0, replaced: 0, removed: 0, stillNone: 0, failed: 0 };
   let rows = loaded.rows;
   try {
-    const queue = poolRepairQueue(rows, limit);
+    const queue = rephotoQueue(rows, limit);
     const run = poolRunner(admin, spent);
     const taken = takenPhotos(rows);
-    // 1. The current pictures, judged.
-    const withPic = queue.filter((r) => r.item.imageUrl);
+    // 1. The current pictures, judged (not a reported one: it needs a new photo whatever the check says).
+    const withPic = queue.filter((r) => r.item.imageUrl && !photoFlagged(r.item));
     const verdicts = await verifyUrls(withPic.map((r) => ({ dish: r.item.name, url: r.item.imageUrl! })), run);
     if (verdicts === null) return jsonResponse({ error: 'The check failed; nothing changed. Try again.', costUsd: spent.usd }, 502);
     const current = new Map(withPic.map((r, i) => [r.id, verdicts[i]]));
     // 2. A new photo for each item whose picture is not confirmed (never the one found wrong, nor another item's).
-    const needNew = queue.filter((r) => !(r.item.imageUrl && verdictAccepts(current.get(r.id))));
+    const needNew = queue.filter((r) => photoFlagged(r.item) || !(r.item.imageUrl && verdictAccepts(current.get(r.id))));
     const dishes = needNew.map((r) => cleanDishPhotoRequest({ dishes: [{ name: r.item.name }] })?.[0] ?? null);
     const asked = needNew.flatMap((r, i) => (dishes[i] ? [{ r, d: dishes[i]! }] : []));
     const exclude = new Set(needNew.flatMap((r) => [...(r.item.badPhotos ?? []), ...(r.item.imageUrl ? [photoKey(r.item.imageUrl)] : [])]));
@@ -369,6 +417,33 @@ async function rephotoStep(admin: SupabaseClient, body: Record<string, unknown>)
     const updated = new Map<string, TemptPoolItem>();
     for (const row of queue) {
       const item = row.item;
+      if (photoFlagged(item)) {
+        // Reported wrong: a confirmed new photo, else none (the app shows the dish photo or the emoji); undecided twice, none too.
+        const got = fresh.has(row.id) ? fresh.get(row.id) : null;
+        const note = { name: item.name, old: item.imageUrl ?? null, verdict: 'reported', confidence: null };
+        let next: TemptPoolItem;
+        if (got === undefined && (item.photoAuditFails ?? 0) + 1 < AUDIT_MAX_FAILS) {
+          tally.failed++;
+          changes.push({ ...note, action: 'failed' });
+          next = { ...item, photoAuditFails: (item.photoAuditFails ?? 0) + 1 };
+        } else {
+          const base = unflagged(item.imageUrl ? withoutPhoto(item) : item);
+          if (got) {
+            tally.replaced++;
+            changes.push({ ...note, action: 'replace', new: got.url, source: got.source });
+            next = withFoundPhoto(base, got);
+          } else {
+            tally.removed++;
+            changes.push({ ...note, action: 'remove' });
+            next = withNoPhoto(base);
+          }
+          next = { ...next, photoAudit: PHOTO_CHECK_VERSION };
+          delete next.photoAuditFails;
+        }
+        updated.set(row.id, next);
+        await saveItem(admin, row.id, next);
+        continue;
+      }
       const v = item.imageUrl ? (current.get(row.id) ?? null) : null;
       // A confirmed picture needs nothing new; an item whose name gives no search counts as "nothing found".
       const got = verdictAccepts(v) ? null : fresh.has(row.id) ? fresh.get(row.id) : null;
@@ -410,7 +485,7 @@ async function rephotoStep(admin: SupabaseClient, body: Record<string, unknown>)
   } finally {
     await admin.from(META).update({ photos_started_at: null }).eq('id', 1);
   }
-  const remaining = poolRepairQueue(rows, rows.length).length;
+  const remaining = rephotoQueue(rows, rows.length).length;
   const { data: m } = await admin.from(META).select('system_cost_usd').eq('id', 1).maybeSingle();
   return jsonResponse({
     step: 'rephoto',
@@ -456,20 +531,30 @@ async function serve(ctx: AiContext, row: PoolRow, repeat: boolean, rows: PoolRo
   return jsonResponse({ result: poolAnswer(row.item, repeat) });
 }
 
+/** "Now" for the scored pick (1.5): the request, plus what the player ate today and their snacking habits when the app sent them. */
+const pickContextOf = (req: TemptRequest, body: Record<string, unknown>): PickContext => ({ ...req, meal: cleanMeal(body.meal), habits: cleanHabits(body.habits) });
+
 /** A pop-up from the pool, refilling it when it runs low; null when the pool tables are not there (the caller answers the old way). */
-async function fromPool(ctx: AiContext, req: TemptRequest): Promise<Response | null> {
+async function fromPool(ctx: AiContext, req: TemptRequest, body: Record<string, unknown> = {}): Promise<Response | null> {
   const loaded = await loadPool(ctx.admin, ctx.userId);
   if (!loaded) return null;
   const { rows, shown } = loaded;
   const now = fitNow(req);
   const at = new Date();
-  const pick = pickPoolItem(rows, shown, now, at, req.avoid);
+  const pickCtx = pickContextOf(req, body);
+  const pick = pickScored(rows, shown, pickCtx, at);
   const urgent = !pick || pick.repeat;
   // A refill is system work (0.26.7): not this player's quota or budget, only the claim guards and the global daily cap.
   if (poolNeedsRefill(rows, shown, now, at) && (await systemAllowance(ctx.admin)).ok && (await claimRefill(ctx.admin, refillGuards(at, urgent)))) {
     const refill = startRefill(ctx.admin, rows, req.date, POOL_CHUNKS);
     // The new items get their pictures right after (what does not fit in the time is done by later pop-ups).
-    const afterwards = refill.all.then((added) => backfillClaimed(ctx.admin, added, added.length, REFILL_PHOTOS_BUDGET_MS));
+    const afterwards = refill.all.then(async (added) => {
+      // 1.5: the new items get their tags too (cheap model), then their pictures.
+      await tagRows(ctx.admin, added, systemRecord(ctx.admin, 'tempt-me')).catch((e) => console.warn('[tempt-me] tags failed:', e instanceof Error ? e.message : e));
+      const fresh = await loadPool(ctx.admin, null);
+      const ids = new Set(added.map((r) => r.id));
+      return backfillClaimed(ctx.admin, fresh ? fresh.rows.filter((r) => ids.has(r.id)) : added, added.length, REFILL_PHOTOS_BUDGET_MS);
+    });
     if (!urgent) {
       // Something fresh to show already: the refill finishes after the answer.
       await inBackground(afterwards);
@@ -478,7 +563,7 @@ async function fromPool(ctx: AiContext, req: TemptRequest): Promise<Response | n
     // Nothing fresh: wait for the first call that adds items, the rest goes on in the background.
     const got = await refill.first;
     await inBackground(afterwards);
-    const fresh = pickPoolItem([...got, ...rows], shown, now, at, req.avoid);
+    const fresh = pickScored([...got, ...rows], shown, pickCtx, at);
     if (fresh) return serve(ctx, fresh.row, fresh.repeat, []);
   }
   if (pick) return serve(ctx, pick.row, pick.repeat, rows);
@@ -528,23 +613,209 @@ async function seedStep(admin: SupabaseClient): Promise<Response> {
   return report('photos', { decided, repaired: repaired.length });
 }
 
+/** Writes the tags of `rows` (index-aligned `tags`, null = none) into the pool: each row is read again just before (a picture job
+ *  may have saved it meanwhile) and only its `tags` change. The number written. */
+async function saveTags(admin: SupabaseClient, rows: PoolRow[], tags: (Record<string, unknown> | null)[]): Promise<number> {
+  const ids = rows.flatMap((r, i) => (tags[i] ? [r.id] : []));
+  if (ids.length === 0) return 0;
+  const { data, error } = await admin.from(POOL).select('id,item').in('id', ids);
+  if (error) {
+    console.warn('[tempt-me] tags not read back:', JSON.stringify(error));
+    return 0;
+  }
+  const byId = new Map(rows.map((r, i) => [r.id, tags[i]]));
+  let written = 0;
+  for (const r of (data ?? []) as { id: string; item: unknown }[]) {
+    const item = cleanStoredPoolItem(r.item);
+    const t = byId.get(r.id);
+    if (!item || !t) continue;
+    const theme = cleanTags(item.tags)?.theme;
+    await saveItem(admin, r.id, { ...item, tags: { ...t, ...(theme ? { theme } : {}) } });
+    written++;
+  }
+  return written;
+}
+
+/** Tags for up to TAG_PER_CALL * TAG_CALLS untagged rows (TAG_CALLS calls at once on the `tempt` model). A row the model answered
+ *  nothing for gets tags derived from its 0.26 fields (so it is not asked again); a failed call leaves its rows for the next step.
+ *  The number of rows tagged. */
+async function tagRows(admin: SupabaseClient, rows: PoolRow[], record: Record_): Promise<number> {
+  const todo = rows.filter((r) => needsTags(r.item)).slice(0, TAG_PER_CALL * TAG_CALLS);
+  if (todo.length === 0) return 0;
+  const ctx = systemContext(admin);
+  const groups = Array.from({ length: Math.ceil(todo.length / TAG_PER_CALL) }, (_, g) => todo.slice(g * TAG_PER_CALL, g * TAG_PER_CALL + TAG_PER_CALL));
+  const counts = await Promise.all(
+    groups.map(async (group) => {
+      const outcome = await runAiCall(
+        ctx,
+        'tempt',
+        { tool: TAG_TOOL, system: TAG_SYSTEM, maxTokens: 12000, attemptTimeoutMs: REFILL_CALL_MS, messages: [{ role: 'user', content: `<request>${tagPrompt(group.map((r) => r.item))}</request>` }] },
+        { record }
+      );
+      if ('error' in outcome) {
+        console.warn('[tempt-me] tag call failed:', outcome.error);
+        return 0;
+      }
+      const tags = cleanTagAnswer(outcome.input, group.length).map((t, i) => (t ?? { ...deriveTags(group[i].item), v: TAGS_VERSION }) as unknown as Record<string, unknown>);
+      return saveTags(admin, group, tags);
+    })
+  );
+  return counts.reduce((a, b) => a + b, 0);
+}
+
+/** One generation step of the expand job: the themes most short of their count (temptPick.ts EXPAND_THEMES), one call each at once,
+ *  each item with its tags; new names only, written to the pool. Holds the refill claim. The rows added, or null when busy. */
+async function expandGenerate(admin: SupabaseClient, rows: PoolRow[], record: Record_, notes: Record<string, unknown>[]): Promise<PoolRow[] | null> {
+  let left = EXPAND_TARGET - rows.length;
+  const themes = themesToGrow(rows).flatMap((t) => {
+    const want = Math.min(t.want, left);
+    left -= want;
+    return want > 0 ? [{ ...t, want }] : [];
+  });
+  if (themes.length === 0) return [];
+  const now = new Date();
+  const far = new Date(now.getTime() + 86_400_000).toISOString();
+  if (!(await claimRefill(admin, { runningBefore: new Date(now.getTime() - 10 * 60_000).toISOString(), doneBefore: far, failedBefore: far }))) return null;
+  const today = new Date(now.getTime() + 7 * 3_600_000).toISOString().slice(0, 10);
+  const known = new Set(rows.map((r) => poolNameKey(r.item.name)));
+  const knownNames = rows.map((r) => r.item.name).slice(0, 700);
+  const ctx = systemContext(admin);
+  const lists = await Promise.all(
+    themes.map(async ({ theme, want }) => {
+      const note: Record<string, unknown> = { theme: theme.id, want };
+      notes.push(note);
+      const outcome = await runAiCall(
+        ctx,
+        'tempt',
+        {
+          tool: EXPAND_TOOL,
+          system: EXPAND_SYSTEM,
+          maxTokens: 16000,
+          attemptTimeoutMs: REFILL_CALL_MS,
+          messages: [{ role: 'user', content: `<request>${expandPrompt(theme, want, today, knownNames)}</request>` }],
+          ...(theme.web ? { serverTools: (model: string) => webToolsFor(model, { maxSearches: 2, maxFetches: 0 }) } : {}),
+        },
+        { record }
+      );
+      if ('error' in outcome) {
+        note.error = String(outcome.error).slice(0, 300);
+        return [] as PoolRow[];
+      }
+      const evidence = outcome.web?.evidence;
+      const seen = (url: string) => !!evidence && seenInEvidence(url, evidence);
+      const raw = poolItemsOf(outcome.input);
+      const items: TemptPoolItem[] = [];
+      for (const r of raw) {
+        const x = expandedItem(r, theme.id);
+        const item = x ? cleanPoolItem(x.raw, seen) : null;
+        const key = item ? poolNameKey(item.name) : '';
+        if (!x || !item || !key || known.has(key)) continue;
+        known.add(key);
+        items.push({ ...item, tags: x.tags as unknown as Record<string, unknown> });
+        if (items.length >= want + 3) break;
+      }
+      note.got = raw.length;
+      note.kept = items.length;
+      if (items.length === 0) return [] as PoolRow[];
+      const { data, error } = await admin
+        .from(POOL)
+        .upsert(
+          items.map((item) => ({ name_key: poolNameKey(item.name), item })),
+          { onConflict: 'name_key', ignoreDuplicates: true }
+        )
+        .select('id,item,created_at');
+      if (error) {
+        note.dbError = JSON.stringify(error).slice(0, 300);
+        return [] as PoolRow[];
+      }
+      note.written = (data ?? []).length;
+      return toRows(data);
+    })
+  );
+  const added = lists.flat();
+  await finishRefill(admin, added.length);
+  return added;
+}
+
+/** One step of the expand job (POST {"action":"expand"} with the x-cron-secret header; called again until `done`): tags for untagged
+ *  items, then new tagged items up to EXPAND_TARGET, then verified photos for items still without one (under the picture lock, so it
+ *  waits while a rephoto runs: `busy`). `phase` ("tag" / "generate" / "photos") forces one of them. Pool (system) cost; `costUsd`
+ *  is what the pool's cost grew by during this step. */
+async function expandStep(admin: SupabaseClient, body: Record<string, unknown>): Promise<Response> {
+  const loaded = await loadPool(admin, null);
+  if (!loaded) return jsonResponse({ error: 'Chưa có bảng tempt_pool: hãy chạy supabase/schema.sql.' }, 503);
+  let rows = loaded.rows;
+  const costNow = async () => Number((await admin.from(META).select('system_cost_usd').eq('id', 1).maybeSingle()).data?.system_cost_usd ?? 0);
+  const before = await costNow();
+  const record = systemRecord(admin, 'tempt-me');
+  const growable = () => rows.length < EXPAND_TARGET && themesToGrow(rows).length > 0;
+  const status = () => {
+    const untagged = rows.filter((r) => needsTags(r.item)).length;
+    const needPhoto = rows.filter((r) => needsPhoto(r.item)).length;
+    return { total: rows.length, target: EXPAND_TARGET, untagged, needPhoto, flagged: rows.filter((r) => photoFlagged(r.item)).length, done: untagged === 0 && !growable() && needPhoto === 0 };
+  };
+  const report = async (step: string, extra: Record<string, unknown> = {}) => {
+    const after = await costNow();
+    return jsonResponse({ step, ...status(), ...extra, costUsd: Math.round((after - before) * 1e6) / 1e6, poolCostUsd: after });
+  };
+  const allowed = await systemAllowance(admin);
+  if (!allowed.ok) return report('none', { error: allowed.error });
+  const st = status();
+  const phase = typeof body.phase === 'string' && body.phase ? body.phase : st.untagged > 0 ? 'tag' : growable() ? 'generate' : st.needPhoto > 0 ? 'photos' : 'none';
+  if (phase === 'tag') {
+    const tagged = await tagRows(admin, rows, record);
+    const again = await loadPool(admin, null);
+    if (again) rows = again.rows;
+    return report('tag', { tagged });
+  }
+  if (phase === 'generate') {
+    const notes: Record<string, unknown>[] = [];
+    const added = await expandGenerate(admin, rows, record, notes);
+    if (added === null) return report('generate', { busy: true });
+    rows = [...added, ...rows];
+    return report('generate', { added: added.length, calls: notes });
+  }
+  if (phase === 'photos') {
+    const decided = await backfillClaimed(admin, rows, SEED_PHOTOS_PER_CALL, SEED_PHOTOS_BUDGET_MS);
+    if (decided === null) return report('photos', { busy: true });
+    const again = await loadPool(admin, null);
+    if (again) rows = again.rows;
+    return report('photos', { decided });
+  }
+  return report('none');
+}
+
+/** The pool for the app's offline pick (POST {"action":"pool","etag":"..."}, signed in): the compact items and their etag, or only
+ *  `notModified` when the app's etag is the same; and this player's showings of the last 30 days. No AI call, no quota. */
+async function poolAction(ctx: AiContext, body: Record<string, unknown>): Promise<Response> {
+  const loaded = await loadPool(ctx.admin, ctx.userId);
+  if (!loaded) return jsonResponse({ error: 'Chưa có kho món.' }, 503);
+  const { etag, items } = poolDownload(loaded.rows);
+  const since = Date.now() - 30 * 86_400_000;
+  const shown = [...loaded.shown].filter(([, at]) => Date.parse(at) > since).map(([id, at]) => ({ id, at }));
+  if (typeof body.etag === 'string' && body.etag === etag) return jsonResponse({ pool: { etag, notModified: true }, shown });
+  return jsonResponse({ pool: { etag, items }, shown });
+}
+
 /** The maintenance calls bypass the player sign-in, only with the cron secret (PUSH_CRON_SECRET, the same as send-push's):
- *  {"action":"seed"} (seedStep) and {"action":"rephoto","limit":6} (rephotoStep, 1.3.x). */
+ *  {"action":"seed"} (seedStep), {"action":"rephoto","limit":6} (rephotoStep, 1.3.x) and {"action":"expand"} (expandStep, 1.5). */
 async function seedGate(req: Request, admin: SupabaseClient): Promise<Response | null> {
   const got = await cronBody(req);
   if (got === null) return null;
   if ('forbidden' in got) return jsonResponse({ error: 'forbidden' }, 401);
   if (got.body.action === 'seed') return seedStep(admin);
   if (got.body.action === 'rephoto') return rephotoStep(admin, got.body);
-  return jsonResponse({ error: 'Unknown action (expected {"action":"seed"} or {"action":"rephoto"}).' }, 400);
+  if (got.body.action === 'expand') return expandStep(admin, got.body);
+  return jsonResponse({ error: 'Unknown action (expected {"action":"seed"}, {"action":"rephoto"} or {"action":"expand"}).' }, 400);
 }
 
 serveAi(
   'tempt',
   async (body, ctx) => {
+    if (body.action === 'pool') return poolAction(ctx, body);
     const req = cleanTemptRequest(body);
     if (!req) return jsonResponse({ error: 'Thiếu ngày giờ hiện tại.' }, 400);
-    const pooled = await fromPool(ctx, req);
+    const pooled = await fromPool(ctx, req, body);
     if (pooled) return pooled;
     // The old way (no pool tables yet): one item from one AI call that may search the web.
     return {

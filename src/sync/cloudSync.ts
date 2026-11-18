@@ -1506,6 +1506,9 @@ export interface TemptationRequest {
   city: string;
   weather: { tempC: number; summary: string } | null;
   avoid: string[];
+  /** 1.5: what the player ate today and their snacking habits (src/temptation/context.ts), for the scored pick. */
+  meal?: unknown;
+  habits?: unknown;
 }
 
 export type TemptationOutcome = { ok: true; result: unknown; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
@@ -1554,7 +1557,37 @@ export async function requestTemptChat(body: Record<string, unknown> & { action:
   }
 }
 
-export type DishPhotosOutcome = { ok: true; dishes: DishPhotoResult[]; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+/** 1.5: the temptation pool for the offline pick (tempt-me {"action":"pool"}): the compact items with their etag (or `notModified`
+ *  when `etag` is still current) and this player's showings of the last 30 days. Null when offline, for the dev account or on error.
+ *  No AI call: not stopped by the device's AI switch. */
+export async function requestTemptPool(etag: string | null): Promise<{ pool: { etag: string; items?: unknown[]; notModified?: boolean }; shown?: { id: string; at: string }[] } | null> {
+  if (useAuthStore.getState().devMode || !(await isOnline())) return null;
+  try {
+    const { data, error } = await supabase.functions.invoke('tempt-me', { body: { action: 'pool', ...(etag ? { etag } : {}) } });
+    if (error || !data?.pool || typeof data.pool.etag !== 'string') return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** 1.5: records that a pool item was shown to this player (an offline pick), so the server does not offer it again for 30 days.
+ *  Best effort: offline / signed out / the dev account do nothing (the device keeps its own record). */
+export async function recordTemptShown(poolId: string, at: Date): Promise<void> {
+  const auth = useAuthStore.getState();
+  const userId = auth.session?.user?.id;
+  if (auth.devMode || !userId || !(await isOnline())) return;
+  const row = { user_id: userId, pool_id: poolId, shown_at: at.toISOString() };
+  try {
+    const { error } = await supabase.from('tempt_shown').upsert(row, { onConflict: 'user_id,pool_id' });
+    // Before the update policy of schema.sql 1.5 is in place, only a first showing can be written.
+    if (error) await supabase.from('tempt_shown').insert(row);
+  } catch {
+    // the device's record is enough to avoid a repeat here
+  }
+}
+
+export type DishPhotosOutcome ={ ok: true; dishes: DishPhotoResult[]; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
 
 /** Calls the dish-photo edge function: a real photo (Wikimedia Commons / Openverse, checked by the AI to show that dish) for up to
  *  MAX_DISHES dish names, or null per dish when none was found. The answer is cleaned again here (`cleanDishPhotoAnswer`). Same rules

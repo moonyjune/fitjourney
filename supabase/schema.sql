@@ -1087,6 +1087,12 @@ create policy "tempt_shown_own_select" on public.tempt_shown for select
 drop policy if exists "tempt_shown_own_insert" on public.tempt_shown;
 create policy "tempt_shown_own_insert" on public.tempt_shown for insert
   to authenticated with check (auth.uid() = user_id);
+-- 1.5: app tự chọn món từ bản kho tải về máy khi offline (temptPick.ts) và ghi lại lần mời; mời lại món sau 30 ngày cần cập nhật
+-- shown_at của dòng sẵn có (upsert ghi lại cả user_id, pool_id), nên người dùng được sửa dòng của chính mình.
+grant update on public.tempt_shown to authenticated;
+drop policy if exists "tempt_shown_own_update" on public.tempt_shown;
+create policy "tempt_shown_own_update" on public.tempt_shown for update
+  to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Trạng thái nạp kho (một dòng): đang nạp từ lúc nào, nạp xong lúc nào, lần nạp không được món nào lúc nào. Chỉ hàm (service role).
 create table if not exists public.tempt_pool_meta (
