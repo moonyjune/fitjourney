@@ -205,6 +205,31 @@ describe('AI tương tác: the chat with the boss', () => {
     expect(onLog).toHaveBeenCalledWith(item);
   });
 
+  it('teasing back from the challenge itself: my own words start the chat, and after 3 replies the boss gives up', async () => {
+    const onTalk = jest.fn(async (talk: { turn: number }) => (talk.turn >= 2 ? { move: 'concede' as const, lines: ['Thôi ta chịu 🏳️'] } : { move: 'insist' as const, lines: ['Hứ, ai thèm dỗi!'] }));
+    const onAnswer = jest.fn();
+    await act(async () => {
+      r = create(<TemptationDialog open={{ item, practice: false }} streak={0} onAnswer={onAnswer} onTalk={onTalk} onLog={jest.fn()} onClose={jest.fn()} />);
+    });
+    for (let i = 0; i < 3; i++) await advance(TYPING_MS);
+    expect(allText(r!)).toContain('Hoặc gõ một câu trêu lại Quỷ (tối đa 3 lượt).');
+    const field = () => r!.root.findAll((n) => n.props.accessibilityLabel === 'Trả lời Quỷ Cám Dỗ' && typeof n.props.onChangeText === 'function')[0];
+    const send = async (text: string) => {
+      await act(async () => field().props.onChangeText(text));
+      await press(r!, 'Gửi');
+    };
+    await send('Quỷ gì mà mời toàn trà sữa, hết chiêu rồi à? 😜');
+    expect(onTalk).toHaveBeenLastCalledWith(expect.objectContaining({ turn: 0, chat: expect.arrayContaining([{ from: 'me', text: 'Quỷ gì mà mời toàn trà sữa, hết chiêu rồi à? 😜' }]) }));
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(allText(r!)).toContain('Còn 2/3 lượt đáp trả');
+    await send('Dỗi à?');
+    expect(allText(r!)).toContain('Còn 1/3 lượt đáp trả');
+    await send('Bye nha 👋');
+    expect(onTalk).toHaveBeenCalledTimes(3);
+    expect(onAnswer).toHaveBeenCalledWith('resisted', 30, item);
+    expect(allText(r!)).toContain('Quỷ chịu thua sau 3 lượt đấu khẩu!');
+  });
+
   it('summon: with AI tương tác on, the boss picks through tempt-chat; unavailable, the chosen level as usual', async () => {
     mockChat.mockResolvedValueOnce({ ok: true, result: { name: 'Bánh tráng nướng', kcal: 350, poolId: 'p9', lines: ['Chiều mưa…'] } });
     await act(async () => {

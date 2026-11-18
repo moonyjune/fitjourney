@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { deleteWorkoutWithUndo } from '../../food/mealActions';
 import { useGameText, type GameKey } from '../../game/strings';
+import { logDayLabel } from '../../game/useLogDate';
+import { editWorkoutWhen, type WorkoutWhen } from '../../game/workoutWhen';
 import { EXERCISE_BY_ID, type ExerciseId } from '../../game/training/exercises';
 import { useProofStore } from '../../store/useProofStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
@@ -15,6 +17,7 @@ import { HudText } from './HudText';
 import { PhotoViewer } from './PhotoViewer';
 import { QuestIcon, type QuestIconName } from './QuestIcon';
 import { WorkoutEntryForm, type PhotoChange, type WorkoutFormValues } from './WorkoutEntryForm';
+import { WorkoutWhenForm } from './WorkoutWhenForm';
 
 interface Props {
   /** The workouts of one journal row, in time order; null when closed. */
@@ -68,6 +71,8 @@ function ExerciseResult({ x, lang }: { x: WorkoutExerciseResult; lang: 'vi' | 'e
 
 interface EntryActions {
   onEdit: (entry: WorkoutLogEntry) => void;
+  /** "Ngày & giờ": move the workout to another day and/or start time. */
+  onWhen?: (entry: WorkoutLogEntry) => void;
   onDelete: (entry: WorkoutLogEntry) => void;
   onPhoto: (uri: string, entry: WorkoutLogEntry) => void;
 }
@@ -104,6 +109,7 @@ function EntryCard({ e, lang, actions }: { e: WorkoutLogEntry; lang: 'vi' | 'en'
       {actions && (
         <View style={styles.actions}>
           <ActionChip icon="edit" label={g('wkp.edit')} a11y={g('wkp.editEntry', { name: e.label })} onPress={() => actions.onEdit(e)} />
+          {actions.onWhen && <ActionChip icon="calendar" label={g('wkWhen.chip')} a11y={g('wkWhen.chipA11y', { name: e.label })} onPress={() => actions.onWhen?.(e)} />}
           <ActionChip icon="camera" label={g('journal.wo.photo')} a11y={g('journal.wo.photoLabel', { name: e.label })} onPress={() => actions.onEdit(e)} />
           {proof && <ActionChip icon="x" label={g('wkp.removePhoto')} a11y={`${g('wkp.removePhoto')}: ${e.label}`} onPress={() => detachWorkoutPhoto(e.id)} />}
           <ActionChip icon="trash" danger label={g('journal.wo.delete')} a11y={g('journal.wo.deleteLabel', { name: e.label })} onPress={() => actions.onDelete(e)} />
@@ -182,6 +188,7 @@ function EntryEditor({ entry, onDone }: { entry: WorkoutLogEntry; onDone: () => 
 export function WorkoutDetailDialog({ entries, lang, onClose, editable }: Props) {
   const g = useGameText();
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ uri: string; label: string } | null>(null);
   if (!entries || entries.length === 0) return null;
   const first = entries[0];
@@ -189,15 +196,18 @@ export function WorkoutDetailDialog({ entries, lang, onClose, editable }: Props)
   const totalMin = entries.reduce((s, e) => s + e.durationMin, 0);
   const totalKcal = Math.round(entries.reduce((s, e) => s + e.caloriesBurned, 0));
   const editing = editingId ? entries.find((e) => e.id === editingId) : undefined;
+  const moving = movingId ? entries.find((e) => e.id === movingId) : undefined;
 
   const close = () => {
     setEditingId(null);
+    setMovingId(null);
     setViewing(null);
     onClose();
   };
   const actions: EntryActions | undefined = editable
     ? {
         onEdit: (e) => setEditingId(e.id),
+        onWhen: (e) => setMovingId(e.id),
         onPhoto: (uri, e) => setViewing({ uri, label: e.label }),
         onDelete: (e) => {
           deleteWorkoutWithUndo(e.id, g('journal.wo.deleted', { name: e.label }));
@@ -205,6 +215,16 @@ export function WorkoutDetailDialog({ entries, lang, onClose, editable }: Props)
         },
       }
     : undefined;
+
+  /** Saves "Ngày & giờ" with "Hoàn tác"; the sheet showed the workout's old place in the journal, so it closes. */
+  function saveWhen(entry: WorkoutLogEntry, next: WorkoutWhen) {
+    const now = new Date();
+    const start = new Date(entry.dateISO);
+    const time = next.clock ? `${String(next.clock[0]).padStart(2, '0')}:${String(next.clock[1]).padStart(2, '0')}` : clock(start);
+    const moved = editWorkoutWhen(entry.id, next, g('wkWhen.moved', { name: entry.label, day: logDayLabel(next.dateKey, now, g), time }), now);
+    if (moved) close();
+    else setMovingId(null);
+  }
 
   return (
     <BottomSheet
@@ -216,7 +236,18 @@ export function WorkoutDetailDialog({ entries, lang, onClose, editable }: Props)
       testID="workout-detail-sheet"
     >
       <View style={styles.content}>
-        {editing ? <EntryEditor key={editing.id} entry={editing} onDone={() => setEditingId(null)} /> : <WorkoutEntries entries={entries} lang={lang} actions={actions} />}
+        {editing ? (
+          <EntryEditor key={editing.id} entry={editing} onDone={() => setEditingId(null)} />
+        ) : moving ? (
+          <View style={styles.entry}>
+            <HudText size={16} accessibilityRole="header">
+              {g('wkWhen.title', { name: moving.label })}
+            </HudText>
+            <WorkoutWhenForm key={moving.id} dateISO={moving.dateISO} onSave={(next) => saveWhen(moving, next)} onCancel={() => setMovingId(null)} />
+          </View>
+        ) : (
+          <WorkoutEntries entries={entries} lang={lang} actions={actions} />
+        )}
       </View>
       <PhotoViewer photos={viewing ? [{ uri: viewing.uri, label: viewing.label }] : null} title={viewing?.label} onClose={() => setViewing(null)} />
     </BottomSheet>

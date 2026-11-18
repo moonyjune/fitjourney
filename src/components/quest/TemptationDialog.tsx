@@ -4,7 +4,7 @@ import { TEMPTATION_RESIST_XP } from '../../game/constants';
 import { useGameText, type GameKey } from '../../game/strings';
 import type { TemptationOpen } from '../../store/useTemptationStore';
 import type { TemptItem } from '../../temptation/item';
-import { chatBonusXp, type TemptOutcome } from '../../temptation/stats';
+import { chatBonusXp, chatOver, chatRepliesLeft, MAX_CHAT_REPLIES, type TemptOutcome } from '../../temptation/stats';
 import { quest, questRadius } from '../../theme/quest';
 import { useDishPhoto } from '../../ai/useDishPhotos';
 import { DishPhoto, DishPhotoCredit, WebPhotoCredit } from './DishPhoto';
@@ -21,8 +21,8 @@ export const TYPING_MS = 700;
 /** One chat step of the conversation (what is on screen grows step by step). */
 type Step = { kind: 'line'; text: string } | { kind: 'card' };
 
-/** Boss turns of a chat after the first "no" (the server makes the last one a surrender). */
-export const MAX_CHAT_TURNS = 5;
+/** Replies the player can send in a chat (the "no" button or their own words); the server makes the boss's last answer a surrender. */
+export const MAX_CHAT_TURNS = MAX_CHAT_REPLIES;
 /** Longest line the player can send. */
 export const CHAT_MAX_CHARS = 200;
 
@@ -241,7 +241,7 @@ export function TemptationDialog({ open, onAnswer, onTalk, onLog, onClose, strea
   /** The player's line: shown at once, then the boss answers it (a new item, a surrender, or more pleading). */
   async function say(text: string) {
     const line = text.trim().slice(0, CHAT_MAX_CHARS);
-    if (!line || waiting || ended || !onTalk || !onTable) return;
+    if (!line || waiting || ended || !onTalk || !onTable || answer || chatRepliesLeft(turns) === 0) return;
     const mine: ChatEntry = { kind: 'me', text: line };
     setTalk((t) => [...t, mine]);
     setDraft('');
@@ -262,7 +262,7 @@ export function TemptationDialog({ open, onAnswer, onTalk, onLog, onClose, strea
     setTalk((t) => [...t, ...next]);
     const made = turns + 1;
     setTurns(made);
-    if (reply.move === 'concede' || made >= MAX_CHAT_TURNS) finish('conceded', made, reply.item ?? onTable);
+    if (chatOver(made, reply.move)) finish('conceded', made, reply.item ?? onTable);
   }
 
   /** The chat ends: the boss gave up or the player walked away (both a win, with the chat's bonus), or the player gave in. */
@@ -284,6 +284,42 @@ export function TemptationDialog({ open, onAnswer, onTalk, onLog, onClose, strea
     if (chatting && !ended) finish('left');
     onClose();
   }
+
+  /** "Trêu lại Quỷ": the player's own words, from the challenge itself (a line instead of the "no" button starts the chat) to the
+   *  last of their MAX_CHAT_TURNS replies. */
+  const composer = (
+    <View style={styles.composer}>
+      <TextInput
+        accessibilityLabel={g('tempt.chatField')}
+        placeholder={g('tempt.chatPlaceholder')}
+        placeholderTextColor={quest.textSecondary}
+        value={draft}
+        onChangeText={setDraft}
+        maxLength={CHAT_MAX_CHARS}
+        editable={!waiting}
+        onSubmitEditing={() => void say(draft)}
+        returnKeyType="send"
+        style={styles.input}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={g('tempt.chatSend')}
+        accessibilityState={{ disabled: waiting || !draft.trim() }}
+        disabled={waiting || !draft.trim()}
+        onPress={() => void say(draft)}
+        style={({ pressed }) => [styles.send, (pressed || waiting || !draft.trim()) && styles.pressed]}
+      >
+        <HudText size={14} color={quest.onGold}>
+          {g('tempt.chatSend')}
+        </HudText>
+      </Pressable>
+    </View>
+  );
+  const repliesLine = (
+    <HudText size={11} weight="medium" color={quest.textSecondary} accessibilityLiveRegion="polite">
+      {g('temptX.repliesLeft', { n: chatRepliesLeft(turns), max: MAX_CHAT_TURNS })}
+    </HudText>
+  );
 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={close}>
@@ -400,6 +436,14 @@ export function TemptationDialog({ open, onAnswer, onTalk, onLog, onClose, strea
               <Pressable accessibilityRole="button" accessibilityLabel={g('tempt.giveIn')} onPress={() => choose('gaveIn')} style={({ pressed }) => [styles.reply, styles.replyGive, pressed && styles.pressed]}>
                 <HudText size={15}>{g('tempt.giveIn')}</HudText>
               </Pressable>
+              {chatMode && (
+                <>
+                  {composer}
+                  <HudText size={11} weight="medium" color={quest.textSecondary}>
+                    {g('temptX.teaseHint', { max: MAX_CHAT_TURNS })}
+                  </HudText>
+                </>
+              )}
             </FadeInUp>
           )}
           {chatting && !ended && (
@@ -411,32 +455,8 @@ export function TemptationDialog({ open, onAnswer, onTalk, onLog, onClose, strea
                   </Pressable>
                 ))}
               </View>
-              <View style={styles.composer}>
-                <TextInput
-                  accessibilityLabel={g('tempt.chatField')}
-                  placeholder={g('tempt.chatPlaceholder')}
-                  placeholderTextColor={quest.textSecondary}
-                  value={draft}
-                  onChangeText={setDraft}
-                  maxLength={CHAT_MAX_CHARS}
-                  editable={!waiting}
-                  onSubmitEditing={() => void say(draft)}
-                  returnKeyType="send"
-                  style={styles.input}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={g('tempt.chatSend')}
-                  accessibilityState={{ disabled: waiting || !draft.trim() }}
-                  disabled={waiting || !draft.trim()}
-                  onPress={() => void say(draft)}
-                  style={({ pressed }) => [styles.send, (pressed || waiting || !draft.trim()) && styles.pressed]}
-                >
-                  <HudText size={14} color={quest.onGold}>
-                    {g('tempt.chatSend')}
-                  </HudText>
-                </Pressable>
-              </View>
+              {composer}
+              {repliesLine}
               <View style={styles.row}>
                 <Pressable accessibilityRole="button" accessibilityLabel={g('tempt.chatLeave')} onPress={() => finish('left')} style={({ pressed }) => [styles.reply, styles.replyResist, styles.flex, pressed && styles.pressed]}>
                   <HudText size={14} color={quest.onGold}>

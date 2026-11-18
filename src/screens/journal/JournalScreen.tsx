@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, PanResponder, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import type { ClientSnapshot } from '../../coach/clientSnapshot';
 import { DateChip } from '../../components/quest/DateChip';
@@ -17,6 +17,7 @@ import { toDateKey } from '../../utils/date';
 import { isoWeekNumber } from '../../utils/isoWeek';
 import { oldestPickableKey } from '../../utils/logDate';
 import { addDays } from '../../utils/milestones';
+import { isSidewaysDrag, swipedDayKey } from '../../utils/swipe';
 import { weekStartKey } from '../../utils/weekKey';
 import { JournalView } from '../JournalView';
 import { JournalMonth } from './JournalMonth';
@@ -71,6 +72,28 @@ export function JournalScreen({ client, initialTab = 'day', focus }: JournalScre
   const selectedKey = client ? (clientKey > todayKey ? todayKey : clientKey) : selectedDayKey(storedKey, now);
   const select = (key: string) => (client ? setClientKey(key) : selectStored(key, now));
 
+  // Ngày: a swipe to the right shows the day before, to the left the next day (never past today nor before the calendar's oldest day).
+  // Only a clearly sideways drag is taken, so vertical scrolling and taps in the day stay as they were.
+  const minKey = oldestPickableKey(now, subject.settings.startDateISO);
+  const swipeDay = useRef<(dx: number, vx: number) => void>(() => {});
+  swipeDay.current = (dx, vx) => {
+    const next = swipedDayKey(selectedKey, dx, vx, todayKey, minKey);
+    if (next) select(next);
+  };
+  const dayDrag = useRef(new Animated.Value(0)).current;
+  const daySwipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, s) => isSidewaysDrag(s.dx, s.dy),
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderMove: (_, s) => dayDrag.setValue(Math.max(-60, Math.min(60, s.dx * 0.4))),
+      onPanResponderRelease: (_, s) => {
+        swipeDay.current(s.dx, s.vx);
+        Animated.spring(dayDrag, { toValue: 0, useNativeDriver: false, bounciness: 0 }).start();
+      },
+      onPanResponderTerminate: () => Animated.spring(dayDrag, { toValue: 0, useNativeDriver: false, bounciness: 0 }).start(),
+    })
+  ).current;
+
   const scrollRef = useRef<ScrollView>(null);
   function changeTab(next: JournalTab) {
     setTab(next);
@@ -118,7 +141,7 @@ export function JournalScreen({ client, initialTab = 'day', focus }: JournalScre
             size="small"
             isMarked={(k) => subject.logs[k] != null}
             markOf={(k) => dayDeficitMark(subject.evaluate(k), { targetKcal: subject.deficitTarget, tdeeKcal: subject.tdeeKcal, cheat: subject.cheatDays.includes(k) })}
-            minKey={oldestPickableKey(now, subject.settings.startDateISO)}
+            minKey={minKey}
           />
         ) : undefined
       }
@@ -141,15 +164,17 @@ export function JournalScreen({ client, initialTab = 'day', focus }: JournalScre
           }}
         >
           {tab === 'day' && (
-            <JournalView
-              client={client}
-              dayKey={selectedKey}
-              focus={focus}
-              onTableLayout={(y) => {
-                tableY.current = y;
-                scrollToTable();
-              }}
-            />
+            <Animated.View {...daySwipe.panHandlers} style={{ transform: [{ translateX: dayDrag }] }} testID="journal-day-swipe">
+              <JournalView
+                client={client}
+                dayKey={selectedKey}
+                focus={focus}
+                onTableLayout={(y) => {
+                  tableY.current = y;
+                  scrollToTable();
+                }}
+              />
+            </Animated.View>
           )}
           {tab === 'week' && <JournalWeek subject={subject} weeks={weeks} selectedKey={selectedKey} onSelect={select} onOpenDay={openDay} />}
           {tab === 'month' && <JournalMonth subject={subject} days={days} byKey={byKey} selectedKey={selectedKey} onOpenDay={openDay} />}
