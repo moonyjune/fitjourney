@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.6.0 | yes | analyze-proof-photo, dish-photo, estimate-workout-kcal, parse-meal-text, photo-review, read-nutrition-label, report-photo, suggest-dinner, suggest-swap, tempt-chat, tempt-me |
 | 1.5.0 | yes | dish-photo, report-photo, tempt-chat, tempt-me |
 | 1.4.0 | no | analyze-proof-photo, analyze-weekly-feelings, boss-banter, coach-digest, dish-photo, estimate-workout-kcal, generate-meal-recipe, parse-meal-text, read-nutrition-label, suggest-cheat-places, suggest-dinner, suggest-plan-update, suggest-swap, tempt-chat, tempt-me, weekly-report |
 | 1.3.0 | no | — |
@@ -99,6 +100,12 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.6.0
+- Every "chính xác ~XX%" (Ghi bữa: meal badge, each food, nutrition label, source; meal ideas, swaps, recipes; a logged meal's detail) can be tapped (ⓘ): the level (Cao ≥85 / Khá 70–84 / Trung bình 50–69 / Thấp <50), why the number is what it is (the AI's own reasons such as "Đọc đúng số trên nhãn" or "Không thấy lượng dầu", or where the figures came from), what is still missing ("Thêm vào ghi chú", "Sửa lượng", "Phân tích lại với ghi chú") and up to 4 tips on photographing or describing the dish for a higher score. The AI functions return an optional `accuracyWhy`; logged foods keep their accuracy.
+- Reported photos ("Ảnh sai?") and challenge dishes still without a photo are handled every night in batches (new function photo-review, pg_cron 02:00 submit + hourly collect): photo libraries first, at most one web search per dish (5 dishes per request), then one Message Batches job (half price) where each request checks up to 10 dishes × 3 pictures labelled [Dnn-Cn]; Haiku 5.5 checks all, Sonnet 5.5 looks again at unsure answers (confidence 50–80); only "exact" ≥70 is kept. Caps: 100 dishes / $1 a night (overridable for a manual run). Manual: `scripts/photo-repair.sh review` / `review-new`.
+- Fix: one picture the API rejected made the whole photo check fail, so the challenge re-photo stopped on the same items every time; each picture is now checked alone when a group fails.
+- Server: schema.sql adds photo_review_batches, the photo_review.* settings and two cron jobs; photo-review must be deployed with --no-verify-jwt (cron sends no JWT; the function checks x-cron-secret).
 
 ## 1.5.0
 - Temptation challenge pool grows to ~500 dishes, each tagged with conditions: time slot (sáng, giữa buổi sáng làm việc, trưa, chiều, tối, khuya), weather and temperature, season/months, weekday or weekend, office hours, and 21 solar and lunar events (Tết, Ông Táo, Trung thu, Vu Lan, Valentine, 20/10, Giáng sinh, payday, big football tournaments…). Lunar dates come from a lunar-calendar converter.
