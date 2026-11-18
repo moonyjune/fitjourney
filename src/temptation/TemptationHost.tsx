@@ -4,6 +4,7 @@ import { router, useSegments } from 'expo-router';
 import { TemptationDialog } from '../components/quest/TemptationDialog';
 import { useMealModeStore } from '../store/useMealModeStore';
 import { useTemptationStore } from '../store/useTemptationStore';
+import { refreshPool } from './offlinePool';
 import { isTemptationDue } from './schedule';
 import { bossReply, summonTemptation } from './summon';
 
@@ -36,8 +37,15 @@ export function TemptationHost({ enabled }: { enabled: boolean }) {
 
   useEffect(() => {
     if (!enabled) return;
+    // 1.5: keep the pool copy for the offline pick up to date (one small check every REFRESH_EVERY_MS; nothing when it did not change).
+    const keepPool = () => {
+      const s = useTemptationStore.getState().settings;
+      if (s.enabled && (s.level === 'hard' || s.aiChat)) void refreshPool().catch(() => undefined);
+    };
+    keepPool();
     const tick = () => {
       const store = useTemptationStore.getState();
+      keepPool();
       if (!store.settings.enabled || store.open || store.busy || !onTabsRef.current) return;
       if (activeSince.current === null || Date.now() - activeSince.current < SETTLE_MS) return;
       const now = new Date();
