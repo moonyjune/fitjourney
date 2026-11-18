@@ -16,6 +16,10 @@ export interface DiaryItem {
   purineMg: number;
   sugarG: number;
   sodiumMg: number;
+  /** A food ticked "Ăn vặt" on its own (1.5): not part of a main meal. */
+  snack?: boolean;
+  /** Logged as a cheat meal (1.5): its meal is a flexible one. */
+  cheatMeal?: boolean;
 }
 
 export const isMainMeal = (mealTime: ExtraMealTime | null): boolean => mealTime === 'breakfast' || mealTime === 'lunch' || mealTime === 'dinner';
@@ -52,6 +56,8 @@ export function buildDiaryItems(logs: Record<string, DailyNutritionLog>, mealTem
         purineMg: e.purineMg ?? 0,
         sugarG: e.sugarG ?? 0,
         sodiumMg: (e.saltG ?? 0) * SODIUM_MG_PER_SALT_G,
+        ...(e.snack ? { snack: true } : {}),
+        ...(e.cheatMeal ? { cheatMeal: true } : {}),
       });
     }
   }

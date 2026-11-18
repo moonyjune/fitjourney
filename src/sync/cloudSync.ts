@@ -23,6 +23,7 @@ import { cleanBanterAnswer, type BanterDaySummary, type BanterText } from '../..
 import { templateBanter } from '../banter/templates';
 import { cleanWorkoutKcalAnswer, type WorkoutKcalEstimate } from '../../supabase/functions/_shared/workoutKcal';
 import { cleanDishPhotoAnswer, MAX_DISHES, type DishPhotoResult } from '../../supabase/functions/_shared/dishPhoto';
+import type { PhotoReportRequest } from '../../supabase/functions/_shared/photoReport';
 import { generateCoachCode } from '../utils/coachCode';
 import { foodKey } from '../food/remember';
 import { toDateKey } from '../utils/date';
@@ -1581,7 +1582,27 @@ export async function requestDishPhotos(names: string[]): Promise<DishPhotosOutc
   }
 }
 
-export type BossBanterOutcome = { ok: true; text: BanterText; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+export type PhotoReportOutcome = { ok: true; flagged: boolean; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
+
+/** "Ảnh sai?" (1.5): tells the report-photo function that this photo is wrong for the dish, so it is flagged for everybody and a new
+ *  one is looked for. No AI call, so the device's AI switch does not stop it; the offline dev account sends nothing; offline fails
+ *  softly (the photo stays hidden on the device either way). */
+export async function requestPhotoReport(report: PhotoReportRequest): Promise<PhotoReportOutcome> {
+  if (useAuthStore.getState().devMode) return { ok: true, flagged: false, sample: true };
+  if (!(await isOnline())) return { ok: false, message: 'Offline', kind: 'offline' };
+  try {
+    const { data, error } = await supabase.functions.invoke('report-photo', { body: report });
+    if (error) throw error;
+    if (data?.error) return { ok: false, message: String(data.error), kind: classifyAiError(String(data.error)) };
+    return { ok: true, flagged: data?.result?.flagged === true };
+  } catch (error) {
+    const message = await describeFunctionsError(error);
+    const status = (error as { context?: unknown })?.context instanceof Response ? (error as { context: Response }).context.status : undefined;
+    return { ok: false, message, kind: classifyReached(message, status) };
+  }
+}
+
+export type BossBanterOutcome ={ ok: true; text: BanterText; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
 
 /** Calls the boss-banter edge function: one day's exchange between the stage boss and the player, written from the day's summary
  *  built on the device. The answer is checked again here (`cleanBanterAnswer`). Same rules as the other AI requests: the device

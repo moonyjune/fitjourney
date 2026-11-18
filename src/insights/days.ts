@@ -95,6 +95,8 @@ export function buildDayRows(input: DayInput): DayRow[] {
 
     const covered = new Set<MainMeal>();
     for (const e of extras) {
+      // A food ticked "Ăn vặt" on its own (1.5) is a snack: it does not make its meal logged.
+      if (e.snack) continue;
       const main = mainMealOf(e);
       if (main) covered.add(main);
     }

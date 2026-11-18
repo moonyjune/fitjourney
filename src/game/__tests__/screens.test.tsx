@@ -595,20 +595,20 @@ describe('FitJourney logging screens', () => {
       expect(mockRouter.back).not.toHaveBeenCalled();
     });
 
-    it('saves an item with its purine, salt, sugar and junk flag, then closes', async () => {
+    it('saves an item with its purine, salt, sugar and its own "Ăn vặt" (snack + junk) flag, then closes', async () => {
       const r = await mount();
       await addByHand(r, { name: 'Bánh mì thịt', kcal: '450', protein: '18,5', purine: '60', salt: '2.2' });
       await openMealSheet(r);
       await tap(r, 'Trưa');
       await tap(r, 'Xong');
-      await tap(r, 'Đồ ăn vặt / junk food');
+      await tap(r, 'Ăn vặt: Bánh mì thịt');
       expect(allText(r)).toContain('Bánh mì thịt');
       expect(allText(r)).toContain('450 kcal · 18.5 g đạm');
       await tap(r, 'Lưu bữa · 450 kcal');
       const log = useNutritionStore.getState().logs[DATE];
       expect(log.extraItems).toHaveLength(1);
       expect(log.extraItems[0]).toMatchObject({
-        name: 'Bánh mì thịt', calories: 450, proteinG: 18.5, mealTime: 'lunch', purineMg: 60, saltG: 2.2, junk: true,
+        name: 'Bánh mì thịt', calories: 450, proteinG: 18.5, mealTime: 'lunch', purineMg: 60, saltG: 2.2, junk: true, snack: true,
       });
       expect(log.extraItems[0].sugarG).toBeUndefined(); // untouched optional fields are not stored
       expect(log.extraCalories).toBe(450);
@@ -638,11 +638,36 @@ describe('FitJourney logging screens', () => {
     it('warns live about the missions an item would break, before it is saved', async () => {
       const r = await mount();
       await addByHand(r, { kcal: '300', sugar: '40' });
-      await tap(r, 'Đồ ăn vặt / junk food');
+      await tap(r, /^Ăn vặt: /);
       const text = allText(r);
       expect(text).toContain('Sẽ vượt ngưỡng Đường');
       expect(text).toContain('Sẽ vượt ngưỡng Đồ ăn vặt');
       expect(useNutritionStore.getState().logs[DATE].extraItems).toHaveLength(0); // preview only
+    });
+
+    it('"Ăn vặt" on one food saves it as a snack of its own; "Cheat meal" saves the kcal ×1.3; "Cheat day" is the day\'s mark', async () => {
+      useCheatDayStore.setState({ days: [] });
+      const r = await mount();
+      await addByHand(r, { name: 'Phở bò', kcal: '500', protein: '30' });
+      await addByHand(r, { name: 'Trà sữa', kcal: '300', protein: '2' });
+      await tap(r, 'Ăn vặt: Trà sữa');
+      expect(findPressable(r, 'Ăn vặt: Trà sữa')?.props.accessibilityState).toEqual({ checked: true });
+      await tap(r, 'Cheat meal hoặc cheat day: cách tính kcal');
+      const sheet = allText(r);
+      expect(sheet).toContain('Bữa này: 800 kcal × 1,3 = 1,040 kcal (+240 kcal)');
+      expect(sheet).toContain('Nhớ ghi cả đồ uống');
+      expect(sheet).toMatch(/Ngân sách cheat day = TDEE [\d,]+ kcal/);
+      expect(sheet).toMatch(/Gỡ lại trong [23] ngày tới/);
+      await tap(r, 'Đánh dấu bữa này là cheat meal');
+      await tap(r, 'Đánh dấu ngày này là cheat day');
+      expect(useCheatDayStore.getState().days).toEqual([DATE]);
+      await tap(r, 'Xong');
+      await tap(r, 'Lưu bữa · 1040 kcal');
+      const items = useNutritionStore.getState().logs[DATE].extraItems;
+      expect(items.map((i) => [i.name, i.calories, !!i.snack, !!i.junk, !!i.cheatMeal])).toEqual([
+        ['Phở bò', 650, false, false, true],
+        ['Trà sữa', 390, true, true, true],
+      ]);
     });
   });
 

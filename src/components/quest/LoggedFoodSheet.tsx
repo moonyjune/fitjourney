@@ -1,6 +1,7 @@
 import { useTranslation } from '../../i18n/useTranslation';
 import type { StringKey } from '../../i18n/strings';
-import { deleteExtraWithUndo, editExtraWhen, logExtraAgain } from '../../food/mealActions';
+import { deleteExtraWithUndo, editExtraWhen, logExtraAgain, toggleSnackWithUndo } from '../../food/mealActions';
+import { snackMarks } from '../../food/snackItems';
 import { suggestedDrinkMl } from '../../water/drinks';
 import { editListedPartPatch, partsOrSelf } from '../../food/singlePart';
 import { useGameText } from '../../game/strings';
@@ -73,6 +74,8 @@ export function LoggedFoodSheet({ dateKey, itemId, now, onClose }: { dateKey: st
       onRemovePhoto={async (photo) => removeExtraPhoto(dateKey, item.id, photo)}
       onEatAgain={item.calories > 0 ? eatAgain : undefined}
       onEditWhen={editWhen}
+      snackMarks={snackMarks(item, detail.parts.length)}
+      onToggleSnack={(i) => toggleSnackWithUndo(dateKey, item.id, i, { on: g('snack.markedOn'), off: g('snack.markedOff'), split: g('snack.split') })}
       withWater
       dateKey={dateKey}
       now={now}

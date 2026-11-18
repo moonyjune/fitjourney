@@ -13,6 +13,7 @@ import { useWaterWindowStore } from '../store/useWaterWindowStore';
 import { clampWaterWindow, DEFAULT_WATER_END_MIN, DEFAULT_WATER_START_MIN } from '../water/schedule';
 import { useAnalysisStore } from '../store/useAnalysisStore';
 import { cleanCheatDays, useCheatDayStore } from '../store/useCheatDayStore';
+import { cleanHiddenPhotos, useHiddenPhotoStore } from '../store/useHiddenPhotoStore';
 import { daysFromEntries, mergeSkipEntries, readSkippedPayload, skippedPayload, useSkippedMealStore } from '../store/useSkippedMealStore';
 import { useCheatPlacesStore } from '../store/useCheatPlacesStore';
 import { cleanCheatPlacesData, mergeCheatPlaces } from '../cookbook/placesHistory';
@@ -367,6 +368,14 @@ function restoreUserData(remote: Map<string, unknown>): void {
   if (useAnalysisStore.getState().mode === 'auto') {
     if (remoteManual) useAnalysisStore.setState({ mode: 'manual' });
   } else if (!remoteManual) void pushUserData(USER_DATA_KEYS.analysisMode, { mode: 'manual' });
+
+  // Pictures reported wrong ("Ảnh sai?"): hidden on either side stays hidden.
+  const hiddenRaw = remote.get(USER_DATA_KEYS.hiddenPhotos);
+  const remoteHidden = cleanHiddenPhotos(isObj(hiddenRaw) ? hiddenRaw.keys : []);
+  const localHidden = useHiddenPhotoStore.getState().keys;
+  const mergedHidden = cleanHiddenPhotos([...remoteHidden, ...localHidden]);
+  if (!sameJson(mergedHidden, localHidden)) useHiddenPhotoStore.setState({ keys: mergedHidden });
+  if (mergedHidden.length > 0 && !sameJson(mergedHidden, remoteHidden)) void pushUserData(USER_DATA_KEYS.hiddenPhotos, { keys: mergedHidden });
 
   // Cheat days: marks from either side are kept (a day marked on another device is still a cheat day here).
   const cheat = remote.get(USER_DATA_KEYS.cheatDays);

@@ -60,12 +60,36 @@ interface Props {
   /** The day the food is on: gives "Sửa bữa & giờ" its day field. */
   dateKey?: string;
   now?: Date;
+  /** "Ăn vặt" per food (1.5): whether each listed food is marked as a snack, and the toggle (a food of a meal of several leaves the meal
+   *  as a snack of its own). Left out for a coach or a plan meal. */
+  snackMarks?: boolean[];
+  onToggleSnack?: (index: number) => void;
+}
+
+/** The "Ăn vặt" toggle of one food (at least 44 pt to tap). */
+export function SnackToggle({ name, on, onPress }: { name: string; on: boolean; onPress: () => void }) {
+  const g = useGameText();
+  return (
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel={g('snack.toggleA11y', { name })}
+      onPress={onPress}
+      hitSlop={{ top: 8, bottom: 8 }}
+      style={({ pressed }) => [styles.snack, on && styles.snackOn, pressed && { opacity: 0.7 }]}
+    >
+      <QuestIcon name={on ? 'check' : 'plus'} size={12} color={on ? quest.gold : quest.textSecondary} strokeWidth={2.4} />
+      <HudText size={11} color={on ? quest.gold : quest.textSecondary}>
+        {g('snack.toggle')}
+      </HudText>
+    </Pressable>
+  );
 }
 
 /** A logged meal in full, as a bottom sheet (dialog 10): its photos side by side with ‹ › (tap one to see it full screen; add up to
  *  MAX_MEAL_PHOTOS, remove the one in view), the totals and, when it was entered as several foods, each of them with a pencil that opens
  *  a small sheet to change its amount (the calories are worked out again on the spot); then "Ăn lại món này" and "Xoá bữa", both undoable. */
-export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto, onEatAgain, onDelete, onEditWhen, withWater, dateKey, now = new Date() }: Props) {
+export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, onAddPhoto, onRemovePhoto, onEatAgain, onDelete, onEditWhen, withWater, dateKey, now = new Date(), snackMarks, onToggleSnack }: Props) {
   const g = useGameText();
   const [inView, setInView] = useState(0);
   const [editing, setEditing] = useState<number | null>(null);
@@ -227,6 +251,7 @@ export function MealDetailDialog({ detail, onClose, canEditParts, onEditPart, on
                 <HudText size={13} weight="medium" style={styles.flex}>
                   {g('journal.detailPartLine', { name: p.name, kcal: p.calories, protein: p.proteinG })}
                 </HudText>
+                {onToggleSnack && <SnackToggle name={p.name} on={!!snackMarks?.[i]} onPress={() => onToggleSnack(i)} />}
                 {canEditParts && onEditPart && (
                   <Pressable
                     accessibilityRole="button"
@@ -340,4 +365,6 @@ const styles = StyleSheet.create({
   iconButton: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   actions: { flexDirection: 'row', gap: 10 },
   whenButton: { alignSelf: 'stretch' },
+  snack: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 32, paddingHorizontal: 8, borderRadius: 16, borderWidth: 1.5, borderColor: quest.border, backgroundColor: quest.raised },
+  snackOn: { borderColor: quest.gold, backgroundColor: quest.raised2 },
 });

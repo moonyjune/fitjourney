@@ -33,7 +33,7 @@ export type TimelineItem =
       proteinSoFarG: number | null;
       past: boolean;
     }
-  | { kind: 'extra'; id: string; minutes: number; name: string; kcal: number; proteinG: number; purineMg: number; saltG: number; sugarG: number; junk: boolean; photoUri?: string; loggedAtISO: string; parts?: MealPart[]; mealTime?: ExtraMealTime | null }
+  | { kind: 'extra'; id: string; minutes: number; name: string; kcal: number; proteinG: number; purineMg: number; saltG: number; sugarG: number; junk: boolean; snack?: boolean; cheatMeal?: boolean; photoUri?: string; loggedAtISO: string; parts?: MealPart[]; mealTime?: ExtraMealTime | null }
   /** One or more workouts close together, shown as one row from the first start to the last end. */
   | { kind: 'workout'; id: string; minutes: number; endMinutes: number; label: string; durationMin: number; kcal: number; entryIds: string[] }
   | { kind: 'feeling'; id: string; minutes: number; mood: Mood; cravingLevel: number; hungerLevel: number }
@@ -175,6 +175,9 @@ export function buildTimeline(input: TimelineInput): TimelineItem[] {
       saltG: e.saltG ?? 0,
       sugarG: e.sugarG ?? 0,
       junk: !!e.junk,
+      // 1.5: a food ticked "Ăn vặt" on its own, and a meal logged as a cheat meal.
+      ...(e.snack ? { snack: true } : {}),
+      ...(e.cheatMeal ? { cheatMeal: true } : {}),
       photoUri: e.photoUri,
       loggedAtISO: e.loggedAtISO,
       mealTime: e.mealTime,

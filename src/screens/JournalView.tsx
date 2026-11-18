@@ -34,7 +34,8 @@ import type { MissionId } from '../game/constants';
 import { PLAN_SLOT_MEAL } from '../insights/days';
 import { logSkippedMeal } from '../food/skipMeal';
 import type { MainMeal } from '../insights/days';
-import { deleteExtraWithUndo, editExtraWhen, logExtraAgain, unmarkPlanMealWithUndo } from '../food/mealActions';
+import { deleteExtraWithUndo, editExtraWhen, logExtraAgain, toggleSnackWithUndo, unmarkPlanMealWithUndo } from '../food/mealActions';
+import { snackMarks } from '../food/snackItems';
 import { mealCaption } from '../utils/mealCaption';
 import { useProofStore } from '../store/useProofStore';
 import { selectedDayKey, useSelectedDayStore } from '../store/useSelectedDayStore';
@@ -248,7 +249,8 @@ function TimelineRow({ item, g, t, proteinTargetG, workoutXpFor, isToday, onOpen
           <HudText size={14} style={styles.flex}>
             {name}
           </HudText>
-          {item.junk && <Chip tone="gold" label={g('journal.junk')} />}
+          {(item.junk || item.snack) && <Chip tone="gold" label={g('journal.junk')} />}
+          {item.cheatMeal && <Chip tone="gold" label={g('cheatX.mealChip')} />}
           <FoodThumb uris={thumbs} name={name} size={36} caption={mealCaption(item.mealTime ? t(`extraMealTime.${item.mealTime}` as StringKey) : null, item.loggedAtISO)} />
         </View>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
@@ -821,6 +823,12 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
         withWater={openItem?.kind === 'extra'}
         dateKey={selectedKey}
         now={now}
+        snackMarks={!client && openItem?.kind === 'extra' && openStored ? snackMarks(openStored, partsOrSelf(openStored).length) : undefined}
+        onToggleSnack={
+          !client && openItem?.kind === 'extra' && openStored
+            ? (i) => toggleSnackWithUndo(selectedKey, openStored.id, i, { on: g('snack.markedOn'), off: g('snack.markedOff'), split: g('snack.split') })
+            : undefined
+        }
       />
     </View>
   );

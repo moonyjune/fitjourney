@@ -16,4 +16,6 @@ export const USER_DATA_KEYS = {
   temptation: 'temptation',
   waterWindow: 'waterWindow',
   bossTalk: 'bossTalk',
+  /** Dish pictures the player reported wrong ("Ảnh sai?", 1.5): hidden for them on every device. */
+  hiddenPhotos: 'hiddenPhotos',
 } as const;

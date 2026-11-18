@@ -8,6 +8,8 @@ import { chatBonusXp, chatOver, chatRepliesLeft, MAX_CHAT_REPLIES, type TemptOut
 import { quest, questRadius } from '../../theme/quest';
 import { useDishPhoto } from '../../ai/useDishPhotos';
 import { DishPhoto, DishPhotoCredit, WebPhotoCredit } from './DishPhoto';
+import { PhotoReportChip } from './PhotoReportChip';
+import { usePhotoHidden } from '../../store/useHiddenPhotoStore';
 import { HudText } from './HudText';
 import { FadeInUp } from './motion/FadeInUp';
 import { PopIn } from './motion/PopIn';
@@ -48,15 +50,20 @@ type ChatEnd = 'conceded' | 'left' | 'gaveIn';
 
 function ItemPicture({ item, size }: { item: TemptItem; size: number }) {
   const [failed, setFailed] = useState(false);
-  if (item.imageUrl && !failed) {
+  // "Ảnh sai?" (1.5): a picture the player reported is hidden for them; the report flags the pool item for a new photo.
+  const hidden = usePhotoHidden(item.imageUrl);
+  if (item.imageUrl && !failed && !hidden) {
     return (
-      <Image
-        source={{ uri: item.imageUrl }}
-        onError={() => setFailed(true)}
-        accessibilityIgnoresInvertColors
-        style={{ width: size, height: size, borderRadius: 14, backgroundColor: quest.raised }}
-        resizeMode="cover"
-      />
+      <View>
+        <Image
+          source={{ uri: item.imageUrl }}
+          onError={() => setFailed(true)}
+          accessibilityIgnoresInvertColors
+          style={{ width: size, height: size, borderRadius: 14, backgroundColor: quest.raised }}
+          resizeMode="cover"
+        />
+        {item.source !== 'sample' && <PhotoReportChip report={{ kind: 'tempt', name: item.name, url: item.imageUrl, ...(item.chat?.poolId ? { poolId: item.chat.poolId } : {}) }} />}
+      </View>
     );
   }
   // No picture of its own (or it did not load): a real photo of the dish when one is found, else its emoji badge.
@@ -89,8 +96,9 @@ function Drool() {
 
 function ItemCard({ item }: { item: TemptItem }) {
   const g = useGameText();
-  const dish = useDishPhoto(item.imageUrl ? null : item.name);
-  const big = !!item.imageUrl || (dish?.status === 'done' && !!dish.photo);
+  const ownHidden = usePhotoHidden(item.imageUrl);
+  const dish = useDishPhoto(item.imageUrl && !ownHidden ? null : item.name);
+  const big = (!!item.imageUrl && !ownHidden) || (dish?.status === 'done' && !!dish.photo);
   return (
     <View style={styles.card}>
       <View>
@@ -120,7 +128,7 @@ function ItemCard({ item }: { item: TemptItem }) {
             {g('tempt.source', { d: item.sourceDomain })}
           </HudText>
         ) : null}
-        {item.imageUrl ? item.photo ? <WebPhotoCredit photo={item.photo} name={item.name} /> : null : <DishPhotoCredit name={item.name} />}
+        {item.imageUrl && !ownHidden ? item.photo ? <WebPhotoCredit photo={item.photo} name={item.name} /> : null : <DishPhotoCredit name={item.name} />}
       </View>
     </View>
   );

@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Linking, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { dropDishPhoto, useDishPhoto } from '../../ai/useDishPhotos';
 import type { PlacePhoto } from '../../../supabase/functions/_shared/places';
+import type { DishPhotoInfo } from '../../../supabase/functions/_shared/dishPhoto';
+import { isPhotoHidden, useHiddenPhotoStore } from '../../store/useHiddenPhotoStore';
+import { PhotoReportChip, REPORT_CHIP_MIN_SIZE } from './PhotoReportChip';
 import { useGameText } from '../../game/strings';
 import { quest } from '../../theme/quest';
 import { HudText } from './HudText';
@@ -48,25 +51,37 @@ export interface DishPhotoProps {
   /** As wide as its parent, `size` high (photo cards, the recipe page). */
   fill?: boolean;
   style?: StyleProp<ViewStyle>;
+  /** Shows the "Ảnh sai?" chip on a photo big enough (default on; never on a small thumbnail). */
+  report?: boolean;
 }
 
-/** The web photo to show instead of an asked-for one: the known photo, else (once the ask found none) the fallback. */
-function otherPhoto(state: ReturnType<typeof useDishPhoto>, known?: PlacePhoto | null, fallback?: PlacePhoto | null): PlacePhoto | null {
-  if (known) return known;
-  return fallback && state?.status === 'done' && !state.photo ? fallback : null;
+/** The asked-for photo, unless the player reported it wrong ("Ảnh sai?": hidden for them). */
+function askedPhoto(state: ReturnType<typeof useDishPhoto>, hidden: readonly string[]): DishPhotoInfo | null {
+  const photo = state?.status === 'done' ? state.photo : null;
+  return photo && !isPhotoHidden(hidden, photo.url) ? photo : null;
+}
+
+/** The web photo to show instead of an asked-for one: the known photo, else (once the ask found none) the fallback; never one the
+ *  player reported wrong. */
+function otherPhoto(state: ReturnType<typeof useDishPhoto>, hidden: readonly string[], known?: PlacePhoto | null, fallback?: PlacePhoto | null): PlacePhoto | null {
+  if (known) return isPhotoHidden(hidden, known.url) ? null : known;
+  return fallback && state?.status === 'done' && !askedPhoto(state, hidden) && !isPhotoHidden(hidden, fallback.url) ? fallback : null;
 }
 
 /** A dish's real photo (rounded, a shimmer until it is there), or its emoji when there is none. The credit goes next to it with
  *  `DishPhotoCredit`. */
-export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised2, off, known, fallback, fill, style }: DishPhotoProps) {
+export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised2, off, known, fallback, fill, style, report = true }: DishPhotoProps) {
   const g = useGameText();
   const state = useDishPhoto(off || known ? null : name);
+  const hidden = useHiddenPhotoStore((s) => s.keys);
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
-  const other = otherPhoto(state, known, fallback);
-  const photo = known ? null : state?.status === 'done' ? state.photo : null;
+  const other = otherPhoto(state, hidden, known, fallback);
+  const photo = known ? null : askedPhoto(state, hidden);
   const asking = !off && !known && (!state || state.status === 'loading');
   const box = { width: fill ? ('100%' as const) : size, height: size, borderRadius: radius };
+  // "Ảnh sai?" on pictures big enough to see the dish (not on list thumbnails).
+  const chip = report && (fill || size >= REPORT_CHIP_MIN_SIZE);
   if (other && brokenUrl !== other.url) {
     // A picture hot-linked from a web page may be refused: the emoji then.
     return (
@@ -81,6 +96,7 @@ export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised
           resizeMode="cover"
           style={box}
         />
+        {chip && <PhotoReportChip report={{ kind: 'dish', name, url: other.url }} />}
       </View>
     );
   }
@@ -97,6 +113,7 @@ export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised
           resizeMode="cover"
           style={box}
         />
+        {chip && <PhotoReportChip report={{ kind: 'dish', name, url: photo.url }} />}
       </View>
     );
   }
@@ -112,10 +129,11 @@ export function DishPhoto({ name, emoji, size, radius = 10, color = quest.raised
 export function DishPhotoCredit({ name, off, known, fallback }: { name: string; off?: boolean; known?: PlacePhoto | null; fallback?: PlacePhoto | null }) {
   const g = useGameText();
   const state = useDishPhoto(off || known ? null : name);
-  const other = otherPhoto(state, known, fallback);
+  const hidden = useHiddenPhotoStore((s) => s.keys);
+  const other = otherPhoto(state, hidden, known, fallback);
   if (other) return <WebPhotoCredit photo={other} name={name} />;
-  if (off || state?.status !== 'done' || !state.photo) return null;
-  const p = state.photo;
+  const p = askedPhoto(state, hidden);
+  if (off || known || state?.status !== 'done' || !p) return null;
   // A photo found on a web page about the dish (source 'web') is credited to that site, like a place's photo.
   const text = state.sample
     ? g('dishPhoto.sample')

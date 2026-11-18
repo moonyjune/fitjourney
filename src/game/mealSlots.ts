@@ -87,6 +87,8 @@ export function coveredMealIds(fasting: boolean, defs: MealSlotDef[], planMeals:
     // half the plan meal's kcal (at least 150), so a snack does not, but a lunch eaten instead of the plan's does.
     const kcal = new Map<string, number>();
     for (const item of log.extraItems ?? []) {
+      // A food ticked "Ăn vặt" on its own (1.5) is a snack: it never makes a meal eaten (its kcal still count in the day).
+      if (item.snack) continue;
       const at = new Date(item.loggedAtISO);
       const min = at.getHours() * 60 + at.getMinutes();
       const slot = defs.find((d, i) => (i === 0 || min >= d.startHour * 60 + d.startMinute) && min < d.endMinutes) ?? defs[defs.length - 1];
@@ -100,6 +102,7 @@ export function coveredMealIds(fasting: boolean, defs: MealSlotDef[], planMeals:
   }
   const kcal = { breakfast: 0, lunch: 0, dinner: 0 };
   for (const item of log.extraItems ?? []) {
+    if (item.snack) continue; // a snack (1.5) never covers a meal
     kcal[periodOfItem(item)] += item.calories;
     // The diary's "Không ăn" mark (0 kcal) says the meal was skipped: taken care of, not missing.
     if (item.calories === 0 && item.name.trim() === SKIPPED_MEAL_NAME) covered.add(periodOfItem(item));
