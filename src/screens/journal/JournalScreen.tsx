@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, ScrollView, StyleSheet, View } from 'react-native';
+import { RefreshableScrollView } from '../../components/quest/RefreshableScrollView';
 import { router } from 'expo-router';
 import type { ClientSnapshot } from '../../coach/clientSnapshot';
 import { DateChip } from '../../components/quest/DateChip';
@@ -149,7 +150,7 @@ export function JournalScreen({ client, initialTab = 'day', focus }: JournalScre
       contentStyle={styles.frame}
       testID="journal-screen"
     >
-      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={[styles.content, screenMaxWidthStyle]} keyboardShouldPersistTaps="handled">
+      <RefreshableScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={[styles.content, screenMaxWidthStyle]} keyboardShouldPersistTaps="handled">
         <QuestSegment
           accessibilityLabel={g('journal2.tabs')}
           value={tab}
@@ -179,7 +180,7 @@ export function JournalScreen({ client, initialTab = 'day', focus }: JournalScre
           {tab === 'week' && <JournalWeek subject={subject} weeks={weeks} selectedKey={selectedKey} onSelect={select} onOpenDay={openDay} />}
           {tab === 'month' && <JournalMonth subject={subject} days={days} byKey={byKey} selectedKey={selectedKey} onOpenDay={openDay} />}
         </View>
-      </ScrollView>
+      </RefreshableScrollView>
     </ScreenTemplate>
   );
 }

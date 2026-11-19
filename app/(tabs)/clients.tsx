@@ -35,7 +35,7 @@ export default function ClientsScreen() {
   );
 
   return (
-    <ScreenTemplate title={g('coach.clientsTitle')} eyebrow={g('coach.eyebrow')} tabBar contentStyle={styles.content}>
+    <ScreenTemplate title={g('coach.clientsTitle')} eyebrow={g('coach.eyebrow')} tabBar refresh={false} contentStyle={styles.content}>
 
       <View style={styles.codeCard} accessible accessibilityLabel={`${t('clients.yourCodeTitle')}: ${coachCode ?? ''}`}>
         <HudText size={11} color={quest.manaText} style={styles.eyebrow}>

@@ -2116,6 +2116,12 @@ const vi = {
   'accTip.db.amount': 'Chỉnh đúng lượng đã ăn bằng − / +',
   'accTip.db.cook': 'Món nấu khác thường (nhiều dầu, thêm sốt)? Ghi chú và cho AI phân tích',
   'accTip.idea.log': 'Khi ăn thật, chụp ảnh hoặc ghi gram để tính lại',
+  // 1.7 pull to refresh
+  'ptr.pull': 'Kéo xuống để làm mới',
+  'ptr.release': 'Thả ra để làm mới',
+  'ptr.refreshing': 'Đang làm mới…',
+  'ptr.done': 'Đã cập nhật dữ liệu mới nhất',
+  'ptr.failed': 'Chưa làm mới được — kiểm tra mạng rồi thử lại',
 } as const;
 
 export type GameKey = keyof typeof vi;
@@ -4232,6 +4238,12 @@ const en: Record<GameKey, string> = {
   'accTip.db.amount': 'Set the amount eaten with − / +',
   'accTip.db.cook': 'Cooked differently (more oil, extra sauce)? Add a note and let the AI analyse it',
   'accTip.idea.log': 'When you eat it, take a photo or write the grams to recount',
+  // 1.7 pull to refresh
+  'ptr.pull': 'Pull down to refresh',
+  'ptr.release': 'Release to refresh',
+  'ptr.refreshing': 'Refreshing…',
+  'ptr.done': 'Up to date',
+  'ptr.failed': 'Could not refresh — check the connection and try again',
 };
 
 export function formatGameText(language: 'vi' | 'en', key: GameKey, params?: Record<string, string | number>): string {

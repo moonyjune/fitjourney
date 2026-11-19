@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { RefreshableScrollView } from '../../src/components/quest/RefreshableScrollView';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HudText } from '../../src/components/quest/HudText';
@@ -203,7 +204,7 @@ export default function MapScreen() {
   const openBanter = openBoss ? latestBanterFor(banter, openBoss.index) : undefined;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[screenMaxWidthStyle, { paddingBottom: tabClearance }]}>
+    <RefreshableScrollView style={styles.screen} contentContainerStyle={[screenMaxWidthStyle, { paddingBottom: tabClearance }]}>
       {/* Hero: the boss blocking the road. */}
       <View style={[styles.hero, { paddingTop: insets.top + 8 }]}>
         <View style={styles.heroHead}>
@@ -394,7 +395,7 @@ export default function MapScreen() {
           />
         )}
       </StageBossDetail>
-    </ScrollView>
+    </RefreshableScrollView>
   );
 }
 

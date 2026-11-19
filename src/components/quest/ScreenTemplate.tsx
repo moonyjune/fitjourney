@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGameText } from '../../game/strings';
 import { quest, questRadius } from '../../theme/quest';
@@ -7,6 +7,7 @@ import { screenMaxWidthStyle } from '../../theme/responsive';
 import { HudText } from './HudText';
 import { QuestButton } from './QuestButton';
 import { QuestIcon } from './QuestIcon';
+import { RefreshableScrollView } from './RefreshableScrollView';
 import { useTabBarClearance } from './QuestTabBar';
 
 /** Header height and spacing of the redesign (Design/uiux-proposal/README.md §2.2): 52 pt header, 16 side padding. */
@@ -40,13 +41,16 @@ export interface ScreenTemplateProps {
   /** false when the content scrolls by itself (a FlatList): it is then laid out in a plain flex view. */
   scroll?: boolean;
   contentStyle?: StyleProp<ViewStyle>;
+  /** Pull to refresh (1.7): on by default for a tab screen (pulls the cloud data again); true / false to force, or a function of
+   *  its own (resolving false when it failed). */
+  refresh?: boolean | (() => Promise<boolean | void>);
   children: ReactNode;
   testID?: string;
 }
 
 /** The one screen frame of the redesign: safe-area aware 52 pt header (back, title 20 pt bold, optional eyebrow and one right action),
  *  content with 16 pt sides that scrolls and ends clear of the tab bar, and an optional primary button kept at the bottom. */
-export function ScreenTemplate({ title, eyebrow, onBack, backLabel, right, primary, tabBar = false, scroll = true, contentStyle, children, testID }: ScreenTemplateProps) {
+export function ScreenTemplate({ title, eyebrow, onBack, backLabel, right, primary, tabBar = false, scroll = true, contentStyle, refresh, children, testID }: ScreenTemplateProps) {
   const g = useGameText();
   const insets = useSafeAreaInsets();
   const tabClearance = useTabBarClearance();
@@ -54,14 +58,16 @@ export function ScreenTemplate({ title, eyebrow, onBack, backLabel, right, prima
   const bottomSpace = tabBar ? tabClearance : insets.bottom + 24;
   const contentBottom = primary ? 16 : bottomSpace;
 
+  const pull = typeof refresh === 'function' ? refresh : (refresh ?? tabBar) ? undefined : null;
   const content = scroll ? (
-    <ScrollView
+    <RefreshableScrollView
+      onPullRefresh={pull}
       style={styles.flex}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingBottom: contentBottom }, contentStyle]}
     >
       {children}
-    </ScrollView>
+    </RefreshableScrollView>
   ) : (
     <View style={[styles.flex, styles.content, screenMaxWidthStyle, { paddingBottom: contentBottom }, contentStyle]}>{children}</View>
   );

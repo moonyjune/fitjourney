@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { RefreshableScrollView } from '../../src/components/quest/RefreshableScrollView';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampHero } from '../../src/components/quest/CampHero';
@@ -188,7 +189,7 @@ export default function CampScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScrollView
+      <RefreshableScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 8, paddingBottom: tabClearance }]}
       >
@@ -332,7 +333,7 @@ export default function CampScreen() {
         <FadeInUp index={6}>
           <JournalView embedded />
         </FadeInUp>
-      </ScrollView>
+      </RefreshableScrollView>
 
       <MissionsSheet visible={missionsOpen} onClose={() => setMissionsOpen(false)} day={day} />
       <WeeklyBossSheet visible={bossOpen} onClose={() => setBossOpen(false)} boss={boss} today={game.today} now={now} />

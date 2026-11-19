@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { RefreshableScrollView } from '../../src/components/quest/RefreshableScrollView';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BannerRibbon } from '../../src/components/quest/BannerRibbon';
@@ -166,7 +167,7 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 12, paddingBottom: tabClearance }]}>
+    <RefreshableScrollView style={styles.screen} contentContainerStyle={[styles.content, screenMaxWidthStyle, { paddingTop: insets.top + 12, paddingBottom: tabClearance }]}>
       <HudText size={20} accessibilityRole="header" style={styles.title}>
         {g('profile.title')}
       </HudText>
@@ -272,7 +273,7 @@ export default function ProfileScreen() {
       <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.build}>
         {`FitJourney ${APP_VERSION}`}
       </HudText>
-    </ScrollView>
+    </RefreshableScrollView>
   );
 }
 
