@@ -105,6 +105,8 @@ const TABLE = 'photo_review_batches';
 
 /** Names gathered per submit call, the time after which no new web request is started, a draft's longest gathering. */
 const GATHER_PER_CALL = 15;
+/** Dishes submitted per call (≤3 pictures each, all loaded in that call); a larger draft is split (finalizeDraft). */
+const SUBMIT_PART_DISHES = 20;
 const GATHER_WEB_MS = 80_000;
 const DRAFT_MAX_MS = 45 * 60_000;
 /** A row lock is trusted this long (one submit / collect works on a row at a time). */
@@ -475,10 +477,25 @@ async function buildRequests(
   return { requests, labels: Object.fromEntries(plans.map((p) => [p.customId, p.labels])), images: plans.reduce((n, p) => n + p.items.length, 0) };
 }
 
-/** Submits a gathering draft as the night's first (Haiku) batch. */
+/** Submits a gathering draft as the night's first (Haiku) batch. A draft larger than SUBMIT_PART_DISHES is split first: the rest
+ *  goes to a new gathering row (same night and options) that the next submit call submits, so one call never loads more than
+ *  ~60 pictures (1.6.1: a 260-dish draft loading ~780 pictures in one call died and was never submitted). */
 async function finalizeDraft(admin: SupabaseClient, draft: BatchRow): Promise<Record<string, unknown>> {
+  let more = 0;
+  if (draft.subjects.length > SUBMIT_PART_DISHES) {
+    const rest = draft.subjects.slice(SUBMIT_PART_DISHES);
+    const { error } = await admin.from(TABLE).insert({ night: draft.night, stage: 'haiku', model: REVIEW_MODEL, status: 'gathering', options: draft.options ?? {}, subjects: rest, est_usd: estimateVerifyUsd(rest.reduce((n, s) => n + s.candidates.length, 0), REVIEW_MODEL) });
+    if (error) return { submitted: false, error: `draft not split: ${error.message}` };
+    draft = { ...draft, subjects: draft.subjects.slice(0, SUBMIT_PART_DISHES) };
+    await admin.from(TABLE).update({ subjects: draft.subjects }).eq('id', draft.id);
+    more = rest.length;
+  }
   const all = (s: ReviewSubject) => s.candidates.map((_, i) => i);
   const built = draft.subjects.length > 0 ? await buildRequests(draft.subjects, draft.night, REVIEW_MODEL, 'low', all, 1) : null;
+  if (!built && more > 0) {
+    await admin.from(TABLE).update({ status: 'applied', ended_at: new Date().toISOString(), summary: { empty: true, subjects: draft.subjects.length } }).eq('id', draft.id);
+    return { submitted: false, empty: true, more };
+  }
   if (!built) {
     await admin.from(TABLE).update({ status: 'applied', ended_at: new Date().toISOString(), summary: { empty: true, subjects: draft.subjects.length } }).eq('id', draft.id);
     return { submitted: false, empty: true };
@@ -493,7 +510,7 @@ async function finalizeDraft(admin: SupabaseClient, draft: BatchRow): Promise<Re
     .from(TABLE)
     .update({ status: 'submitted', batch_id: created.id, labels: built.labels, est_usd: est, submitted_at: new Date().toISOString() })
     .eq('id', draft.id);
-  return { submitted: true, batchId: created.id, requests: built.requests.length, images: built.images, estUsd: est };
+  return { submitted: true, batchId: created.id, requests: built.requests.length, images: built.images, estUsd: est, ...(more > 0 ? { more } : {}) };
 }
 
 // ----- the steps -----
@@ -576,7 +593,7 @@ async function submitStep(admin: SupabaseClient, body: Record<string, unknown>):
       caps,
       ...(draft.options?.include === 'needPhoto' ? { needPhoto: includeNeed, ...(includeNeed ? {} : { photosBusy: true }) } : {}),
       ...(submitted ?? {}),
-      done: final && !!submitted && submitted.error === undefined,
+      done: final && !!submitted && submitted.error === undefined && !submitted.more,
     });
   } finally {
     if (photosLocked) await admin.from('tempt_pool_meta').update({ photos_started_at: null }).eq('id', 1);

@@ -43,7 +43,7 @@ review_body() {
 rsumm() { python3 -c 'import sys,json
 try: d=json.load(sys.stdin)
 except Exception: print("bad response"); sys.exit(0)
-print({k:d.get(k) for k in ("step","night","gathered","noPhoto","failed","webRequests","webCostUsd","inDraft","remaining","submitted","batchId","estUsd","already","busy","pending","batches","done","error") if k in d})'; }
+print({k:d.get(k) for k in ("step","night","gathered","noPhoto","failed","webRequests","webCostUsd","inDraft","remaining","submitted","more","batchId","estUsd","already","busy","pending","batches","done","error") if k in d})'; }
 case "$WHAT" in
   review|review-new)
     echo "== photo-review submit"

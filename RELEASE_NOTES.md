@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.6.1 | no | photo-review |
 | 1.6.0 | yes | analyze-proof-photo, dish-photo, estimate-workout-kcal, parse-meal-text, photo-review, read-nutrition-label, report-photo, suggest-dinner, suggest-swap, tempt-chat, tempt-me |
 | 1.5.0 | yes | dish-photo, report-photo, tempt-chat, tempt-me |
 | 1.4.0 | no | analyze-proof-photo, analyze-weekly-feelings, boss-banter, coach-digest, dish-photo, estimate-workout-kcal, generate-meal-recipe, parse-meal-text, read-nutrition-label, suggest-cheat-places, suggest-dinner, suggest-plan-update, suggest-swap, tempt-chat, tempt-me, weekly-report |
@@ -100,6 +101,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.6.1
+- Fix (server): the nightly photo review loaded every picture of a draft in one call, so a large run (260 dishes, ~780 pictures) died before it was submitted and held its lock. A draft is now submitted 20 dishes (~60 pictures) per call, the rest in a new draft that the next call submits; the run reports done only when nothing is left. photo-review must be deployed with --no-verify-jwt.
 
 ## 1.6.0
 - Every "chính xác ~XX%" (Ghi bữa: meal badge, each food, nutrition label, source; meal ideas, swaps, recipes; a logged meal's detail) can be tapped (ⓘ): the level (Cao ≥85 / Khá 70–84 / Trung bình 50–69 / Thấp <50), why the number is what it is (the AI's own reasons such as "Đọc đúng số trên nhãn" or "Không thấy lượng dầu", or where the figures came from), what is still missing ("Thêm vào ghi chú", "Sửa lượng", "Phân tích lại với ghi chú") and up to 4 tips on photographing or describing the dish for a higher score. The AI functions return an optional `accuracyWhy`; logged foods keep their accuracy.
