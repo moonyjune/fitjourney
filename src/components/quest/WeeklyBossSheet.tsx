@@ -1,11 +1,12 @@
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import type { BossState } from '../../game/boss';
-import { bossHitTexts, bossNum, bossStatusText } from '../../game/bossView';
+import { bossHitTexts, bossNum, bossStatusText, weekDeficitText, weeklyReportHref } from '../../game/bossView';
 import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../../game/constants';
 import { DEFICIT_LEVEL_COLOR } from '../../game/deficitLevel';
 import type { DayEvaluation } from '../../game/missions';
 import { useGameText, type GameKey } from '../../game/strings';
+import { useSettingsStore } from '../../store/useSettingsStore';
 import { quest, questRadius } from '../../theme/quest';
 import { toDateKey } from '../../utils/date';
 import { isoWeekNumber } from '../../utils/isoWeek';
@@ -34,10 +35,11 @@ interface WeeklyBossSheetProps {
  *  and the way to the full week ("Xem cả tuần" → Journal › Tuần, where the 7-day log is) and to the AI weekly review. */
 export function WeeklyBossSheet({ visible, onClose, boss, today, now }: WeeklyBossSheetProps) {
   const g = useGameText();
+  const language = useSettingsStore((s) => s.language);
   const weekNo = isoWeekNumber(new Date(`${boss.weekKey}T12:00:00`));
   const { headline, reason } = bossHitTexts(boss, today, g);
   const todayDay = boss.days[boss.days.length - 1];
-  const hitAmount = !todayDay || todayDay.deficitKcal == null ? '—' : todayDay.pending ? `~−${bossNum(todayDay.pendingDamage)}` : `−${bossNum(todayDay.damage)}`;
+  const hitAmount = !todayDay || (todayDay.deficitKcal == null && !(todayDay.cheat && todayDay.damage > 0)) ? '—' : todayDay.pending ? `~−${bossNum(todayDay.pendingDamage)}` : `−${bossNum(todayDay.damage)}`;
   const monday = new Date(`${boss.weekKey}T12:00:00`);
   const todayKey = toDateKey(now);
   const week = Array.from({ length: 7 }, (_, i) => {
@@ -71,6 +73,9 @@ export function WeeklyBossSheet({ visible, onClose, boss, today, now }: WeeklyBo
           )}
           <HudText size={12} weight="medium" color={quest.textTertiary}>
             {bossStatusText(boss, g)}
+          </HudText>
+          <HudText size={12} weight="medium" color={quest.textSecondary} testID="weekly-boss-total">
+            {weekDeficitText(boss, g, language)}
           </HudText>
         </View>
       </View>
@@ -110,7 +115,7 @@ export function WeeklyBossSheet({ visible, onClose, boss, today, now }: WeeklyBo
                 : day.damage > 0
                   ? quest.hp
                   : quest.textSecondary;
-          const amount = future || !day || day.deficitKcal == null ? (day?.cheat ? g('deficit.cheatShort') : '—') : day.pending ? `~${bossNum(day.pendingDamage)}` : bossNum(day.damage);
+          const amount = day?.cheat && day.damage > 0 ? bossNum(day.damage) : future || !day || day.deficitKcal == null ? (day?.cheat ? g('deficit.cheatShort') : '—') : day.pending ? `~${bossNum(day.pendingDamage)}` : bossNum(day.damage);
           const wd = g(`weekday.${weekday}` as GameKey);
           return (
             <View key={key} accessible accessibilityLabel={`${wd} ${amount}`} style={styles.dayCell}>
@@ -134,7 +139,7 @@ export function WeeklyBossSheet({ visible, onClose, boss, today, now }: WeeklyBo
       </View>
 
       <View style={styles.buttons}>
-        <QuestButton icon="chart" variant="ghost" title={g('week.bossButton')} onPress={() => go('/weekly-report')} />
+        <QuestButton icon="chart" variant="ghost" title={g('week.bossButton')} onPress={() => go(weeklyReportHref(boss.weekKey))} />
         <QuestButton icon="calendar" variant="ghost" title={g('camp.bossSeeWeek')} onPress={() => go({ pathname: '/journal', params: { tab: 'week' } })} />
       </View>
       <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.reward}>

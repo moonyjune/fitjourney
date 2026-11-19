@@ -25,9 +25,11 @@ import { bossClock, bossForWeek } from '../boss';
 import { buildDamageLog } from '../bossDamage';
 import { evaluateDay } from '../missions';
 import { computeGameState } from '../state';
+import { LIMITS } from '../constants';
 
-// A cheat day keeps its food on record but is left out of every calorie figure: no deficit, no boss damage or heal, not in
-// the insights' sums, neutral for the streak, and marked (not given a deficit) in what the AI is told.
+// A cheat day keeps its food on record but is left out of every calorie figure: no deficit, no heal of the boss, not in
+// the insights' sums, neutral for the streak, and marked (not given a deficit) in what the AI is told. Since 1.7 the weekly boss
+// takes one day's deficit target from it ("miễn trừ 1 ngày").
 
 const TDEE = 2500;
 const NO_MEALS: Record<DayType, MealTemplate[]> = { training: [], rest: [] };
@@ -66,14 +68,33 @@ describe('a cheat day in the game state and bosses', () => {
   const logs = { '2026-10-19': log('2026-10-19', 1500), '2026-10-20': log('2026-10-20', 4500), '2026-10-21': log('2026-10-21', 1500) };
   const base = { now: NOW, startDateISO: '2026-10-19T08:00:00', logs, workoutEntries: [], mealTemplatesByDayType: NO_MEALS, tdeeKcal: TDEE, proteinTargetG: 100 };
 
-  it('the weekly boss neither loses nor regains HP on it', () => {
+  it('the weekly boss is not healed by it and takes the daily deficit target from it, whatever was eaten', () => {
     const plain = computeGameState(base);
-    const marked = computeGameState({ ...base, cheatDays: ['2026-10-20'] });
+    const marked = computeGameState({ ...base, cheatDays: ['2026-10-20'], targetDeficitKcal: 1100 });
     expect(plain.boss.days.find((d) => d.dateKey === '2026-10-20')).toMatchObject({ deficitKcal: -2000, damage: 0, cheat: false });
-    expect(marked.boss.days.find((d) => d.dateKey === '2026-10-20')).toMatchObject({ deficitKcal: null, damage: 0, cheat: true });
-    expect(marked.boss.totalDamage).toBe(2000);
+    expect(marked.boss.days.find((d) => d.dateKey === '2026-10-20')).toMatchObject({ deficitKcal: null, damage: 1100, cheat: true, pending: false });
+    expect(marked.boss.totalDamage).toBe(2000 + 1100);
     expect(marked.days.find((d) => d.dateKey === '2026-10-20')).toMatchObject({ cheat: true, deficitKcal: null, eatenKcal: 4500 });
-    expect(bossForWeek(NOW, () => 1000, undefined, (k) => k === '2026-10-22').days.find((d) => d.dateKey === '2026-10-22')).toMatchObject({ damage: 0, cheat: true });
+    // Without a target setting: the deficit limit the missions fall back to.
+    expect(computeGameState({ ...base, cheatDays: ['2026-10-20'] }).boss.days.find((d) => d.dateKey === '2026-10-20')!.damage).toBe(LIMITS.deficitKcal);
+    expect(bossForWeek(NOW, () => 1000, undefined, (k) => k === '2026-10-22', undefined, undefined, 900).days.find((d) => d.dateKey === '2026-10-22')).toMatchObject({ damage: 900, cheat: true });
+  });
+
+  it('a week with a cheat day and six days at 1100 defeats the 7700 HP boss (the target from the settings)', () => {
+    const week: Record<string, DailyNutritionLog> = {};
+    const days = ['2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25'];
+    for (const k of days) week[k] = log(k, k === '2026-10-21' ? 4000 : TDEE - 1100);
+    const sunday = new Date('2026-10-25T22:00:00');
+    const args = { ...base, now: sunday, logs: week, cheatDays: ['2026-10-21'] };
+    const game = computeGameState({ ...args, targetDeficitKcal: 1100 });
+    expect(game.boss.maxHp).toBe(7700);
+    expect(game.boss.days.map((d) => d.damage)).toEqual([1100, 1100, 1100, 1100, 1100, 1100, 1100]);
+    expect(game.boss).toMatchObject({ totalDamage: 7700, hpLeft: 0, defeated: true });
+    expect(game.bossesDefeated).toBe(1);
+    // A smaller target in the settings: the cheat day deals that, and the boss survives.
+    const smaller = computeGameState({ ...args, targetDeficitKcal: 800 });
+    expect(smaller.boss.days.find((d) => d.cheat)!.damage).toBe(800);
+    expect(smaller.boss).toMatchObject({ totalDamage: 7400, hpLeft: 300, defeated: false });
   });
 
   it('the stage damage log has no estimate for it (no damage, no heal) and marks it', () => {
@@ -127,13 +148,13 @@ describe('a cheat day in what the AI is told', () => {
     weights: [], dailyDeficitKcal: 1000, waterTargetMl: 2000, cheatDays: ['2026-10-20'],
   };
 
-  it('the weekly review marks it instead of giving its deficit, and leaves it out of the patterns and the boss', () => {
+  it('the weekly review marks it instead of giving its deficit, leaves it out of the patterns, and gives the boss the daily target', () => {
     const week = buildWeekInput(source, NOW);
     const cheat = week.days.find((d) => d.date === '2026-10-20')!;
-    expect(cheat).toMatchObject({ logged: true, cheatDay: true, damage: 0, eatenKcal: 5000 });
+    expect(cheat).toMatchObject({ logged: true, cheatDay: true, damage: 1000, eatenKcal: 5000 });
     expect(cheat.deficitKcal).toBeUndefined();
     expect(week.patterns).toMatchObject({ daysLogged: 1, cheatDays: 1, avgDeficitKcal: 1000 });
-    expect(week.boss.damageSoFar).toBe(1000);
+    expect(week.boss.damageSoFar).toBe(2000);
   });
 
   it('the coach snapshot day evaluator gives no deficit on it', () => {
@@ -149,6 +170,8 @@ describe('cheat days ahead and the 80/20 allowance', () => {
     // Wednesday 21/10: Thu–Sun are left (4 days); Saturday is a cheat day, so 3 days share the HP left.
     const boss = bossForWeek(new Date('2026-10-21T10:00:00'), () => null, 3000, (k) => k === '2026-10-24');
     expect(boss.neededPerRemainingDay).toBe(1000);
+    // A cheat day ahead takes its hit (the target) off the HP first: (3000 − 600) / 3.
+    expect(bossForWeek(new Date('2026-10-21T10:00:00'), () => null, 3000, (k) => k === '2026-10-24', undefined, undefined, 600).neededPerRemainingDay).toBe(800);
   });
 });
 

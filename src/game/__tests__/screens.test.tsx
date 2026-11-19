@@ -84,6 +84,7 @@ import { useEatAgainStore } from '../../store/useEatAgainStore';
 import { useSkippedMealStore } from '../../store/useSkippedMealStore';
 import { useMealModeStore } from '../../store/useMealModeStore';
 import { deleteFeelingRecord, pushFeelingRecord, pushNutritionLog } from '../../sync/cloudSync';
+import { weekStartKey } from '../../utils/weekKey';
 
 const DATE = '2026-10-23';
 
@@ -657,7 +658,8 @@ describe('FitJourney logging screens', () => {
       expect(sheet).toContain('Bữa này: 800 kcal × 1,3 = 1,040 kcal (+240 kcal)');
       expect(sheet).toContain('Nhớ ghi cả đồ uống');
       expect(sheet).toMatch(/Ngân sách cheat day = TDEE [\d,]+ kcal/);
-      expect(sheet).toMatch(/Gỡ lại trong [23] ngày tới/);
+      expect(sheet).toMatch(/Boss tuần vẫn mất [\d,]+ HP \(= mục tiêu thâm hụt 1 ngày/);
+      expect(sheet).not.toContain('Tuần mất');
       await tap(r, 'Đánh dấu bữa này là cheat meal');
       await tap(r, 'Đánh dấu ngày này là cheat day');
       expect(useCheatDayStore.getState().days).toEqual([DATE]);
@@ -1211,8 +1213,9 @@ describe('FitJourney logging screens', () => {
       expect(text).toContain('Tâm trạng');
       act(() => pressable(r, (l) => l.startsWith('Boss tuần.')).props.onPress());
       expect(mockRouter.push).toHaveBeenCalledWith('/boss');
+      expect(text).toMatch(/Tổng thâm hụt: [\d.]+ kcal/);
       act(() => pressable(r, (l) => l === 'Tổng kết tuần (AI)').props.onPress());
-      expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
+      expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/weekly-report', params: { week: weekStartKey(new Date()) } });
     });
 
     it('Tháng: the short summary opens the deep analysis, and the weight card the weight page', () => {

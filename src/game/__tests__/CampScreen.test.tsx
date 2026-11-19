@@ -288,7 +288,8 @@ describe('FitJourney Camp screen', () => {
     const r = render();
     expect(allText(r)).toMatch(/Tổng kết tuần 43/);
     act(() => button(r, 'Xem: Tổng kết tuần').props.onPress());
-    expect(mockPush).toHaveBeenCalledWith('/weekly-report');
+    // Last week's card opens last week's review (week 43 starts Monday 19/10), not this week's.
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/weekly-report', params: { week: '2026-10-19' } });
   });
 
   it("keeps last week's review card after Monday until it is closed (×) or the weekly report is opened", () => {

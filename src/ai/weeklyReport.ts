@@ -1,4 +1,4 @@
-import { bossDeficitOf } from '../game/state';
+import { bossDeficitOf, cheatDayDamageKcal } from '../game/state';
 import { getDayType } from '../constants/plan';
 import { lateMealHour } from '../utils/mealMode';
 import { bossForWeek, type BossState } from '../game/boss';
@@ -29,7 +29,8 @@ export interface WeekDay {
   logged: boolean;
   /** TDEE + exercise − eaten; omitted when no food was logged or on a cheat day. */
   deficitKcal?: number;
-  /** The user marked the day as a cheat day: its kcal are not counted (no deficit, no damage) and it is left out of the patterns. */
+  /** The user marked the day as a cheat day: its kcal are not counted (no deficit) and it is left out of the patterns; the boss
+   *  takes one day's deficit target from it. */
   cheatDay?: true;
   /** Damage dealt to the boss that day. */
   damage: number;
@@ -103,9 +104,24 @@ export function weekSourceFromStores(now: Date = new Date()): WeekSource {
   };
 }
 
-/** Reads this device's logs and builds the weekly review input (see `buildWeekInput`). */
-export function buildWeeklyReportInput(now: Date = new Date()): WeekInput {
-  return buildWeekInput(weekSourceFromStores(now), now);
+/** The moment a week's review is computed at. No `weekKey` (or a bad one, or the week of `now` or later): `now`, the week so far.
+ *  An earlier week: the very end of its Sunday (23:59:59), so the whole week is judged, settled, like its boss in the history. */
+export function weekReportMoment(now: Date, weekKey?: string | null): Date {
+  if (!weekKey || !DATE_RE.test(weekKey)) return now;
+  const day = new Date(`${weekKey}T12:00:00`);
+  if (Number.isNaN(day.getTime())) return now;
+  const start = weekStartKey(day);
+  if (start >= weekStartKey(now)) return now;
+  const sunday = addDays(new Date(`${start}T12:00:00`), 6);
+  sunday.setHours(23, 59, 59, 0);
+  return sunday;
+}
+
+/** Reads this device's logs and builds the weekly review input (see `buildWeekInput`) for the week that starts on `weekKey`
+ *  (any day of it works), or the current week when none is given. */
+export function buildWeeklyReportInput(now: Date = new Date(), weekKey?: string | null): WeekInput {
+  const at = weekReportMoment(now, weekKey);
+  return buildWeekInput(weekSourceFromStores(at), at);
 }
 
 /** Builds everything the weekly review is based on: the week so far (Monday to today), per day and in
@@ -118,6 +134,8 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
   const todayKey = toDateKey(now);
   const startKey = weekStartKey(now);
   const monday = new Date(`${startKey}T12:00:00`);
+  // A cheat day deals one day's deficit target to the boss (its own kcal still are not counted).
+  const cheatHit = cheatDayDamageKcal(source.dailyDeficitKcal);
 
   const days: WeekDay[] = [];
   for (let i = 0; i < 7; i++) {
@@ -132,7 +150,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     const day: WeekDay = {
       date,
       logged,
-      damage: Math.min(Math.max(e.deficitKcal ?? 0, 0), dailyDamageCapKcal(e.burnedKcal)),
+      damage: e.cheat ? cheatHit : Math.min(Math.max(e.deficitKcal ?? 0, 0), dailyDamageCapKcal(e.burnedKcal)),
       eatenKcal: Math.round(e.eatenKcal),
       proteinG: Math.round(e.proteinG),
       burnedKcal: Math.round(e.burnedKcal),
@@ -170,7 +188,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
     lateMealDays: count((d) => d.lastMealHour !== undefined && d.lastMealHour >= lateMealHour()),
   };
 
-  const boss = bossForWeek(now, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled);
+  const boss = bossForWeek(now, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled, cheatHit);
 
   // Weight: from the last weigh-in before the week (else the first of the week) to the latest, against what the deficit predicts.
   const points = weights
@@ -193,7 +211,7 @@ export function buildWeekInput(source: WeekSource, now: Date = new Date()): Week
   // Last week, for comparison: the same rules, ended on its Sunday.
   const prevSunday = addDays(monday, -1);
   prevSunday.setHours(12, 0, 0, 0);
-  const prevBoss = bossForWeek(prevSunday, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled);
+  const prevBoss = bossForWeek(prevSunday, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled, cheatHit);
   const prevDeficits = prevBoss.days.map((d) => d.deficitKcal).filter((v): v is number => v !== null);
   const previousWeek: WeekInput['previousWeek'] =
     prevDeficits.length > 0 ? { damage: Math.round(prevBoss.totalDamage), daysLogged: prevDeficits.length, avgDeficitKcal: avg(prevDeficits) } : undefined;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildWeeklyReportInput, cleanReport, weekInputFingerprint, type WeekInput } from '../src/ai/weeklyReport';
 import { useAiErrorText } from '../src/ai/usePhotoAnalysis';
@@ -12,7 +12,8 @@ import { useGameText } from '../src/game/strings';
 import { useNow } from '../src/game/useGameState';
 import { useAiReportStore } from '../src/store/useAiReportStore';
 import { useCelebrationStore } from '../src/store/useCelebrationStore';
-import { previousWeekStartKey } from '../src/utils/weekKey';
+import { previousWeekStartKey, weekStartKey } from '../src/utils/weekKey';
+import { isoWeekNumber } from '../src/utils/isoWeek';
 import { bossClock } from '../src/game/boss';
 import { useAnalysisStore } from '../src/store/useAnalysisStore';
 import { useInsightsText } from '../src/insights/strings';
@@ -37,7 +38,8 @@ const stamp = (iso: string) => {
 };
 const signed = (n: number) => `${n > 0 ? '+' : ''}${n}`;
 
-/** Boss > AI weekly review. The numbers are computed on the device from the logs and are always current; the AI writes the
+/** Boss > AI weekly review of the week in the `week` route param (its Monday's date key: Journal › Tuần, Camp's last-week card), or
+ *  of the current week without one. The numbers are computed on the device from the logs and are always current; the AI writes the
  *  explanation from them (why the boss is or is not going down, repeated habits, weight against the deficit, next week's
  *  actions). The text is stored per week, so reopening it costs nothing; refreshing makes a new one. */
 export default function WeeklyReportScreen() {
@@ -45,11 +47,13 @@ export default function WeeklyReportScreen() {
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow(60_000);
+  const params = useLocalSearchParams<{ week?: string }>();
+  const weekParam = typeof params.week === 'string' ? params.week : undefined;
   const aiErrorText = useAiErrorText();
   const logs = useNutritionStore((s) => s.logs);
   const workouts = useWorkoutStore((s) => s.entries);
   const weights = useWeightStore((s) => s.entries);
-  const input: WeekInput = useMemo(() => buildWeeklyReportInput(now), [now, logs, workouts, weights]); // eslint-disable-line react-hooks/exhaustive-deps
+  const input: WeekInput = useMemo(() => buildWeeklyReportInput(now, weekParam), [now, weekParam, logs, workouts, weights]); // eslint-disable-line react-hooks/exhaustive-deps
   const period = input.week.start;
   const dataFp = useMemo(() => weekInputFingerprint(input), [input]);
   const mode = useAnalysisStore((s) => s.mode);
@@ -106,7 +110,9 @@ export default function WeeklyReportScreen() {
   const { boss, patterns, weight, previousWeek, targets } = input;
   const report = stored?.report;
   const outdated = !!stored && stored.dataFp !== dataFp;
-  const eyebrow = `${dd(input.week.start)} – ${dd(input.week.today)}`;
+  // A week before this one is over: no "needed per day", and the status says how it ended.
+  const past = period < weekStartKey(now);
+  const eyebrow = `${g('chart.bossWeek', { n: isoWeekNumber(new Date(`${period}T12:00:00`)) })} · ${dd(input.week.start)} – ${dd(input.week.today)}`;
 
   return (
     <View style={styles.screen}>
@@ -117,13 +123,13 @@ export default function WeeklyReportScreen() {
           <View style={styles.bossLine}>
             <DefaultBossArt size={36} defeated={boss.defeated} />
             <HudText size={13} color={quest.gold} style={styles.flex}>
-              {g(`week.status.${boss.status}` as never)}
+              {past && !boss.defeated ? g('week.statusPastUp') : g(`week.status.${boss.status}` as never)}
             </HudText>
           </View>
           <HudText size={13} weight="medium" color={quest.textSecondary}>
             {g('week.boss', { hp: boss.hpLeft, max: boss.maxHp, dealt: boss.damageSoFar })}
           </HudText>
-          {!boss.defeated && (
+          {!boss.defeated && !past && (
             <HudText size={13} weight="medium" color={quest.textSecondary}>
               {g('week.needed', { n: boss.neededPerRemainingDay, days: Math.max(1, 7 - input.week.daysElapsed) })}
             </HudText>

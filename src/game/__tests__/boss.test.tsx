@@ -38,6 +38,8 @@ import { useNutritionStore } from '../../store/useNutritionStore';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { useWeightStore } from '../../store/useWeightStore';
 import { useWorkoutStore } from '../../store/useWorkoutStore';
+import { weekStartKey } from '../../utils/weekKey';
+import { bossClock } from '../boss';
 
 function allText(renderer: ReactTestRenderer): string {
   const parts: string[] = [];
@@ -66,7 +68,7 @@ describe('Boss detail screen', () => {
     const button = r.root.findAll((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === 'Tổng kết tuần bằng AI')[0];
     expect(button).toBeDefined();
     act(() => button.props.onPress());
-    expect(mockRouter.push).toHaveBeenCalledWith('/weekly-report');
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/weekly-report', params: { week: weekStartKey(bossClock(new Date())) } });
     act(() => r.unmount());
   });
 

@@ -14,13 +14,13 @@ const n = (v: number) => Math.round(v).toLocaleString('en-US');
 const factor = String(CHEAT_MEAL_BUFFER).replace('.', ',');
 
 /** The weekly boss's line, only for a day of the boss's current week. */
-function BossLine({ dateKey, now }: { dateKey: string; now: Date }) {
+function BossLine({ dateKey, now, hitKcal }: { dateKey: string; now: Date; hitKcal: number }) {
   const g = useGameText();
   const boss = useGameState(now).boss;
   if (weekStartKey(new Date(`${dateKey}T12:00:00`)) !== weekStartKey(bossClock(now))) return null;
   return (
     <HudText size={12} weight="medium" color={quest.textSecondary}>
-      {boss.defeated ? g('cheatX.bossDown') : g('cheatX.boss', { hp: n(boss.hpLeft), need: n(boss.neededPerRemainingDay) })}
+      {boss.defeated ? g('cheatX.bossDown') : g('cheatX.boss2', { hp: n(boss.hpLeft), need: n(boss.neededPerRemainingDay), deficit: n(hitKcal) })}
     </HudText>
   );
 }
@@ -84,23 +84,26 @@ export function CheatGuide({
             : g('cheatX.dayLeft', { eaten: n(plan.eatenKcal), left: n(plan.leftKcal) })}
         </HudText>
         <HudText size={12} weight="medium" color={quest.textSecondary}>
-          {plan.overKcal > 0
-            ? g('cheatX.weekCostOver', { cost: n(plan.weekCostKcal), deficit: n(plan.targetDeficitKcal), over: n(plan.overKcal), pct: plan.weekCostPct })
-            : g('cheatX.weekCost', { cost: n(plan.weekCostKcal), pct: plan.weekCostPct })}
+          {g('cheatX.bossHit', { deficit: n(plan.bossHitKcal), pct: plan.bossHitPct })}
         </HudText>
-        <BossLine dateKey={dateKey} now={now} />
+        {plan.overKcal > 0 && (
+          <HudText size={12} weight="medium" color={quest.textSecondary}>
+            {g('cheatX.overRisk', { over: n(plan.overKcal), fat: n(plan.overFatG) })}
+          </HudText>
+        )}
+        <BossLine dateKey={dateKey} now={now} hitKcal={plan.bossHitKcal} />
         {r.days > 0 && (
           <HudText size={12} weight="medium" color={quest.text}>
-            {g('cheatX.recovery', { days: r.days, per: n(r.perDayKcal), budget: n(r.dayBudgetKcal), max: RECOVERY_MAX_PER_DAY })}
+            {g('cheatX.recovery2', { days: r.days, per: n(r.perDayKcal), budget: n(r.dayBudgetKcal), max: RECOVERY_MAX_PER_DAY })}
           </HudText>
         )}
         {r.leftKcal > 0 && (
           <HudText size={12} weight="medium" color={quest.textSecondary}>
-            {g('cheatX.recoveryLeft', { left: n(r.leftKcal) })}
+            {g('cheatX.recoveryLeft2', { left: n(r.leftKcal) })}
           </HudText>
         )}
         <HudText size={11} weight="medium" color={quest.textTertiary}>
-          {g('cheatX.dayRules')}
+          {g('cheatX.dayRules2', { deficit: n(plan.bossHitKcal) })}
         </HudText>
       </View>
     </View>
