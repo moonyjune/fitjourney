@@ -37,6 +37,9 @@ import {
   webAllowed,
   withinBudget,
   type Verdict,
+  erroredSubjectKeys as splitErroredKeys,
+  soloShown as splitSoloShown,
+  SPLIT_START as SPLIT_FIRST,
 } from '../../../supabase/functions/_shared/photoReview';
 import { dishKey } from '../../../supabase/functions/_shared/dishPhoto';
 
@@ -271,5 +274,42 @@ describe('the function and its schedule', () => {
     expect(fn).toMatch(/got === null \|\| 'forbidden' in got/);
     expect(fn).toMatch(/systemRecord\(admin, 'photo-review batch'\)/);
     expect(fn).toMatch(/tempt_pool_claim_photos/);
+  });
+});
+
+
+describe('split re-check of failed requests (1.6.2)', () => {
+  const labels = {
+    'rp-2026-11-19-01': { 'D01-C1': { s: 'a', c: 0, u: 'u1' }, 'D01-C2': { s: 'a', c: 1, u: 'u2' }, 'D02-C1': { s: 'b', c: 0, u: 'u3' } },
+    'rp-2026-11-19-02': { 'D01-C1': { s: 'c', c: 0, u: 'u4' } },
+  };
+  it('collects the dishes of every request that did not succeed, ignoring unknown ids', () => {
+    const keys = splitErroredKeys(
+      [
+        { custom_id: 'rp-2026-11-19-01', result: { type: 'errored' } },
+        { custom_id: 'rp-2026-11-19-02', result: { type: 'succeeded' } },
+        { custom_id: 'rp-2026-11-19-99', result: { type: 'expired' } },
+        { result: { type: 'errored' } },
+      ],
+      labels
+    );
+    expect([...keys].sort()).toEqual(['a', 'b']);
+  });
+  it('treats expired and canceled like errored', () => {
+    expect([...splitErroredKeys([{ custom_id: 'rp-2026-11-19-02', result: { type: 'canceled' } }], labels)]).toEqual(['c']);
+    expect(splitErroredKeys([{ custom_id: 'rp-2026-11-19-02', result: { type: 'succeeded' } }], labels).size).toBe(0);
+  });
+  it('one pseudo-subject per picture, so each picture becomes its own request', () => {
+    const solo = splitSoloShown([
+      { key: 'a', cands: [{ c: 0, url: 'u1' }, { c: 2, url: 'u2' }] },
+      { key: 'b', cands: [] },
+    ]);
+    expect(solo).toEqual([
+      { key: 'a', cands: [{ c: 0, url: 'u1' }] },
+      { key: 'a', cands: [{ c: 2, url: 'u2' }] },
+    ]);
+  });
+  it('split ids do not collide with the first (1..) or second (51..) batch numbers', () => {
+    expect(SPLIT_FIRST).toBeGreaterThan(51 + 49);
   });
 });

@@ -66,6 +66,9 @@ import {
   pickForTasks,
   pictureKey,
   planRequests,
+  erroredSubjectKeys,
+  soloShown,
+  SPLIT_START,
   readMarker,
   REVIEW_MODEL,
   REVIEW_WEB_SYSTEM,
@@ -128,7 +131,7 @@ type BatchRow = {
   subjects: ReviewSubject[];
   labels: LabelMap;
   first_verdicts: Record<string, Verdict> | null;
-  options: { include?: string; maxDishes?: number; maxUsd?: number } | null;
+  options: { include?: string; maxDishes?: number; maxUsd?: number; split?: boolean } | null;
   web_cost_usd: number;
   est_usd: number;
   cost_usd: number;
@@ -454,7 +457,8 @@ async function buildRequests(
   model: string,
   effort: 'low' | 'medium',
   which: (s: ReviewSubject) => number[],
-  start: number
+  start: number,
+  solo = false
 ): Promise<{ requests: { custom_id: string; params: Record<string, unknown> }[]; labels: LabelMap; images: number } | null> {
   const wanted = subjects.flatMap((s) => which(s).map((c) => ({ s, c, url: s.candidates[c]?.url })).filter((x) => !!x.url));
   const blocks = new Map<string, ImageBlock>();
@@ -463,7 +467,7 @@ async function buildRequests(
     if (block) blocks.set(verdictKey(x.s.key, x.c), block);
   });
   const shown = subjects.map((s) => ({ key: s.key, cands: which(s).filter((c) => blocks.has(verdictKey(s.key, c))).map((c) => ({ c, url: s.candidates[c].url })) }));
-  const plans = planRequests(shown, night, { start });
+  const plans = solo ? planRequests(soloShown(shown), night, { start, perRequest: 1 }) : planRequests(shown, night, { start });
   if (plans.length === 0) return null;
   const byKey = new Map(subjects.map((s) => [s.key, s]));
   const requests = plans.map((p) => ({
@@ -634,6 +638,34 @@ async function submitSecond(admin: SupabaseClient, row: BatchRow, subjects: Revi
   return !error;
 }
 
+/** Submits the dishes of a Haiku batch's failed requests again as a split batch (one picture per request, stage haiku, options.split
+ *  so it is never split again); false when it could not (they are then decided with what is known, i.e. retried later). */
+async function submitSplit(admin: SupabaseClient, row: BatchRow, subjects: ReviewSubject[]): Promise<boolean> {
+  const all = (s: ReviewSubject) => s.candidates.map((_, i) => i);
+  const built = await buildRequests(subjects, row.night, REVIEW_MODEL, 'low', all, SPLIT_START, true);
+  if (!built) return false;
+  const created = await createBatch(built.requests);
+  if ('error' in created) {
+    console.warn('[photo-review] split batch:', created.error);
+    return false;
+  }
+  const { error } = await admin.from(TABLE).insert({
+    night: row.night,
+    stage: 'haiku',
+    model: REVIEW_MODEL,
+    status: 'submitted',
+    batch_id: created.id,
+    subjects,
+    labels: built.labels,
+    parent: row.id,
+    options: { ...(row.options ?? {}), split: true },
+    est_usd: estimateVerifyUsd(built.images, REVIEW_MODEL, built.requests.length),
+    submitted_at: new Date().toISOString(),
+  });
+  if (error) console.warn('[photo-review] split batch row not saved:', error.message);
+  return !error;
+}
+
 /** Applies one ended batch. */
 async function collectRow(admin: SupabaseClient, row: BatchRow, now: Date, maxUsd: number): Promise<Record<string, unknown>> {
   const batch = await getBatch(row.batch_id!);
@@ -670,8 +702,17 @@ async function collectRow(admin: SupabaseClient, row: BatchRow, now: Date, maxUs
   const poolTaken = await poolPictures(admin);
   const subjects = (row.subjects ?? []) as ReviewSubject[];
   const firstOf = (s: ReviewSubject, from: Map<string, Verdict>) => s.candidates.map((_, i) => from.get(verdictKey(s.key, i)));
+  let split = 0;
   if (row.stage === 'haiku') {
-    let toSecond = subjects.filter((s) => needsSecond(firstOf(s, verdicts)));
+    // 1.6.2: the dishes of failed requests are checked again one picture per request (never twice: a split batch is not split).
+    const failedKeys = row.options?.split ? new Set<string>() : erroredSubjectKeys(results as { custom_id?: unknown; result?: { type?: unknown } }[], row.labels ?? {});
+    if (failedKeys.size > 0) {
+      const failed = subjects.filter((s) => failedKeys.has(s.key));
+      if (await submitSplit(admin, row, failed)) split = failed.length;
+      else failedKeys.clear();
+    }
+    const own = subjects.filter((s) => !failedKeys.has(s.key));
+    let toSecond = own.filter((s) => needsSecond(firstOf(s, verdicts)));
     if (toSecond.length > 0) {
       const unsure = toSecond.reduce((n, s) => n + firstPass(firstOf(s, verdicts)).unsure.length, 0);
       const spent = (await spentOn(admin, row.night)) - Number(row.est_usd ?? 0) + cost;
@@ -680,7 +721,7 @@ async function collectRow(admin: SupabaseClient, row: BatchRow, now: Date, maxUs
       else toSecond = [];
     }
     const waiting = new Set(toSecond.map((s) => s.key));
-    for (const s of subjects) if (!waiting.has(s.key)) await applySubject(admin, s, decide(firstOf(s, verdicts), null), poolTaken, now, tally);
+    for (const s of own) if (!waiting.has(s.key)) await applySubject(admin, s, decide(firstOf(s, verdicts), null), poolTaken, now, tally);
   } else {
     const first = new Map(Object.entries(row.first_verdicts ?? {}));
     for (const s of subjects) {
@@ -689,7 +730,7 @@ async function collectRow(admin: SupabaseClient, row: BatchRow, now: Date, maxUs
       await applySubject(admin, s, decide(f, second), poolTaken, now, tally);
     }
   }
-  const summary = { results: counts, verdicts: verdicts.size, ...tally };
+  const summary = { results: counts, verdicts: verdicts.size, ...tally, ...(split > 0 ? { split } : {}) };
   await admin.from(TABLE).update({ status: 'applied', cost_usd: cost, ended_at: now.toISOString(), summary }).eq('id', row.id);
   return { id: row.id, stage: row.stage, state: 'applied', costUsd: cost, ...summary };
 }

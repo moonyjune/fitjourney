@@ -460,6 +460,26 @@ export function planRequests(
   return out;
 }
 
+/** The first custom_id number of a split re-check (one picture per request) of a batch's failed requests. */
+export const SPLIT_START = 101;
+
+/** The subject keys of the requests of a batch that did not succeed (errored, expired, canceled; 1.6.2): one picture the API rejects
+ *  fails its whole 10-dish request, so those dishes are checked again one picture per request. Unknown custom_ids are ignored. */
+export function erroredSubjectKeys(results: { custom_id?: unknown; result?: { type?: unknown } | null }[], labels: LabelMap): Set<string> {
+  const out = new Set<string>();
+  for (const r of results) {
+    if (r?.result?.type === 'succeeded' || typeof r?.custom_id !== 'string') continue;
+    for (const t of Object.values(labels[r.custom_id] ?? {})) out.add(t.s);
+  }
+  return out;
+}
+
+/** `shown` (subjects with their loaded candidates) as one pseudo-subject per picture, so planRequests(…, {perRequest: 1}) makes one
+ *  request per picture: a bad picture then fails only itself. */
+export function soloShown(shown: { key: string; cands: { c: number; url: string }[] }[]): { key: string; cands: { c: number; url: string }[] }[] {
+  return shown.flatMap((s) => s.cands.map((cand) => ({ key: s.key, cands: [cand] })));
+}
+
 /** The params of one vision request (a Message Batches `params`): the fixed instruction first (cached), then each picture after its
  *  label line, then the ask; the answer constrained to REVIEW_SCHEMA. `entries` carry the image blocks (built by the caller). */
 export function reviewParams(

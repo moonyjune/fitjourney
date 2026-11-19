@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.6.2 | no | photo-review |
 | 1.6.1 | no | photo-review |
 | 1.6.0 | yes | analyze-proof-photo, dish-photo, estimate-workout-kcal, parse-meal-text, photo-review, read-nutrition-label, report-photo, suggest-dinner, suggest-swap, tempt-chat, tempt-me |
 | 1.5.0 | yes | dish-photo, report-photo, tempt-chat, tempt-me |
@@ -101,6 +102,9 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.6.2
+- Nightly photo review: when a request of a batch fails (one picture the API rejects fails the whole 10-dish request), its dishes are checked again at once, one picture per request (custom_ids from 101), so only the bad picture is lost; a split batch is never split again. On the first full run 5 of 13 requests failed this way (51 dishes waited a day). photo-review must be deployed with --no-verify-jwt.
 
 ## 1.6.1
 - Fix (server): the nightly photo review loaded every picture of a draft in one call, so a large run (260 dishes, ~780 pictures) died before it was submitted and held its lock. A draft is now submitted 20 dishes (~60 pictures) per call, the rest in a new draft that the next call submits; the run reports done only when nothing is left. photo-review must be deployed with --no-verify-jwt.
