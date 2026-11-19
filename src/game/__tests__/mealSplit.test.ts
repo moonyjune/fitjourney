@@ -108,6 +108,22 @@ describe('coveredMealIds', () => {
     expect(coveredMealIds(true, defs, planMeals, undefined).size).toBe(0);
   });
 
+  it('fasting (1.6.3): a picked main meal wins over the clock — "Tối" filed at 19:00 covers Bữa 3 (starts 19:15), not Bữa 2', () => {
+    const defs = mealDefs(true, planMeals);
+    const last = defs[defs.length - 1].id;
+    // A 700 kcal dinner filed at the usual dinner time 19:00 (MEAL_CLOCK), before the plan's last meal starts at 19:15.
+    expect([...coveredMealIds(true, defs, planMeals, log({ extraItems: [x('Bún chả', 700, 'dinner', 19)] }))]).toEqual([last]);
+    // "Không nhớ" for dinner, saved at 10:00 with the dinner pick, still covers the last meal.
+    expect([...coveredMealIds(true, defs, planMeals, log({ extraItems: [x('Bữa không nhớ (ước tính)', 540, 'dinner', 10)] }))]).toEqual([last]);
+    // Breakfast / lunch picks cover the first plan meal whatever the time.
+    expect([...coveredMealIds(true, defs, planMeals, log({ extraItems: [x('Phở', 600, 'lunch', 16)] }))]).toEqual([defs[0].id]);
+    // A snack time or no pick still goes by the clock: 600 kcal at 16:00 covers the plan meal of that time (Bữa 2).
+    expect([...coveredMealIds(true, defs, planMeals, log({ extraItems: [x('Bánh mì', 600, 'late_afternoon_snack', 16)] }))]).toEqual([defs[1].id]);
+    expect([...coveredMealIds(true, defs, planMeals, log({ extraItems: [x('Bánh mì', 600, null, 16)] }))]).toEqual([defs[1].id]);
+    // A food ticked "Ăn vặt" never covers a meal, even when picked as dinner.
+    expect(coveredMealIds(true, defs, planMeals, log({ extraItems: [{ ...x('Chè', 600, 'dinner', 19), snack: true }] })).size).toBe(0);
+  });
+
   it('normal day: a period is covered by 150 kcal or more logged for it; the plan\'s first two meals count as lunch, the last as dinner', () => {
     const defs = mealDefs(false, planMeals);
     const ids = (l: DailyNutritionLog) => [...coveredMealIds(false, defs, planMeals, l)].sort();

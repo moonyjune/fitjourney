@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.6.3 | no | — |
 | 1.6.2 | no | photo-review |
 | 1.6.1 | no | photo-review |
 | 1.6.0 | yes | analyze-proof-photo, dish-photo, estimate-workout-kcal, parse-meal-text, photo-review, read-nutrition-label, report-photo, suggest-dinner, suggest-swap, tempt-chat, tempt-me |
@@ -102,6 +103,10 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.6.3
+- Fix: with fasting on, a meal logged as "Tối" (or "Không nhớ đã ăn gì → Tối") did not count as the last meal: a dinner is filed at 19:00, which falls in Bữa 2's time when the plan's last meal starts later (the default plan: 19:15). Bữa 3 stayed "Chờ ăn" / missing, the forecast added its planned kcal again, and Bữa 2 counted as eaten instead. In fasting mode the meal picked now wins over the time: "Tối" covers the last plan meal, "Sáng" / "Trưa" the first; snack times and foods without a picked meal still go by their time.
+- Design/qa-1.6: screenshot QA of 1.4–1.6 (73 shots, README table, overview).
 
 ## 1.6.2
 - Nightly photo review: when a request of a batch fails (one picture the API rejects fails the whole 10-dish request), its dishes are checked again at once, one picture per request (custom_ids from 101), so only the bad picture is lost; a split batch is never split again. On the first full run 5 of 13 requests failed this way (51 dishes waited a day). photo-review must be deployed with --no-verify-jwt.

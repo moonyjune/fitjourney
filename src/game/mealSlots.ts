@@ -76,6 +76,15 @@ export function periodOfItem(item: { mealTime?: ExtraMealTime | null; loggedAtIS
   return h < 10.5 ? 'breakfast' : h < 15 ? 'lunch' : 'dinner';
 }
 
+/** Fasting: the plan meal a food belongs to by the main meal the user picked ("Tối" → the last plan meal, "Sáng" / "Trưa" → the first),
+ *  or null for a snack time or no pick (those go by the food's time). */
+export function fastingSlotOfMealTime(defs: MealSlotDef[], mealTime: ExtraMealTime | null | undefined): MealSlotDef | null {
+  if (defs.length === 0) return null;
+  if (mealTime === 'dinner') return defs[defs.length - 1];
+  if (mealTime === 'breakfast' || mealTime === 'lunch') return defs[0];
+  return null;
+}
+
 /** The meals of a day that are already taken care of. Fasting: a plan meal that is ticked eaten or removed, or one with half its kcal
  *  (at least 150) of food logged during its time. Normal day: a period with at least 150 kcal logged (what was eaten as off-plan food, by its meal
  *  time, plus the plan's meals ticked eaten: the first two count as lunch, the last as dinner). */
@@ -89,9 +98,14 @@ export function coveredMealIds(fasting: boolean, defs: MealSlotDef[], planMeals:
     for (const item of log.extraItems ?? []) {
       // A food ticked "Ăn vặt" on its own (1.5) is a snack: it never makes a meal eaten (its kcal still count in the day).
       if (item.snack) continue;
+      // 1.6.3: the meal the user picked wins over the clock. "Tối" files a food at 19:00 (MEAL_CLOCK), which falls in the previous
+      // plan meal's window when the plan's last meal starts later, so a logged dinner (or "Không nhớ → Tối") covered Bữa 2 and left
+      // the last meal "Chờ ăn" / missing. Main meals go by the pick (dinner → last plan meal, breakfast / lunch → first); snacks and
+      // foods without a picked meal still go by their time.
+      const picked = fastingSlotOfMealTime(defs, item.mealTime);
       const at = new Date(item.loggedAtISO);
       const min = at.getHours() * 60 + at.getMinutes();
-      const slot = defs.find((d, i) => (i === 0 || min >= d.startHour * 60 + d.startMinute) && min < d.endMinutes) ?? defs[defs.length - 1];
+      const slot = picked ?? defs.find((d, i) => (i === 0 || min >= d.startHour * 60 + d.startMinute) && min < d.endMinutes) ?? defs[defs.length - 1];
       if (slot) kcal.set(slot.id, (kcal.get(slot.id) ?? 0) + item.calories);
     }
     for (const d of defs) {
