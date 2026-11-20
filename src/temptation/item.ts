@@ -1,4 +1,5 @@
 import { cleanPlacePhoto, type PlacePhoto } from '../../supabase/functions/_shared/places';
+import { cleanShopOut, type ShopOut } from '../../supabase/functions/_shared/temptShops';
 import { OPENERS, TEMPT_CATALOG, isWeekendMood, slotOfHour, type BossKind, type CatalogItem } from './catalog';
 
 /** One temptation as the pop-up shows it, whichever level made it. */
@@ -26,6 +27,13 @@ export interface TemptItem {
   chat?: { poolId: string };
   /** AI answered without web search (the key may not use it), or Hard fell back to Easy (AI unavailable). */
   note?: 'noWeb' | 'fallback';
+  /** 1.7: a real shop near the player selling it (from the cached web search), with its line ("Đang mở · giao ~25 phút · Quán") and
+   *  source link. */
+  shop?: ShopOut;
+  /** 1.7: "Vì sao gợi ý món này?" from the diary summary ("Bạn hay ăn vặt đồ ngọt lúc 15h · hôm nay còn 420 kcal"). */
+  why?: string;
+  /** 1.7: the server's record of this temptation (tempt_interactions), so the answer and the chat are learned from. */
+  interactionId?: string;
 }
 
 type Rand = () => number;
@@ -100,6 +108,9 @@ export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai', chat = 
   const imageUrl = httpsUrl(r.imageUrl);
   const domain = text(r.sourceDomain, 80);
   const photo = imageUrl ? cleanPlacePhoto(r.photo) : null;
+  const shop = cleanShopOut(r.shop);
+  const why = text(r.why, 160);
+  const interactionId = typeof r.interactionId === 'string' && /^[0-9a-f-]{36}$/i.test(r.interactionId) ? r.interactionId : '';
   return {
     id: `ai:${name.toLowerCase()}`,
     name,
@@ -118,5 +129,8 @@ export function itemFromAi(raw: unknown, source: 'ai' | 'sample' = 'ai', chat = 
     source,
     ...(r.web === 'unavailable' ? { note: 'noWeb' as const } : {}),
     ...(chat ? { chat: { poolId: text(r.poolId, 64) } } : {}),
+    ...(shop ? { shop } : {}),
+    ...(why ? { why } : {}),
+    ...(interactionId ? { interactionId } : {}),
   };
 }

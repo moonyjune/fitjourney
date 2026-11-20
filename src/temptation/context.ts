@@ -1,4 +1,11 @@
-import { habitProfile, type HabitEntry, type HabitProfile, type MealState } from '../../supabase/functions/_shared/temptPick';
+import { foodCategory, habitProfile, slotOf, type HabitEntry, type HabitProfile, type MealState } from '../../supabase/functions/_shared/temptPick';
+import { analyzeDiary, WEEK_DAYS, type DiaryEntry, type HabitSummary } from '../../supabase/functions/_shared/eatingHabits';
+import { learnSummary, type Interaction } from '../../supabase/functions/_shared/temptLearn';
+import { cleanArea, type TemptArea } from '../../supabase/functions/_shared/temptShops';
+import { makeDayEvaluator } from '../ai/coachContext';
+import { useTemptationStore } from '../store/useTemptationStore';
+import type { TemptSettings } from './schedule';
+import type { TemptHistoryEntry } from './stats';
 import { mainMealOf } from '../insights/days';
 import { useNutritionStore } from '../store/useNutritionStore';
 import type { DailyNutritionLog, ExtraFoodItem } from '../types';
@@ -69,4 +76,90 @@ export function pickExtrasNow(now: Date): { meal: MealState; habits: HabitProfil
   } catch {
     return { meal: { sinceMealMin: null, sinceFoodMin: null }, habits: { total: 0, cats: {}, names: [] } };
   }
+}
+
+// ----- 1.7: the diary summary, the area and what the boss learned (sent to tempt-me / tempt-chat; only summaries leave the device) -----
+
+/** The log of the last `days` days (today included) as the diary analysis reads it. */
+export function diaryEntriesFrom(now: Date, logs: Record<string, DailyNutritionLog>, days = WEEK_DAYS): DiaryEntry[] {
+  const out: DiaryEntry[] = [];
+  for (let i = 0; i < days; i++) {
+    const key = toDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - i));
+    for (const item of logs[key]?.extraItems ?? []) {
+      if (!item.name || /^không ăn$/i.test(item.name.trim())) continue;
+      const snack = isSnackEntry(item);
+      out.push({
+        date: key,
+        name: item.name,
+        kcal: item.calories,
+        minutes: minutesOf(item.loggedAtISO),
+        meal: snack ? null : mainMealOf(item),
+        snack,
+        ...(item.sugarG !== undefined ? { sugarG: item.sugarG } : {}),
+        ...(item.saltG !== undefined ? { saltG: item.saltG } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+/** The diary summary for `now` (today, yesterday, the week; snacks, favourites, leanings, late-night eating). */
+export function diarySummaryFrom(now: Date, logs: Record<string, DailyNutritionLog>, targetKcal: number | null, dayKcal?: (date: string) => number | null): HabitSummary {
+  return analyzeDiary({ today: toDateKey(now), nowMinutes: now.getHours() * 60 + now.getMinutes(), entries: diaryEntriesFrom(now, logs), targetKcal, categorize: foodCategory, dayKcal });
+}
+
+/** The same, read from this device's stores now (the day's kcal as the app counts them, the target in the settings); null when the
+ *  log cannot be read. */
+export function diaryNow(now: Date): HabitSummary | null {
+  try {
+    const { evaluate, logs, settings } = makeDayEvaluator(now);
+    const dayKcal = (date: string) => {
+      try {
+        return Math.round(evaluate(date).eatenKcal);
+      } catch {
+        return null;
+      }
+    };
+    return diarySummaryFrom(now, logs, settings.calorieTargetKcal > 0 ? settings.calorieTargetKcal : null, dayKcal);
+  } catch {
+    return null;
+  }
+}
+
+/** "Khu vực của tôi" as it may leave the device: district and city only, the position rounded to ~1 km; null when not set. */
+export function areaFromSettings(s: Pick<TemptSettings, 'district' | 'city' | 'coords'>): TemptArea | null {
+  return cleanArea({ district: s.district, city: s.city, ...(s.coords ? { lat: s.coords.lat, lon: s.coords.lon } : {}) });
+}
+
+/** What the boss learned from the device's own record (for the offline pick): the answers of the history as interactions. */
+export function localLearned(history: TemptHistoryEntry[], now: Date = new Date()): Record<string, number> {
+  const list: Interaction[] = history.map((h) => {
+    const at = new Date(h.at);
+    return {
+      shownAt: h.at,
+      poolId: null,
+      name: h.name,
+      cat: foodCategory(h.name),
+      kind: 'food',
+      context: { slot: slotOf(at.getHours() * 60 + at.getMinutes()), weekday: at.getDay(), weather: [], tempC: null, kcalLeft: null, sinceMealMin: null, area: '', shop: '' },
+      outcome: h.outcome === 'resisted' ? 'resisted' : 'gave_in',
+      turns: [],
+      bonusXp: 0,
+      model: '',
+      angle: '',
+    };
+  });
+  return learnSummary(list, now).catBoost;
+}
+
+/** Everything 1.7 adds to a temptation request: the diary summary and the area. */
+export function liveExtrasNow(now: Date): { diary?: HabitSummary; area?: TemptArea } {
+  const diary = diaryNow(now);
+  let area: TemptArea | null = null;
+  try {
+    area = areaFromSettings(useTemptationStore.getState().settings);
+  } catch {
+    area = null;
+  }
+  return { ...(diary ? { diary } : {}), ...(area ? { area } : {}) };
 }

@@ -20,8 +20,8 @@ export function AiModelCard({ usage }: { usage?: AiDayTotal[] | null }) {
   const [priceOut, setPriceOut] = useState('');
   const [busy, setBusy] = useState(false);
   // Per-feature models (0.26.4): what was loaded, and what is typed now. Empty = the feature's default.
-  const [groupSaved, setGroupSaved] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '', short: '' });
-  const [groupModel, setGroupModel] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '', short: '' });
+  const [groupSaved, setGroupSaved] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '', short: '', temptlive: '' });
+  const [groupModel, setGroupModel] = useState<Record<ModelGroup, string>>({ places: '', tempt: '', photo: '', short: '', temptlive: '' });
   const pricing = pricingFrom(model, priceIn, priceOut);
   const forecast = pricing && usage ? forecastPerUser(usage, pricing) : null;
   const [message, setMessage] = useState<{ kind: 'ok' | 'bad'; text: string } | null>(null);

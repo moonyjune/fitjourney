@@ -18,6 +18,10 @@ export interface WebSearchOptions {
   maxUses: number;
   /** Localises the results (country = ISO 3166-1 alpha-2, timezone = IANA id). */
   userLocation?: { city?: string; region?: string; country?: string; timezone?: string };
+  /** Only these sites are searched (plain host names, subdomains included). */
+  allowedDomains?: string[];
+  /** The dynamic-filtering tool version to send instead of WEB_SEARCH_TOOL_TYPE (e.g. the one a given model is documented with). */
+  toolType?: string;
 }
 
 export const WEB_SEARCH_TOOL_TYPE = 'web_search_20260318';
@@ -42,10 +46,12 @@ export function searchLocation(loc: WebSearchOptions['userLocation']): Record<st
 /** The tool definition for a variant; `withLocation: false` leaves `user_location` out (after the API refused it). */
 export function webSearchTool(opts: WebSearchOptions, variant: WebSearchVariant = 'dynamic', withLocation = true): Record<string, unknown> {
   const tool: Record<string, unknown> = {
-    type: variant === 'basic' ? WEB_SEARCH_BASIC_TYPE : WEB_SEARCH_TOOL_TYPE,
+    type: variant === 'basic' ? WEB_SEARCH_BASIC_TYPE : (opts.toolType ?? WEB_SEARCH_TOOL_TYPE),
     name: 'web_search',
     max_uses: Math.max(1, Math.min(10, Math.round(opts.maxUses))),
   };
+  const domains = (opts.allowedDomains ?? []).filter((d) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d)).slice(0, 64);
+  if (domains.length > 0) tool.allowed_domains = domains;
   if (variant === 'dynamic-direct') tool.allowed_callers = ['direct'];
   const location = withLocation ? searchLocation(opts.userLocation) : null;
   if (location) tool.user_location = location;

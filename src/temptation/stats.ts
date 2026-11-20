@@ -75,6 +75,14 @@ export interface TemptationData {
   history: TemptHistoryEntry[];
 }
 
+/** 1.7: a position kept with "Khu vực của tôi", rounded to 2 decimals (~1 km); null when unusable. */
+function cleanAreaCoords(v: unknown): { lat: number; lon: number } | null {
+  const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+  const ok = (x: unknown, max: number): x is number => typeof x === 'number' && Number.isFinite(x) && Math.abs(x) <= max;
+  if (!o || !ok(o.lat, 90) || !ok(o.lon, 180)) return null;
+  return { lat: Math.round(o.lat * 100) / 100, lon: Math.round(o.lon * 100) / 100 };
+}
+
 const count = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.min(1_000_000, Math.round(v)) : 0);
 const hour = (v: unknown, fallback: number): number => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 23 ? v : fallback);
 
@@ -88,6 +96,8 @@ export function cleanTemptSettings(raw: unknown): TemptSettings {
     quietStartHour: hour(r.quietStartHour, d.quietStartHour),
     quietEndHour: hour(r.quietEndHour, d.quietEndHour),
     city: typeof r.city === 'string' ? r.city.replace(/[<>\n\r]/g, ' ').trim().slice(0, 40) : '',
+    district: typeof r.district === 'string' ? r.district.replace(/[<>\n\r]/g, ' ').trim().slice(0, 40) : '',
+    coords: cleanAreaCoords(r.coords),
     aiChat: r.aiChat === true,
   };
 }

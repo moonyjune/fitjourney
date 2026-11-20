@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Animated, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { TEMPTATION_RESIST_XP } from '../../game/constants';
 import { useGameText, type GameKey } from '../../game/strings';
 import type { TemptationOpen } from '../../store/useTemptationStore';
@@ -128,9 +128,37 @@ function ItemCard({ item }: { item: TemptItem }) {
             {g('tempt.source', { d: item.sourceDomain })}
           </HudText>
         ) : null}
+        {item.shop ? <ShopLine shop={item.shop} /> : null}
+        {item.why ? (
+          <HudText size={11} weight="medium" color={quest.textSecondary} testID="tempt-why">
+            {g('tempt.why', { why: item.why })}
+          </HudText>
+        ) : null}
         {item.imageUrl && !ownHidden ? item.photo ? <WebPhotoCredit photo={item.photo} name={item.name} /> : null : <DishPhotoCredit name={item.name} />}
       </View>
     </View>
+  );
+}
+
+/** 1.7: the open shop near the player selling it ("Đang mở · giao ~25 phút · Quán"), with its source page as a link. */
+export function ShopLine({ shop }: { shop: NonNullable<TemptItem['shop']> }) {
+  const g = useGameText();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={g('tempt.shopA11y', { name: shop.name, d: shop.domain })}
+      onPress={() => void Linking.openURL(shop.url).catch(() => undefined)}
+      hitSlop={4}
+      testID="tempt-shop"
+    >
+      <HudText size={12} color={quest.xp}>
+        {`🛵 ${shop.line}`}
+        {shop.priceRange ? ` · ${shop.priceRange}` : ''}
+      </HudText>
+      <HudText size={10} weight="medium" color={quest.textTertiary} numberOfLines={1}>
+        {`${g('tempt.shopSource', { d: shop.domain })} · ${shop.reliability}`}
+      </HudText>
+    </Pressable>
   );
 }
 

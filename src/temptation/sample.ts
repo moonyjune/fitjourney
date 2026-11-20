@@ -17,6 +17,9 @@ export function sampleTemptation(now: Date): Record<string, unknown> {
     imageUrl: null,
     sourceDomain: null,
     web: 'unused',
+    // 1.7: a labelled stand-in for the open shop and the "why" line (no real shop is named in Dev).
+    shop: { name: `${SAMPLE_LABEL} Quán mẫu`, line: `Đang mở · giao ~25 phút · ${SAMPLE_LABEL} Quán mẫu`, url: 'https://shopeefood.vn/', open: true, reliability: 'Thấp', reliabilityWhy: 'Dữ liệu giả lập.' },
+    why: `${SAMPLE_LABEL} Bạn hay ăn vặt đồ ngọt lúc 15h · hôm nay còn 420 kcal`,
   };
 }
 

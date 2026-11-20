@@ -2186,6 +2186,24 @@ const vi = {
   'loss.weekBurned': '🔥 Tuần này đã đốt ~{mass} mỡ, cố lên!',
   'loss.weekStored': 'Tuần này đang dư: cất thêm ~{mass} mỡ, mai mình gỡ lại!',
   'loss.weighIn': 'Cân thực tế: {actual} kg / {days} ngày · ước tính {est} kg',
+
+  // ----- 1.7: Quỷ Cám Dỗ thông minh hơn (quán đang mở gần bạn, nhật ký, học từ lịch sử) -----
+  'aiModel.group.temptlive': 'Quỷ Cám Dỗ trực tiếp (chọn món, chat, tìm quán)',
+  'aiUsage.temptpick': 'Quỷ Cám Dỗ chọn món',
+  'aiUsage.temptshops': 'Quán đang mở gần bạn',
+  'tempt.area': 'Khu vực của tôi',
+  'tempt.districtPlaceholder': 'Quận / huyện, VD: Quận 3',
+  'tempt.useLocation': 'Dùng vị trí hiện tại',
+  'tempt.locating': 'Đang lấy vị trí…',
+  'tempt.locationFailed': 'Không lấy được khu vực từ vị trí, hãy gõ quận và thành phố.',
+  'tempt.areaPrivacy': 'Chỉ quận / huyện và thành phố (cùng vị trí làm tròn ~1 km nếu bạn dùng vị trí hiện tại) được gửi để tìm quán đang mở gần bạn. Không bao giờ gửi số nhà hay tên đường.',
+  'tempt.clearHistory': 'Xoá lịch sử cám dỗ',
+  'tempt.clearHistoryHint': 'Quỷ học từ những lần bạn cưỡng lại hay chịu thua (giữ 180 ngày) để mời khéo hơn.',
+  'tempt.clearHistoryDone': 'Đã xoá lịch sử cám dỗ.',
+  'tempt.clearHistoryFailed': 'Chưa xoá được (cần mạng), hãy thử lại sau.',
+  'tempt.why': 'Vì sao gợi ý món này? {why}',
+  'tempt.shopSource': 'nguồn: {d}',
+  'tempt.shopA11y': 'Mở trang quán {name} trên {d}',
 } as const;
 
 export type GameKey = keyof typeof vi;
@@ -4372,6 +4390,24 @@ const en: Record<GameKey, string> = {
   'loss.weekBurned': '🔥 This week ~{mass} of fat burned, keep going!',
   'loss.weekStored': 'This week is in surplus: ~{mass} of fat stored, win it back tomorrow!',
   'loss.weighIn': 'Real scale: {actual} kg / {days} days · estimate {est} kg',
+
+  // ----- 1.7: smarter temptation boss (open shops nearby, the diary, learning from the history) -----
+  'aiModel.group.temptlive': 'Temptation boss live (pick, chat, shops)',
+  'aiUsage.temptpick': 'Temptation pick',
+  'aiUsage.temptshops': 'Open shops nearby',
+  'tempt.area': 'My area',
+  'tempt.districtPlaceholder': 'District, e.g. District 3',
+  'tempt.useLocation': 'Use my current location',
+  'tempt.locating': 'Getting your location…',
+  'tempt.locationFailed': 'Could not read an area from your location; type the district and city.',
+  'tempt.areaPrivacy': 'Only the district and city (and your position rounded to ~1 km if you use your location) are sent to find open shops near you. Never a house number or street.',
+  'tempt.clearHistory': 'Clear temptation history',
+  'tempt.clearHistoryHint': 'The boss learns from when you resist or give in (kept 180 days) to tempt you better.',
+  'tempt.clearHistoryDone': 'Temptation history cleared.',
+  'tempt.clearHistoryFailed': 'Could not clear it yet (needs a connection); try again later.',
+  'tempt.why': 'Why this? {why}',
+  'tempt.shopSource': 'source: {d}',
+  'tempt.shopA11y': 'Open {name} on {d}',
 };
 
 export function formatGameText(language: 'vi' | 'en', key: GameKey, params?: Record<string, string | number>): string {
