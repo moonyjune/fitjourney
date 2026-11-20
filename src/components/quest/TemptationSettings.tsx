@@ -7,6 +7,8 @@ import { useTemptationStore } from '../../store/useTemptationStore';
 import type { TemptFrequency, TemptLevel } from '../../temptation/schedule';
 import { temptationXp } from '../../temptation/stats';
 import { summonTemptation } from '../../temptation/summon';
+import { locateArea } from '../../temptation/area';
+import { deleteTemptHistory } from '../../sync/cloudSync';
 import { quest, questFonts, questRadius } from '../../theme/quest';
 import { HitSwitch } from './HitSwitch';
 import { HudText } from './HudText';
@@ -49,6 +51,33 @@ export function TemptationSettings() {
   const setSettings = useTemptationStore((s) => s.setSettings);
   const fasting = useMealModeStore((s) => s.fasting);
   const [city, setCity] = useState(settings.city);
+  const [district, setDistrict] = useState(settings.district);
+  const [locating, setLocating] = useState(false);
+  const [areaNote, setAreaNote] = useState<string | null>(null);
+  const [clearNote, setClearNote] = useState<string | null>(null);
+
+  /** "Dùng vị trí hiện tại": the area read from the position (rounded to ~1 km); the player can still edit it. */
+  async function fillFromLocation() {
+    setLocating(true);
+    setAreaNote(null);
+    const got = await locateArea().catch(() => ({ error: 'unavailable' as const }));
+    setLocating(false);
+    if ('error' in got) {
+      setAreaNote(g('tempt.locationFailed'));
+      return;
+    }
+    const next = { district: got.district || district, city: got.city || city, coords: got.coords };
+    setDistrict(next.district);
+    setCity(next.city);
+    setSettings(next);
+    if (!got.district || !got.city) setAreaNote(g('tempt.locationFailed'));
+  }
+
+  async function clearHistory() {
+    const ok = await deleteTemptHistory();
+    if (ok) useTemptationStore.getState().clearHistory();
+    setClearNote(g(ok ? 'tempt.clearHistoryDone' : 'tempt.clearHistoryFailed'));
+  }
 
   return (
     <View style={styles.box}>
@@ -117,6 +146,17 @@ export function TemptationSettings() {
 
           {(settings.level === 'hard' || settings.aiChat) && (
             <>
+              <HudText size={13}>{g('tempt.area')}</HudText>
+              <TextInput
+                accessibilityLabel={g('tempt.area')}
+                placeholder={g('tempt.districtPlaceholder')}
+                placeholderTextColor={quest.textSecondary}
+                value={district}
+                onChangeText={setDistrict}
+                onBlur={() => district !== settings.district && setSettings({ district })}
+                onSubmitEditing={() => district !== settings.district && setSettings({ district })}
+                style={styles.input}
+              />
               <TextInput
                 accessibilityLabel={g('tempt.city')}
                 placeholder={g('tempt.cityPlaceholder')}
@@ -129,6 +169,15 @@ export function TemptationSettings() {
               />
               <HudText size={12} weight="medium" color={quest.textSecondary}>
                 {g('tempt.cityHint')}
+              </HudText>
+              <QuestButton variant="ghost" title={locating ? g('tempt.locating') : g('tempt.useLocation')} loading={locating} onPress={() => void fillFromLocation()} />
+              {areaNote ? (
+                <HudText size={12} weight="medium" color={quest.hpText} accessibilityLiveRegion="polite">
+                  {areaNote}
+                </HudText>
+              ) : null}
+              <HudText size={11} weight="medium" color={quest.textSecondary}>
+                {g('tempt.areaPrivacy')}
               </HudText>
             </>
           )}
@@ -157,6 +206,16 @@ export function TemptationSettings() {
           )}
 
           <QuestButton variant="ghost" title={busy ? g('tempt.preparing') : g('tempt.tryNow')} loading={busy} onPress={() => void summonTemptation(new Date(), true)} />
+
+          <HudText size={11} weight="medium" color={quest.textSecondary}>
+            {g('tempt.clearHistoryHint')}
+          </HudText>
+          <QuestButton variant="ghost" title={g('tempt.clearHistory')} onPress={() => void clearHistory()} />
+          {clearNote ? (
+            <HudText size={12} weight="medium" color={quest.textSecondary} accessibilityLiveRegion="polite">
+              {clearNote}
+            </HudText>
+          ) : null}
         </>
       )}
     </View>

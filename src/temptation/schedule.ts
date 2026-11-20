@@ -16,14 +16,18 @@ export interface TemptSettings {
   /** Quiet hours, whole hours 0-23: none from `quietStartHour` to `quietEndHour` (across midnight when start > end; none when equal). */
   quietStartHour: number;
   quietEndHour: number;
-  /** Optional city for the Hard level (weather and local trends). */
+  /** Optional city for the Hard level (weather and local trends); with `district`, "Khu vực của tôi" (1.7). */
   city: string;
+  /** 1.7 "Khu vực của tôi": the district (quận / huyện) for the open shops near the player. Never a street address. */
+  district: string;
+  /** 1.7: the position rounded to ~1 km (2 decimals) when the player used "Dùng vị trí hiện tại"; null otherwise. */
+  coords: { lat: number; lon: number } | null;
   /** "AI tương tác": the boss is the AI. It picks the item for the player now (weather, recent foods, weak spots, kcal left) and, after a
    *  "no", the player can chat with it; it insists, switches or gives up. Needs the AI (signed in). */
   aiChat: boolean;
 }
 
-export const DEFAULT_TEMPT_SETTINGS: TemptSettings = { enabled: false, level: 'easy', frequency: 'mid', quietStartHour: 22, quietEndHour: 7, city: '', aiChat: false };
+export const DEFAULT_TEMPT_SETTINGS: TemptSettings = { enabled: false, level: 'easy', frequency: 'mid', quietStartHour: 22, quietEndHour: 7, city: '', district: '', coords: null, aiChat: false };
 
 /** Ít / Vừa / Nhiều. */
 export const MAX_PER_DAY: Record<TemptFrequency, number> = { low: 1, mid: 3, high: 5 };

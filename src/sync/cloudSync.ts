@@ -1512,6 +1512,9 @@ export interface TemptationRequest {
   /** 1.5: what the player ate today and their snacking habits (src/temptation/context.ts), for the scored pick. */
   meal?: unknown;
   habits?: unknown;
+  /** 1.7: the diary summary (eatingHabits.ts) and "Khu vực của tôi" (district / city, position rounded to ~1 km). */
+  diary?: unknown;
+  area?: unknown;
 }
 
 export type TemptationOutcome = { ok: true; result: unknown; sample?: boolean } | { ok: false; message: string; kind: AiErrorKind };
@@ -1587,6 +1590,48 @@ export async function recordTemptShown(poolId: string, at: Date): Promise<void> 
     if (error) await supabase.from('tempt_shown').insert(row);
   } catch {
     // the device's record is enough to avoid a repeat here
+  }
+}
+
+/** 1.7: records a temptation shown from the device's own pool copy (offline pick) in the player's history (tempt_interactions, the
+ *  boss learns from it). Returns the row id, or null (offline, signed out, the dev account, no table yet). The server records the
+ *  online ones itself. */
+export async function recordTemptInteraction(row: Record<string, unknown>): Promise<string | null> {
+  const auth = useAuthStore.getState();
+  const userId = auth.session?.user?.id;
+  if (auth.devMode || !userId || !(await isOnline())) return null;
+  try {
+    const { data, error } = await supabase.from('tempt_interactions').insert({ ...row, user_id: userId }).select('id').single();
+    return error || typeof data?.id !== 'string' ? null : data.id;
+  } catch {
+    return null;
+  }
+}
+
+/** 1.7: the player's answer to a recorded temptation (only the outcome and the chat's bonus XP may be changed by the app). Best effort. */
+export async function updateTemptOutcome(id: string, outcome: string, bonusXp = 0): Promise<void> {
+  const auth = useAuthStore.getState();
+  if (auth.devMode || !auth.session?.user?.id || !/^[0-9a-f-]{36}$/i.test(id) || !(await isOnline())) return;
+  try {
+    await supabase.from('tempt_interactions').update({ outcome, bonus_xp: Math.max(0, Math.min(1000, Math.round(bonusXp))) }).eq('id', id);
+  } catch {
+    // the next answers still teach the boss
+  }
+}
+
+/** 1.7 "Xoá lịch sử cám dỗ": deletes every recorded temptation of this player (and their cached shop searches). False when it could
+ *  not be done now (offline, signed out). The dev account has nothing to delete. */
+export async function deleteTemptHistory(): Promise<boolean> {
+  const auth = useAuthStore.getState();
+  const userId = auth.session?.user?.id;
+  if (auth.devMode) return true;
+  if (!userId || !(await isOnline())) return false;
+  try {
+    const { error } = await supabase.from('tempt_interactions').delete().eq('user_id', userId);
+    await supabase.from('tempt_shops').delete().eq('user_id', userId);
+    return !error;
+  } catch {
+    return false;
   }
 }
 

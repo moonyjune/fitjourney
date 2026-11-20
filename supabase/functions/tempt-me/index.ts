@@ -48,9 +48,24 @@
 // Call it until `done`; {"phase":"tag"|"generate"|"photos"} forces one phase. Pool (system) cost.
 // Pool download (offline pick): POST {"action":"pool","etag":"..."} (signed in) answers the compact pool with its etag (or
 // notModified) and the player's showings of the last 30 days; no AI call, no quota.
+// 1.7 (smarter boss): the app also sends the diary summary (`diary`, _shared/eatingHabits.ts: today's kcal vs target, meals missing,
+// snacks by category and hour, favourites, leanings, late-night eating; never the raw log) and "Khu vực của tôi" (`area`: district +
+// city, position rounded to ~1 km; never a street). The scored pick also reads what the boss learned from this player's own history
+// (tempt_interactions, _shared/temptLearn.ts catBoost). Then one short call on the `temptlive` model (Sonnet 5.5 by default, feature
+// `temptpick`, 12/day) picks among the 8 best candidates with the diary, the learned summary and the open shops, and writes 1-2 lines;
+// past the quota or on any failure the free scored pick stands. Open shops (_shared/temptShops.ts, temptLive.ts): cached per player,
+// area and time slot in tempt_shops (4 h); a pop-up with no fresh cache starts one search in the background (Sonnet 5.5, web search
+// <= 3 uses on shopeefood.vn / foody.vn / food.grab.com / google.com, feature `temptshops`, 3/day) so the next pop-up names a real shop
+// ("Đang mở · giao ~25 phút · <quán>" + source link); {"action":"shops"} runs it on demand. Every pop-up is recorded in
+// tempt_interactions (returned as `interactionId`; the app writes the answer) and carries a "why" line from the diary.
 
 import type { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { jsonResponse, runAiCall, serveAi, systemAllowance, type AiContext } from '../_shared/ai.ts';
+import { habitWhyLine } from '../_shared/eatingHabits.ts';
+import { cravingsOf, liveInputsOf, liveLines, loadLearn, loadShops, minutesOf, playerCall, recordShown, searchShops, shopsForNow, usableShops, type LiveInputs } from '../_shared/temptLive.ts';
+import type { LearnSummary } from '../_shared/temptLearn.ts';
+import { areaText, matchShop, shopOut, type ShopsBatch, type TemptShop } from '../_shared/temptShops.ts';
+import { cleanSmartPick, SMART_CANDIDATES, SMART_PICK_TOOL, SMART_SYSTEM, smartPickPrompt } from '../_shared/temptSmart.ts';
 import { cleanDishPhotoRequest } from '../_shared/dishPhoto.ts';
 import { findVerifiedPhotos, verifyUrls, within, type Runner } from '../_shared/dishPhotoLookup.ts';
 import { genericPictureUrl, PHOTO_CHECK_VERSION, poolRepairQueue, REPAIR_MODEL, repairDecision, repairLimit, verdictAccepts } from '../_shared/photoMatch.ts';
@@ -113,7 +128,10 @@ import {
   expandPrompt,
   needsTags,
   pickScored,
+  nowOf,
   poolDownload,
+  rankRows,
+  tagsOf,
   TAG_CALLS,
   TAG_PER_CALL,
   TAG_SYSTEM,
@@ -510,16 +528,119 @@ async function backfillClaimed(admin: SupabaseClient, rows: PoolRow[], max: numb
   }
 }
 
-/** Serves one pool item to this player and records it; pictures still missing in the pool are looked for after the answer. */
-async function serve(ctx: AiContext, row: PoolRow, repeat: boolean, rows: PoolRow[]): Promise<Response> {
-  const { error } = await ctx.admin.from(SHOWN).upsert({ user_id: ctx.userId, pool_id: row.id, shown_at: new Date().toISOString() }, { onConflict: 'user_id,pool_id' });
-  if (error) console.warn('[tempt-me] showing not recorded:', JSON.stringify(error));
-  if (rows.some((r) => needsPhoto(r.item))) await inBackground(backfillClaimed(ctx.admin, rows, POPUP_PHOTOS, REFILL_PHOTOS_BUDGET_MS));
-  return jsonResponse({ result: poolAnswer(row.item, repeat) });
+/** 1.7: what the live pick reads besides the pool: the request, the scored context, the diary summary and area, what the boss learned
+ *  about this player, the open shops near them (cached), and the pool rows ranked for now. */
+interface LivePick {
+  req: TemptRequest;
+  pickCtx: PickContext;
+  live: LiveInputs;
+  learn: LearnSummary | null;
+  shops: ShopsBatch | null;
+  rows: PoolRow[];
+  shown: Map<string, string>;
 }
 
-/** "Now" for the scored pick (1.5): the request, plus what the player ate today and their snacking habits when the app sent them. */
-const pickContextOf = (req: TemptRequest, body: Record<string, unknown>): PickContext => ({ ...req, meal: cleanMeal(body.meal), habits: cleanHabits(body.habits) });
+/** The Sonnet 5.5 pick (1.7) over the best-scored candidates: the item, a shop of the list selling that kind of item, the boss's lines.
+ *  Null when it cannot be had (quota, budget, the AI failing, an answer off the list): the free scored pick stands. */
+async function smartPick(ctx: AiContext, lp: LivePick, usable: ReturnType<typeof usableShops>) {
+  const ranked = rankRows(lp.rows, lp.shown, lp.pickCtx, new Date(), SMART_CANDIDATES).map((x) => x.row);
+  if (ranked.length < 2) return null;
+  const { habitLines, learnLines } = liveLines(lp.live, lp.learn);
+  // The player's own call (quota `temptpick`, their usage and budget), unlike the pool's refills above.
+  const call = await playerCall(ctx, 'temptpick', {
+    tool: SMART_PICK_TOOL,
+    system: SMART_SYSTEM,
+    maxTokens: 3000,
+    messages: [
+      {
+        role: 'user',
+        content: smartPickPrompt({
+          ...lp.req,
+          candidates: ranked.map((r) => ({ id: r.id, name: r.item.name, cat: tagsOf(r.item).cat, course: tagsOf(r.item).course, kcal: r.item.kcal, whyNow: r.item.whyNow })),
+          habitLines,
+          learnLines,
+          shopLines: usable.lines,
+        }),
+      },
+    ],
+  });
+  if ('error' in call) {
+    console.warn('[tempt-me] smart pick failed, using the scored pick:', call.error);
+    return null;
+  }
+  const pick = cleanSmartPick(call.input, ranked.map((r) => r.id), usable.list.length);
+  const row = pick ? ranked.find((r) => r.id === pick.id) : undefined;
+  return pick && row ? { row, pick, model: call.model } : null;
+}
+
+/** Serves one pool item to this player and records it; pictures still missing in the pool are looked for after the answer. With `lp`
+ *  (1.7) the Sonnet pick may choose another of the best candidates, a nearby open shop is named with it (only one the search found,
+ *  selling that kind of item), the "why" line is built from the diary, and the temptation is recorded for learning. */
+async function serve(ctx: AiContext, row: PoolRow, repeat: boolean, rows: PoolRow[], lp?: LivePick): Promise<Response> {
+  let chosen = row;
+  let lines: string[] = [];
+  let angle = '';
+  let model = '';
+  let shop: { shop: TemptShop; open: boolean | null } | null = null;
+  if (lp) {
+    const usable = usableShops(lp.shops, lp.req.time);
+    const smart = repeat ? null : await smartPick(ctx, lp, usable).catch(() => null);
+    if (smart) {
+      chosen = smart.row;
+      lines = smart.pick.lines;
+      angle = smart.pick.angle;
+      model = smart.model;
+      const named = smart.pick.shop !== null ? usable.list[smart.pick.shop] : null;
+      // A shop the model named is kept only when it sells that kind of item (never a made-up match).
+      if (named && matchShop([named.shop], { name: chosen.item.name, cat: tagsOf(chosen.item).cat }, minutesOf(lp.req.time))) shop = named;
+    }
+    shop ??= usable.list.length > 0 ? matchShop(usable.list.map((x) => x.shop), { name: chosen.item.name, cat: tagsOf(chosen.item).cat }, minutesOf(lp.req.time)) : null;
+  }
+  const { error } = await ctx.admin.from(SHOWN).upsert({ user_id: ctx.userId, pool_id: chosen.id, shown_at: new Date().toISOString() }, { onConflict: 'user_id,pool_id' });
+  if (error) console.warn('[tempt-me] showing not recorded:', JSON.stringify(error));
+  if (rows.some((r) => needsPhoto(r.item))) await inBackground(backfillClaimed(ctx.admin, rows, POPUP_PHOTOS, REFILL_PHOTOS_BUDGET_MS));
+  if (!lp) return jsonResponse({ result: poolAnswer(chosen.item, repeat) });
+  const tags = tagsOf(chosen.item);
+  const now = nowOf(lp.pickCtx);
+  const why = habitWhyLine(lp.live.habits, { cat: tags.cat, nowMinutes: minutesOf(lp.req.time) });
+  const interactionId = await recordShown(ctx.admin, ctx.userId, {
+    poolId: chosen.id,
+    name: chosen.item.name,
+    cat: tags.cat,
+    kind: tags.course === 'drink' ? 'drink' : 'food',
+    context: {
+      slot: now.slot,
+      weekday: lp.req.weekday,
+      weather: now.weather,
+      tempC: now.tempC,
+      kcalLeft: lp.live.habits?.today.leftKcal ?? null,
+      sinceMealMin: lp.pickCtx.meal?.sinceMealMin ?? null,
+      area: lp.live.area ? areaText(lp.live.area) : '',
+      shop: shop?.shop.name ?? '',
+    },
+    model,
+    angle,
+  });
+  return jsonResponse({
+    result: {
+      ...poolAnswer(chosen.item, repeat),
+      poolId: chosen.id,
+      ...(lines.length > 0 ? { lines } : {}),
+      ...(shop ? { shop: shopOut(shop.shop, shop.open) } : {}),
+      ...(why ? { why } : {}),
+      ...(interactionId ? { interactionId } : {}),
+    },
+  });
+}
+
+/** "Now" for the scored pick (1.5): the request, plus what the player ate today and their snacking habits when the app sent them;
+ *  1.7: what the boss learned about them (`learned`). */
+const pickContextOf = (req: TemptRequest, body: Record<string, unknown>, learn: LearnSummary | null = null): PickContext => ({
+  ...req,
+  meal: cleanMeal(body.meal),
+  habits: cleanHabits(body.habits),
+  learned: learn?.catBoost ?? null,
+});
 
 /** A pop-up from the pool, refilling it when it runs low; null when the pool tables are not there (the caller answers the old way). */
 async function fromPool(ctx: AiContext, req: TemptRequest, body: Record<string, unknown> = {}): Promise<Response | null> {
@@ -528,7 +649,12 @@ async function fromPool(ctx: AiContext, req: TemptRequest, body: Record<string, 
   const { rows, shown } = loaded;
   const now = fitNow(req);
   const at = new Date();
-  const pickCtx = pickContextOf(req, body);
+  // 1.7: the diary summary, the area, what was learned and the cached open shops (a missing cache starts a background search).
+  const live = liveInputsOf(body);
+  const learn = await loadLearn(ctx.admin, ctx.userId);
+  const pickCtx = pickContextOf(req, body, learn);
+  const shops = await shopsForNow(ctx, live, req).catch(() => null);
+  const lp = (pool: PoolRow[]): LivePick => ({ req, pickCtx, live, learn, shops, rows: pool, shown });
   const pick = pickScored(rows, shown, pickCtx, at);
   const urgent = !pick || pick.repeat;
   // A refill is system work (0.26.7): not this player's quota or budget, only the claim guards and the global daily cap.
@@ -545,15 +671,15 @@ async function fromPool(ctx: AiContext, req: TemptRequest, body: Record<string, 
     if (!urgent) {
       // Something fresh to show already: the refill finishes after the answer.
       await inBackground(afterwards);
-      return serve(ctx, pick!.row, false, []);
+      return serve(ctx, pick!.row, false, [], lp(rows));
     }
     // Nothing fresh: wait for the first call that adds items, the rest goes on in the background.
     const got = await refill.first;
     await inBackground(afterwards);
     const fresh = pickScored([...got, ...rows], shown, pickCtx, at);
-    if (fresh) return serve(ctx, fresh.row, fresh.repeat, []);
+    if (fresh) return serve(ctx, fresh.row, fresh.repeat, [], lp([...got, ...rows]));
   }
-  if (pick) return serve(ctx, pick.row, pick.repeat, rows);
+  if (pick) return serve(ctx, pick.row, pick.repeat, rows, lp(rows));
   return jsonResponse({ error: 'Quỷ Cám Dỗ đang chuẩn bị thực đơn mới, lát nữa quay lại nhé.' }, 503);
 }
 
@@ -784,6 +910,19 @@ async function poolAction(ctx: AiContext, body: Record<string, unknown>): Promis
   return jsonResponse({ pool: { etag, items }, shown });
 }
 
+/** 1.7: the open shops near the player's area for now (POST {"action":"shops", area, diary, date, time, weekday}): the cached search
+ *  when fresh, else one search now (Sonnet 5.5 by default, <= 3 web searches, the player's `temptshops` quota). */
+async function shopsAction(ctx: AiContext, body: Record<string, unknown>): Promise<Response> {
+  const req = cleanTemptRequest(body);
+  const live = liveInputsOf(body);
+  if (!req || !live.area) return jsonResponse({ error: 'Thiếu khu vực (quận, thành phố) hoặc giờ hiện tại.' }, 400);
+  const cached = await loadShops(ctx.admin, ctx.userId, live.area, req.time);
+  if (cached) return jsonResponse({ result: { ...cached, cached: true } });
+  const got = await searchShops(ctx, live.area, req, cravingsOf(live.habits));
+  if ('error' in got) return jsonResponse({ error: got.error }, got.status);
+  return jsonResponse({ result: got.batch });
+}
+
 /** The maintenance calls bypass the player sign-in, only with the cron secret (PUSH_CRON_SECRET, the same as send-push's):
  *  {"action":"seed"} (seedStep), {"action":"rephoto","limit":6} (rephotoStep, 1.3.x) and {"action":"expand"} (expandStep, 1.5). */
 async function seedGate(req: Request, admin: SupabaseClient): Promise<Response | null> {
@@ -800,6 +939,7 @@ serveAi(
   'tempt',
   async (body, ctx) => {
     if (body.action === 'pool') return poolAction(ctx, body);
+    if (body.action === 'shops') return shopsAction(ctx, body);
     const req = cleanTemptRequest(body);
     if (!req) return jsonResponse({ error: 'Thiếu ngày giờ hiện tại.' }, 400);
     const pooled = await fromPool(ctx, req, body);

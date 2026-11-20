@@ -1,6 +1,6 @@
 // Pure helpers for the per-user AI quota and the cost estimate (no Deno or network use, so they are unit-tested in jest).
 
-export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter' | 'workout' | 'dishphoto' | 'feelings' | 'planchat' | 'temptchat';
+export type AiFeature = 'photo' | 'text' | 'label' | 'recipe' | 'report' | 'swap' | 'dinner' | 'digest' | 'places' | 'tempt' | 'banter' | 'workout' | 'dishphoto' | 'feelings' | 'planchat' | 'temptchat' | 'temptpick' | 'temptshops';
 
 /** Calls per user per day, when the database does not set one (`app_settings` key `ai_quota.<feature>`, see `quotaFrom`). */
 export const DAILY_QUOTA: Record<AiFeature, number> = {
@@ -32,6 +32,12 @@ export const DAILY_QUOTA: Record<AiFeature, number> = {
   /** The temptation chat ("AI tương tác", tempt-chat): an opening is 2 short calls (the pick, then the lines over the photo), each
    *  reply to the player 1. A few pop-ups a day with a chat of up to 5 turns each. */
   temptchat: 60,
+  /** 1.7: the online temptation pick on Sonnet 5.5 (tempt-me): one short call per pop-up (at most 5 a day by the schedule, plus "try
+   *  now"); past the quota the pick is the free scored one. */
+  temptpick: 12,
+  /** 1.7: open shops near the player's area (tempt-me {"action":"shops"} or a pop-up with a stale cache): one Sonnet 5.5 call with up to
+   *  3 web searches, cached per area and time slot for 4 h (~$0.10 each), so 3 a day at most. */
+  temptshops: 3,
 };
 
 export interface TokenUsage {
@@ -97,15 +103,18 @@ export const MODEL_PRICES: Partial<Record<string, { in: number; out: number }>> 
  *  the global model). `photo` covers the dish photo checks (dish-photo, the temptation pool's pictures) and the pool's web photo search.
  *  `short` covers the text-only calls that write a few short lines (boss-banter, coach-digest); they send no images, no sampling or
  *  thinking parameters, and a forced tool call (which Haiku 5.5 takes; a model that refuses it is asked with tool_choice auto). */
-export const MODEL_GROUPS = ['places', 'tempt', 'photo', 'short'] as const;
+export const MODEL_GROUPS = ['places', 'tempt', 'photo', 'short', 'temptlive'] as const;
 export type ModelGroup = (typeof MODEL_GROUPS)[number];
-export const GROUP_DEFAULT_MODEL: Record<ModelGroup, string | null> = { places: null, tempt: 'claude-haiku-5-5', photo: 'claude-haiku-5-5', short: 'claude-haiku-5-5' };
+/** `temptlive` (1.7): everything the temptation boss says to a player live (the pick, the chat's opening and replies, the open-shop
+ *  search): Sonnet 5.5 unless the admin saves another model as `model.temptlive`. The pool's refills / tags stay on `tempt` (Haiku). */
+export const GROUP_DEFAULT_MODEL: Record<ModelGroup, string | null> = { places: null, tempt: 'claude-haiku-5-5', photo: 'claude-haiku-5-5', short: 'claude-haiku-5-5', temptlive: 'claude-sonnet-5-5' };
 export const modelKey = (group: ModelGroup): string => `model.${group}`;
 
 /** The group whose model a feature's calls use, or null (the global model). */
 export function modelGroupOf(feature: AiFeature): ModelGroup | null {
   if (feature === 'places') return 'places';
-  if (feature === 'tempt' || feature === 'temptchat') return 'tempt';
+  if (feature === 'temptchat' || feature === 'temptpick' || feature === 'temptshops') return 'temptlive';
+  if (feature === 'tempt') return 'tempt';
   if (feature === 'dishphoto') return 'photo';
   if (feature === 'banter' || feature === 'digest') return 'short';
   return null;

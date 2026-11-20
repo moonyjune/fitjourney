@@ -1270,3 +1270,102 @@ select cron.schedule(
   where exists (select 1 from vault.decrypted_secrets where name = 'push_function_url');
   $cron$
 );
+
+-- ===== 1.7: Quỷ Cám Dỗ thông minh hơn: quán đang mở gần "Khu vực của tôi", nhật ký ăn uống, học từ lịch sử cám dỗ =====
+-- Chạy lại nhiều lần vẫn an toàn. Khi chưa chạy, tempt-me / tempt-chat vẫn chạy như trước (không quán, không học).
+
+-- Lịch sử cám dỗ của từng người (tempt_interactions): mỗi lần Quỷ mời một món = một dòng: món (pool_id, tên, loại, đồ ăn / uống), lúc
+-- mời và bối cảnh (khung giờ, thứ, thời tiết / nhiệt độ, kcal còn lại hôm nay, số phút từ bữa chính gần nhất, khu vực = quận / thành
+-- phố, quán được nhắc nếu có; không bao giờ có địa chỉ chi tiết), kết quả (resisted / gave_in / gave_in_logged = nhật ký có món khớp
+-- trong ~2 giờ / dismissed / ignored / reported_photo / practice), đoạn chat (lời Quỷ + lời người chơi trêu lại, tối đa 3 câu, mỗi câu
+-- ≤ 200 ký tự), XP thưởng, model. Hàm (service role) ghi khi mời và khi chat; app ghi kết quả (chỉ cột outcome, bonus_xp) và dòng của
+-- lần mời offline; người dùng chỉ đọc / xoá dòng của mình ("Xoá lịch sử cám dỗ"). Giữ 180 ngày: dòng cũ hơn bị xoá mỗi lần ghi mới.
+create table if not exists public.tempt_interactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  shown_at timestamptz not null default now(),
+  pool_id uuid references public.tempt_pool (id) on delete set null,
+  name text not null check (char_length(name) between 1 and 80),
+  cat text not null default 'other' check (char_length(cat) between 1 and 20),
+  kind text not null default 'food' check (kind in ('food', 'drink')),
+  context jsonb not null default '{}'::jsonb check (jsonb_typeof(context) = 'object' and pg_column_size(context) <= 2000),
+  outcome text check (outcome in ('resisted', 'gave_in', 'gave_in_logged', 'dismissed', 'ignored', 'reported_photo', 'practice')),
+  turns jsonb not null default '[]'::jsonb check (jsonb_typeof(turns) = 'array' and pg_column_size(turns) <= 8000),
+  bonus_xp integer not null default 0 check (bonus_xp between 0 and 1000),
+  model text not null default '' check (char_length(model) <= 60),
+  angle text not null default '' check (char_length(angle) <= 200)
+);
+create index if not exists tempt_interactions_user_time on public.tempt_interactions (user_id, shown_at desc);
+alter table public.tempt_interactions enable row level security;
+revoke all on public.tempt_interactions from public, anon, authenticated;
+grant select, insert, delete on public.tempt_interactions to authenticated;
+grant update (outcome, bonus_xp) on public.tempt_interactions to authenticated;
+drop policy if exists "tempt_interactions_own_select" on public.tempt_interactions;
+create policy "tempt_interactions_own_select" on public.tempt_interactions for select
+  to authenticated using (auth.uid() = user_id);
+drop policy if exists "tempt_interactions_own_insert" on public.tempt_interactions;
+create policy "tempt_interactions_own_insert" on public.tempt_interactions for insert
+  to authenticated with check (auth.uid() = user_id);
+drop policy if exists "tempt_interactions_own_update" on public.tempt_interactions;
+create policy "tempt_interactions_own_update" on public.tempt_interactions for update
+  to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "tempt_interactions_own_delete" on public.tempt_interactions;
+create policy "tempt_interactions_own_delete" on public.tempt_interactions for delete
+  to authenticated using (auth.uid() = user_id);
+
+-- Quán đang mở gần khu vực của người chơi (tempt_shops): kết quả một lần tìm (Sonnet 5.5 + tối đa 3 lượt web search trên ShopeeFood /
+-- Foody / GrabFood / Google), theo người, khu vực (quận + thành phố) và khung giờ (cache_key), dùng lại 4 giờ cho các lần mời. Hàm
+-- (service role) đọc / ghi và xoá dòng quá 1 ngày; người dùng chỉ xem / xoá dòng của mình (như places_batches).
+create table if not exists public.tempt_shops (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  cache_key text not null check (char_length(cache_key) between 1 and 200),
+  payload jsonb not null check (jsonb_typeof(payload) = 'object' and pg_column_size(payload) <= 60000),
+  created_at timestamptz not null default now()
+);
+create index if not exists tempt_shops_lookup on public.tempt_shops (user_id, cache_key, created_at desc);
+alter table public.tempt_shops enable row level security;
+revoke all on public.tempt_shops from public, anon, authenticated;
+grant select, delete on public.tempt_shops to authenticated;
+drop policy if exists "tempt_shops_own_select" on public.tempt_shops;
+create policy "tempt_shops_own_select" on public.tempt_shops for select
+  to authenticated using (auth.uid() = user_id);
+drop policy if exists "tempt_shops_own_delete" on public.tempt_shops;
+create policy "tempt_shops_own_delete" on public.tempt_shops for delete
+  to authenticated using (auth.uid() = user_id);
+
+-- model.temptlive: mọi câu Quỷ Cám Dỗ nói trực tiếp với người chơi (chọn món, chat, tìm quán), mặc định claude-sonnet-5-5.
+alter table public.ai_settings drop constraint if exists ai_settings_key_check;
+alter table public.ai_settings add constraint ai_settings_key_check
+  check (key in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo', 'model.short', 'model.temptlive', 'photo_review.max_dishes', 'photo_review.max_usd'));
+
+create or replace function public.ai_admin_set_setting(p_key text, p_value text)
+returns void
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v text := btrim(coalesce(p_value, ''));
+begin
+  if not public.is_ai_admin() then
+    raise exception 'Không có quyền đổi.';
+  end if;
+  if p_key not in ('model', 'price_in', 'price_out', 'model.places', 'model.tempt', 'model.photo', 'model.short', 'model.temptlive') then
+    raise exception 'Cài đặt không hợp lệ.';
+  end if;
+  if v = '' then
+    delete from public.ai_settings where key = p_key;
+    return;
+  end if;
+  if p_key like 'model%' and v !~ '^[a-z0-9][a-z0-9._-]{2,59}$' then
+    raise exception 'Tên model không hợp lệ.';
+  end if;
+  if p_key in ('price_in', 'price_out') and (v !~ '^[0-9]+(\.[0-9]+)?$' or v::numeric > 1000) then
+    raise exception 'Giá không hợp lệ (số từ 0 đến 1000).';
+  end if;
+  insert into public.ai_settings (key, value, updated_at) values (p_key, v, now())
+  on conflict (key) do update set value = excluded.value, updated_at = now();
+end;
+$$;
+revoke all on function public.ai_admin_set_setting(text, text) from public, anon;
+grant execute on function public.ai_admin_set_setting(text, text) to authenticated;

@@ -459,6 +459,8 @@ export interface PickContext {
   habits?: HabitProfile | null;
   /** Names shown lately (not again). */
   avoid?: string[];
+  /** 1.7: what the boss learned from this player's own history (temptLearn.ts catBoost): a bounded score adjustment per category. */
+  learned?: Record<string, number> | null;
 }
 
 export interface Now {
@@ -605,6 +607,9 @@ export function scoreItem(row: PickRow, ctx: PickContext, now: Now = nowOf(ctx),
     }))
       add(2, 'a favourite');
   }
+  // What the boss learned works on this player (1.7, bounded by temptLearn.ts: at most +2, at least -1.5).
+  const learned = ctx.learned?.[t.cat];
+  if (typeof learned === 'number' && Number.isFinite(learned) && learned !== 0 && t.cat !== 'other') add(Math.max(-1.5, Math.min(2, learned)), `learned ${t.cat}`);
   // A fresh trend.
   if (item.trending && at.getTime() - Date.parse(row.createdAt) < NO_REPEAT_DAYS * 86_400_000) add(1, 'trending');
   return { score: Math.round(score * 10) / 10, why };
