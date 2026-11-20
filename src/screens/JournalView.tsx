@@ -45,6 +45,7 @@ import { DEFICIT_LEVEL_COLOR, deficitColor, deficitLevel, type DeficitLevel } fr
 import { LIMITS } from '../game/constants';
 import { shownDeficit } from '../game/deficitView';
 import { DayDeficitNotes } from '../components/quest/DayDeficitNotes';
+import { DailyLossCard } from '../components/quest/DailyLossCard';
 import { useWorkoutStore } from '../store/useWorkoutStore';
 import { quest, questRadius } from '../theme/quest';
 import { toDateKey } from '../utils/date';
@@ -743,6 +744,7 @@ export function JournalView({ client, embedded, dayKey, focus, onTableLayout }: 
         onToggleCheat={client || selectedKey > todayKey ? undefined : () => toggleCheat(selectedKey)}
       />
       <DayDeficitNotes day={day} dateKey={selectedKey} dayLabel={dayLabelText} readOnly={!!client} />
+      {!client && <DailyLossCard dayKey={selectedKey} isToday={isToday} dayLabel={dayLabelText} />}
 
       <View
         accessible

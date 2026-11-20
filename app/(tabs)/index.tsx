@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampHero } from '../../src/components/quest/CampHero';
 import { DateChip } from '../../src/components/quest/DateChip';
+import { DailyLossCard } from '../../src/components/quest/DailyLossCard';
 import { HudText } from '../../src/components/quest/HudText';
 import { MissionRings, MissionsSheet } from '../../src/components/quest/MissionsSheet';
 import { NextMealCard } from '../../src/components/quest/NextMealCard';
@@ -213,6 +214,7 @@ export default function CampScreen() {
             proteinTargetG={proteinTargetG}
             onOpenBoss={() => setBossOpen(true)}
           />
+          <DailyLossCard dayKey={dayKey} isToday={isToday} dayLabel={dayLabel} testID="camp-daily-loss" />
         </FadeInUp>
 
         <FadeInUp index={3} style={[styles.tiles, styles.gap]}>
