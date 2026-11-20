@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.8.0 | yes | suggest-cheat-places, tempt-chat, tempt-me |
 | 1.7.0 | no | — |
 | 1.6.3 | no | — |
 | 1.6.2 | no | photo-review |
@@ -104,6 +105,13 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.8.0
+- Temptation boss knows "Khu vực của tôi" (Settings: district + city, or "Dùng vị trí hiện tại" for a position rounded to ~1 km): it suggests real shops that are open near you (ShopeeFood, Foody, GrabFood, Google; at most 3 searches, cached per area and time of day for 4 h), late-night too, and the pop-up shows "🛵 Đang mở · giao ~25 phút · <quán>" with "nguồn: domain · độ tin cậy" opening the source page. Opening hours, prices and delivery times are never invented: a field that is not on the source page stays empty, and a shop whose page was not found is dropped.
+- It reads your diary — today, yesterday and the week (kcal left, missing meals, snacks by kind and hour, favourite dishes, sweet / salty / fried / drinks, late-night eating) — and says why: "Vì sao gợi ý món này? Bạn hay ăn vặt trà sữa lúc 15h · hôm nay còn 420 kcal". Only a compact summary goes to the AI, never the raw diary.
+- It learns from its own history with you: every temptation is recorded (the dish, the moment, the shop, resisted / gave in / dismissed / practice, and the tease-back lines of the chat; "gave in" is also detected when a matching food is logged within 2 h). The boss raises the kinds of temptation that work on you and changes its angle; history is kept 180 days and "Xoá lịch sử cám dỗ" in Settings deletes it.
+- The pick, the chat's opening and every reply, and the shop search use Claude Sonnet 5.5 (new model group `temptlive`; the admin can change it with `model.temptlive`). If a player's AI quota is used up the free scored pick is used. Estimated cost for one active user ≈ $0.3–0.6 a day; the default per-user budget is $0.60.
+- Server: schema.sql adds tempt_interactions and tempt_shops (both with RLS), and `model.temptlive` to the ai_settings check and ai_admin_set_setting. Deploy tempt-me, tempt-chat and suggest-cheat-places (normal JWT). Until schema.sql has been run the functions still work, without the learning and the shops.
 
 ## 1.7.0
 - Pull to refresh on the tab screens (Camp, Hành trình, Tập, Nhật ký, Hồ sơ): pulling down at the top pulls the cloud data again (what another device synced shows up) and says "Đã cập nhật dữ liệu mới nhất". The phone app uses the native pull; the web app (including the Home Screen app) has its own pull gesture, since the native one does nothing there. A sideways drag (the Journal's day swipe) never starts a pull.
