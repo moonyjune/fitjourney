@@ -12,12 +12,13 @@ import { DefaultBossArt } from '../../components/quest/StageBossArt';
 import { WeeklyBossHistory } from '../../components/quest/WeeklyBossHistory';
 import { BossHpBar } from '../../components/quest/WeeklyBossSheet';
 import { BOSS_DEFEAT_XP } from '../../game/constants';
-import { bossNum } from '../../game/bossView';
+import { bossNum, weekDeficitText, weeklyReportHref } from '../../game/bossView';
 import { deficitColor } from '../../game/deficitLevel';
 import { mealNames, shownDeficit } from '../../game/deficitView';
 import { useGameText, type GameKey } from '../../game/strings';
 import type { StringKey } from '../../i18n/strings';
 import { useTranslation } from '../../i18n/useTranslation';
+import { useSettingsStore } from '../../store/useSettingsStore';
 import { fetchWeeklySuggestion, pushWeeklySuggestion, requestWeeklySuggestion } from '../../sync/cloudSync';
 import { quest, questFonts, questRadius } from '../../theme/quest';
 import { chartWidthFor } from '../../theme/responsive';
@@ -78,6 +79,7 @@ interface JournalWeekProps {
 export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }: JournalWeekProps) {
   const g = useGameText();
   const { t } = useTranslation();
+  const language = useSettingsStore((s) => s.language);
   // Inside a panel (14 padding + 1.5 border each side), so the last bar's label is not cut off.
   const chartWidth = chartWidthFor(useWindowDimensions().width) - 31;
   const { now, todayKey, evaluate, levelOf, cheatDays, deficitTarget, readOnly, logs, settings, weights, feelings, subjectId } = subject;
@@ -127,7 +129,6 @@ export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }
   const boss = isThisWeek ? subject.boss : subject.bossHistory.find((b) => b.weekKey === weekKey);
   const counted = days.filter((d) => !d.future && !d.cheat && d.deficit != null && !d.projected && !d.incomplete);
   const metDays = counted.filter((d) => levelOf(d.key, d.deficit) === 'met').length;
-  const deficitSum = counted.reduce((s, d) => s + (d.deficit ?? 0), 0);
   const todayBossDay = boss?.days.find((d) => d.dateKey === todayKey);
   const todayEval = evaluate(todayKey);
 
@@ -312,10 +313,14 @@ export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }
                 </HudText>
               </View>
               <HudText size={12} weight="medium" color={quest.textSecondary} style={styles.flex} numberOfLines={2}>
-                {g('journal2.week.bossMeta', { met: metDays, n: counted.length, sum: bossNum(deficitSum) })}
+                {g('bossX.metDays', { met: metDays, n: counted.length })}
                 {boss.defeated ? ` · ${g('journal2.week.bossXp', { xp: BOSS_DEFEAT_XP })}` : ''}
               </HudText>
             </View>
+            {/* The week's total deficit so far (settled days, a cheat day as its hit, today's estimate apart). */}
+            <HudText size={13} color={quest.text} style={styles.bossTotal} testID="journal-week-total">
+              {weekDeficitText(boss, g, language)}
+            </HudText>
           </View>
           {!readOnly && isThisWeek && <QuestIcon name="chevron" size={16} color={quest.textSecondary} />}
         </Pressable>
@@ -425,7 +430,7 @@ export function JournalWeek({ subject, weeks, selectedKey, onSelect, onOpenDay }
           accessibilityRole="button"
           accessibilityLabel={g('week.profileRow')}
           accessibilityHint={g('journal2.week.reportHint')}
-          onPress={() => router.push('/weekly-report')}
+          onPress={() => router.push(weeklyReportHref(weekKey))}
           style={({ pressed }) => [styles.reportCard, pressed && { opacity: 0.85 }]}
         >
           <QuestIcon name="chart" size={20} color={quest.gold} />
@@ -545,6 +550,7 @@ const styles = StyleSheet.create({
   bossCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, padding: 12, borderRadius: questRadius.panel, borderWidth: 1.5, borderColor: quest.bossBorder, backgroundColor: quest.bossPanel },
   bossHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bossBar: { marginVertical: 4 },
+  bossTotal: { marginTop: 6 },
   pill: { paddingHorizontal: 8, minHeight: 24, justifyContent: 'center', borderRadius: 12, borderWidth: 1.5, marginTop: 4 },
   pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 4, borderTopWidth: 1, borderTopColor: quest.border, paddingTop: 4 },
   sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 20, marginBottom: 8 },

@@ -1,4 +1,4 @@
-import { bossDeficitOf } from '../game/state';
+import { bossDeficitOf, cheatDayDamageKcal } from '../game/state';
 import { getDayType } from '../constants/plan';
 import { eatingEndHour } from '../utils/mealMode';
 import { bossForWeek } from '../game/boss';
@@ -190,7 +190,7 @@ export function buildCoachContext(now: Date = new Date()): CoachContext {
     if (day.eatenKcal > 0 || day.burnedKcal > 0 || day.waterMl > 0) recentDays.push(day);
   }
 
-  const boss = bossForWeek(now, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled);
+  const boss = bossForWeek(now, (key) => bossDeficitOf(evaluate(key)), undefined, isCheatDay, (key) => evaluate(key).burnedKcal, (key) => evaluate(key).settled, cheatDayDamageKcal(settings.targetDailyDeficitKcal));
   const since = toDateKey(addDays(now, -COACH_HISTORY_DAYS));
 
   return {

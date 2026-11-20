@@ -8,10 +8,11 @@ import { BOSS_MAX_HP } from './constants';
  *   portion is multiplied by CHEAT_MEAL_BUFFER (×1.3) when it is saved, and the guide reminds to log the drinks and sauces. It is a
  *   food like any other in the day (kcal counted, missions as usual) and is the 80/20 rule's flexible meal (feedback/flex.ts).
  * - Cheat day: the day's budget is the maintenance (TDEE), not TDEE − the deficit target. It is the existing cheat-day mark
- *   (useCheatDayStore, Journal and here): the day is left out of the calorie math (no boss damage or heal, no deficit XP, the streak
- *   neither breaks nor grows, never "Ăn dư"). What it costs the week is the deficit that day would have brought (the target) plus
- *   anything eaten over the TDEE; it can be won back over the next RECOVERY_MIN_DAYS–RECOVERY_MAX_DAYS days with at most
- *   RECOVERY_MAX_PER_DAY kcal of extra deficit a day (what is left beyond that is let go: the weekly boss resets on Monday). */
+ *   (useCheatDayStore, Journal and here): its own kcal are left out of the calorie math (no deficit XP, the streak neither breaks nor
+ *   grows, never "Ăn dư"), and the weekly boss still takes one day's deficit target from it ("miễn trừ 1 ngày", 1.7 rule, boss.ts).
+ *   So it costs the boss nothing; only what is eaten over the TDEE is a risk, to the weight (extra fat), not to the boss. That part
+ *   can be made up over the next RECOVERY_MIN_DAYS–RECOVERY_MAX_DAYS days with at most RECOVERY_MAX_PER_DAY kcal of extra deficit a
+ *   day (what is left beyond that is let go: never starve to make up). */
 
 /** A cheat meal's estimate = a typical restaurant portion × this. */
 export const CHEAT_MEAL_BUFFER = 1.3;
@@ -56,13 +57,14 @@ export interface CheatDayPlan {
   overKcal: number;
   /** Left of the cheat-day budget (0 once it is used up). */
   leftKcal: number;
-  /** What the day costs the week: the deficit it would have brought plus anything over the TDEE. */
-  weekCostKcal: number;
-  /** That cost as a share of the weekly boss's HP (BOSS_MAX_HP = 1 kg of fat), in %. */
-  weekCostPct: number;
+  /** What the cheat day still deals to the weekly boss: one day's deficit target. */
+  bossHitKcal: number;
+  /** That hit as a share of the weekly boss's HP (BOSS_MAX_HP = 1 kg of fat), in %. */
+  bossHitPct: number;
   /** Grams of fat the part over the TDEE stands for. */
   overFatG: number;
-  /** How to win the cost back, and each recovery day's intake (normal budget − the extra deficit). */
+  /** How to make up the part over the TDEE (nothing to make up under it), and each recovery day's intake (normal budget − the
+   *  extra deficit). */
   recovery: ReturnType<typeof recoveryPlan> & { dayBudgetKcal: number };
 }
 
@@ -73,8 +75,7 @@ export function cheatDayPlan(input: { tdeeKcal: number; targetDeficitKcal: numbe
   const eatenKcal = Math.max(0, Math.round(input.eatenKcal));
   const normalBudgetKcal = Math.max(0, tdeeKcal - targetDeficitKcal);
   const overKcal = Math.max(0, eatenKcal - tdeeKcal);
-  const weekCostKcal = targetDeficitKcal + overKcal;
-  const recovery = recoveryPlan(weekCostKcal);
+  const recovery = recoveryPlan(overKcal);
   return {
     tdeeKcal,
     targetDeficitKcal,
@@ -84,8 +85,8 @@ export function cheatDayPlan(input: { tdeeKcal: number; targetDeficitKcal: numbe
     eatenKcal,
     overKcal,
     leftKcal: Math.max(0, tdeeKcal - eatenKcal),
-    weekCostKcal,
-    weekCostPct: Math.round((weekCostKcal / BOSS_MAX_HP) * 100),
+    bossHitKcal: targetDeficitKcal,
+    bossHitPct: Math.round((targetDeficitKcal / BOSS_MAX_HP) * 100),
     overFatG: Math.round((overKcal / KCAL_PER_KG_FAT) * 1000),
     recovery: { ...recovery, dayBudgetKcal: Math.max(0, normalBudgetKcal - recovery.perDayKcal) },
   };

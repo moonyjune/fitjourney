@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
 const mockRouter = { push: jest.fn(), replace: jest.fn(), back: jest.fn(), canGoBack: jest.fn(() => true) };
+let mockParams: Record<string, string> = {};
 jest.mock('expo-router', () => ({
   router: {
     push: (...a: unknown[]) => mockRouter.push(...a),
@@ -10,7 +11,7 @@ jest.mock('expo-router', () => ({
     canGoBack: () => mockRouter.canGoBack(),
   },
   useFocusEffect: () => undefined,
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams,
 }));
 jest.mock('expo-status-bar', () => ({ setStatusBarStyle: jest.fn() }));
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
@@ -34,7 +35,7 @@ jest.mock('../../sync/cloudSync', () => ({
 
 import WeeklyReportScreen from '../../../app/weekly-report';
 import { AI_AUTO_DEBOUNCE_MS, AI_AUTO_MIN_GAP_MS, WeeklyReportAutoRefresh } from '../../ai/useWeeklyReportAutoRefresh';
-import { buildWeeklyReportInput, weekInputFingerprint } from '../../ai/weeklyReport';
+import { buildWeeklyReportInput, weekInputFingerprint, weekReportMoment } from '../../ai/weeklyReport';
 import { resetAnalysisStore, useAnalysisStore } from '../../store/useAnalysisStore';
 import { useAiReportStore } from '../../store/useAiReportStore';
 import { useCelebrationStore } from '../../store/useCelebrationStore';
@@ -83,6 +84,7 @@ describe('Weekly review screen', () => {
   beforeEach(() => {
     jest.useFakeTimers({ now: new Date('2026-10-23T16:10:00') });
     jest.clearAllMocks();
+    mockParams = {};
     useSettingsStore.setState({ language: 'vi', gender: null, age: null, heightCm: null, activityLevel: null, calorieTargetKcal: 1900, targetDailyDeficitKcal: 1100, proteinTargetG: 200, waterTargetMl: 3000, startWeightKg: 106, startDateISO: '2026-10-01T08:00:00' });
     useLimitsStore.setState({ purineMg: 1200, saltG: 7, sugarG: 25 });
     useWorkoutStore.setState({ entries: [] });
@@ -110,6 +112,37 @@ describe('Weekly review screen', () => {
     expect(text).toContain('Cân nặng -0.8 kg · dự kiến theo thâm hụt -0.4 kg');
     expect(text).toContain('Phân tích tuần bằng AI');
     expect(mockRequest).not.toHaveBeenCalled(); // opening the screen costs nothing
+  });
+
+  it('the week in the route param: that week\'s numbers, dates and stored review, not this week\'s', async () => {
+    // Last week (Mon 12/10 – Sun 18/10): 6 days at 1100 and a cheat day (Wednesday 14/10).
+    const logs: Record<string, ReturnType<typeof day>> = {};
+    for (let i = 12; i <= 18; i++) logs[`2026-10-${i}`] = day(`2026-10-${i}`, i === 14 ? 4000 : 0);
+    useNutritionStore.setState({ logs: { ...useNutritionStore.getState().logs, ...logs } });
+    mockParams = { week: '2026-10-12' };
+    const r = await mount();
+    const text = allText(r);
+    expect(text.toUpperCase()).toContain('12/10 – 18/10');
+    expect(text).not.toContain('19/10 – 23/10');
+    expect(mockFetch).toHaveBeenCalledWith('2026-10-12');
+    expect(text).not.toContain('ngày còn lại'); // the week is over: nothing is "needed per day"
+    await act(async () => press(r, 'Phân tích tuần bằng AI').props.onPress());
+    const [week, period] = mockRequest.mock.calls[0] as [Record<string, any>, string];
+    expect(period).toBe('2026-10-12');
+    expect(week.week).toMatchObject({ start: '2026-10-12', today: '2026-10-18', daysElapsed: 7 });
+    expect(useAiReportStore.getState().weekly['2026-10-12']).toBeDefined();
+    expect(useAiReportStore.getState().weekly['2026-10-19']).toBeUndefined();
+  });
+
+  it('the moment a week is judged at: now for this week (or no / a bad / a future param), the end of its Sunday for an earlier one', () => {
+    const now = new Date('2026-10-23T16:10:00');
+    expect(weekReportMoment(now)).toBe(now);
+    expect(weekReportMoment(now, 'nonsense')).toBe(now);
+    expect(weekReportMoment(now, '2026-10-19')).toBe(now);
+    expect(weekReportMoment(now, '2026-10-26')).toBe(now);
+    const past = weekReportMoment(now, '2026-10-14'); // any day of the week works
+    expect([past.getFullYear(), past.getMonth() + 1, past.getDate(), past.getHours(), past.getMinutes()]).toEqual([2026, 10, 18, 23, 59]);
+    expect(buildWeeklyReportInput(now, '2026-10-12').week.start).toBe('2026-10-12');
   });
 
   it("opening it hides Camp's card for last week's review", async () => {

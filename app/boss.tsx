@@ -12,7 +12,8 @@ import { BOSS_DEFEAT_XP, DAILY_DAMAGE_CAP_KCAL } from '../src/game/constants';
 import { useGameText } from '../src/game/strings';
 import { useGameState, useNow } from '../src/game/useGameState';
 import { mealNames } from '../src/game/deficitView';
-import { bossHitTexts, bossNum as num, bossStatusText } from '../src/game/bossView';
+import { bossHitTexts, bossNum as num, bossStatusText, weekDeficitText, weeklyReportHref } from '../src/game/bossView';
+import { useSettingsStore } from '../src/store/useSettingsStore';
 import { quest, questRadius } from '../src/theme/quest';
 import { screenMaxWidthStyle } from '../src/theme/responsive';
 import { useLightStatusBar } from '../src/theme/useLightStatusBar';
@@ -25,6 +26,7 @@ function back() {
 
 export default function BossScreen() {
   const g = useGameText();
+  const language = useSettingsStore((s) => s.language);
   const insets = useSafeAreaInsets();
   useLightStatusBar();
   const now = useNow(60_000);
@@ -67,6 +69,9 @@ export default function BossScreen() {
       <HudText size={13} weight="medium" color={quest.textSecondary}>
         {bossStatusText(boss, g)}
       </HudText>
+      <HudText size={13} weight="medium" color={quest.textSecondary} testID="boss-week-total">
+        {weekDeficitText(boss, g, language)}
+      </HudText>
 
       {!boss.defeated && boss.neededPerRemainingDay > DAILY_DAMAGE_CAP_KCAL && (
         <HudText size={13} weight="medium" color={quest.hpText} accessibilityLiveRegion="polite">
@@ -91,7 +96,7 @@ export default function BossScreen() {
         ) : null}
       </View>
 
-      <QuestButton icon="chart" variant="ghost" title={g('week.bossButton')} onPress={() => router.push('/weekly-report')} />
+      <QuestButton icon="chart" variant="ghost" title={g('week.bossButton')} onPress={() => router.push(weeklyReportHref(boss.weekKey))} />
       {/* The full 7-day log lives in Journal › Tuần (dialogs.md decision 7). */}
       <QuestButton icon="calendar" variant="ghost" title={g('camp.bossSeeWeek')} onPress={() => router.push({ pathname: '/journal', params: { tab: 'week' } })} />
 

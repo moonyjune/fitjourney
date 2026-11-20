@@ -38,6 +38,7 @@ import { toDateKey } from '../../src/utils/date';
 import { isoWeekNumber } from '../../src/utils/isoWeek';
 import { previousWeekStartKey } from '../../src/utils/weekKey';
 import { bossClock } from '../../src/game/boss';
+import { weekDeficitTotal, weeklyReportHref } from '../../src/game/bossView';
 import { getIfStatus } from '../../src/utils/intermittentFasting';
 import { useWaterPlan } from '../../src/water/useWaterPlan';
 import { setPendingMealPhoto } from '../../src/food/pendingPhoto';
@@ -184,7 +185,7 @@ export default function CampScreen() {
   const markWeeklyDone = useCelebrationStore((s) => s.markWeeklyDone);
   const lastWeekKey = previousWeekStartKey(bossClock(now));
   const lastWeek = weeklyDoneKey === lastWeekKey ? undefined : game.bossHistory.find((w) => w.weekKey === lastWeekKey);
-  const lastWeekDeficit = lastWeek ? lastWeek.days.reduce((sum, d) => sum + (d.cheat || d.deficitKcal == null ? 0 : d.deficitKcal), 0) : 0;
+  const lastWeekDeficit = lastWeek ? weekDeficitTotal(lastWeek).kcal : 0;
   const lastWeekLogged = lastWeek ? lastWeek.days.filter((d) => d.deficitKcal != null || d.cheat).length : 0;
 
   return (
@@ -311,7 +312,7 @@ export default function CampScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${g('camp.weeklyView')}: ${g('week.title')}`}
-              onPress={() => router.push('/weekly-report')}
+              onPress={() => router.push(weeklyReportHref(lastWeek.weekKey))}
               style={({ pressed }) => [styles.ghostPill, pressed && { opacity: 0.85 }]}
             >
               <HudText size={13} color={quest.manaText}>

@@ -170,16 +170,16 @@ describe('cheat meal and cheat day: the numbers', () => {
     expect(recoveryPlan(1300)).toEqual({ days: 3, perDayKcal: RECOVERY_MAX_PER_DAY, coveredKcal: 900, leftKcal: 400 });
   });
 
-  it('a cheat day: budget = TDEE, what it costs the week and how to win it back, with the player\'s numbers', () => {
+  it('a cheat day: budget = TDEE, the boss still takes the target, only the part over the TDEE is to make up (weight), with the player\'s numbers', () => {
     const under = cheatDayPlan({ tdeeKcal: 2400, targetDeficitKcal: 500, eatenKcal: 2100 });
-    expect(under).toMatchObject({ normalBudgetKcal: 1900, budgetKcal: 2400, extraKcal: 500, overKcal: 0, leftKcal: 300, weekCostKcal: 500, weekCostPct: 6, overFatG: 0 });
-    expect(under.recovery).toEqual({ days: 2, perDayKcal: 250, coveredKcal: 500, leftKcal: 0, dayBudgetKcal: 1650 });
+    expect(under).toMatchObject({ normalBudgetKcal: 1900, budgetKcal: 2400, extraKcal: 500, overKcal: 0, leftKcal: 300, bossHitKcal: 500, bossHitPct: 6, overFatG: 0 });
+    expect(under.recovery).toEqual({ days: 0, perDayKcal: 0, coveredKcal: 0, leftKcal: 0, dayBudgetKcal: 1900 });
     const over = cheatDayPlan({ tdeeKcal: 2400, targetDeficitKcal: 500, eatenKcal: 3170 });
-    expect(over).toMatchObject({ overKcal: 770, leftKcal: 0, weekCostKcal: 1270, weekCostPct: 16, overFatG: 100 });
-    expect(over.recovery).toEqual({ days: 3, perDayKcal: 300, coveredKcal: 900, leftKcal: 370, dayBudgetKcal: 1600 });
+    expect(over).toMatchObject({ overKcal: 770, leftKcal: 0, bossHitKcal: 500, bossHitPct: 6, overFatG: 100 });
+    expect(over.recovery).toEqual({ days: 3, perDayKcal: 260, coveredKcal: 770, leftKcal: 0, dayBudgetKcal: 1640 });
   });
 
-  it('consistent with the existing mark: a marked cheat day deals and heals nothing, and the boss spreads its HP over the other days', () => {
+  it('consistent with the existing mark: a marked cheat day heals nothing (no target given: deals nothing), and the boss spreads its HP over the other days', () => {
     // Monday 2026-11-16 … Sunday 22; judged on Wednesday 18 evening, Thursday 19 marked as a cheat day ahead.
     const now = new Date('2026-11-18T21:00:00');
     const deficit = (k: string) => (k === '2026-11-17' ? -800 : 600);
