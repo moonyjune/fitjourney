@@ -15,6 +15,7 @@ What each release needs on the server, so it is clear whether anything really ha
 
 | Version | schema.sql | Redeploy |
 |---|---|---|
+| 1.7.0 | no | — |
 | 1.6.3 | no | — |
 | 1.6.2 | no | photo-review |
 | 1.6.1 | no | photo-review |
@@ -103,6 +104,13 @@ What each release needs on the server, so it is clear whether anything really ha
 | 0.2.0 | no | — |
 | 0.1.1 | no | suggest-dinner |
 | 0.1.0 | no | — |
+
+## 1.7.0
+- Pull to refresh on the tab screens (Camp, Hành trình, Tập, Nhật ký, Hồ sơ): pulling down at the top pulls the cloud data again (what another device synced shows up) and says "Đã cập nhật dữ liệu mới nhất". The phone app uses the native pull; the web app (including the Home Screen app) has its own pull gesture, since the native one does nothing there. A sideways drag (the Journal's day swipe) never starts a pull.
+- Weekly boss: Journal › Tuần, the boss sheet and /boss show the week's total deficit ("Tổng thâm hụt: 6.420 kcal · dự kiến thêm ~900 hôm nay · gồm 1 ngày cheat (1.100)").
+- "Tổng kết tuần" opens the week being viewed (Journal › Tuần, last week's card on Camp, the boss's own week on the boss sheet and /boss); before it always showed the current week. A past week is computed to the end of its Sunday, the AI review is saved per week, and the header says "Tuần N · dd/mm – dd/mm".
+- New rule: a day marked cheat day takes the weekly boss's HP down by one day's deficit target (1.100 for a 1.100 target; the configured target is used), shown as "🎉 Cheat day: −1.100 HP (miễn trừ 1 ngày)". The cheat day's own kcal still do not count and the boss does not heal. Past weeks with a cheat day are recalculated under this rule, so the number of defeated bosses can change. The cheat guide no longer says a cheat day costs the week; eating above TDEE is shown only as a weight risk.
+- Daily fat-loss estimate (Camp, Journal › Ngày): "Ước tính hôm nay: −93 g mỡ · cân có thể −300…−500 g" from the day's deficit, sugar, salt and water ("Dự kiến ~" while meals are still to come). ⓘ opens the reasoning as bullets: the day's data as a table (TDEE, eaten, burned, deficit, sugar, salt, water, protein), why (deficit ÷ 7.7 kcal per g of fat, glycogen used first and holding ~3 g of water per g, salt above 5 g holding water), the order of burning, tips, the week's fat total, and a comparison with real weigh-ins when there are two or more in 7 days. A rough estimate, not medical advice.
 
 ## 1.6.3
 - Fix: with fasting on, a meal logged as "Tối" (or "Không nhớ đã ăn gì → Tối") did not count as the last meal: a dinner is filed at 19:00, which falls in Bữa 2's time when the plan's last meal starts later (the default plan: 19:15). Bữa 3 stayed "Chờ ăn" / missing, the forecast added its planned kcal again, and Bữa 2 counted as eaten instead. In fasting mode the meal picked now wins over the time: "Tối" covers the last plan meal, "Sáng" / "Trưa" the first; snack times and foods without a picked meal still go by their time.
